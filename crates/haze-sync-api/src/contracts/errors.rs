@@ -141,7 +141,10 @@ mod tests {
         let mapped = SafeErrorDetails::Map(fields);
         let listed = SafeErrorDetails::List(vec!["retry later".to_owned()]);
 
-        assert_eq!(serde_json::to_value(&mapped).unwrap()["path"][0], "must be relative");
+        assert_eq!(
+            serde_json::to_value(&mapped).unwrap()["path"][0],
+            "must be relative"
+        );
         assert_eq!(serde_json::to_value(&listed).unwrap()[0], "retry later");
     }
 }
