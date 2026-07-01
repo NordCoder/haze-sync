@@ -1,7 +1,9 @@
 //! Typed server configuration values and env-based parsing helpers.
 
 use super::{env, ConfigError};
-use std::{collections::HashMap, env as std_env, fmt, net::SocketAddr, path::PathBuf, str::FromStr};
+use std::{
+    collections::HashMap, env as std_env, fmt, net::SocketAddr, path::PathBuf, str::FromStr,
+};
 
 /// Complete server config primitive set for later runtime wiring.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -247,14 +249,12 @@ pub struct AdapterModesConfig {
 }
 
 fn value_or_default(value: Option<String>, default: &'static str) -> String {
-    value.filter(|value| !value.trim().is_empty())
+    value
+        .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| default.to_owned())
 }
 
-fn required_non_empty(
-    name: &'static str,
-    value: Option<String>,
-) -> Result<String, ConfigError> {
+fn required_non_empty(name: &'static str, value: Option<String>) -> Result<String, ConfigError> {
     match value {
         Some(value) if !value.trim().is_empty() => Ok(value),
         _ => Err(ConfigError::MissingRequiredVar { name }),
@@ -288,7 +288,10 @@ mod tests {
     #[test]
     fn parses_env_config_happy_path() {
         let config = ServerConfig::from_env_map([
-            (env::HAZE_SYNC_DATABASE_URL, "postgres://haze-sync.invalid/haze_sync"),
+            (
+                env::HAZE_SYNC_DATABASE_URL,
+                "postgres://haze-sync.invalid/haze_sync",
+            ),
             (env::HAZE_SYNC_LISTEN_ADDR, "127.0.0.1:9090"),
             (env::HAZE_SYNC_OBJECT_STORE_PATH, "/srv/haze-sync/objects"),
             (env::HAZE_SYNC_WORKTREE_PATH, "/srv/haze-vault/worktree"),
@@ -299,10 +302,19 @@ mod tests {
         .expect("config should parse");
 
         assert_eq!(config.listen_addr, "127.0.0.1:9090".parse().unwrap());
-        assert_eq!(config.object_store.root, PathBuf::from("/srv/haze-sync/objects"));
-        assert_eq!(config.worktree.root, PathBuf::from("/srv/haze-vault/worktree"));
+        assert_eq!(
+            config.object_store.root,
+            PathBuf::from("/srv/haze-sync/objects")
+        );
+        assert_eq!(
+            config.worktree.root,
+            PathBuf::from("/srv/haze-vault/worktree")
+        );
         assert_eq!(config.adapter_modes.gdrive_adapter, AdapterMode::ImportOnly);
-        assert_eq!(config.adapter_modes.worktree_adapter, AdapterMode::ExportOnly);
+        assert_eq!(
+            config.adapter_modes.worktree_adapter,
+            AdapterMode::ExportOnly
+        );
         assert_eq!(config.adapter_modes.obsidian_plugin, AdapterMode::ReadOnly);
     }
 
@@ -339,7 +351,10 @@ mod tests {
     fn invalid_listen_addr_does_not_echo_value() {
         let invalid_value = "invalid-listen-value";
         let error = ServerConfig::from_env_map([
-            (env::HAZE_SYNC_DATABASE_URL, "postgres://haze-sync.invalid/haze_sync"),
+            (
+                env::HAZE_SYNC_DATABASE_URL,
+                "postgres://haze-sync.invalid/haze_sync",
+            ),
             (env::HAZE_SYNC_LISTEN_ADDR, invalid_value),
         ])
         .expect_err("listen address should fail");
