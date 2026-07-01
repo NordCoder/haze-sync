@@ -7,6 +7,7 @@
 pub mod auth;
 pub mod contracts;
 pub mod dto;
+pub mod routes;
 
 /// Human-readable crate role used by skeleton smoke checks and documentation.
 pub const CRATE_ROLE: &str =
