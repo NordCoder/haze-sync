@@ -1,0 +1,12 @@
+{
+  "name": "haze-sync-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "typecheck": "npm run --workspaces --if-present typecheck",
+    "build": "npm run --workspaces --if-present build"
+  }
+}
