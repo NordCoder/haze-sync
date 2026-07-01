@@ -23,7 +23,9 @@ pub async fn health() -> Json<HealthResponse> {
 }
 
 /// Handles GET /ready.
-pub async fn ready(Extension(readiness): Extension<ReadinessState>) -> (StatusCode, Json<ReadinessReport>) {
+pub async fn ready(
+    Extension(readiness): Extension<ReadinessState>,
+) -> (StatusCode, Json<ReadinessReport>) {
     let report = readiness.check().await;
     let status_code = match report.status {
         ReadinessOverallStatus::Ready => StatusCode::OK,
