@@ -50,6 +50,7 @@ fn valid_put_headers_parse() {
     assert_eq!(request.size_bytes(), 5);
 
     let metadata = request.to_metadata_dto();
+    let expected_hash = prefixed_hash('a');
     assert_eq!(metadata.path.as_str(), "Notes/plan.md");
     assert_eq!(
         metadata
@@ -58,7 +59,7 @@ fn valid_put_headers_parse() {
             .as_str(),
         "rev_01JBASE"
     );
-    assert_eq!(metadata.content_sha256.as_str(), prefixed_hash('a'));
+    assert_eq!(metadata.content_sha256.as_str(), expected_hash.as_str());
     assert_eq!(metadata.size_bytes, Some(5));
 }
 
@@ -154,7 +155,8 @@ fn get_optional_revision_id_parses() {
 #[test]
 fn response_headers_are_deterministic_and_safe() {
     let revision_id = RevisionId::parse("rev_01JDOWN").unwrap();
-    let content_sha256 = ContentHash::parse(&prefixed_hash('b')).unwrap();
+    let expected_hash = prefixed_hash('b');
+    let content_sha256 = ContentHash::parse(&expected_hash).unwrap();
     let headers = FileDownloadRouteHeaders::new(revision_id, content_sha256, 1842);
 
     let map = headers.to_header_map();
@@ -169,15 +171,15 @@ fn response_headers_are_deterministic_and_safe() {
             X_SIZE_BYTES_HEADER,
         ]
     );
-    assert_eq!(map[CONTENT_TYPE_HEADER], APPLICATION_OCTET_STREAM);
-    assert_eq!(map["X-Content-SHA256"], prefixed_hash('b'));
-    assert_eq!(map[X_REVISION_ID_HEADER], "rev_01JDOWN");
-    assert_eq!(map[X_SIZE_BYTES_HEADER], "1842");
+    assert_eq!(map[CONTENT_TYPE_HEADER].as_str(), APPLICATION_OCTET_STREAM);
+    assert_eq!(map["X-Content-SHA256"].as_str(), expected_hash.as_str());
+    assert_eq!(map[X_REVISION_ID_HEADER].as_str(), "rev_01JDOWN");
+    assert_eq!(map[X_SIZE_BYTES_HEADER].as_str(), "1842");
 
     let metadata = headers.to_metadata_dto();
     assert_eq!(metadata.content_type, APPLICATION_OCTET_STREAM);
     assert_eq!(metadata.revision_id.as_str(), "rev_01JDOWN");
-    assert_eq!(metadata.content_sha256.as_str(), prefixed_hash('b'));
+    assert_eq!(metadata.content_sha256.as_str(), expected_hash.as_str());
     assert_eq!(metadata.size_bytes, 1842);
 }
 
