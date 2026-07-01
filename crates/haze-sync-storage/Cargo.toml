@@ -1,6 +1,6 @@
 [package]
 name = "haze-sync-storage"
-description = "Storage schema metadata, local object store primitives, and test support for Haze Sync."
+description = "Storage schema metadata, local object store primitives, repository helpers, locks, and test support for Haze Sync."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
