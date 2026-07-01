@@ -9,7 +9,7 @@ use crate::{
 };
 use serde::Serialize;
 use sqlx::PgPool;
-use std::{fs, io, path::PathBuf};
+use std::{fmt, fs, io, path::Path, path::PathBuf};
 
 /// Aggregate status for GET /ready.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -111,7 +111,7 @@ impl ReadinessReport {
 }
 
 /// Runtime readiness dependencies owned by the server.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ReadinessState {
     database: DatabaseReadiness,
     object_store: ObjectStoreReadiness,
@@ -129,7 +129,10 @@ impl ReadinessState {
 
     /// Build readiness state from optional runtime dependencies.
     #[must_use]
-    pub fn from_optional(database_pool: Option<PgPool>, object_store: Option<ObjectStoreConfig>) -> Self {
+    pub fn from_optional(
+        database_pool: Option<PgPool>,
+        object_store: Option<ObjectStoreConfig>,
+    ) -> Self {
         Self {
             database: database_pool.map_or(DatabaseReadiness::Disabled, DatabaseReadiness::Pool),
             object_store: object_store.map_or(ObjectStoreReadiness::Disabled, |config| {
@@ -158,8 +161,18 @@ impl ReadinessState {
     }
 }
 
+impl fmt::Debug for ReadinessState {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ReadinessState")
+            .field("database", &self.database)
+            .field("object_store", &self.object_store)
+            .finish()
+    }
+}
+
 /// Database dependency used by readiness checks.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum DatabaseReadiness {
     /// No pool was supplied to readiness.
     Disabled,
@@ -191,8 +204,17 @@ impl DatabaseReadiness {
     }
 }
 
+impl fmt::Debug for DatabaseReadiness {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Disabled => formatter.write_str("DatabaseReadiness::Disabled"),
+            Self::Pool(_pool) => formatter.write_str("DatabaseReadiness::Pool([REDACTED])"),
+        }
+    }
+}
+
 /// Object-store dependency used by readiness checks.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum ObjectStoreReadiness {
     /// No object-store root was supplied to readiness.
     Disabled,
@@ -213,7 +235,18 @@ impl ObjectStoreReadiness {
     }
 }
 
-fn check_object_store_root(root: &PathBuf) -> ReadinessComponent {
+impl fmt::Debug for ObjectStoreReadiness {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Disabled => formatter.write_str("ObjectStoreReadiness::Disabled"),
+            Self::Configured { .. } => {
+                formatter.write_str("ObjectStoreReadiness::Configured([REDACTED])")
+            }
+        }
+    }
+}
+
+fn check_object_store_root(root: &Path) -> ReadinessComponent {
     if root.as_os_str().is_empty() {
         return ReadinessComponent::not_ready(
             "object_store",
@@ -318,7 +351,7 @@ mod tests {
         let report = ReadinessState::from_optional(
             None,
             Some(ObjectStoreConfig {
-                root: sensitive_root.clone(),
+                root: sensitive_root,
             }),
         )
         .check()
@@ -345,9 +378,25 @@ mod tests {
         .check()
         .await;
         let json = serde_json::to_string(&report).expect("readiness should serialize");
+        let dir_path = dir.path.to_string_lossy();
 
         assert_eq!(report.components[1].code, "object_store_root_not_directory");
         assert!(!json.contains("not-a-directory"));
-        assert!(!json.contains(&dir.path.to_string_lossy().to_string()));
+        assert!(!json.contains(dir_path.as_ref()));
+    }
+
+    #[test]
+    fn debug_output_is_redacted() {
+        let state = ReadinessState::from_optional(
+            None,
+            Some(ObjectStoreConfig {
+                root: PathBuf::from("/srv/haze-sync/objects/super-secret-root"),
+            }),
+        );
+        let rendered = format!("{state:?}");
+
+        assert!(rendered.contains("[REDACTED]"));
+        assert!(!rendered.contains("/srv/haze-sync"));
+        assert!(!rendered.contains("super-secret-root"));
     }
 }
