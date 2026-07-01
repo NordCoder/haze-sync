@@ -122,7 +122,7 @@ impl BearerToken {
     /// Creates a bearer token wrapper from an already-extracted token value.
     pub fn new(token: impl Into<String>) -> Result<Self, AuthError> {
         let token = token.into();
-        if token.is_empty() || token.contains(['\r', '\n']) {
+        if token.is_empty() || token.contains('\r') || token.contains('\n') {
             return Err(AuthError::InvalidBearerToken);
         }
 
