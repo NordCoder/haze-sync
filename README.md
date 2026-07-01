@@ -48,6 +48,8 @@ tests/e2e/               E2E test scaffold only
 
 ## Development commands
 
+These commands mirror the repository CI checks and should not require production secrets, Google Drive OAuth, or externally running provider services.
+
 Rust workspace:
 
 ~~~bash
@@ -60,16 +62,26 @@ cargo clippy --workspace --all-targets -- -D warnings
 Obsidian plugin workspace:
 
 ~~~bash
-npm install
+npm install --no-audit --no-fund
 npm run --workspace haze-obsidian-plugin typecheck
 npm run --workspace haze-obsidian-plugin build
 ~~~
+
+The repository currently uses npm workspaces and does not require a committed npm lockfile for these scaffold checks.
 
 Deployment scaffold validation:
 
 ~~~bash
 docker compose -f deploy/docker-compose.yml config
 ~~~
+
+This validates the local Compose file syntax only; it does not start PostgreSQL or any future sync services.
+
+## Continuous integration
+
+The GitHub Actions CI workflow runs Rust formatting, checking, tests, and Clippy across the workspace; installs npm workspace dependencies; typechecks and builds the Obsidian plugin; and validates the local Docker Compose configuration.
+
+CI must not use repository secrets, production credentials, Google Drive OAuth, or deployment automation.
 
 ## Configuration
 
