@@ -7,6 +7,7 @@ pub mod error;
 pub mod hash;
 pub mod ids;
 pub mod path;
+pub mod security;
 
 pub use adapter::{AdapterMode, AdapterRole};
 pub use error::ValidationError;
