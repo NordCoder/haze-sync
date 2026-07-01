@@ -45,7 +45,6 @@ pub enum ShellErrorCode {
 }
 
 /// Returns a 501 response for Core API surfaces that are only route shells.
-#[must_use]
 pub fn not_implemented_response() -> (StatusCode, Json<ShellErrorResponse>) {
     (
         StatusCode::NOT_IMPLEMENTED,
