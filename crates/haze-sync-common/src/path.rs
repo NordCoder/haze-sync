@@ -283,10 +283,7 @@ mod tests {
     #[test]
     fn preserves_contract_safe_haze_paths() {
         let path = VaultPath::parse("_haze_conflicts/open/Projects/Haze/plan.md").unwrap();
-        assert_eq!(
-            path.as_str(),
-            "_haze_conflicts/open/Projects/Haze/plan.md"
-        );
+        assert_eq!(path.as_str(), "_haze_conflicts/open/Projects/Haze/plan.md");
 
         let outbox = VaultPath::parse("_haze_agent_outbox/draft.md").unwrap();
         assert_eq!(outbox.as_str(), "_haze_agent_outbox/draft.md");
