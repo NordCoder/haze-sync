@@ -1,12 +1,15 @@
-//! Placeholder crate for the future Sync Core.
+//! Sync Core primitives and services for Haze Sync.
 //!
-//! Wave 0 intentionally exposes only a tiny placeholder API. Real V1 behavior is
-//! implemented by later phases.
+//! This crate currently exposes deterministic Core-domain helpers that do not
+//! start server runtimes, access providers, persist file bytes, or perform route
+//! handling.
+
+pub mod idempotency;
 
 /// Human-readable crate role used by skeleton smoke checks and documentation.
-pub const CRATE_ROLE: &str = "Placeholder crate for the future Sync Core.";
+pub const CRATE_ROLE: &str = "Sync Core primitives and services for Haze Sync.";
 
-/// Returns the package name for this placeholder crate.
+/// Returns the package name for this crate.
 #[must_use]
 pub const fn package_name() -> &'static str {
     "haze-sync-core"
