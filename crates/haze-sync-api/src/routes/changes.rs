@@ -56,10 +56,7 @@ impl ChangesRequest {
     /// the Core operation-log default. Present values must be plain integers;
     /// negative `since`, zero `limit`, and limits above the contract maximum are
     /// rejected as safe invalid-request errors.
-    pub fn parse(
-        since: Option<&str>,
-        limit: Option<&str>,
-    ) -> Result<Self, ChangesRouteError> {
+    pub fn parse(since: Option<&str>, limit: Option<&str>) -> Result<Self, ChangesRouteError> {
         Ok(Self {
             since: parse_since_query_value(since)?,
             limit: parse_limit_query_value(limit)?,
