@@ -1,0 +1,25 @@
+# Rust
+/target/
+
+# Node / TypeScript
+node_modules/
+coverage/
+dist/
+apps/haze-obsidian-plugin/main.js
+apps/haze-obsidian-plugin/styles.css
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Local OS/editor noise
+.DS_Store
+__MACOSX/
+*.swp
+*.swo
+
+# Logs and temporary artifacts
+*.log
+*.tmp
+*.bak
