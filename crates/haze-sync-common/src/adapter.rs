@@ -84,6 +84,21 @@ impl AdapterMode {
             Self::DryRun => "dry_run",
         }
     }
+
+    /// Returns whether this adapter mode may submit writes to Core.
+    #[must_use]
+    pub const fn allows_core_writes(self) -> bool {
+        matches!(self, Self::ImportOnly | Self::Bidirectional)
+    }
+
+    /// Returns whether this adapter mode may read from Core.
+    #[must_use]
+    pub const fn allows_core_reads(self) -> bool {
+        matches!(
+            self,
+            Self::ReadOnly | Self::ExportOnly | Self::Bidirectional | Self::DryRun
+        )
+    }
 }
 
 impl fmt::Display for AdapterMode {
@@ -153,6 +168,15 @@ mod tests {
             AdapterMode::from_str("unsafe_full_access").unwrap_err(),
             ValidationError::InvalidAdapterMode
         );
+    }
+
+    #[test]
+    fn adapter_mode_capabilities_follow_rollout_boundaries() {
+        assert!(AdapterMode::ImportOnly.allows_core_writes());
+        assert!(AdapterMode::Bidirectional.allows_core_writes());
+        assert!(!AdapterMode::ExportOnly.allows_core_writes());
+        assert!(AdapterMode::DryRun.allows_core_reads());
+        assert!(!AdapterMode::Disabled.allows_core_reads());
     }
 
     #[test]
