@@ -69,8 +69,7 @@ fn missing_idempotency_key_rejected() {
     let mut parts = valid_put_parts(Some("rev_01JBASE"));
     parts.idempotency_key = None;
 
-    let error =
-        parse_put_file_request(parts).expect_err("missing idempotency key should reject");
+    let error = parse_put_file_request(parts).expect_err("missing idempotency key should reject");
 
     assert_eq!(
         error,
