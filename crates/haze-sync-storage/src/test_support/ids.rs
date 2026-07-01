@@ -100,7 +100,7 @@ fn sanitize_path_segment(value: &str) -> String {
             }
         })
         .collect();
-    let trimmed = sanitized.trim_matches(['-', '.']);
+    let trimmed = sanitized.trim_matches(|ch| ch == '-' || ch == '.');
     let segment = if trimmed.is_empty() { "note" } else { trimmed };
 
     if segment.contains('.') {
