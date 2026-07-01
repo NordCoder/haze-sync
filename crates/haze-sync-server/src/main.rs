@@ -11,7 +11,8 @@ pub mod readiness;
 pub mod routes;
 
 /// Human-readable crate role used by skeleton smoke checks and documentation.
-pub const CRATE_ROLE: &str = "Haze Sync HTTP route shell, configuration, DB readiness, and migration foundation.";
+pub const CRATE_ROLE: &str =
+    "Haze Sync HTTP route shell, configuration, DB readiness, and migration foundation.";
 
 /// Returns the package name for this crate.
 #[must_use]
