@@ -1,14 +1,17 @@
-//! Storage schema and passive database models for Haze Sync.
+//! Storage schema, passive database models, and local object store primitives for Haze Sync.
 //!
-//! This crate currently exposes table metadata and row-shaped model structs only.
-//! Repository functions, SQL execution, migration running, production database
-//! connectivity, and Core storage policy are implemented in later phases.
+//! This crate currently exposes table metadata, row-shaped model structs, and
+//! content-addressed object store primitives. Repository functions, SQL execution,
+//! migration running, production database connectivity, and Core storage policy
+//! are implemented in later phases.
 
 pub mod models;
+pub mod object_store;
 pub mod schema;
 
 /// Human-readable crate role used by skeleton smoke checks and documentation.
-pub const CRATE_ROLE: &str = "Storage schema metadata and passive database row models.";
+pub const CRATE_ROLE: &str =
+    "Storage schema metadata, passive database row models, and object store primitives.";
 
 /// Returns the package name for this crate.
 #[must_use]
