@@ -1,6 +1,6 @@
 [package]
 name = "haze-sync-common"
-description = "Shared placeholder crate for Haze Sync cross-component types."
+description = "Shared domain, value, adapter, hash, path, and security primitives for Haze Sync."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
