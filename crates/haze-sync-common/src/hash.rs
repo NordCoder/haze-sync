@@ -140,9 +140,8 @@ mod tests {
     use super::*;
 
     const ZERO_HEX: &str = "0000000000000000000000000000000000000000000000000000000000000000";
-    const MIXED_HEX: &str = "ABCDEFabcdef0123456789ABCDEFabcdef0123456789ABCDEFabcdef0123456789";
-    const MIXED_CANONICAL: &str =
-        "abcdefabcdef0123456789abcdefabcdef0123456789abcdefabcdef0123456789";
+    const UPPER_HEX: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    const UPPER_CANONICAL: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
     #[test]
     fn parses_plain_hex_and_formats_prefixed_canonical() {
@@ -153,9 +152,9 @@ mod tests {
 
     #[test]
     fn parses_prefixed_hash_and_normalizes_case() {
-        let hash = Sha256::parse(&format!("sha256:{MIXED_HEX}")).unwrap();
-        assert_eq!(hash.as_hex(), MIXED_CANONICAL);
-        assert_eq!(hash.to_string(), format!("sha256:{MIXED_CANONICAL}"));
+        let hash = Sha256::parse(&format!("sha256:{UPPER_HEX}")).unwrap();
+        assert_eq!(hash.as_hex(), UPPER_CANONICAL);
+        assert_eq!(hash.to_string(), format!("sha256:{UPPER_CANONICAL}"));
     }
 
     #[test]
