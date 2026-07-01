@@ -2,6 +2,7 @@
 
 use crate::ValidationError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::borrow::Cow;
 use std::fmt;
 use std::str::FromStr;
 
@@ -16,6 +17,9 @@ pub struct VaultPath(String);
 impl VaultPath {
     /// Validate and normalize a vault path.
     pub fn parse(input: &str) -> Result<Self, ValidationError> {
+        let decoded = decode_percent_sequences(input)?;
+        let input = decoded.as_ref();
+
         if input.is_empty() {
             return Err(ValidationError::EmptyPath);
         }
@@ -128,6 +132,44 @@ impl<'de> Deserialize<'de> for VaultPath {
     }
 }
 
+fn decode_percent_sequences(input: &str) -> Result<Cow<'_, str>, ValidationError> {
+    if !input.as_bytes().contains(&b'%') {
+        return Ok(Cow::Borrowed(input));
+    }
+
+    let input_bytes = input.as_bytes();
+    let mut decoded = Vec::with_capacity(input_bytes.len());
+    let mut index = 0;
+
+    while index < input_bytes.len() {
+        if input_bytes[index] == b'%' {
+            if index + 2 >= input_bytes.len() {
+                return Err(ValidationError::InvalidPercentEncoding);
+            }
+            let hi = percent_nibble(input_bytes[index + 1])?;
+            let lo = percent_nibble(input_bytes[index + 2])?;
+            decoded.push((hi << 4) | lo);
+            index += 3;
+        } else {
+            decoded.push(input_bytes[index]);
+            index += 1;
+        }
+    }
+
+    String::from_utf8(decoded)
+        .map(Cow::Owned)
+        .map_err(|_| ValidationError::InvalidPercentEncoding)
+}
+
+fn percent_nibble(byte: u8) -> Result<u8, ValidationError> {
+    match byte {
+        b'0'..=b'9' => Ok(byte - b'0'),
+        b'a'..=b'f' => Ok(byte - b'a' + 10),
+        b'A'..=b'F' => Ok(byte - b'A' + 10),
+        _ => Err(ValidationError::InvalidPercentEncoding),
+    }
+}
+
 fn has_windows_drive_prefix(input: &str) -> bool {
     let bytes = input.as_bytes();
     bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':'
@@ -161,6 +203,12 @@ mod tests {
     }
 
     #[test]
+    fn normalizes_safely_decoded_url_path() {
+        let path = VaultPath::parse("Notes%2Fa.md").unwrap();
+        assert_eq!(path.as_str(), "Notes/a.md");
+    }
+
+    #[test]
     fn rejects_path_traversal() {
         assert_eq!(
             VaultPath::parse("../a.md").unwrap_err(),
@@ -168,6 +216,10 @@ mod tests {
         );
         assert_eq!(
             VaultPath::parse("Notes/../../bad.md").unwrap_err(),
+            ValidationError::PathTraversal
+        );
+        assert_eq!(
+            VaultPath::parse("%2e%2e/a.md").unwrap_err(),
             ValidationError::PathTraversal
         );
     }
@@ -197,6 +249,18 @@ mod tests {
         assert_eq!(
             VaultPath::parse("Notes/a\0.md").unwrap_err(),
             ValidationError::NullByte
+        );
+        assert_eq!(
+            VaultPath::parse("Notes/a%00.md").unwrap_err(),
+            ValidationError::NullByte
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_percent_encoding() {
+        assert_eq!(
+            VaultPath::parse("Notes/%GG.md").unwrap_err(),
+            ValidationError::InvalidPercentEncoding
         );
     }
 
