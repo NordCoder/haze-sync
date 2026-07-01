@@ -43,7 +43,10 @@ fn upload_then_downloads_same_bytes_and_verifies_hash_with_fake_store() {
     assert_eq!(revision.content_hash, expected_hash);
     assert_eq!(revision.size_bytes, bytes.len() as u64);
     assert_eq!(operation.seq, 1);
-    assert_eq!(harness.download(&revision.content_hash), Some(bytes.to_vec()));
+    assert_eq!(
+        harness.download(&revision.content_hash),
+        Some(bytes.to_vec())
+    );
 }
 
 #[test]
@@ -66,7 +69,10 @@ fn uploads_two_revisions_and_tracks_parent_and_current_revision_with_fakes() {
     );
 
     assert_eq!(second.parent_revision_id, Some(first.revision_id.clone()));
-    assert_eq!(harness.current_revision("Notes/two-revisions.md"), Some(second));
+    assert_eq!(
+        harness.current_revision("Notes/two-revisions.md"),
+        Some(second)
+    );
     assert_eq!(harness.revision_insert_count(), 2);
     assert_eq!(harness.operation_count(), 2);
 }
@@ -100,8 +106,14 @@ fn changes_feed_includes_upsert_operations_from_fake_log() {
         .changes
         .iter()
         .all(|change| change.operation.kind == FeedOperationKind::UpsertFile));
-    assert_eq!(page.changes[0].operation.revision_id, Some(first.revision_id));
-    assert_eq!(page.changes[1].operation.revision_id, Some(second.revision_id));
+    assert_eq!(
+        page.changes[0].operation.revision_id,
+        Some(first.revision_id)
+    );
+    assert_eq!(
+        page.changes[1].operation.revision_id,
+        Some(second.revision_id)
+    );
 }
 
 #[test]
@@ -157,7 +169,13 @@ fn same_path_concurrent_writes_are_serialized_by_fake_harness_without_state_corr
             .expect("right fake upsert should not error"),
     ];
 
-    assert_eq!(outcomes.iter().filter(|outcome| is_accepted_new_file(outcome)).count(), 1);
+    assert_eq!(
+        outcomes
+            .iter()
+            .filter(|outcome| is_accepted_new_file(outcome))
+            .count(),
+        1
+    );
     assert_eq!(
         outcomes
             .iter()
