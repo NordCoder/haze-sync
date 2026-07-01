@@ -2,11 +2,18 @@
 //!
 //! Repository helpers in this module execute only caller-requested SQL against a
 //! caller-owned executor or transaction. They do not create pools, run
-//! migrations, append operation-log entries, perform idempotency checks, resolve
-//! conflicts, or implement Core apply policy.
+//! migrations, append operation-log entries outside their scoped repository,
+//! resolve conflicts, or implement Core apply policy.
 
+pub mod idempotency;
 pub mod objects;
 pub mod revisions;
+
+pub use idempotency::{
+    check_or_store_idempotency_record, compare_request_fingerprint, insert_idempotency_record,
+    read_idempotency_record, IdempotencyRecordInput, IdempotencyRepositoryError,
+    IdempotencyRepositoryOutcome, IdempotencyRequestComparison, IdempotencyStoreOutcome,
+};
 
 use std::{error::Error, fmt};
 
