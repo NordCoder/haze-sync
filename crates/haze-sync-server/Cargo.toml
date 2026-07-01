@@ -16,6 +16,7 @@ axum = { version = "0.7", default-features = false, features = ["json", "query",
 haze-sync-api = { path = "../haze-sync-api" }
 haze-sync-common = { path = "../haze-sync-common" }
 serde = { version = "1.0", features = ["derive"] }
+sqlx = { version = "0.7", default-features = false, features = ["postgres", "runtime-tokio-rustls", "migrate"] }
 
 [dev-dependencies]
 http-body-util = "0.1"
