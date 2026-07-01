@@ -44,7 +44,10 @@ impl SecretString {
 
 impl fmt::Debug for SecretString {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.debug_tuple("SecretString").field(&REDACTED).finish()
+        formatter
+            .debug_tuple("SecretString")
+            .field(&REDACTED)
+            .finish()
     }
 }
 
