@@ -62,7 +62,7 @@ impl FromStr for OperationKindName {
             "conflict_created" => Ok(Self::ConflictCreated),
             "conflict_resolved" => Ok(Self::ConflictResolved),
             "backup_created" => Ok(Self::BackupCreated),
-            _ => Err(RepositoryError::DatabaseOperationFailed),
+            _ => Err(RepositoryError::InvalidOperationKind),
         }
     }
 }
@@ -324,6 +324,10 @@ mod tests {
         assert_eq!(
             serde_json::from_str::<OperationKindName>(&json).unwrap(),
             OperationKindName::ConflictCreated
+        );
+        assert_eq!(
+            OperationKindName::from_str("overwrite_file"),
+            Err(RepositoryError::InvalidOperationKind)
         );
     }
 }
