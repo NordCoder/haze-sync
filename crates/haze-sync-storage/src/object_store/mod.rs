@@ -172,16 +172,16 @@ impl ObjectStore for LocalObjectStore {
         expected_hash: ContentHash,
         bytes: &[u8],
     ) -> ObjectStoreResult<ObjectMetadata> {
-        if let Some(metadata) = self.stat(expected_hash)? {
-            return Ok(metadata);
-        }
-
         let actual_hash = hash_bytes(bytes);
         if actual_hash != expected_hash {
             return Err(ObjectStoreError::HashMismatch {
                 expected: expected_hash,
                 actual: actual_hash,
             });
+        }
+
+        if let Some(metadata) = self.stat(expected_hash)? {
+            return Ok(metadata);
         }
 
         let final_path = self.blob_path(expected_hash);
@@ -446,6 +446,25 @@ mod tests {
             .expect("duplicate put should succeed");
 
         assert_eq!(first, second);
+        assert_eq!(store.get_bytes(hash).unwrap().as_slice(), bytes);
+    }
+
+    #[test]
+    fn existing_blob_does_not_mask_mismatched_reput() {
+        let root = TestRoot::new("existing-mismatch");
+        let store = root.store();
+        let bytes = b"already committed content";
+        let hash = hash_bytes(bytes);
+
+        store
+            .put_bytes(hash, bytes)
+            .expect("initial put should succeed");
+
+        let error = store
+            .put_bytes(hash, b"different content")
+            .expect_err("mismatched re-put should be rejected");
+
+        assert_eq!(error.code(), "content_hash_mismatch");
         assert_eq!(store.get_bytes(hash).unwrap().as_slice(), bytes);
     }
 
