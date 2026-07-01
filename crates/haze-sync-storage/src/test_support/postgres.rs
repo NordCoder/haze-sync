@@ -9,6 +9,8 @@ use crate::schema::table_names;
 use sqlx::{postgres::PgPoolOptions, Executor, PgPool};
 use std::fmt;
 
+type PostgresTestResult<T> = Result<T, TestSupportError>;
+
 /// One embedded storage-schema migration used by the test harness.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TestMigration {
@@ -71,7 +73,7 @@ impl PostgresTestContext {
     /// Returns `Ok(None)` when neither `HAZE_SYNC_TEST_DATABASE_URL` nor
     /// `DATABASE_URL` is set. Callers can use that result to skip ignored or
     /// opt-in integration tests without failing normal local/unit test runs.
-    pub async fn connect_from_env() -> Result<Option<Self>, TestSupportError> {
+    pub async fn connect_from_env() -> PostgresTestResult<Option<Self>> {
         let Some(url) = TestDatabaseUrl::from_env()? else {
             return Ok(None);
         };
@@ -80,7 +82,7 @@ impl PostgresTestContext {
     }
 
     /// Connects to a previously validated test database URL.
-    pub async fn connect(url: TestDatabaseUrl) -> Result<Self, TestSupportError> {
+    pub async fn connect(url: TestDatabaseUrl) -> PostgresTestResult<Self> {
         let pool = PgPoolOptions::new()
             .max_connections(5)
             .connect(url.as_sensitive_str())
@@ -118,7 +120,7 @@ impl PostgresTestContext {
     /// This helper is intentionally test-only and assumes a fresh safe test
     /// database. It is not a production migration runner and does not maintain a
     /// schema history table.
-    pub async fn apply_migrations(&self) -> Result<(), TestSupportError> {
+    pub async fn apply_migrations(&self) -> PostgresTestResult<()> {
         apply_storage_migrations(&self.pool).await
     }
 
@@ -126,7 +128,7 @@ impl PostgresTestContext {
     ///
     /// This is destructive by design and is available only after the database URL
     /// has passed test-name safety checks. It never drops databases or schemas.
-    pub async fn clean_storage_tables(&self) -> Result<(), TestSupportError> {
+    pub async fn clean_storage_tables(&self) -> PostgresTestResult<()> {
         clean_storage_tables(&self.pool).await
     }
 }
@@ -142,12 +144,12 @@ impl fmt::Debug for PostgresTestContext {
 }
 
 /// Connects to the configured real Postgres test database if available.
-pub async fn connect_test_database_from_env() -> Result<Option<PostgresTestContext>, TestSupportError> {
+pub async fn connect_test_database_from_env() -> PostgresTestResult<Option<PostgresTestContext>> {
     PostgresTestContext::connect_from_env().await
 }
 
 /// Applies all embedded storage schema migrations to a test database.
-pub async fn apply_storage_migrations(pool: &PgPool) -> Result<(), TestSupportError> {
+pub async fn apply_storage_migrations(pool: &PgPool) -> PostgresTestResult<()> {
     for migration in STORAGE_TEST_MIGRATIONS {
         pool.execute(migration.sql)
             .await
@@ -158,7 +160,7 @@ pub async fn apply_storage_migrations(pool: &PgPool) -> Result<(), TestSupportEr
 }
 
 /// Truncates storage metadata tables in dependency-safe order.
-pub async fn clean_storage_tables(pool: &PgPool) -> Result<(), TestSupportError> {
+pub async fn clean_storage_tables(pool: &PgPool) -> PostgresTestResult<()> {
     let sql = format!(
         "truncate table {audit_events}, {worktree_state}, {gdrive_mapping}, {idempotency_records}, {adapter_cursors}, {operation_log}, {conflicts}, {tombstones}, {file_revisions}, {sync_objects}, {content_blobs}, {sync_adapters} restart identity cascade",
         audit_events = table_names::AUDIT_EVENTS,
