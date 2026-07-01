@@ -1,37 +1,44 @@
-//! Haze Sync HTTP route shell.
+//! Haze Sync HTTP route shell and W2 Core file-operation fan-in.
 //!
-//! This module defines route boundaries for the V1 Core API surface. Health is
-//! dependency-free; readiness is backed by explicit safe dependency checks when
-//! supplied. Core file/change/conflict routes remain placeholders and do not read
-//! or write storage, mutate the filesystem, run Core algorithms, bypass future
-//! auth/idempotency/conflict/delete semantics, or contact providers.
+//! Health remains dependency-free. Readiness and Core file/change routes use
+//! explicit caller-owned state when supplied; no hidden global runtime state is
+//! created by router construction.
 
 use axum::{routing::get, Extension, Router};
 
-use crate::readiness::ReadinessState;
+use crate::{readiness::ReadinessState, state::ServerAppState};
 
 pub mod health;
 pub mod v1;
 
-/// Builds the Haze Sync server shell router with safe not-ready dependency defaults.
+/// Builds the Haze Sync router with safe not-ready dependency defaults.
 ///
-/// The default router remains free of live database connections, object-store
-/// creation, provider clients, auth middleware, and production listener startup.
+/// Protected W2 Core routes are registered, but without runtime state they
+/// return sanitized auth/storage errors rather than mutating anything.
 pub fn build_router() -> Router {
-    build_router_with_readiness(ReadinessState::dependency_free_not_ready())
+    build_router_with_state(ServerAppState::dependency_free())
 }
 
-/// Builds the Haze Sync server shell router with caller-supplied readiness checks.
-///
-/// This is the integration point future startup code can use after explicitly
-/// creating a database pool and validating object-store configuration. Supplying
-/// readiness state does not wire file/changelog routes to Core services.
+/// Builds the Haze Sync router with caller-supplied runtime state.
+#[must_use]
+pub fn build_router_with_state(state: ServerAppState) -> Router {
+    let readiness = state.readiness_state();
+    build_router_with_state_and_readiness(state, readiness)
+}
+
+/// Builds the router with caller-supplied readiness checks and dependency-free
+/// Core state. This preserves the W1/W2-P8 shell integration point.
 pub fn build_router_with_readiness(readiness: ReadinessState) -> Router {
+    build_router_with_state_and_readiness(ServerAppState::dependency_free(), readiness)
+}
+
+fn build_router_with_state_and_readiness(state: ServerAppState, readiness: ReadinessState) -> Router {
     Router::new()
         .route("/health", get(health::health))
         .route("/ready", get(health::ready))
         .nest("/v1", v1::router())
         .layer(Extension(readiness))
+        .layer(Extension(state))
 }
 
 #[cfg(test)]
@@ -110,30 +117,26 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn placeholder_file_write_returns_explicit_not_implemented_error() {
+    async fn protected_file_write_requires_auth_without_runtime_state() {
         let (status, json) = request_json(
             "PUT",
             "/v1/files/Notes/a.md",
-            Body::from("not persisted by route shell"),
+            Body::from("not persisted without runtime state"),
         )
         .await;
 
-        assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
-        assert_eq!(json["error"]["code"], "not_implemented");
-        assert!(json["error"]["message"]
-            .as_str()
-            .expect("message should be a string")
-            .contains("route shell"));
-        assert!(!json.to_string().contains("accepted"));
-        assert!(!json.to_string().contains("persisted"));
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(json["error"]["code"], "missing_token");
+        assert!(!json.to_string().contains("Idempotency-Key"));
+        assert!(!json.to_string().contains("not persisted"));
     }
 
     #[tokio::test]
-    async fn placeholder_changes_route_returns_not_implemented_error() {
+    async fn protected_changes_route_requires_auth_without_runtime_state() {
         let (status, json) =
             request_json("GET", "/v1/changes?since=0&limit=10", Body::empty()).await;
 
-        assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
-        assert_eq!(json["error"]["code"], "not_implemented");
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(json["error"]["code"], "missing_token");
     }
 }
