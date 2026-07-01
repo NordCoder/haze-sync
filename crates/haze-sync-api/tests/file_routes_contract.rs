@@ -3,15 +3,15 @@ use haze_sync_api::{
         errors::PublicErrorCode,
         headers::{IDEMPOTENCY_KEY_HEADER, X_BASE_REVISION_ID_HEADER},
     },
-    dto::files::FileRejectedReasonDto,
+    dto::{common::ConflictPolicyDto, files::FileRejectedReasonDto},
     routes::files::{
-        accepted_upload_response, ignored_same_content_response, parse_get_file_request,
-        parse_put_file_request, rejected_upload_response, FileDownloadRouteHeaders,
-        FileRouteError, GetFileRouteRequestParts, PutFileRouteRequestParts,
+        accepted_upload_response, conflict_saved_upload_response, ignored_same_content_response,
+        parse_get_file_request, parse_put_file_request, rejected_upload_response,
+        FileDownloadRouteHeaders, FileRouteError, GetFileRouteRequestParts, PutFileRouteRequestParts,
         APPLICATION_OCTET_STREAM, CONTENT_TYPE_HEADER, X_REVISION_ID_HEADER, X_SIZE_BYTES_HEADER,
     },
 };
-use haze_sync_common::{ContentHash, RevisionId, VaultPath};
+use haze_sync_common::{ConflictId, ContentHash, RevisionId, VaultPath};
 
 fn prefixed_hash(ch: char) -> String {
     let hex = ch.to_string().repeat(64);
@@ -153,6 +153,19 @@ fn get_optional_revision_id_parses() {
 }
 
 #[test]
+fn invalid_get_revision_id_rejected() {
+    let error = parse_get_file_request(GetFileRouteRequestParts {
+        route_path: "Notes/plan.md",
+        revision_id: Some("not_rev_01J"),
+    })
+    .expect_err("invalid GET revision query should reject");
+
+    assert_eq!(error, FileRouteError::InvalidRevisionQuery);
+    assert_eq!(error.http_status_code(), 400);
+    assert_eq!(error.public_code(), PublicErrorCode::ValidationError);
+}
+
+#[test]
 fn response_headers_are_deterministic_and_safe() {
     let revision_id = RevisionId::parse("rev_01JDOWN").unwrap();
     let expected_hash = prefixed_hash('b');
@@ -195,6 +208,13 @@ fn response_dto_mappers_preserve_contract_shapes() {
         VaultPath::parse("Notes/plan.md").unwrap(),
         FileRejectedReasonDto::ValidationError,
     );
+    let conflict_saved = conflict_saved_upload_response(
+        VaultPath::parse("Notes/plan.md").unwrap(),
+        ConflictId::parse("conf_01JCONFLICT").unwrap(),
+        VaultPath::parse("_haze_conflicts/open/Notes/plan.md").unwrap(),
+        ConflictPolicyDto::PreserveBoth,
+        43,
+    );
 
     assert!(serde_json::to_string(&accepted)
         .unwrap()
@@ -205,6 +225,9 @@ fn response_dto_mappers_preserve_contract_shapes() {
     assert!(serde_json::to_string(&rejected)
         .unwrap()
         .contains("validation_error"));
+    assert!(serde_json::to_string(&conflict_saved)
+        .unwrap()
+        .contains("conflict_saved"));
 }
 
 #[test]
