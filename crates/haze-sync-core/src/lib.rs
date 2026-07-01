@@ -4,6 +4,7 @@
 //! routes, database pool creation, migrations, provider SDKs, and adapter loops
 //! live outside this crate.
 
+pub mod idempotency;
 pub mod revision_service;
 
 /// Human-readable crate role used by skeleton smoke checks and documentation.
