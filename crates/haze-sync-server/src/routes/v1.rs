@@ -47,9 +47,6 @@ pub async fn server_info() -> Json<ServerInfoResponse> {
 }
 
 /// Placeholder for Core routes whose business behavior is not implemented yet.
-pub async fn core_route_not_implemented() -> (
-    axum::http::StatusCode,
-    Json<ShellErrorResponse>,
-) {
+pub async fn core_route_not_implemented() -> (axum::http::StatusCode, Json<ShellErrorResponse>) {
     not_implemented_response()
 }
