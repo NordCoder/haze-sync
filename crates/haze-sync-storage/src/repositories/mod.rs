@@ -38,7 +38,9 @@ impl fmt::Display for RepositoryError {
             }
             Self::InvalidOperationKind => formatter.write_str("operation kind is not supported"),
             Self::CursorRegression => formatter.write_str("cursor update would move backwards"),
-            Self::DatabaseOperationFailed => formatter.write_str("storage database operation failed"),
+            Self::DatabaseOperationFailed => {
+                formatter.write_str("storage database operation failed")
+            }
         }
     }
 }
