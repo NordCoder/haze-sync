@@ -3,6 +3,8 @@
 //! Wave 0 intentionally exposes only a tiny placeholder API. Real V1 behavior is
 //! implemented by later phases.
 
+pub mod operation_log;
+
 /// Human-readable crate role used by skeleton smoke checks and documentation.
 pub const CRATE_ROLE: &str = "Placeholder crate for the future Sync Core.";
 
