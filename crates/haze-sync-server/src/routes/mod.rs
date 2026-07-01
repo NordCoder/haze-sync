@@ -102,7 +102,8 @@ mod tests {
 
     #[tokio::test]
     async fn placeholder_changes_route_returns_not_implemented_error() {
-        let (status, json) = request_json("GET", "/v1/changes?since=0&limit=10", Body::empty()).await;
+        let (status, json) =
+            request_json("GET", "/v1/changes?since=0&limit=10", Body::empty()).await;
 
         assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
         assert_eq!(json["error"]["code"], "not_implemented");
