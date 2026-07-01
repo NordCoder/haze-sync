@@ -78,10 +78,7 @@ mod tests {
                 kind: OperationKindDto::UpsertFile,
                 path: VaultPathDto::from("Projects/Haze/plan.md"),
                 revision_id: Some(RevisionIdDto::from("rev_01J")),
-                content_sha256: Some(ContentSha256Dto::from(format!(
-                    "sha256:{}",
-                    "a".repeat(64)
-                ))),
+                content_sha256: Some(ContentSha256Dto::from(format!("sha256:{}", "a".repeat(64)))),
                 size_bytes: Some(1_842),
                 tombstone_id: None,
                 conflict_id: None,
