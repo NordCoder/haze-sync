@@ -7,6 +7,9 @@
 pub mod models;
 pub mod schema;
 
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support;
+
 /// Human-readable crate role used by skeleton smoke checks and documentation.
 pub const CRATE_ROLE: &str = "Storage schema metadata and passive database row models.";
 
