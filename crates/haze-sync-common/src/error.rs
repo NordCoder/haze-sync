@@ -60,7 +60,9 @@ impl ValidationError {
             Self::NullByte => "value must not contain null bytes",
             Self::RuntimePath => "path is reserved for runtime state and must not sync",
             Self::InvalidPercentEncoding => "path contains invalid percent encoding",
-            Self::InvalidHashLength => "SHA-256 value must contain exactly 64 hexadecimal characters",
+            Self::InvalidHashLength => {
+                "SHA-256 value must contain exactly 64 hexadecimal characters"
+            }
             Self::InvalidHashCharacter => "SHA-256 value contains non-hexadecimal characters",
             Self::InvalidIdentifier => "identifier contains unsupported characters",
             Self::InvalidIdentifierPrefix => "identifier does not use the required prefix",
