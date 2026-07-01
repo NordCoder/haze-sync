@@ -94,7 +94,10 @@ impl ReadinessReport {
     /// Build a readiness report from deterministic component results.
     #[must_use]
     pub fn new(components: Vec<ReadinessComponent>) -> Self {
-        let status = if components.iter().all(|component| component.status.is_ready()) {
+        let status = if components
+            .iter()
+            .all(|component| component.status.is_ready())
+        {
             ReadinessOverallStatus::Ready
         } else {
             ReadinessOverallStatus::NotReady
@@ -154,10 +157,7 @@ impl ReadinessState {
 
     /// Check all runtime readiness components.
     pub async fn check(&self) -> ReadinessReport {
-        ReadinessReport::new(vec![
-            self.database.check().await,
-            self.object_store.check(),
-        ])
+        ReadinessReport::new(vec![self.database.check().await, self.object_store.check()])
     }
 }
 
@@ -341,7 +341,10 @@ mod tests {
         .await;
 
         assert_eq!(report.status, ReadinessOverallStatus::NotReady);
-        assert_eq!(report.components[0].status, ReadinessComponentStatus::Disabled);
+        assert_eq!(
+            report.components[0].status,
+            ReadinessComponentStatus::Disabled
+        );
         assert_eq!(report.components[1].status, ReadinessComponentStatus::Ready);
     }
 
@@ -371,12 +374,10 @@ mod tests {
         let file_path = dir.path.join("not-a-directory");
         fs::write(&file_path, b"not a directory").expect("test file should be written");
 
-        let report = ReadinessState::from_optional(
-            None,
-            Some(ObjectStoreConfig { root: file_path }),
-        )
-        .check()
-        .await;
+        let report =
+            ReadinessState::from_optional(None, Some(ObjectStoreConfig { root: file_path }))
+                .check()
+                .await;
         let json = serde_json::to_string(&report).expect("readiness should serialize");
         let dir_path = dir.path.to_string_lossy();
 
