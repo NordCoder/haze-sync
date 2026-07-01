@@ -421,9 +421,7 @@ mod tests {
         let bytes = b"immutable blob bytes";
         let hash = hash_bytes(bytes);
 
-        let metadata = store
-            .put_bytes(hash, bytes)
-            .expect("blob should be stored");
+        let metadata = store.put_bytes(hash, bytes).expect("blob should be stored");
         let loaded = store.get_bytes(hash).expect("blob should be readable");
 
         assert_eq!(metadata.hash(), hash);
