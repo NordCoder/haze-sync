@@ -225,11 +225,15 @@ mod tests {
             path: VaultPathDto::from("Projects/Haze/plan.md"),
         };
 
-        assert!(serde_json::to_string(&accepted).unwrap().contains("\"accepted\""));
+        assert!(serde_json::to_string(&accepted)
+            .unwrap()
+            .contains("\"accepted\""));
         assert!(serde_json::to_string(&conflict)
             .unwrap()
             .contains("conflict_saved"));
-        assert!(serde_json::to_string(&ignored).unwrap().contains("same_content"));
+        assert!(serde_json::to_string(&ignored)
+            .unwrap()
+            .contains("same_content"));
     }
 
     #[test]
