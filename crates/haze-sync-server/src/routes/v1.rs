@@ -11,7 +11,6 @@ use haze_sync_api::dto::server::{ServerCapabilityDto, ServerInfoResponse};
 use crate::http::errors::{not_implemented_response, ShellErrorResponse};
 
 /// Builds the versioned `/v1` API namespace.
-#[must_use]
 pub fn router() -> Router {
     Router::new()
         .route("/server-info", get(server_info))
