@@ -16,7 +16,7 @@ pub fn router() -> Router {
         .route("/server-info", get(server_info))
         .route("/changes", get(core_route_not_implemented))
         .route(
-            "/files/*path",
+            "/files/{*path}",
             get(core_route_not_implemented)
                 .put(core_route_not_implemented)
                 .delete(core_route_not_implemented),
