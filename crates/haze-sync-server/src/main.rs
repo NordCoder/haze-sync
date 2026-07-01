@@ -1,15 +1,18 @@
 //! Haze Sync server route shell binary.
 //!
-//! This phase exposes deterministic HTTP route boundaries only. It does not
-//! start a production listener, connect to storage, run migrations, verify
-//! adapter tokens, or perform Core sync behavior.
+//! This phase exposes deterministic HTTP route boundaries and server-side
+//! database/readiness helpers. It does not start a production listener, auto-run
+//! migrations, verify adapter tokens, or perform Core sync behavior.
 
 pub mod config;
+pub mod db;
 pub mod http;
+pub mod readiness;
 pub mod routes;
 
 /// Human-readable crate role used by skeleton smoke checks and documentation.
-pub const CRATE_ROLE: &str = "Haze Sync HTTP route shell and configuration foundation.";
+pub const CRATE_ROLE: &str =
+    "Haze Sync HTTP route shell, configuration, DB readiness, and migration foundation.";
 
 /// Returns the package name for this crate.
 #[must_use]

@@ -1,26 +1,37 @@
 //! Haze Sync HTTP route shell.
 //!
-//! This module defines route boundaries for the V1 Core API surface. Except for
-//! health, explicit route-shell readiness, and static server-info, handlers return
-//! explicit placeholders. They do not read or write storage, mutate the filesystem,
-//! run Core algorithms, bypass future auth/idempotency/conflict/delete semantics,
-//! or contact providers.
+//! This module defines route boundaries for the V1 Core API surface. Health is
+//! dependency-free; readiness is backed by explicit safe dependency checks when
+//! supplied. Core file/change/conflict routes remain placeholders and do not read
+//! or write storage, mutate the filesystem, run Core algorithms, bypass future
+//! auth/idempotency/conflict/delete semantics, or contact providers.
 
-use axum::{routing::get, Router};
+use axum::{routing::get, Extension, Router};
+
+use crate::readiness::ReadinessState;
 
 pub mod health;
 pub mod v1;
 
-/// Builds the Haze Sync server shell router.
+/// Builds the Haze Sync server shell router with safe not-ready dependency defaults.
 ///
-/// The router is intentionally dependency-free: no database pool, object store,
-/// provider client, config loader, auth middleware, or production listener is
-/// required to construct it.
+/// The default router remains free of live database connections, object-store
+/// creation, provider clients, auth middleware, and production listener startup.
 pub fn build_router() -> Router {
+    build_router_with_readiness(ReadinessState::dependency_free_not_ready())
+}
+
+/// Builds the Haze Sync server shell router with caller-supplied readiness checks.
+///
+/// This is the integration point future startup code can use after explicitly
+/// creating a database pool and validating object-store configuration. Supplying
+/// readiness state does not wire file/changelog routes to Core services.
+pub fn build_router_with_readiness(readiness: ReadinessState) -> Router {
     Router::new()
         .route("/health", get(health::health))
         .route("/ready", get(health::ready))
         .nest("/v1", v1::router())
+        .layer(Extension(readiness))
 }
 
 #[cfg(test)]
@@ -70,17 +81,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ready_endpoint_returns_explicit_safe_not_ready_placeholder() {
+    async fn ready_endpoint_returns_safe_not_ready_report_by_default() {
         let (status, json) = request_json("GET", "/ready", Body::empty()).await;
 
         assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
         assert_eq!(json["status"], "not_ready");
-        assert!(json["reason"]
-            .as_str()
-            .expect("reason should be a string")
-            .contains("route shell"));
+        assert_eq!(json["components"][0]["name"], "database");
+        assert_eq!(json["components"][0]["status"], "disabled");
+        assert_eq!(json["components"][1]["name"], "object_store");
+        assert_eq!(json["components"][1]["status"], "disabled");
         assert!(!json.to_string().contains("postgres://"));
         assert!(!json.to_string().contains("secret"));
+        assert!(!json.to_string().contains("/srv/"));
+        assert!(!json.to_string().contains("stack"));
     }
 
     #[tokio::test]
