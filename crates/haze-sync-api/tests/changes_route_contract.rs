@@ -17,10 +17,7 @@ fn sample_change(seq: i64) -> ChangeEntryDto {
         kind: OperationKindDto::UpsertFile,
         path: VaultPathDto::from("Projects/Haze/plan.md"),
         revision_id: Some(RevisionIdDto::from("rev_01JTEST")),
-        content_sha256: Some(ContentSha256Dto::from(format!(
-            "sha256:{}",
-            "a".repeat(64)
-        ))),
+        content_sha256: Some(ContentSha256Dto::from(format!("sha256:{}", "a".repeat(64)))),
         size_bytes: Some(1_842),
         tombstone_id: None,
         conflict_id: None,
@@ -87,8 +84,8 @@ fn too_large_limit_is_rejected_as_invalid_request() {
 
 #[test]
 fn response_serialization_matches_stable_safe_shape() {
-    let response = changes_response_from_parts(12_345, 12_380, false, vec![sample_change(12_380)])
-        .unwrap();
+    let response =
+        changes_response_from_parts(12_345, 12_380, false, vec![sample_change(12_380)]).unwrap();
     let hash = format!("sha256:{}", "a".repeat(64));
     let expected = format!(
         "{{\"from_seq\":12345,\"to_seq\":12380,\"has_more\":false,\"changes\":[{{\"seq\":12380,\"kind\":\"upsert_file\",\"path\":\"Projects/Haze/plan.md\",\"revision_id\":\"rev_01JTEST\",\"content_sha256\":\"{hash}\",\"size_bytes\":1842,\"updated_by\":\"gdrive-adapter\",\"updated_at\":\"2026-07-01T22:00:00Z\"}}]}}"
