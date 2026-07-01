@@ -16,7 +16,8 @@ fn zero_hash() -> ContentHash {
 fn api_dtos_interoperate_with_common_domain_primitives() {
     let path = VaultPath::parse("./Notes//daily.md").expect("fixture path should parse");
     let adapter_id = AdapterId::parse("iphone-anna").expect("fixture adapter id should parse");
-    let revision_id = RevisionId::parse("rev_01JFOUNDATION").expect("fixture revision should parse");
+    let revision_id =
+        RevisionId::parse("rev_01JFOUNDATION").expect("fixture revision should parse");
     let hash = zero_hash();
 
     let metadata = FileMetadataResponse {
@@ -31,9 +32,18 @@ fn api_dtos_interoperate_with_common_domain_primitives() {
     let json = serde_json::to_string(&metadata).expect("metadata should serialize");
     assert!(json.contains("Notes/daily.md"));
     assert_eq!(VaultPath::try_from(&metadata.path).unwrap(), path);
-    assert_eq!(RevisionId::try_from(&metadata.revision_id).unwrap(), revision_id);
-    assert_eq!(ContentHash::try_from(&metadata.content_sha256).unwrap(), hash);
-    assert_eq!(AdapterId::try_from(&metadata.updated_by).unwrap(), adapter_id);
+    assert_eq!(
+        RevisionId::try_from(&metadata.revision_id).unwrap(),
+        revision_id
+    );
+    assert_eq!(
+        ContentHash::try_from(&metadata.content_sha256).unwrap(),
+        hash
+    );
+    assert_eq!(
+        AdapterId::try_from(&metadata.updated_by).unwrap(),
+        adapter_id
+    );
 }
 
 #[test]
