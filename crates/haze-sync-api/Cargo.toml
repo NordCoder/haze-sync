@@ -13,6 +13,7 @@ path = "src/lib.rs"
 [dependencies]
 hex = "0.4"
 haze-sync-common = { path = "../haze-sync-common" }
+haze-sync-core = { path = "../haze-sync-core" }
 serde = { version = "1.0", features = ["derive"] }
 sha2 = "0.10"
 subtle = "2.5"
