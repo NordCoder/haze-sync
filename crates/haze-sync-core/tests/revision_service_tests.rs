@@ -196,7 +196,10 @@ fn new_file_with_null_base_is_accepted() {
     assert_eq!(repository.inserted.len(), 1);
     assert_eq!(content_store.put_calls.len(), 1);
     assert_eq!(operation_log.appended.len(), 1);
-    assert_eq!(events.snapshot(), ["put_content", "insert_revision", "append_operation"]);
+    assert_eq!(
+        events.snapshot(),
+        ["put_content", "insert_revision", "append_operation"]
+    );
 }
 
 #[test]
