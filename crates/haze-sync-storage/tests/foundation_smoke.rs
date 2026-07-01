@@ -1,7 +1,7 @@
 use haze_sync_common::ContentHash;
 use haze_sync_storage::{LocalObjectStore, ObjectStore};
 use sha2::{Digest, Sha256 as Sha256Hasher};
-use std::{env, fs, path::PathBuf, time::SystemTime};
+use std::{env, fs, path::PathBuf, time::UNIX_EPOCH};
 
 struct TempRoot {
     path: PathBuf,
@@ -9,8 +9,8 @@ struct TempRoot {
 
 impl TempRoot {
     fn new(label: &str) -> Self {
-        let timestamp = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(UNIX_EPOCH)
             .expect("system time should be after Unix epoch")
             .as_nanos();
         let path = env::temp_dir().join(format!(
