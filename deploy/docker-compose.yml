@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-haze_sync}
+      POSTGRES_USER: ${POSTGRES_USER:-haze_sync}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-haze_sync_dev_password}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Future phases will add haze-sync-server and haze-gdrive-adapter service wiring.
+  # Wave 0 intentionally provides only the local PostgreSQL scaffold.
+
+volumes:
+  postgres_data:

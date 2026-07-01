@@ -1,0 +1,30 @@
+name: Obsidian Plugin
+
+on:
+  push:
+    branches:
+      - main
+      - w00-repo-foundation
+  pull_request:
+
+jobs:
+  obsidian-plugin:
+    name: TypeScript plugin
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Typecheck plugin
+        run: npm run --workspace haze-obsidian-plugin typecheck
+
+      - name: Build plugin
+        run: npm run --workspace haze-obsidian-plugin build
