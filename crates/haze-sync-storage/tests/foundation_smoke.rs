@@ -56,7 +56,7 @@ fn storage_object_store_accepts_common_content_hash() {
     assert_eq!(metadata.hash(), hash);
     assert_eq!(metadata.size_bytes(), bytes.len() as u64);
     assert_eq!(loaded, bytes);
-    assert_eq!(store.exists(hash), Ok(true));
+    assert!(store.exists(hash).expect("exists check should succeed"));
 }
 
 #[test]
@@ -70,5 +70,7 @@ fn storage_object_store_rejects_mismatched_common_hash() {
         .expect_err("mismatched content must be rejected");
 
     assert_eq!(error.code(), "content_hash_mismatch");
-    assert_eq!(store.exists(expected_hash), Ok(false));
+    assert!(!store
+        .exists(expected_hash)
+        .expect("exists check should succeed"));
 }
