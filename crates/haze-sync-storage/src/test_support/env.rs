@@ -192,11 +192,9 @@ mod tests {
     #[test]
     fn parses_and_redacts_test_database_url() {
         let raw = "postgres://haze_sync:placeholder_password@localhost:5432/haze_sync_test?sslmode=disable";
-        let url = TestDatabaseUrl::parse_explicit(
-            TestDatabaseUrlSource::HazeSyncTestDatabaseUrl,
-            raw,
-        )
-        .expect("test URL should be accepted");
+        let url =
+            TestDatabaseUrl::parse_explicit(TestDatabaseUrlSource::HazeSyncTestDatabaseUrl, raw)
+                .expect("test URL should be accepted");
 
         assert_eq!(url.as_sensitive_str(), raw);
         assert_eq!(url.database_name(), "haze_sync_test");
