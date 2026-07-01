@@ -313,6 +313,32 @@ fn stale_or_unknown_base_does_not_overwrite_different_current_content() {
 }
 
 #[test]
+fn null_base_for_existing_file_does_not_overwrite_different_content() {
+    let current = stored_revision("rev_0001", b"current");
+    let mut service = service(
+        FakeRevisionRepository::with_current(current.clone()),
+        FakeContentStore::default(),
+        FakeOperationLog::default(),
+    );
+
+    let outcome = service.upsert_file(request(None, b"incoming")).unwrap();
+
+    assert_eq!(
+        outcome,
+        UpsertOutcome::RejectedStaleOrUnknownBase {
+            current_revision: Some(current.clone()),
+            provided_base_revision_id: None,
+        }
+    );
+
+    let (repository, content_store, operation_log) = service.into_inner();
+    assert_eq!(repository.current, Some(current));
+    assert!(repository.inserted.is_empty());
+    assert!(content_store.put_calls.is_empty());
+    assert!(operation_log.appended.is_empty());
+}
+
+#[test]
 fn non_null_base_for_missing_file_is_rejected_as_unknown_base() {
     let unknown_base = RevisionId::parse("rev_unknown").unwrap();
     let mut service = service(
