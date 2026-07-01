@@ -1,0 +1,15 @@
+[package]
+name = "haze-gdrive-adapter"
+description = "Haze Google Drive adapter placeholder binary."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "haze-gdrive-adapter"
+path = "src/main.rs"
+
+[lints]
+workspace = true
