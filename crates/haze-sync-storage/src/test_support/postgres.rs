@@ -142,8 +142,7 @@ impl fmt::Debug for PostgresTestContext {
 }
 
 /// Connects to the configured real Postgres test database if available.
-pub async fn connect_test_database_from_env() -> Result<Option<PostgresTestContext>, TestSupportError>
-{
+pub async fn connect_test_database_from_env() -> Result<Option<PostgresTestContext>, TestSupportError> {
     PostgresTestContext::connect_from_env().await
 }
 
