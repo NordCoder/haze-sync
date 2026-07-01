@@ -1,9 +1,10 @@
 //! JSON-serializable API contracts and DTOs for the Haze Sync Core HTTP API.
 //!
 //! This crate defines contract data shapes only. It does not register Axum
-//! routes, start a server, verify credentials, access storage, or implement Core
-//! sync behavior.
+//! routes, start a server, access storage, or implement Core sync behavior.
+//! Authentication primitives are provided as pure value/helper types only.
 
+pub mod auth;
 pub mod contracts;
 pub mod dto;
 
