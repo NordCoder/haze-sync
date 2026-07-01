@@ -2,6 +2,7 @@
 
 use super::{map_sqlx_error, RepositoryResult};
 use crate::models::SyncObjectRow;
+use chrono::{DateTime, Utc};
 use haze_sync_common::{AdapterId, RevisionId, VaultPath};
 use sqlx::{postgres::PgRow, Executor, Postgres, Row};
 
@@ -172,6 +173,60 @@ where
     )
     .bind(path.as_str())
     .bind(revision_id)
+    .bind(updated_by.as_str())
+    .fetch_optional(executor)
+    .await
+    .map_err(map_sqlx_error)?;
+
+    row.as_ref().map(sync_object_from_row).transpose()
+}
+
+/// Updates only the `deleted_at` metadata for an object id.
+///
+/// This passive helper records or clears the object delete marker chosen by a
+/// future delete service. It does not create tombstones, move bytes to trash,
+/// enforce retention, apply delete guards, append operation-log entries, or
+/// physically delete database rows.
+pub async fn set_sync_object_deleted_at_by_object_id<'executor, ExecutorType>(
+    executor: ExecutorType,
+    object_id: &str,
+    deleted_at: Option<DateTime<Utc>>,
+    updated_by: &AdapterId,
+) -> RepositoryResult<Option<SyncObjectRow>>
+where
+    ExecutorType: Executor<'executor, Database = Postgres>,
+{
+    let row = sqlx::query(
+        "update sync_objects\n         set deleted_at = $2, updated_by = $3, updated_at = now()\n         where object_id = $1\n         returning object_id, path, kind, current_revision_id, deleted_at, updated_at, updated_by",
+    )
+    .bind(object_id)
+    .bind(deleted_at)
+    .bind(updated_by.as_str())
+    .fetch_optional(executor)
+    .await
+    .map_err(map_sqlx_error)?;
+
+    row.as_ref().map(sync_object_from_row).transpose()
+}
+
+/// Updates only the `deleted_at` metadata for a normalized path.
+///
+/// This helper is storage-only. It does not decide whether a delete is safe and
+/// never performs a hard delete.
+pub async fn set_sync_object_deleted_at_by_path<'executor, ExecutorType>(
+    executor: ExecutorType,
+    path: &VaultPath,
+    deleted_at: Option<DateTime<Utc>>,
+    updated_by: &AdapterId,
+) -> RepositoryResult<Option<SyncObjectRow>>
+where
+    ExecutorType: Executor<'executor, Database = Postgres>,
+{
+    let row = sqlx::query(
+        "update sync_objects\n         set deleted_at = $2, updated_by = $3, updated_at = now()\n         where path = $1\n         returning object_id, path, kind, current_revision_id, deleted_at, updated_at, updated_by",
+    )
+    .bind(path.as_str())
+    .bind(deleted_at)
     .bind(updated_by.as_str())
     .fetch_optional(executor)
     .await
