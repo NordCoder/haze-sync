@@ -1,7 +1,9 @@
 //! Haze Sync server placeholder binary.
 //!
-//! This is a Wave 0 skeleton. It does not start network services, connect to
-//! providers, read credentials, or perform synchronization.
+//! Wave 0 keeps startup as a skeleton. W1-P4 only exposes config primitives for
+//! later wiring.
+
+pub mod config;
 
 fn main() {
     println!("haze-sync-server skeleton");
