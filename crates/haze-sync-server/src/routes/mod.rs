@@ -15,7 +15,6 @@ pub mod v1;
 /// The router is intentionally dependency-free: no database pool, object store,
 /// provider client, config loader, auth middleware, or production listener is
 /// required to construct it.
-#[must_use]
 pub fn build_router() -> Router {
     Router::new()
         .route("/health", get(health::health))
