@@ -1,9 +1,10 @@
 //! Haze Sync HTTP route shell.
 //!
 //! This module defines route boundaries for the V1 Core API surface. Except for
-//! health and static server-info, handlers return explicit placeholders. They do
-//! not read or write storage, mutate the filesystem, run Core algorithms, bypass
-//! future auth/idempotency/conflict/delete semantics, or contact providers.
+//! health, explicit route-shell readiness, and static server-info, handlers return
+//! explicit placeholders. They do not read or write storage, mutate the filesystem,
+//! run Core algorithms, bypass future auth/idempotency/conflict/delete semantics,
+//! or contact providers.
 
 use axum::{routing::get, Router};
 
@@ -18,6 +19,7 @@ pub mod v1;
 pub fn build_router() -> Router {
     Router::new()
         .route("/health", get(health::health))
+        .route("/ready", get(health::ready))
         .nest("/v1", v1::router())
 }
 
@@ -65,6 +67,20 @@ mod tests {
 
         assert_eq!(status, StatusCode::OK);
         assert_eq!(json["status"], "ok");
+    }
+
+    #[tokio::test]
+    async fn ready_endpoint_returns_explicit_safe_not_ready_placeholder() {
+        let (status, json) = request_json("GET", "/ready", Body::empty()).await;
+
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(json["status"], "not_ready");
+        assert!(json["reason"]
+            .as_str()
+            .expect("reason should be a string")
+            .contains("route shell"));
+        assert!(!json.to_string().contains("postgres://"));
+        assert!(!json.to_string().contains("secret"));
     }
 
     #[tokio::test]
