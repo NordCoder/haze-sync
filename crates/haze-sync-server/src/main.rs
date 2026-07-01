@@ -1,10 +1,14 @@
-//! Haze Sync server placeholder binary.
+//! Haze Sync server route shell binary.
 //!
-//! Wave 0 keeps startup as a skeleton. W1-P4 only exposes config primitives for
-//! later wiring.
+//! This phase exposes deterministic HTTP route boundaries only. It does not
+//! start a production listener, connect to storage, run migrations, verify
+//! adapter tokens, or perform Core sync behavior.
 
 pub mod config;
+pub mod http;
+pub mod routes;
 
 fn main() {
-    println!("haze-sync-server skeleton");
+    let _app = routes::build_router();
+    println!("haze-sync-server route shell");
 }
