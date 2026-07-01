@@ -20,12 +20,17 @@ const TEMP_DIR_NAME: &str = "tmp";
 const HASH_PREFIX_HEX_LEN: usize = 2;
 const READ_BUFFER_SIZE: usize = 64 * 1024;
 
-type ObjectStoreResult<T> = Result<T, ObjectStoreError>;
+/// Result type returned by object store operations.
+pub type ObjectStoreResult<T> = Result<T, ObjectStoreError>;
 
 /// Minimal object store operations required by the Haze Sync storage boundary.
 pub trait ObjectStore {
     /// Stores `bytes` as `expected_hash` after verifying the written content.
-    fn put_bytes(&self, expected_hash: ContentHash, bytes: &[u8]) -> ObjectStoreResult<ObjectMetadata>;
+    fn put_bytes(
+        &self,
+        expected_hash: ContentHash,
+        bytes: &[u8],
+    ) -> ObjectStoreResult<ObjectMetadata>;
 
     /// Reads and verifies the blob addressed by `hash`.
     fn get_bytes(&self, hash: ContentHash) -> ObjectStoreResult<Vec<u8>>;
@@ -99,12 +104,18 @@ impl LocalObjectStore {
 
     fn ensure_parent_dirs(&self, final_path: &Path) -> ObjectStoreResult<()> {
         let parent = final_path.parent().ok_or(ObjectStoreError::InvalidLayout)?;
-        fs::create_dir_all(parent).map_err(|source| ObjectStoreError::io("create_blob_parent", source))
+        fs::create_dir_all(parent)
+            .map_err(|source| ObjectStoreError::io("create_blob_parent", source))
     }
 
-    fn write_temp_blob(&self, expected_hash: ContentHash, bytes: &[u8]) -> ObjectStoreResult<PathBuf> {
+    fn write_temp_blob(
+        &self,
+        expected_hash: ContentHash,
+        bytes: &[u8],
+    ) -> ObjectStoreResult<PathBuf> {
         let tmp_dir = self.temp_dir();
-        fs::create_dir_all(&tmp_dir).map_err(|source| ObjectStoreError::io("create_temp_dir", source))?;
+        fs::create_dir_all(&tmp_dir)
+            .map_err(|source| ObjectStoreError::io("create_temp_dir", source))?;
 
         let temp_path = tmp_dir.join(temp_blob_name(expected_hash));
         let mut temp_file = OpenOptions::new()
@@ -145,7 +156,9 @@ impl LocalObjectStore {
 
         remove_temp_file(temp_path)?;
         self.stat(expected_hash)?
-            .ok_or(ObjectStoreError::MissingBlob { hash: expected_hash })
+            .ok_or(ObjectStoreError::MissingBlob {
+                hash: expected_hash,
+            })
     }
 
     fn remove_temp_after_error(&self, temp_path: &Path) {
@@ -154,7 +167,11 @@ impl LocalObjectStore {
 }
 
 impl ObjectStore for LocalObjectStore {
-    fn put_bytes(&self, expected_hash: ContentHash, bytes: &[u8]) -> ObjectStoreResult<ObjectMetadata> {
+    fn put_bytes(
+        &self,
+        expected_hash: ContentHash,
+        bytes: &[u8],
+    ) -> ObjectStoreResult<ObjectMetadata> {
         if let Some(metadata) = self.stat(expected_hash)? {
             return Ok(metadata);
         }
@@ -192,7 +209,9 @@ impl ObjectStore for LocalObjectStore {
             Err(ObjectStoreError::AlreadyCommitted) => {
                 self.remove_temp_after_error(&temp_path);
                 self.stat(expected_hash)?
-                    .ok_or(ObjectStoreError::MissingBlob { hash: expected_hash })
+                    .ok_or(ObjectStoreError::MissingBlob {
+                        hash: expected_hash,
+                    })
             }
             Err(error) => {
                 self.remove_temp_after_error(&temp_path);
@@ -283,7 +302,7 @@ impl ObjectStoreError {
         }
     }
 
-    const fn io(operation: &'static str, source: io::Error) -> Self {
+    fn io(operation: &'static str, source: io::Error) -> Self {
         Self::Io { operation, source }
     }
 }
@@ -488,10 +507,7 @@ mod tests {
         fs::write(tmp_dir.join("blob-manual.tmp"), bytes).expect("tmp file should be writable");
 
         assert!(!store.exists(hash).unwrap());
-        assert_eq!(
-            store.get_bytes(hash).unwrap_err().code(),
-            "missing_blob"
-        );
+        assert_eq!(store.get_bytes(hash).unwrap_err().code(), "missing_blob");
         assert!(!store.blob_path(hash).exists());
     }
 }
