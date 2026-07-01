@@ -14,7 +14,10 @@ pub fn unique_test_id(prefix: &str) -> String {
         .duration_since(UNIX_EPOCH)
         .map_or(0, |duration| duration.as_nanos());
 
-    format!("{prefix}-{}-{timestamp_nanos}-{sequence}", std::process::id())
+    format!(
+        "{prefix}-{}-{timestamp_nanos}-{sequence}",
+        std::process::id()
+    )
 }
 
 /// Namespace for grouping rows, adapter ids, and paths owned by one test.
@@ -65,7 +68,11 @@ impl TestNamespace {
     /// Produces a vault-relative path under `_haze_tests/` for future E2E tests.
     #[must_use]
     pub fn vault_path(&self, file_name: &str) -> String {
-        format!("_haze_tests/{}/{}", self.id, sanitize_path_segment(file_name))
+        format!(
+            "_haze_tests/{}/{}",
+            self.id,
+            sanitize_path_segment(file_name)
+        )
     }
 }
 
@@ -132,6 +139,8 @@ mod tests {
         assert!(namespace.operation_id("put file").contains("op-put-file"));
         assert!(namespace.request_id("upload").contains("req-upload"));
         assert!(namespace.vault_path("note").ends_with("/note.md"));
-        assert!(namespace.vault_path("Folder/Note.md").ends_with("/folder-note.md"));
+        assert!(namespace
+            .vault_path("Folder/Note.md")
+            .ends_with("/folder-note.md"));
     }
 }
