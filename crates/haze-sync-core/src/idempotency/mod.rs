@@ -417,7 +417,7 @@ fn append_canonical_json(value: &Value, output: &mut String) {
         }
         Value::Object(values) => {
             let mut entries: Vec<_> = values.iter().collect();
-            entries.sort_by(|(left_key, _), (right_key, _)| left_key.cmp(right_key));
+            entries.sort_by_key(|(left_key, _)| *left_key);
 
             output.push('{');
             for (index, (key, value)) in entries.iter().enumerate() {
