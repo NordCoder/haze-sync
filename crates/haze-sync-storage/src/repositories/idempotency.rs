@@ -2,8 +2,8 @@
 //!
 //! The repository stores only adapter-scoped idempotency keys, SHA-256 request
 //! fingerprints, and safe JSON response snapshots. It does not store raw request
-//! bodies, file bytes, secrets, provider payloads, database URLs, or runtime
-//! details.
+//! bodies, file bytes, sensitive values, provider payloads, database URLs, or
+//! runtime details.
 
 use crate::{models::IdempotencyRecordRow, schema::table_names};
 use chrono::{DateTime, Utc};
@@ -111,7 +111,7 @@ impl IdempotencyRepositoryError {
         }
     }
 
-    /// Stable human-readable message with no secrets or database details.
+    /// Stable human-readable message with no sensitive details.
     #[must_use]
     pub const fn message(self) -> &'static str {
         match self {
@@ -191,12 +191,8 @@ pub async fn check_or_store_idempotency_record(
     connection: &mut PgConnection,
     input: &IdempotencyRecordInput,
 ) -> Result<IdempotencyRepositoryOutcome, IdempotencyRepositoryError> {
-    if let Some(record) = read_idempotency_record(
-        connection,
-        input.adapter_id(),
-        input.idempotency_key(),
-    )
-    .await?
+    if let Some(record) =
+        read_idempotency_record(connection, input.adapter_id(), input.idempotency_key()).await?
     {
         return outcome_from_existing_record(record, input.request_hash());
     }
@@ -267,7 +263,10 @@ fn record_from_row(row: PgRow) -> Result<IdempotencyRecordRow, IdempotencyReposi
 fn validate_idempotency_key(key: &str) -> Result<(), IdempotencyRepositoryError> {
     if key.is_empty()
         || key.len() > MAX_IDEMPOTENCY_KEY_LEN
-        || key.as_bytes().iter().any(|byte| !matches!(*byte, b'!'..=b'~'))
+        || key
+            .as_bytes()
+            .iter()
+            .any(|byte| !matches!(*byte, b'!'..=b'~'))
     {
         return Err(IdempotencyRepositoryError::InvalidKey);
     }
