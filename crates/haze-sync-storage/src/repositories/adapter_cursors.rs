@@ -153,7 +153,7 @@ impl AdapterCursorRepository {
         )
         .bind(update.adapter_id.as_str())
         .bind(update.last_core_seq)
-        .bind(update.external_cursor_json.as_ref())
+        .bind(update.external_cursor_json.clone())
         .bind(update.mark_success)
         .try_map(cursor_update_row_from_pg)
         .fetch_one(executor)
