@@ -21,6 +21,8 @@ pub enum RepositoryError {
     InvalidSequence,
     /// Query page limits must be between one and the configured maximum.
     InvalidLimit { max: u32 },
+    /// An operation kind string is not part of the V1 contract vocabulary.
+    InvalidOperationKind,
     /// A requested cursor update would move the adapter backwards.
     CursorRegression,
     /// A database operation failed; details are intentionally redacted.
@@ -34,6 +36,7 @@ impl fmt::Display for RepositoryError {
             Self::InvalidLimit { max } => {
                 write!(formatter, "limit must be between 1 and {max}")
             }
+            Self::InvalidOperationKind => formatter.write_str("operation kind is not supported"),
             Self::CursorRegression => formatter.write_str("cursor update would move backwards"),
             Self::DatabaseOperationFailed => formatter.write_str("storage database operation failed"),
         }
