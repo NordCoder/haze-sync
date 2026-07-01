@@ -312,8 +312,14 @@ mod tests {
         assert_eq!(OperationKindName::UpsertFile.as_str(), "upsert_file");
         assert_eq!(OperationKindName::DeleteFile.as_str(), "delete_file");
         assert_eq!(OperationKindName::RestoreFile.as_str(), "restore_file");
-        assert_eq!(OperationKindName::ConflictCreated.as_str(), "conflict_created");
-        assert_eq!(OperationKindName::ConflictResolved.as_str(), "conflict_resolved");
+        assert_eq!(
+            OperationKindName::ConflictCreated.as_str(),
+            "conflict_created"
+        );
+        assert_eq!(
+            OperationKindName::ConflictResolved.as_str(),
+            "conflict_resolved"
+        );
         assert_eq!(OperationKindName::BackupCreated.as_str(), "backup_created");
     }
 
