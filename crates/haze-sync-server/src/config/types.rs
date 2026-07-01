@@ -1,9 +1,8 @@
 //! Typed server configuration values and env-based parsing helpers.
 
 use super::{env, ConfigError};
-use std::{
-    collections::HashMap, env as std_env, fmt, net::SocketAddr, path::PathBuf, str::FromStr,
-};
+use haze_sync_common::AdapterMode;
+use std::{collections::HashMap, env as std_env, fmt, net::SocketAddr, path::PathBuf, str::FromStr};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ServerConfig {
@@ -150,63 +149,6 @@ pub struct WorktreeConfig {
     pub mode: AdapterMode,
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum AdapterMode {
-    Disabled,
-    ReadOnly,
-    ImportOnly,
-    ExportOnly,
-    Bidirectional,
-    DryRun,
-}
-
-impl AdapterMode {
-    #[must_use]
-    pub const fn allows_core_writes(self) -> bool {
-        matches!(self, Self::ImportOnly | Self::Bidirectional)
-    }
-
-    #[must_use]
-    pub const fn allows_core_reads(self) -> bool {
-        matches!(
-            self,
-            Self::ReadOnly | Self::ExportOnly | Self::Bidirectional | Self::DryRun
-        )
-    }
-}
-
-impl fmt::Display for AdapterMode {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(match self {
-            Self::Disabled => "disabled",
-            Self::ReadOnly => "read_only",
-            Self::ImportOnly => "import_only",
-            Self::ExportOnly => "export_only",
-            Self::Bidirectional => "bidirectional",
-            Self::DryRun => "dry_run",
-        })
-    }
-}
-
-impl FromStr for AdapterMode {
-    type Err = ConfigError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value {
-            "disabled" => Ok(Self::Disabled),
-            "read_only" => Ok(Self::ReadOnly),
-            "import_only" => Ok(Self::ImportOnly),
-            "export_only" => Ok(Self::ExportOnly),
-            "bidirectional" => Ok(Self::Bidirectional),
-            "dry_run" => Ok(Self::DryRun),
-            _ => Err(ConfigError::InvalidVar {
-                name: "adapter mode",
-                reason: "unknown adapter mode",
-            }),
-        }
-    }
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AdapterModesConfig {
     pub gdrive_adapter: AdapterMode,
@@ -227,11 +169,11 @@ fn required_non_empty(name: &'static str, value: Option<String>) -> Result<Strin
     }
 }
 
-fn parse_or_default<T>(
+fn parse_or_default<T, E>(
     name: &'static str,
     value: Option<String>,
     default: &'static str,
-    parser: impl FnOnce(&str) -> Result<T, ConfigError>,
+    parser: impl FnOnce(&str) -> Result<T, E>,
 ) -> Result<T, ConfigError> {
     let value = value_or_default(value, default);
     parser(&value).map_err(|_| ConfigError::InvalidVar {
