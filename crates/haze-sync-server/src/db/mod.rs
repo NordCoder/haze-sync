@@ -110,8 +110,8 @@ mod tests {
     use super::*;
     use crate::config::DatabaseUrl;
 
-    #[test]
-    fn lazy_pool_creation_does_not_connect() {
+    #[tokio::test]
+    async fn lazy_pool_creation_does_not_connect() {
         let config = DatabaseConfig {
             database_url: DatabaseUrl::new(
                 "postgres://haze_sync:secret_password@postgres.invalid/haze_sync",
