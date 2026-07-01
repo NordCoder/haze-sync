@@ -415,7 +415,10 @@ mod tests {
     fn auth_roles_convert_to_common_roles() {
         let common_role = CommonAdapterRole::from(AdapterRole::WorktreeAdapter);
         assert_eq!(common_role, CommonAdapterRole::WorktreeAdapter);
-        assert_eq!(AdapterRole::try_from(common_role), Ok(AdapterRole::WorktreeAdapter));
+        assert_eq!(
+            AdapterRole::try_from(common_role),
+            Ok(AdapterRole::WorktreeAdapter)
+        );
         assert_eq!(
             AdapterRole::try_from(CommonAdapterRole::ReadonlyAgent),
             Err(AuthError::UnknownAdapterRole)
