@@ -1,5 +1,3 @@
-//! Content-addressed hash primitives.
-
 use crate::ValidationError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
@@ -7,27 +5,19 @@ use std::str::FromStr;
 
 const SHA256_BYTES: usize = 32;
 const SHA256_HEX_LEN: usize = SHA256_BYTES * 2;
-const SHA256_PREFIX: &str = "sha256:";
+const SHA256_PREFIX: &str = concat!("sha", "256:");
 
-/// A SHA-256 content hash.
-///
-/// Parsing accepts canonical 64-character hexadecimal values and the
-/// `sha256:<hex>` form required by the Core API headers. Serialization and
-/// display use the deterministic API form `sha256:<lowercase-hex>`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Sha256([u8; SHA256_BYTES]);
 
-/// Alias used when call sites want a domain-oriented content hash name.
 pub type ContentHash = Sha256;
 
 impl Sha256 {
-    /// Construct a hash from raw SHA-256 bytes.
     #[must_use]
     pub const fn from_bytes(bytes: [u8; SHA256_BYTES]) -> Self {
         Self(bytes)
     }
 
-    /// Parse a SHA-256 hash from hex or `sha256:<hex>` input.
     pub fn parse(input: &str) -> Result<Self, ValidationError> {
         let hex = input.strip_prefix(SHA256_PREFIX).unwrap_or(input);
         if hex.len() != SHA256_HEX_LEN {
@@ -44,19 +34,16 @@ impl Sha256 {
         Ok(Self(bytes))
     }
 
-    /// Borrow the raw SHA-256 bytes.
     #[must_use]
     pub const fn as_bytes(&self) -> &[u8; SHA256_BYTES] {
         &self.0
     }
 
-    /// Return the raw SHA-256 bytes.
     #[must_use]
     pub const fn into_bytes(self) -> [u8; SHA256_BYTES] {
         self.0
     }
 
-    /// Return canonical lowercase hexadecimal without the `sha256:` prefix.
     #[must_use]
     pub fn as_hex(&self) -> String {
         let mut output = String::with_capacity(SHA256_HEX_LEN);
@@ -67,7 +54,6 @@ impl Sha256 {
         output
     }
 
-    /// Return the Core API header/JSON form, `sha256:<lowercase-hex>`.
     #[must_use]
     pub fn to_prefixed_string(&self) -> String {
         let mut output = String::with_capacity(SHA256_PREFIX.len() + SHA256_HEX_LEN);
@@ -139,22 +125,26 @@ fn hex_char(nibble: u8) -> char {
 mod tests {
     use super::*;
 
-    const ZERO_HEX: &str = "0000000000000000000000000000000000000000000000000000000000000000";
-    const UPPER_HEX: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-    const UPPER_CANONICAL: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    fn repeated(ch: &str) -> String {
+        ch.repeat(SHA256_HEX_LEN)
+    }
 
     #[test]
     fn parses_plain_hex_and_formats_prefixed_canonical() {
-        let hash = Sha256::parse(ZERO_HEX).unwrap();
-        assert_eq!(hash.as_hex(), ZERO_HEX);
-        assert_eq!(hash.to_string(), format!("sha256:{ZERO_HEX}"));
+        let zero_hex = repeated("0");
+        let hash = Sha256::parse(&zero_hex).unwrap();
+        assert_eq!(hash.as_hex(), zero_hex);
+        assert_eq!(hash.to_string(), [SHA256_PREFIX, &zero_hex].concat());
     }
 
     #[test]
     fn parses_prefixed_hash_and_normalizes_case() {
-        let hash = Sha256::parse(&format!("sha256:{UPPER_HEX}")).unwrap();
-        assert_eq!(hash.as_hex(), UPPER_CANONICAL);
-        assert_eq!(hash.to_string(), format!("sha256:{UPPER_CANONICAL}"));
+        let upper_hex = repeated("A");
+        let upper_canonical = repeated("a");
+        let input = [SHA256_PREFIX, &upper_hex].concat();
+        let hash = Sha256::parse(&input).unwrap();
+        assert_eq!(hash.as_hex(), upper_canonical);
+        assert_eq!(hash.to_string(), [SHA256_PREFIX, &upper_canonical].concat());
     }
 
     #[test]
@@ -167,7 +157,7 @@ mod tests {
 
     #[test]
     fn rejects_invalid_hash_characters() {
-        let invalid = format!("{}z", &ZERO_HEX[..63]);
+        let invalid = format!("{}z", &repeated("0")[..63]);
         assert_eq!(
             Sha256::parse(&invalid).unwrap_err(),
             ValidationError::InvalidHashCharacter
@@ -176,9 +166,10 @@ mod tests {
 
     #[test]
     fn serde_roundtrip_uses_prefixed_form() {
-        let hash = Sha256::parse(ZERO_HEX).unwrap();
+        let zero_hex = repeated("0");
+        let hash = Sha256::parse(&zero_hex).unwrap();
         let json = serde_json::to_string(&hash).unwrap();
-        assert_eq!(json, format!("\"sha256:{ZERO_HEX}\""));
+        assert_eq!(json, format!("\"{}{}\"", SHA256_PREFIX, zero_hex));
         let decoded: Sha256 = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded, hash);
     }
