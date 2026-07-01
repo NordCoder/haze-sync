@@ -1,20 +1,34 @@
-//! Storage repository primitives for Haze Sync metadata.
+//! Passive SQLx repository primitives for Haze Sync metadata.
 //!
-//! These modules provide SQL helpers only. They do not implement route handlers,
-//! Core revision apply policy, idempotency behavior, conflict/delete policy, or
-//! adapter runtime behavior.
+//! Repository helpers in this module execute only caller-requested SQL against a
+//! caller-owned executor or transaction. They do not create pools, run
+//! migrations, resolve conflicts, or implement Core apply policy.
 
 pub mod adapter_cursors;
+pub mod idempotency;
+pub mod objects;
 pub mod operation_log;
+pub mod revisions;
+
+pub use idempotency::{
+    check_or_store_idempotency_record, compare_request_fingerprint, insert_idempotency_record,
+    read_idempotency_record, IdempotencyRecordInput, IdempotencyRepositoryError,
+    IdempotencyRepositoryOutcome, IdempotencyRequestComparison, IdempotencyStoreOutcome,
+};
 
 use std::{error::Error, fmt};
 
 /// Maximum number of changes returned by one repository page.
 pub const MAX_CHANGES_LIMIT: u32 = 1_000;
 
-/// Safe repository error type that does not expose SQL, database URLs, paths, or
-/// provider payloads.
-#[derive(Clone, Debug, Eq, PartialEq)]
+/// Result type returned by storage repository helpers.
+pub type RepositoryResult<T> = Result<T, RepositoryError>;
+
+/// Safe repository error boundary.
+///
+/// Public formatting intentionally avoids raw SQL, database URLs, filesystem
+/// paths, provider payloads, stack traces, credentials, and runtime details.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum RepositoryError {
     /// Sequence values must be zero or greater.
@@ -25,22 +39,46 @@ pub enum RepositoryError {
     InvalidOperationKind,
     /// A requested cursor update would move the adapter backwards.
     CursorRegression,
-    /// A database operation failed; details are intentionally redacted.
+    /// A database operation failed. The underlying database error is not exposed
+    /// across this storage boundary.
     DatabaseOperationFailed,
+    /// A caller-provided size could not be represented by the storage schema.
+    InvalidSizeBytes,
+}
+
+impl RepositoryError {
+    /// Stable machine-readable error code.
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::InvalidSequence => "invalid_sequence",
+            Self::InvalidLimit { .. } => "invalid_limit",
+            Self::InvalidOperationKind => "invalid_operation_kind",
+            Self::CursorRegression => "cursor_regression",
+            Self::DatabaseOperationFailed => "storage_database_operation_failed",
+            Self::InvalidSizeBytes => "invalid_size_bytes",
+        }
+    }
+
+    /// Stable path-free and secret-free human-readable message.
+    #[must_use]
+    pub const fn message(self) -> &'static str {
+        match self {
+            Self::InvalidSequence => "sequence must be non-negative",
+            Self::InvalidLimit { .. } => "limit is outside the supported range",
+            Self::InvalidOperationKind => "operation kind is not supported",
+            Self::CursorRegression => "cursor update would move backwards",
+            Self::DatabaseOperationFailed => "storage database operation failed",
+            Self::InvalidSizeBytes => "size is outside the supported storage range",
+        }
+    }
 }
 
 impl fmt::Display for RepositoryError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidSequence => formatter.write_str("sequence must be non-negative"),
-            Self::InvalidLimit { max } => {
-                write!(formatter, "limit must be between 1 and {max}")
-            }
-            Self::InvalidOperationKind => formatter.write_str("operation kind is not supported"),
-            Self::CursorRegression => formatter.write_str("cursor update would move backwards"),
-            Self::DatabaseOperationFailed => {
-                formatter.write_str("storage database operation failed")
-            }
+            Self::InvalidLimit { max } => write!(formatter, "limit must be between 1 and {max}"),
+            _ => formatter.write_str(self.message()),
         }
     }
 }
@@ -67,6 +105,10 @@ pub(crate) fn validate_limit(limit: u32) -> Result<(), RepositoryError> {
 
 pub(crate) fn map_sqlx_error(_error: sqlx::Error) -> RepositoryError {
     RepositoryError::DatabaseOperationFailed
+}
+
+pub(crate) fn size_bytes_to_i64(size_bytes: u64) -> RepositoryResult<i64> {
+    i64::try_from(size_bytes).map_err(|_| RepositoryError::InvalidSizeBytes)
 }
 
 #[cfg(test)]
