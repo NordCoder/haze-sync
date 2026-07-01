@@ -191,7 +191,7 @@ mod tests {
 
     #[test]
     fn parses_and_redacts_test_database_url() {
-        let raw = "postgres://haze_sync:super_secret@localhost:5432/haze_sync_test?sslmode=disable";
+        let raw = "postgres://haze_sync:placeholder_password@localhost:5432/haze_sync_test?sslmode=disable";
         let url = TestDatabaseUrl::parse_explicit(
             TestDatabaseUrlSource::HazeSyncTestDatabaseUrl,
             raw,
@@ -201,8 +201,8 @@ mod tests {
         assert_eq!(url.as_sensitive_str(), raw);
         assert_eq!(url.database_name(), "haze_sync_test");
         assert_eq!(url.source(), TestDatabaseUrlSource::HazeSyncTestDatabaseUrl);
-        assert!(!format!("{url:?}").contains("super_secret"));
-        assert!(!url.to_string().contains("super_secret"));
+        assert!(!format!("{url:?}").contains("placeholder_password"));
+        assert!(!url.to_string().contains("placeholder_password"));
         assert!(url.to_string().contains("<redacted>"));
     }
 
