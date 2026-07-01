@@ -23,7 +23,10 @@ impl IdempotencyKey {
     pub fn parse(input: &str) -> Result<Self, IdempotencyError> {
         if input.is_empty()
             || input.len() > MAX_IDEMPOTENCY_KEY_LEN
-            || input.as_bytes().iter().any(|byte| !is_visible_header_byte(*byte))
+            || input
+                .as_bytes()
+                .iter()
+                .any(|byte| !is_visible_header_byte(*byte))
         {
             return Err(IdempotencyError::InvalidKey);
         }
@@ -287,7 +290,9 @@ impl StoredIdempotencyRecord {
 #[serde(tag = "outcome", rename_all = "snake_case")]
 pub enum IdempotencyReplayOutcome {
     NewRequest,
-    ReplaySameRequest { response: StoredIdempotencyResponse },
+    ReplaySameRequest {
+        response: StoredIdempotencyResponse,
+    },
     ConflictDifferentRequest {
         stored_request_fingerprint: RequestFingerprint,
         incoming_request_fingerprint: RequestFingerprint,
@@ -401,7 +406,12 @@ fn append_canonical_json(value: &Value, output: &mut String) {
 }
 
 fn validate_response_header_name(name: &str) -> Result<String, IdempotencyError> {
-    if name.is_empty() || name.as_bytes().iter().any(|byte| !is_header_name_byte(*byte)) {
+    if name.is_empty()
+        || name
+            .as_bytes()
+            .iter()
+            .any(|byte| !is_header_name_byte(*byte))
+    {
         return Err(IdempotencyError::UnsafeResponseHeader);
     }
 
@@ -515,7 +525,10 @@ mod tests {
 
     #[test]
     fn invalid_key_is_rejected() {
-        assert_eq!(IdempotencyKey::parse("").unwrap_err(), IdempotencyError::InvalidKey);
+        assert_eq!(
+            IdempotencyKey::parse("").unwrap_err(),
+            IdempotencyError::InvalidKey
+        );
         assert_eq!(
             IdempotencyKey::parse("contains space").unwrap_err(),
             IdempotencyError::InvalidKey
