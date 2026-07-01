@@ -90,11 +90,23 @@ fn sanitize_label(value: &str) -> String {
 }
 
 fn sanitize_path_segment(value: &str) -> String {
-    let sanitized = sanitize_label(value);
-    if sanitized.contains('.') {
-        sanitized
+    let sanitized: String = value
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '.' {
+                ch.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let trimmed = sanitized.trim_matches(['-', '.']);
+    let segment = if trimmed.is_empty() { "note" } else { trimmed };
+
+    if segment.contains('.') {
+        segment.to_owned()
     } else {
-        format!("{sanitized}.md")
+        format!("{segment}.md")
     }
 }
 
@@ -120,5 +132,6 @@ mod tests {
         assert!(namespace.operation_id("put file").contains("op-put-file"));
         assert!(namespace.request_id("upload").contains("req-upload"));
         assert!(namespace.vault_path("note").ends_with("/note.md"));
+        assert!(namespace.vault_path("Folder/Note.md").ends_with("/folder-note.md"));
     }
 }
