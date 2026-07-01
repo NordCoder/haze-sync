@@ -25,7 +25,7 @@ pub fn router() -> Router {
         .route("/conflicts", get(core_route_not_implemented))
         .route(
             "/conflicts/:conflict_id/resolve",
-            get(method_not_implemented).post(core_route_not_implemented),
+            axum::routing::post(core_route_not_implemented),
         )
 }
 
@@ -48,9 +48,5 @@ pub async fn server_info() -> Json<ServerInfoResponse> {
 
 /// Placeholder for Core routes whose business behavior is not implemented yet.
 pub async fn core_route_not_implemented() -> (axum::http::StatusCode, Json<ShellErrorResponse>) {
-    not_implemented_response()
-}
-
-async fn method_not_implemented() -> (axum::http::StatusCode, Json<ShellErrorResponse>) {
     not_implemented_response()
 }
