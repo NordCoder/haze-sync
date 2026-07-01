@@ -194,13 +194,9 @@ pub async fn insert_idempotency_record(
         });
     }
 
-    let record = read_idempotency_record(
-        connection,
-        input.adapter_id(),
-        input.idempotency_key(),
-    )
-    .await?
-    .ok_or(IdempotencyRepositoryError::DuplicateInsertRace)?;
+    let record = read_idempotency_record(connection, input.adapter_id(), input.idempotency_key())
+        .await?
+        .ok_or(IdempotencyRepositoryError::DuplicateInsertRace)?;
 
     Ok(IdempotencyStoreOutcome::AlreadyExists { record })
 }
@@ -210,12 +206,8 @@ pub async fn check_or_store_idempotency_record(
     connection: &mut PgConnection,
     input: &IdempotencyRecordInput,
 ) -> Result<IdempotencyRepositoryOutcome, IdempotencyRepositoryError> {
-    if let Some(record) = read_idempotency_record(
-        connection,
-        input.adapter_id(),
-        input.idempotency_key(),
-    )
-    .await?
+    if let Some(record) =
+        read_idempotency_record(connection, input.adapter_id(), input.idempotency_key()).await?
     {
         return outcome_from_existing_record(record, input.request_hash());
     }
@@ -354,7 +346,8 @@ mod tests {
         let request_hash = hash("a");
 
         assert_eq!(
-            IdempotencyRecordInput::new(adapter_id.clone(), "", request_hash, json!({})).unwrap_err(),
+            IdempotencyRecordInput::new(adapter_id.clone(), "", request_hash, json!({}))
+                .unwrap_err(),
             IdempotencyRepositoryError::InvalidKey
         );
         assert_eq!(
