@@ -162,7 +162,10 @@ impl BearerToken {
 
 impl fmt::Debug for BearerToken {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.debug_tuple("BearerToken").field(&REDACTED).finish()
+        formatter
+            .debug_tuple("BearerToken")
+            .field(&REDACTED)
+            .finish()
     }
 }
 
@@ -318,8 +321,8 @@ mod tests {
 
     #[test]
     fn token_hash_debug_redacts_digest() {
-        let token = BearerToken::new("non_sensitive_fixture_token")
-            .expect("fixture token should be valid");
+        let token =
+            BearerToken::new("non_sensitive_fixture_token").expect("fixture token should be valid");
         let hash = token.sha256_hash();
 
         let formatted = format!("{hash:?}");
@@ -330,8 +333,8 @@ mod tests {
 
     #[test]
     fn verifies_matching_sha256_token_hash() {
-        let token = BearerToken::new("non_sensitive_fixture_token")
-            .expect("fixture token should be valid");
+        let token =
+            BearerToken::new("non_sensitive_fixture_token").expect("fixture token should be valid");
         let hash = token.sha256_hash();
 
         assert!(verify_sha256_bearer_token(&token, &hash));
@@ -340,8 +343,8 @@ mod tests {
 
     #[test]
     fn rejects_non_matching_sha256_token_hash() {
-        let token = BearerToken::new("non_sensitive_fixture_token")
-            .expect("fixture token should be valid");
+        let token =
+            BearerToken::new("non_sensitive_fixture_token").expect("fixture token should be valid");
         let other_token = BearerToken::new("different_non_sensitive_fixture_token")
             .expect("fixture token should be valid");
         let other_hash = other_token.sha256_hash();
@@ -351,14 +354,17 @@ mod tests {
 
     #[test]
     fn validates_stored_sha256_hash_shape() {
-        let token = BearerToken::new("non_sensitive_fixture_token")
-            .expect("fixture token should be valid");
+        let token =
+            BearerToken::new("non_sensitive_fixture_token").expect("fixture token should be valid");
         let hash = token.sha256_hash();
 
         let parsed = TokenHash::from_sha256_hex(hash.digest_hex()).expect("hash should parse");
 
         assert_eq!(parsed, hash);
-        assert_eq!(TokenHash::from_sha256_hex("abcd"), Err(AuthError::InvalidTokenHash));
+        assert_eq!(
+            TokenHash::from_sha256_hex("abcd"),
+            Err(AuthError::InvalidTokenHash)
+        );
     }
 
     #[test]
