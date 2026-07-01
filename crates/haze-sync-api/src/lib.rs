@@ -8,7 +8,8 @@ pub mod contracts;
 pub mod dto;
 
 /// Human-readable crate role used by skeleton smoke checks and documentation.
-pub const CRATE_ROLE: &str = "JSON-serializable API contracts and DTOs for the Haze Sync Core HTTP API.";
+pub const CRATE_ROLE: &str =
+    "JSON-serializable API contracts and DTOs for the Haze Sync Core HTTP API.";
 
 /// Returns the package name for this crate.
 #[must_use]
