@@ -1,7 +1,9 @@
 //! Typed server configuration values and env-based parsing helpers.
 
 use super::{env, ConfigError};
-use std::{collections::HashMap, env as std_env, fmt, net::SocketAddr, path::PathBuf, str::FromStr};
+use std::{
+    collections::HashMap, env as std_env, fmt, net::SocketAddr, path::PathBuf, str::FromStr,
+};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ServerConfig {
