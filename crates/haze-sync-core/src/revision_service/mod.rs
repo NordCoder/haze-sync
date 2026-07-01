@@ -1,0 +1,354 @@
+//! Pure service-layer foundation for normal file revision upserts.
+//!
+//! The service is intentionally storage-agnostic. Callers own the repository,
+//! content store, and operation-log implementations, so the same algorithm can
+//! later be executed inside a database transaction without this crate creating
+//! hidden pools, running migrations, or wiring server runtime state.
+
+use haze_sync_common::{AdapterId, ContentHash, OperationId, RevisionId, VaultPath};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256 as Sha256Hasher};
+use std::error::Error;
+use std::fmt;
+
+/// Request accepted by the normal file upsert algorithm.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UpsertFileRequest {
+    /// Vault-relative, already validated path.
+    pub path: VaultPath,
+    /// Adapter principal submitting the write.
+    pub adapter_id: AdapterId,
+    /// Explicit base revision. `None` represents explicit `base_revision_id = null`.
+    pub base_revision_id: Option<RevisionId>,
+    /// SHA-256 the caller expects for `content`.
+    pub expected_hash: ContentHash,
+    /// Raw file bytes for the initial pure implementation.
+    pub content: Vec<u8>,
+    /// Placeholder for future idempotency integration. This phase does not
+    /// implement idempotency lookup, comparison, storage, or replay behavior.
+    pub idempotency_key: Option<String>,
+}
+
+impl UpsertFileRequest {
+    /// Build an upsert request from validated value types and raw bytes.
+    #[must_use]
+    pub fn new(
+        path: VaultPath,
+        adapter_id: AdapterId,
+        base_revision_id: Option<RevisionId>,
+        expected_hash: ContentHash,
+        content: Vec<u8>,
+    ) -> Self {
+        Self {
+            path,
+            adapter_id,
+            base_revision_id,
+            expected_hash,
+            content,
+            idempotency_key: None,
+        }
+    }
+
+    /// Attach a future idempotency key placeholder without enabling idempotency behavior.
+    #[must_use]
+    pub fn with_idempotency_key(mut self, idempotency_key: impl Into<String>) -> Self {
+        self.idempotency_key = Some(idempotency_key.into());
+        self
+    }
+}
+
+/// Immutable file revision snapshot used at the Core service boundary.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StoredRevision {
+    pub revision_id: RevisionId,
+    pub path: VaultPath,
+    pub parent_revision_id: Option<RevisionId>,
+    pub content_hash: ContentHash,
+    pub size_bytes: u64,
+    pub created_by: AdapterId,
+}
+
+/// Content blob metadata returned by the content-store boundary.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct StoredContent {
+    pub hash: ContentHash,
+    pub size_bytes: u64,
+}
+
+/// Metadata required to insert an accepted normal revision.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InsertRevisionRequest {
+    pub path: VaultPath,
+    pub adapter_id: AdapterId,
+    pub parent_revision_id: Option<RevisionId>,
+    pub content_hash: ContentHash,
+    pub size_bytes: u64,
+}
+
+/// Operation-log entry returned after a successful append.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct OperationLogEntry {
+    pub operation_id: OperationId,
+    pub seq: i64,
+}
+
+/// Operation-log append request for accepted file upserts.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AppendOperationRequest {
+    pub adapter_id: AdapterId,
+    pub kind: OperationKind,
+    pub path: VaultPath,
+    pub revision_id: RevisionId,
+}
+
+/// Operation kinds needed by the normal revision service.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OperationKind {
+    UpsertFile,
+}
+
+/// Safe result returned by the normal upsert algorithm.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case", tag = "status")]
+pub enum UpsertOutcome {
+    AcceptedNewFile {
+        revision: StoredRevision,
+        operation: OperationLogEntry,
+    },
+    AcceptedNewRevision {
+        revision: StoredRevision,
+        operation: OperationLogEntry,
+    },
+    IgnoredDuplicateSameContent {
+        current_revision: StoredRevision,
+    },
+    RejectedHashMismatch {
+        expected: ContentHash,
+        actual: ContentHash,
+    },
+    RejectedStaleOrUnknownBase {
+        current_revision: Option<StoredRevision>,
+        provided_base_revision_id: Option<RevisionId>,
+    },
+}
+
+/// Caller-owned repository boundary for current revision lookup and revision insertion.
+pub trait RevisionRepository {
+    fn current_revision(
+        &mut self,
+        path: &VaultPath,
+    ) -> Result<Option<StoredRevision>, RevisionServiceError>;
+
+    fn insert_revision(
+        &mut self,
+        request: InsertRevisionRequest,
+    ) -> Result<StoredRevision, RevisionServiceError>;
+}
+
+/// Caller-owned content store boundary.
+pub trait ContentStore {
+    fn put_content(
+        &mut self,
+        expected_hash: ContentHash,
+        bytes: &[u8],
+    ) -> Result<StoredContent, RevisionServiceError>;
+}
+
+/// Caller-owned operation-log append boundary.
+pub trait OperationLog {
+    fn append_operation(
+        &mut self,
+        request: AppendOperationRequest,
+    ) -> Result<OperationLogEntry, RevisionServiceError>;
+}
+
+/// Pure normal-upsert service over caller-owned storage boundaries.
+#[derive(Debug)]
+pub struct RevisionService<R, C, L> {
+    repository: R,
+    content_store: C,
+    operation_log: L,
+}
+
+impl<R, C, L> RevisionService<R, C, L> {
+    /// Build a service from caller-owned dependencies.
+    #[must_use]
+    pub const fn new(repository: R, content_store: C, operation_log: L) -> Self {
+        Self {
+            repository,
+            content_store,
+            operation_log,
+        }
+    }
+
+    /// Return owned dependencies, useful for pure tests and future composition.
+    #[must_use]
+    pub fn into_inner(self) -> (R, C, L) {
+        (self.repository, self.content_store, self.operation_log)
+    }
+}
+
+impl<R, C, L> RevisionService<R, C, L>
+where
+    R: RevisionRepository,
+    C: ContentStore,
+    L: OperationLog,
+{
+    /// Apply the Wave 2 normal file upsert rules without conflict preservation.
+    pub fn upsert_file(
+        &mut self,
+        request: UpsertFileRequest,
+    ) -> Result<UpsertOutcome, RevisionServiceError> {
+        let actual_hash = compute_content_hash(&request.content);
+        if actual_hash != request.expected_hash {
+            return Ok(UpsertOutcome::RejectedHashMismatch {
+                expected: request.expected_hash,
+                actual: actual_hash,
+            });
+        }
+
+        let current_revision = self.repository.current_revision(&request.path)?;
+
+        match current_revision {
+            None => self.upsert_missing_file(request),
+            Some(current_revision) => self.upsert_existing_file(request, current_revision),
+        }
+    }
+
+    fn upsert_missing_file(
+        &mut self,
+        request: UpsertFileRequest,
+    ) -> Result<UpsertOutcome, RevisionServiceError> {
+        if request.base_revision_id.is_some() {
+            return Ok(UpsertOutcome::RejectedStaleOrUnknownBase {
+                current_revision: None,
+                provided_base_revision_id: request.base_revision_id,
+            });
+        }
+
+        let revision = self.store_and_insert_revision(request, None)?;
+        let operation = self.append_upsert_operation(&revision)?;
+
+        Ok(UpsertOutcome::AcceptedNewFile {
+            revision,
+            operation,
+        })
+    }
+
+    fn upsert_existing_file(
+        &mut self,
+        request: UpsertFileRequest,
+        current_revision: StoredRevision,
+    ) -> Result<UpsertOutcome, RevisionServiceError> {
+        if request.expected_hash == current_revision.content_hash {
+            return Ok(UpsertOutcome::IgnoredDuplicateSameContent { current_revision });
+        }
+
+        let current_revision_id = current_revision.revision_id.clone();
+        if request.base_revision_id.as_ref() != Some(&current_revision_id) {
+            return Ok(UpsertOutcome::RejectedStaleOrUnknownBase {
+                current_revision: Some(current_revision),
+                provided_base_revision_id: request.base_revision_id,
+            });
+        }
+
+        let revision = self.store_and_insert_revision(request, Some(current_revision_id))?;
+        let operation = self.append_upsert_operation(&revision)?;
+
+        Ok(UpsertOutcome::AcceptedNewRevision {
+            revision,
+            operation,
+        })
+    }
+
+    fn store_and_insert_revision(
+        &mut self,
+        request: UpsertFileRequest,
+        parent_revision_id: Option<RevisionId>,
+    ) -> Result<StoredRevision, RevisionServiceError> {
+        let stored_content = self
+            .content_store
+            .put_content(request.expected_hash, &request.content)?;
+        if stored_content.hash != request.expected_hash {
+            return Err(RevisionServiceError::content_store(
+                "put_content_returned_unexpected_hash",
+            ));
+        }
+
+        self.repository.insert_revision(InsertRevisionRequest {
+            path: request.path,
+            adapter_id: request.adapter_id,
+            parent_revision_id,
+            content_hash: stored_content.hash,
+            size_bytes: stored_content.size_bytes,
+        })
+    }
+
+    fn append_upsert_operation(
+        &mut self,
+        revision: &StoredRevision,
+    ) -> Result<OperationLogEntry, RevisionServiceError> {
+        self.operation_log.append_operation(AppendOperationRequest {
+            adapter_id: revision.created_by.clone(),
+            kind: OperationKind::UpsertFile,
+            path: revision.path.clone(),
+            revision_id: revision.revision_id.clone(),
+        })
+    }
+}
+
+/// Compute the canonical SHA-256 content hash used by Core verification.
+#[must_use]
+pub fn compute_content_hash(bytes: &[u8]) -> ContentHash {
+    let digest = Sha256Hasher::digest(bytes);
+    let mut hash_bytes = [0_u8; 32];
+    hash_bytes.copy_from_slice(&digest);
+    ContentHash::from_bytes(hash_bytes)
+}
+
+/// Safe, path-free service boundary errors for dependency failures.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RevisionServiceError {
+    Repository { operation: &'static str },
+    ContentStore { operation: &'static str },
+    OperationLog { operation: &'static str },
+}
+
+impl RevisionServiceError {
+    #[must_use]
+    pub const fn repository(operation: &'static str) -> Self {
+        Self::Repository { operation }
+    }
+
+    #[must_use]
+    pub const fn content_store(operation: &'static str) -> Self {
+        Self::ContentStore { operation }
+    }
+
+    #[must_use]
+    pub const fn operation_log(operation: &'static str) -> Self {
+        Self::OperationLog { operation }
+    }
+
+    #[must_use]
+    pub const fn code(&self) -> &'static str {
+        match self {
+            Self::Repository { .. } => "revision_repository_error",
+            Self::ContentStore { .. } => "content_store_error",
+            Self::OperationLog { .. } => "operation_log_error",
+        }
+    }
+}
+
+impl fmt::Display for RevisionServiceError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::Repository { .. } => "revision repository operation failed",
+            Self::ContentStore { .. } => "content store operation failed",
+            Self::OperationLog { .. } => "operation log operation failed",
+        })
+    }
+}
+
+impl Error for RevisionServiceError {}
