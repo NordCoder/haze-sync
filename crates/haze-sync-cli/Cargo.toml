@@ -1,0 +1,15 @@
+[package]
+name = "haze-sync-cli"
+description = "Haze Sync CLI placeholder binary."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "haze-sync-cli"
+path = "src/main.rs"
+
+[lints]
+workspace = true
