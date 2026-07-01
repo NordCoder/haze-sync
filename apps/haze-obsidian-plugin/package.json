@@ -1,0 +1,16 @@
+{
+  "name": "haze-obsidian-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "main.js",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "obsidian": "^1.5.12",
+    "typescript": "^5.5.4"
+  }
+}
