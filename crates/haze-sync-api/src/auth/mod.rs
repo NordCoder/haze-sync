@@ -86,7 +86,7 @@ impl TryFrom<CommonAdapterRole> for AdapterRole {
 
 impl fmt::Display for AdapterRole {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        CommonAdapterRole::from(*self).fmt(formatter)
+        formatter.write_str(CommonAdapterRole::from(*self).as_str())
     }
 }
 
@@ -110,7 +110,8 @@ impl AdapterPrincipal {
     /// Creates a principal for a verified adapter.
     pub fn new(adapter_id: impl Into<String>, role: AdapterRole) -> Result<Self, AuthError> {
         let adapter_id = adapter_id.into();
-        let adapter_id = CommonAdapterId::parse(&adapter_id).map_err(|_| AuthError::EmptyAdapterId)?;
+        let adapter_id =
+            CommonAdapterId::parse(&adapter_id).map_err(|_| AuthError::EmptyAdapterId)?;
 
         Ok(Self { adapter_id, role })
     }
@@ -123,7 +124,7 @@ impl AdapterPrincipal {
 
     /// Validated common adapter identifier.
     #[must_use]
-    pub const fn common_adapter_id(&self) -> &CommonAdapterId {
+    pub fn common_adapter_id(&self) -> &CommonAdapterId {
         &self.adapter_id
     }
 
