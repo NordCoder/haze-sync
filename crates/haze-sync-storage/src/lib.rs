@@ -10,7 +10,8 @@ pub mod object_store;
 pub mod schema;
 
 /// Human-readable crate role used by skeleton smoke checks and documentation.
-pub const CRATE_ROLE: &str = "Storage schema metadata, passive database row models, and object store primitives.";
+pub const CRATE_ROLE: &str =
+    "Storage schema metadata, passive database row models, and object store primitives.";
 
 /// Returns the package name for this crate.
 #[must_use]
