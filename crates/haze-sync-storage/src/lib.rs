@@ -1,12 +1,16 @@
-//! Placeholder crate for future storage adapters and repositories.
+//! Storage schema and passive database models for Haze Sync.
 //!
-//! Wave 0 intentionally exposes only a tiny placeholder API. Real V1 behavior is
-//! implemented by later phases.
+//! This crate currently exposes table metadata and row-shaped model structs only.
+//! Repository functions, SQL execution, migration running, production database
+//! connectivity, and Core storage policy are implemented in later phases.
+
+pub mod models;
+pub mod schema;
 
 /// Human-readable crate role used by skeleton smoke checks and documentation.
-pub const CRATE_ROLE: &str = "Placeholder crate for future storage adapters and repositories.";
+pub const CRATE_ROLE: &str = "Storage schema metadata and passive database row models.";
 
-/// Returns the package name for this placeholder crate.
+/// Returns the package name for this crate.
 #[must_use]
 pub const fn package_name() -> &'static str {
     "haze-sync-storage"
