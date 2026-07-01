@@ -24,25 +24,26 @@ Core mental model:
 - Google Drive is an external replica.
 - iPhone vault is an external replica.
 
-This repository currently contains only the Wave 0 foundation skeleton. The crates and plugin app compile as placeholders; real sync, storage, Drive, worktree, auth, and conflict behavior belong to later phases.
+The repository currently contains the Wave 1 foundation: shared domain/value primitives, storage schema metadata and migrations, API DTO/contracts/auth primitives, server config and route shell, local content-addressed object store primitives, gated storage test support, and CI/dev tooling. Real Core sync behavior, storage repositories, adapters, conflict/delete engines, provider clients, and production runtime wiring belong to later phases.
 
 ## Repository layout
 
 ~~~text
 crates/
-  haze-sync-server/      server binary placeholder
-  haze-sync-core/        sync core library placeholder
-  haze-sync-api/         HTTP/API contract surface placeholder
-  haze-sync-storage/     storage library placeholder
-  haze-sync-common/      shared types/utilities placeholder
-  haze-sync-worktree/    built-in worktree adapter library placeholder
+  haze-sync-server/      Axum route shell and server config primitives
+  haze-sync-core/        sync core library placeholder for later Core services
+  haze-sync-api/         HTTP/API DTOs, route contracts, and auth primitives
+  haze-sync-storage/     schema metadata, passive models, object store, test support
+  haze-sync-common/      shared domain, value, hash, path, adapter, security primitives
+  haze-sync-worktree/    built-in worktree adapter placeholder
   haze-gdrive-adapter/   Google Drive adapter binary placeholder
   haze-sync-cli/         CLI binary placeholder
 apps/
   haze-obsidian-plugin/  Obsidian plugin skeleton
+.github/workflows/       CI checks for Rust, plugin, and compose validation
 deploy/
   docker-compose.yml     local Postgres scaffold
-migrations/              migration scaffold only
+migrations/              initial storage schema migrations
 tests/e2e/               E2E test scaffold only
 ~~~
 
@@ -57,6 +58,12 @@ cargo fmt --check
 cargo check --workspace
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
+~~~
+
+Optional storage test-support feature checks:
+
+~~~bash
+cargo test -p haze-sync-storage --features test-support
 ~~~
 
 Obsidian plugin workspace:
@@ -76,6 +83,17 @@ docker compose -f deploy/docker-compose.yml config
 ~~~
 
 This validates the local Compose file syntax only; it does not start PostgreSQL or any future sync services.
+
+## HTTP route shell
+
+The Wave 1 server route shell can build an Axum router without database pools, object-store roots, provider clients, config secrets, or adapter tokens.
+
+Current route behavior:
+
+- `GET /health` returns a local `ok` response.
+- `GET /ready` returns an explicit safe `not_ready` placeholder until later runtime dependency checks are wired.
+- `GET /v1/server-info` returns static safe protocol metadata.
+- File, changes, and conflict mutation/read routes are registered as explicit `not_implemented` placeholders until Core phases wire real behavior.
 
 ## Continuous integration
 

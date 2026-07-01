@@ -1,6 +1,6 @@
 [package]
 name = "haze-sync-api"
-description = "Placeholder crate for future API contracts and route surfaces."
+description = "JSON API DTOs, route contracts, and auth primitives for Haze Sync."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

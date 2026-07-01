@@ -13,6 +13,10 @@ pub mod schema;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 
+pub use object_store::{
+    LocalObjectStore, ObjectMetadata, ObjectStore, ObjectStoreError, ObjectStoreResult,
+};
+
 /// Human-readable crate role used by skeleton smoke checks and documentation.
 pub const CRATE_ROLE: &str =
     "Storage schema metadata, passive database row models, object store primitives, and test support.";

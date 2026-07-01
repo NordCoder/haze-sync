@@ -4,7 +4,10 @@
 //! HTTP middleware, read persistent storage, create tokens, or perform runtime
 //! authentication lookups.
 
-use haze_sync_common::security::{SecretString, REDACTED};
+use haze_sync_common::{
+    security::{SecretString, REDACTED},
+    AdapterId as CommonAdapterId, AdapterRole as CommonAdapterRole,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{error::Error, fmt, str::FromStr};
@@ -56,14 +59,34 @@ impl AdapterRole {
     }
 }
 
+impl From<AdapterRole> for CommonAdapterRole {
+    fn from(value: AdapterRole) -> Self {
+        match value {
+            AdapterRole::ObsidianPlugin => Self::ObsidianPlugin,
+            AdapterRole::GdriveAdapter => Self::GdriveAdapter,
+            AdapterRole::WorktreeAdapter => Self::WorktreeAdapter,
+            AdapterRole::Admin => Self::Admin,
+        }
+    }
+}
+
+impl TryFrom<CommonAdapterRole> for AdapterRole {
+    type Error = AuthError;
+
+    fn try_from(value: CommonAdapterRole) -> Result<Self, Self::Error> {
+        match value {
+            CommonAdapterRole::ObsidianPlugin => Ok(Self::ObsidianPlugin),
+            CommonAdapterRole::GdriveAdapter => Ok(Self::GdriveAdapter),
+            CommonAdapterRole::WorktreeAdapter => Ok(Self::WorktreeAdapter),
+            CommonAdapterRole::Admin => Ok(Self::Admin),
+            CommonAdapterRole::ReadonlyAgent => Err(AuthError::UnknownAdapterRole),
+        }
+    }
+}
+
 impl fmt::Display for AdapterRole {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(match self {
-            Self::ObsidianPlugin => "obsidian_plugin",
-            Self::GdriveAdapter => "gdrive_adapter",
-            Self::WorktreeAdapter => "worktree_adapter",
-            Self::Admin => "admin",
-        })
+        formatter.write_str(CommonAdapterRole::from(*self).as_str())
     }
 }
 
@@ -71,20 +94,15 @@ impl FromStr for AdapterRole {
     type Err = AuthError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value {
-            "obsidian_plugin" => Ok(Self::ObsidianPlugin),
-            "gdrive_adapter" => Ok(Self::GdriveAdapter),
-            "worktree_adapter" => Ok(Self::WorktreeAdapter),
-            "admin" => Ok(Self::Admin),
-            _ => Err(AuthError::UnknownAdapterRole),
-        }
+        let role = CommonAdapterRole::from_str(value).map_err(|_| AuthError::UnknownAdapterRole)?;
+        Self::try_from(role)
     }
 }
 
 /// Authenticated adapter identity after token verification.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AdapterPrincipal {
-    adapter_id: String,
+    adapter_id: CommonAdapterId,
     role: AdapterRole,
 }
 
@@ -92,9 +110,8 @@ impl AdapterPrincipal {
     /// Creates a principal for a verified adapter.
     pub fn new(adapter_id: impl Into<String>, role: AdapterRole) -> Result<Self, AuthError> {
         let adapter_id = adapter_id.into();
-        if adapter_id.trim().is_empty() {
-            return Err(AuthError::EmptyAdapterId);
-        }
+        let adapter_id =
+            CommonAdapterId::parse(&adapter_id).map_err(|_| AuthError::EmptyAdapterId)?;
 
         Ok(Self { adapter_id, role })
     }
@@ -102,6 +119,12 @@ impl AdapterPrincipal {
     /// Stable adapter identifier.
     #[must_use]
     pub fn adapter_id(&self) -> &str {
+        self.adapter_id.as_str()
+    }
+
+    /// Validated common adapter identifier.
+    #[must_use]
+    pub fn common_adapter_id(&self) -> &CommonAdapterId {
         &self.adapter_id
     }
 
@@ -386,5 +409,35 @@ mod tests {
         assert!(!AdapterRole::GdriveAdapter.can_resolve_conflicts());
         assert!(!AdapterRole::WorktreeAdapter.can_admin());
         assert!(AdapterRole::Admin.can_admin());
+    }
+
+    #[test]
+    fn auth_roles_convert_to_common_roles() {
+        let common_role = CommonAdapterRole::from(AdapterRole::WorktreeAdapter);
+        assert_eq!(common_role, CommonAdapterRole::WorktreeAdapter);
+        assert_eq!(
+            AdapterRole::try_from(common_role),
+            Ok(AdapterRole::WorktreeAdapter)
+        );
+        assert_eq!(
+            AdapterRole::try_from(CommonAdapterRole::ReadonlyAgent),
+            Err(AuthError::UnknownAdapterRole)
+        );
+    }
+
+    #[test]
+    fn adapter_principal_uses_validated_common_adapter_id() {
+        let principal = AdapterPrincipal::new("iphone-anna", AdapterRole::ObsidianPlugin)
+            .expect("principal should parse");
+
+        assert_eq!(principal.adapter_id(), "iphone-anna");
+        assert_eq!(
+            principal.common_adapter_id(),
+            &CommonAdapterId::parse("iphone-anna").unwrap()
+        );
+        assert_eq!(
+            AdapterPrincipal::new("bad/path", AdapterRole::ObsidianPlugin),
+            Err(AuthError::EmptyAdapterId)
+        );
     }
 }

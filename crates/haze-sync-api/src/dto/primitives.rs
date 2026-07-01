@@ -1,11 +1,14 @@
 //! Contract-local string wrappers for public DTO values.
 //!
-//! These wrappers avoid depending on sibling branch domain types. The Wave 1
-//! fan-in phase can reconcile them with common value types when those are on the
-//! integration branch.
+//! The wrappers preserve the W1 API JSON wire shape while providing explicit
+//! conversions to and from shared common domain/value types where those types are
+//! already available.
 
 use core::fmt;
 
+use haze_sync_common::{
+    AdapterId, ConflictId, ContentHash, OperationId, RevisionId, ValidationError, VaultPath,
+};
 use serde::{Deserialize, Serialize};
 
 macro_rules! string_dto {
@@ -55,6 +58,32 @@ macro_rules! string_dto {
     };
 }
 
+macro_rules! common_string_conversions {
+    ($dto:ident, $common:ty, $parse:path) => {
+        impl From<$common> for $dto {
+            fn from(value: $common) -> Self {
+                Self::new(value.into_string())
+            }
+        }
+
+        impl TryFrom<$dto> for $common {
+            type Error = ValidationError;
+
+            fn try_from(value: $dto) -> Result<Self, Self::Error> {
+                $parse(value.as_str())
+            }
+        }
+
+        impl TryFrom<&$dto> for $common {
+            type Error = ValidationError;
+
+            fn try_from(value: &$dto) -> Result<Self, Self::Error> {
+                $parse(value.as_str())
+            }
+        }
+    };
+}
+
 string_dto! {
     /// Normalized vault-relative path as represented in public API JSON.
     VaultPathDto
@@ -95,6 +124,34 @@ string_dto! {
     TimestampDto
 }
 
+common_string_conversions!(VaultPathDto, VaultPath, VaultPath::parse);
+common_string_conversions!(AdapterIdDto, AdapterId, AdapterId::parse);
+common_string_conversions!(RevisionIdDto, RevisionId, RevisionId::parse);
+common_string_conversions!(ConflictIdDto, ConflictId, ConflictId::parse);
+common_string_conversions!(OperationIdDto, OperationId, OperationId::parse);
+
+impl From<ContentHash> for ContentSha256Dto {
+    fn from(value: ContentHash) -> Self {
+        Self::new(value.to_string())
+    }
+}
+
+impl TryFrom<ContentSha256Dto> for ContentHash {
+    type Error = ValidationError;
+
+    fn try_from(value: ContentSha256Dto) -> Result<Self, Self::Error> {
+        ContentHash::parse(value.as_str())
+    }
+}
+
+impl TryFrom<&ContentSha256Dto> for ContentHash {
+    type Error = ValidationError;
+
+    fn try_from(value: &ContentSha256Dto) -> Result<Self, Self::Error> {
+        ContentHash::parse(value.as_str())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -106,5 +163,38 @@ mod tests {
 
         assert_eq!(json, "\"Projects/Haze/plan.md\"");
         assert_eq!(serde_json::from_str::<VaultPathDto>(&json).unwrap(), path);
+    }
+
+    #[test]
+    fn common_domain_values_convert_without_changing_wire_json() {
+        let path = VaultPath::parse("./Notes//a.md").unwrap();
+        let adapter_id = AdapterId::parse("iphone-anna").unwrap();
+        let revision_id = RevisionId::parse("rev_01JTEST").unwrap();
+        let conflict_id = ConflictId::parse("conf_01JTEST").unwrap();
+        let operation_id = OperationId::parse("op_01JTEST").unwrap();
+        let hash = ContentHash::parse(
+            "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        )
+        .unwrap();
+
+        let path_dto = VaultPathDto::from(path.clone());
+        let adapter_dto = AdapterIdDto::from(adapter_id.clone());
+        let revision_dto = RevisionIdDto::from(revision_id.clone());
+        let conflict_dto = ConflictIdDto::from(conflict_id.clone());
+        let operation_dto = OperationIdDto::from(operation_id.clone());
+        let hash_dto = ContentSha256Dto::from(hash);
+
+        assert_eq!(path_dto.as_str(), "Notes/a.md");
+        assert_eq!(VaultPath::try_from(&path_dto).unwrap(), path);
+        assert_eq!(AdapterId::try_from(&adapter_dto).unwrap(), adapter_id);
+        assert_eq!(RevisionId::try_from(&revision_dto).unwrap(), revision_id);
+        assert_eq!(ConflictId::try_from(&conflict_dto).unwrap(), conflict_id);
+        assert_eq!(OperationId::try_from(&operation_dto).unwrap(), operation_id);
+        assert_eq!(ContentHash::try_from(&hash_dto).unwrap(), hash);
+
+        assert_eq!(
+            serde_json::to_string(&hash_dto).unwrap(),
+            "\"sha256:0000000000000000000000000000000000000000000000000000000000000000\""
+        );
     }
 }
