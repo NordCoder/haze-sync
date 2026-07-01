@@ -231,9 +231,14 @@ mod tests {
 
     #[test]
     fn base_revision_header_supports_explicit_null() {
-        assert_eq!(BaseRevisionIdHeader::parse("null").unwrap(), BaseRevisionIdHeader::Null);
         assert_eq!(
-            BaseRevisionIdHeader::parse("rev_01J").unwrap().as_optional_revision_id(),
+            BaseRevisionIdHeader::parse("null").unwrap(),
+            BaseRevisionIdHeader::Null
+        );
+        assert_eq!(
+            BaseRevisionIdHeader::parse("rev_01J")
+                .unwrap()
+                .as_optional_revision_id(),
             Some("rev_01J")
         );
     }
