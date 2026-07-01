@@ -5,6 +5,7 @@
 //! live outside this crate.
 
 pub mod idempotency;
+pub mod operation_log;
 pub mod revision_service;
 
 /// Human-readable crate role used by skeleton smoke checks and documentation.
