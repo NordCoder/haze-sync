@@ -216,10 +216,7 @@ pub fn parse_get_file_request(
     parts: GetFileRouteRequestParts<'_>,
 ) -> Result<GetFileRouteRequest, FileRouteError> {
     let path = parse_vault_path(parts.route_path)?;
-    let revision_id = parts
-        .revision_id
-        .map(parse_revision_query)
-        .transpose()?;
+    let revision_id = parts.revision_id.map(parse_revision_query).transpose()?;
 
     Ok(GetFileRouteRequest { path, revision_id })
 }
@@ -439,7 +436,10 @@ pub fn ignored_same_content_response(path: VaultPath) -> PutFileResponse {
 
 /// Builds a rejected upload DTO without applying any route-layer policy.
 #[must_use]
-pub fn rejected_upload_response(path: VaultPath, reason: FileRejectedReasonDto) -> PutFileResponse {
+pub fn rejected_upload_response(
+    path: VaultPath,
+    reason: FileRejectedReasonDto,
+) -> PutFileResponse {
     PutFileResponse::Rejected {
         reason,
         path: VaultPathDto::from(path),
@@ -487,7 +487,9 @@ fn parse_required_content_hash(value: Option<&str>) -> Result<ContentHash, FileR
     ContentHash::parse(header.as_str()).map_err(|_| FileRouteError::InvalidContentSha256)
 }
 
-fn parse_required_base_revision(value: Option<&str>) -> Result<Option<RevisionId>, FileRouteError> {
+fn parse_required_base_revision(
+    value: Option<&str>,
+) -> Result<Option<RevisionId>, FileRouteError> {
     let value = value.ok_or(FileRouteError::MissingRequiredHeader {
         header: X_BASE_REVISION_ID_HEADER,
     })?;
