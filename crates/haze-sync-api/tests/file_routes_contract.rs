@@ -14,7 +14,7 @@ use haze_sync_api::{
 use haze_sync_common::{ContentHash, RevisionId, VaultPath};
 
 fn prefixed_hash(ch: char) -> String {
-    let hex: String = std::iter::repeat(ch).take(64).collect();
+    let hex = ch.to_string().repeat(64);
     format!("sha256:{hex}")
 }
 
@@ -22,7 +22,9 @@ fn valid_put_parts<'a>(base_revision_id: Option<&'a str>) -> PutFileRouteRequest
     PutFileRouteRequestParts {
         route_path: "./Notes//plan.md",
         idempotency_key: Some("iphone-anna:op-001"),
-        content_sha256: Some("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+        content_sha256: Some(
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ),
         base_revision_id,
         body: b"hello".to_vec(),
         max_upload_bytes: Some(1024),
@@ -95,12 +97,7 @@ fn explicit_null_base_revision_parses_as_none() {
         .expect("explicit null base should parse");
 
     assert_eq!(request.base_revision_id(), None);
-    assert_eq!(
-        request
-            .to_metadata_dto()
-            .base_revision_id,
-        None
-    );
+    assert_eq!(request.to_metadata_dto().base_revision_id, None);
 }
 
 #[test]
@@ -112,8 +109,7 @@ fn invalid_base_revision_rejected() {
     assert_eq!(error.http_status_code(), 400);
     assert_eq!(error.public_code(), PublicErrorCode::ValidationError);
 
-    let mut missing = valid_put_parts(None);
-    missing.base_revision_id = None;
+    let missing = valid_put_parts(None);
     assert_eq!(
         parse_put_file_request(missing).expect_err("missing base header should reject"),
         FileRouteError::MissingRequiredHeader {
