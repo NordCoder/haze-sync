@@ -5,9 +5,7 @@
 //! call providers, or implement route handlers.
 
 use chrono::{DateTime, Utc};
-use haze_sync_common::{
-    AdapterId, ConflictId, ContentHash, OperationId, RevisionId, VaultPath,
-};
+use haze_sync_common::{AdapterId, ConflictId, ContentHash, OperationId, RevisionId, VaultPath};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{error::Error, fmt, str::FromStr};
@@ -43,14 +41,15 @@ pub enum OperationLogError {
 impl fmt::Display for OperationLogError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NegativeSequence => formatter.write_str("operation sequence must be non-negative"),
+            Self::NegativeSequence => {
+                formatter.write_str("operation sequence must be non-negative")
+            }
             Self::ZeroLimit => formatter.write_str("changes limit must be at least one"),
             Self::LimitTooLarge { max } => {
                 write!(formatter, "changes limit must not exceed {max}")
             }
-            Self::NonMonotonicSequence => formatter.write_str(
-                "operation log entries must be ordered by strictly increasing sequence",
-            ),
+            Self::NonMonotonicSequence => formatter
+                .write_str("operation log entries must be ordered by strictly increasing sequence"),
             Self::InvalidOperationKind => formatter.write_str("operation kind is not supported"),
             Self::InvalidTombstoneId => formatter.write_str("tombstone id is invalid"),
         }
@@ -448,7 +447,10 @@ mod tests {
 
     #[test]
     fn tombstone_id_requires_public_prefix() {
-        assert_eq!(TombstoneId::parse("tmb_01JTEST").unwrap().as_str(), "tmb_01JTEST");
+        assert_eq!(
+            TombstoneId::parse("tmb_01JTEST").unwrap().as_str(),
+            "tmb_01JTEST"
+        );
         assert_eq!(
             TombstoneId::parse("../secret"),
             Err(OperationLogError::InvalidTombstoneId)
@@ -462,7 +464,8 @@ mod tests {
     #[test]
     fn changes_page_preserves_ordering_and_to_seq() {
         let query = ChangesQuery::new(10, 100).unwrap();
-        let page = ChangesPage::new(query, vec![sample_change(11), sample_change(12)], false).unwrap();
+        let page =
+            ChangesPage::new(query, vec![sample_change(11), sample_change(12)], false).unwrap();
 
         assert_eq!(page.from_seq.value(), 10);
         assert_eq!(page.to_seq.value(), 12);
