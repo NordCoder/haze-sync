@@ -17,14 +17,14 @@ pub fn router() -> Router {
         .route("/server-info", get(server_info))
         .route("/changes", get(core_route_not_implemented))
         .route(
-            "/files/*path",
+            "/files/{*path}",
             get(core_route_not_implemented)
                 .put(core_route_not_implemented)
                 .delete(core_route_not_implemented),
         )
         .route("/conflicts", get(core_route_not_implemented))
         .route(
-            "/conflicts/:conflict_id/resolve",
+            "/conflicts/{conflict_id}/resolve",
             axum::routing::post(core_route_not_implemented),
         )
 }
