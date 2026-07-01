@@ -2,7 +2,9 @@
 
 use super::{env, ConfigError};
 use haze_sync_common::AdapterMode;
-use std::{collections::HashMap, env as std_env, fmt, net::SocketAddr, path::PathBuf, str::FromStr};
+use std::{
+    collections::HashMap, env as std_env, fmt, net::SocketAddr, path::PathBuf, str::FromStr,
+};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ServerConfig {
