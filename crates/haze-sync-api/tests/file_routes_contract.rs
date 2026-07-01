@@ -7,8 +7,9 @@ use haze_sync_api::{
     routes::files::{
         accepted_upload_response, conflict_saved_upload_response, ignored_same_content_response,
         parse_get_file_request, parse_put_file_request, rejected_upload_response,
-        FileDownloadRouteHeaders, FileRouteError, GetFileRouteRequestParts, PutFileRouteRequestParts,
-        APPLICATION_OCTET_STREAM, CONTENT_TYPE_HEADER, X_REVISION_ID_HEADER, X_SIZE_BYTES_HEADER,
+        FileDownloadRouteHeaders, FileRouteError, GetFileRouteRequestParts,
+        PutFileRouteRequestParts, APPLICATION_OCTET_STREAM, CONTENT_TYPE_HEADER,
+        X_REVISION_ID_HEADER, X_SIZE_BYTES_HEADER,
     },
 };
 use haze_sync_common::{ConflictId, ContentHash, RevisionId, VaultPath};
@@ -68,7 +69,8 @@ fn missing_idempotency_key_rejected() {
     let mut parts = valid_put_parts(Some("rev_01JBASE"));
     parts.idempotency_key = None;
 
-    let error = parse_put_file_request(parts).expect_err("missing idempotency key should reject");
+    let error =
+        parse_put_file_request(parts).expect_err("missing idempotency key should reject");
 
     assert_eq!(
         error,
