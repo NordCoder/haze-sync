@@ -27,7 +27,7 @@ const LIST_ACTIVE_TOMBSTONES_SQL: &str = "select tombstone_id, path, \
      tombstone_id desc limit $1";
 
 /// Input for inserting a safe tombstone row.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct NewTombstone<'a> {
     /// Caller-assigned tombstone id, typically with `tmb_` prefix.
     pub tombstone_id: &'a str,
