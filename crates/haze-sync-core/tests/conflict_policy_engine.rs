@@ -4,7 +4,9 @@ use haze_sync_core::conflict_service::{
     ConflictPathRequest, ConflictPolicy, ConflictPolicyError, ConflictRecordStatus, CurrentRevision,
     IncomingConflictCandidate,
 };
-use haze_sync_core::policy_engine::{apply_conflict_policy, ConflictPolicyOutcome, ConflictPolicyRequest};
+use haze_sync_core::policy_engine::{
+    apply_conflict_policy, ConflictPolicyOutcome, ConflictPolicyRequest,
+};
 
 fn timestamp() -> chrono::DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 7, 1, 22, 0, 0)
@@ -13,7 +15,7 @@ fn timestamp() -> chrono::DateTime<Utc> {
 }
 
 fn hash(repeated_hex: char) -> ContentHash {
-    let hex = std::iter::repeat(repeated_hex).take(64).collect::<String>();
+    let hex = repeated_hex.to_string().repeat(64);
     ContentHash::parse(&hex).expect("test hash should parse")
 }
 
@@ -163,11 +165,11 @@ fn conflict_area_input_is_rejected_to_prevent_recursive_conflict_explosion() {
 #[test]
 fn unsafe_paths_and_adapters_are_rejected() {
     assert!(matches!(
-        ConflictPathRequest::parse("../secret.md", "iphone-anna", timestamp()),
+        ConflictPathRequest::parse("../bad.md", "iphone-anna", timestamp()),
         Err(ConflictPolicyError::InvalidPath { .. })
     ));
     assert!(matches!(
-        ConflictPathRequest::parse("/secret.md", "iphone-anna", timestamp()),
+        ConflictPathRequest::parse("/bad.md", "iphone-anna", timestamp()),
         Err(ConflictPolicyError::InvalidPath { .. })
     ));
     assert_eq!(
