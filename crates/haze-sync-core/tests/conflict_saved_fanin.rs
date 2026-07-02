@@ -92,6 +92,13 @@ impl OperationLog for FakeOperationLog {
     }
 }
 
+struct UpsertFixtureResult {
+    outcome: UpsertOutcome,
+    repository: FakeRevisionRepository,
+    content_store: FakeContentStore,
+    operation_log: FakeOperationLog,
+}
+
 fn adapter_id() -> AdapterId {
     AdapterId::parse("iphone-anna").expect("fixture adapter id should parse")
 }
@@ -140,12 +147,7 @@ fn run_upsert(
     current_bytes: &[u8],
     base_revision_id: Option<RevisionId>,
     incoming_bytes: &[u8],
-) -> (
-    UpsertOutcome,
-    FakeRevisionRepository,
-    FakeContentStore,
-    FakeOperationLog,
-) {
+) -> UpsertFixtureResult {
     let current = current_revision_at(path_input, current_bytes);
     let mut service = RevisionService::new(
         FakeRevisionRepository::with_current(current),
@@ -157,7 +159,12 @@ fn run_upsert(
         .expect("fake-backed service should not fail");
     let (repository, content_store, operation_log) = service.into_inner();
 
-    (outcome, repository, content_store, operation_log)
+    UpsertFixtureResult {
+        outcome,
+        repository,
+        content_store,
+        operation_log,
+    }
 }
 
 fn assert_conflict_saved_plan(
@@ -170,9 +177,9 @@ fn assert_conflict_saved_plan(
         .expect("conflict_saved outcome should produce a preservation plan");
 
     assert_eq!(outcome.public_status(), "conflict_saved");
-    assert_eq!(plan.original_path, current.path.clone());
-    assert_eq!(plan.provided_base_revision_id, provided_base_revision_id);
-    assert_eq!(plan.current_revision_id, current.revision_id.clone());
+    assert_eq!(&plan.original_path, &current.path);
+    assert_eq!(&plan.provided_base_revision_id, &provided_base_revision_id);
+    assert_eq!(&plan.current_revision_id, &current.revision_id);
     assert_eq!(plan.current_content_hash, current.content_hash);
     assert_eq!(plan.current_size_bytes, current.size_bytes);
     assert_eq!(plan.incoming_adapter_id, adapter_id());
@@ -181,13 +188,13 @@ fn assert_conflict_saved_plan(
     assert_eq!(plan.policy_applied, ConflictPolicy::PreserveBoth);
     assert_eq!(plan.status, ConflictRecordStatus::Open);
     assert_eq!(plan.created_at, fixed_timestamp());
-    assert_eq!(plan.conflict_record.conflict_path, plan.materialized_path);
+    assert_eq!(&plan.conflict_record.conflict_path, &plan.materialized_path);
 }
 
 #[test]
 fn stale_base_different_content_produces_conflict_saved_planning_surface() {
     let current = current_revision_at("Projects/Haze/plan.md", b"current content");
-    let (outcome, repository, content_store, operation_log) = run_upsert(
+    let result = run_upsert(
         "Projects/Haze/plan.md",
         b"current content",
         Some(revision_id("rev_stale")),
@@ -195,21 +202,21 @@ fn stale_base_different_content_produces_conflict_saved_planning_surface() {
     );
 
     assert_conflict_saved_plan(
-        &outcome,
+        &result.outcome,
         &current,
         Some(revision_id("rev_stale")),
         b"incoming content",
     );
-    assert_eq!(repository.current, Some(current));
-    assert!(repository.inserted.is_empty());
-    assert!(content_store.writes.is_empty());
-    assert!(operation_log.entries.is_empty());
+    assert_eq!(result.repository.current, Some(current));
+    assert!(result.repository.inserted.is_empty());
+    assert!(result.content_store.writes.is_empty());
+    assert!(result.operation_log.entries.is_empty());
 }
 
 #[test]
 fn unknown_base_different_content_produces_conflict_saved_planning_surface() {
     let current = current_revision_at("Projects/Haze/plan.md", b"current content");
-    let (outcome, _, _, _) = run_upsert(
+    let result = run_upsert(
         "Projects/Haze/plan.md",
         b"current content",
         Some(revision_id("rev_unknown")),
@@ -217,7 +224,7 @@ fn unknown_base_different_content_produces_conflict_saved_planning_surface() {
     );
 
     assert_conflict_saved_plan(
-        &outcome,
+        &result.outcome,
         &current,
         Some(revision_id("rev_unknown")),
         b"incoming content",
@@ -227,14 +234,14 @@ fn unknown_base_different_content_produces_conflict_saved_planning_surface() {
 #[test]
 fn null_base_existing_different_content_produces_conflict_saved_planning_surface() {
     let current = current_revision_at("Projects/Haze/plan.md", b"current content");
-    let (outcome, _, _, _) = run_upsert(
+    let result = run_upsert(
         "Projects/Haze/plan.md",
         b"current content",
         None,
         b"incoming content",
     );
 
-    assert_conflict_saved_plan(&outcome, &current, None, b"incoming content");
+    assert_conflict_saved_plan(&result.outcome, &current, None, b"incoming content");
 }
 
 #[test]
@@ -246,7 +253,7 @@ fn same_content_stale_unknown_and_null_base_remain_ignored() {
     ];
 
     for base_revision_id in cases {
-        let (outcome, repository, content_store, operation_log) = run_upsert(
+        let result = run_upsert(
             "Projects/Haze/plan.md",
             b"same content",
             base_revision_id,
@@ -254,30 +261,30 @@ fn same_content_stale_unknown_and_null_base_remain_ignored() {
         );
 
         assert!(matches!(
-            &outcome,
+            &result.outcome,
             UpsertOutcome::IgnoredDuplicateSameContent { .. }
         ));
-        assert_eq!(outcome.public_status(), "same_content");
-        assert_eq!(
-            plan_upsert_conflict_saved(&outcome, fixed_timestamp())
-                .expect("ignored same-content outcome should be plannable as none"),
-            None
+        assert_eq!(result.outcome.public_status(), "same_content");
+        assert!(
+            plan_upsert_conflict_saved(&result.outcome, fixed_timestamp())
+                .expect("ignored same-content outcome should be plannable as none")
+                .is_none()
         );
-        assert!(repository.inserted.is_empty());
-        assert!(content_store.writes.is_empty());
-        assert!(operation_log.entries.is_empty());
+        assert!(result.repository.inserted.is_empty());
+        assert!(result.content_store.writes.is_empty());
+        assert!(result.operation_log.entries.is_empty());
     }
 }
 
 #[test]
 fn conflict_materialized_path_stays_under_open_conflicts_dir() {
-    let (outcome, _, _, _) = run_upsert(
+    let result = run_upsert(
         "Projects/Haze/plan.md",
         b"current content",
         Some(revision_id("rev_stale")),
         b"incoming content",
     );
-    let plan = require_upsert_conflict_saved_plan(&outcome, fixed_timestamp())
+    let plan = require_upsert_conflict_saved_plan(&result.outcome, fixed_timestamp())
         .expect("stale conflict should produce materialization path");
 
     assert!(
@@ -294,17 +301,18 @@ fn conflict_materialized_path_stays_under_open_conflicts_dir() {
 
 #[test]
 fn recursive_haze_conflicts_source_path_is_rejected() {
-    let conflict_path = "_haze_conflicts/open/Projects/Haze/plan.conflict.iphone-anna.2026-07-03-101112.md";
-    let (outcome, _, _, _) = run_upsert(
+    let conflict_path =
+        "_haze_conflicts/open/Projects/Haze/plan.conflict.iphone-anna.2026-07-03-101112.md";
+    let result = run_upsert(
         conflict_path,
         b"current conflict copy",
         Some(revision_id("rev_stale")),
         b"incoming conflict copy",
     );
 
-    assert_eq!(outcome.public_status(), "conflict_saved");
+    assert_eq!(result.outcome.public_status(), "conflict_saved");
     assert_eq!(
-        require_upsert_conflict_saved_plan(&outcome, fixed_timestamp()).unwrap_err(),
+        require_upsert_conflict_saved_plan(&result.outcome, fixed_timestamp()).unwrap_err(),
         ConflictSavedPlanningError::ConflictPolicy {
             reason: ConflictPolicyError::RecursiveConflictPath,
         }
@@ -313,13 +321,13 @@ fn recursive_haze_conflicts_source_path_is_rejected() {
 
 #[test]
 fn conflict_saved_plan_serializes_without_raw_incoming_bytes() {
-    let (outcome, _, _, _) = run_upsert(
+    let result = run_upsert(
         "Projects/Haze/plan.md",
         b"current content",
         Some(revision_id("rev_stale")),
         b"do not leak raw incoming bytes",
     );
-    let plan = require_upsert_conflict_saved_plan(&outcome, fixed_timestamp())
+    let plan = require_upsert_conflict_saved_plan(&result.outcome, fixed_timestamp())
         .expect("stale conflict should produce plan");
     let serialized = serde_json::to_string(&plan).expect("plan should serialize");
 
