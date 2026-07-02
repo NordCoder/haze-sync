@@ -147,13 +147,13 @@ pub fn apply_conflict_policy(
     };
 
     match policy {
-        ConflictPolicy::PreserveBoth => Ok(ConflictPolicyOutcome::PreserveBoth(
-            PreserveBothOutcome {
+        ConflictPolicy::PreserveBoth => {
+            Ok(ConflictPolicyOutcome::PreserveBoth(PreserveBothOutcome {
                 current_revision,
                 incoming_backup,
                 conflict_record,
-            },
-        )),
+            }))
+        }
         ConflictPolicy::CurrentWinsWithIncomingBackup => {
             Ok(ConflictPolicyOutcome::CurrentWinsWithIncomingBackup(
                 CurrentWinsWithIncomingBackupOutcome {
