@@ -277,27 +277,38 @@ fn current_base_is_accepted_as_new_revision() {
 }
 
 #[test]
-fn same_content_duplicate_is_ignored_without_persistence() {
+fn same_content_duplicate_is_ignored_without_persistence_for_any_base() {
     let current = stored_revision("rev_0001", b"same");
-    let mut service = service(
-        FakeRevisionRepository::with_current(current.clone()),
-        FakeContentStore::default(),
-        FakeOperationLog::default(),
-    );
+    let cases = [
+        Some(current.revision_id.clone()),
+        Some(RevisionId::parse("rev_0000").unwrap()),
+        Some(RevisionId::parse("rev_unknown").unwrap()),
+        None,
+    ];
 
-    let outcome = service.upsert_file(request(None, b"same")).unwrap();
+    for base_revision_id in cases {
+        let mut service = service(
+            FakeRevisionRepository::with_current(current.clone()),
+            FakeContentStore::default(),
+            FakeOperationLog::default(),
+        );
 
-    assert_eq!(
-        outcome,
-        UpsertOutcome::IgnoredDuplicateSameContent {
-            current_revision: current,
-        }
-    );
+        let outcome = service
+            .upsert_file(request(base_revision_id, b"same"))
+            .unwrap();
 
-    let (repository, content_store, operation_log) = service.into_inner();
-    assert!(repository.inserted.is_empty());
-    assert!(content_store.put_calls.is_empty());
-    assert!(operation_log.appended.is_empty());
+        assert_eq!(
+            outcome,
+            UpsertOutcome::IgnoredDuplicateSameContent {
+                current_revision: current.clone(),
+            }
+        );
+
+        let (repository, content_store, operation_log) = service.into_inner();
+        assert!(repository.inserted.is_empty());
+        assert!(content_store.put_calls.is_empty());
+        assert!(operation_log.appended.is_empty());
+    }
 }
 
 #[test]
@@ -329,7 +340,30 @@ fn hash_mismatch_is_rejected_before_persistence() {
 }
 
 #[test]
-fn stale_or_unknown_base_does_not_overwrite_different_current_content() {
+fn stale_base_with_different_content_yields_conflict_saved() {
+    let current = stored_revision("rev_0002", b"current");
+    let stale_base = RevisionId::parse("rev_0001").unwrap();
+    let mut service = service(
+        FakeRevisionRepository::with_current(current.clone()),
+        FakeContentStore::default(),
+        FakeOperationLog::default(),
+    );
+
+    let outcome = service
+        .upsert_file(request(Some(stale_base.clone()), b"incoming"))
+        .unwrap();
+
+    assert_conflict_saved(&outcome, &current, Some(&stale_base), b"incoming");
+
+    let (repository, content_store, operation_log) = service.into_inner();
+    assert_eq!(repository.current, Some(current));
+    assert!(repository.inserted.is_empty());
+    assert!(content_store.put_calls.is_empty());
+    assert!(operation_log.appended.is_empty());
+}
+
+#[test]
+fn unknown_base_with_different_content_yields_conflict_saved() {
     let current = stored_revision("rev_0001", b"current");
     let unknown_base = RevisionId::parse("rev_unknown").unwrap();
     let mut service = service(
@@ -352,7 +386,7 @@ fn stale_or_unknown_base_does_not_overwrite_different_current_content() {
 }
 
 #[test]
-fn null_base_for_existing_file_does_not_overwrite_different_content() {
+fn null_base_for_existing_different_content_yields_conflict_saved() {
     let current = stored_revision("rev_0001", b"current");
     let mut service = service(
         FakeRevisionRepository::with_current(current.clone()),
@@ -372,7 +406,7 @@ fn null_base_for_existing_file_does_not_overwrite_different_content() {
 }
 
 #[test]
-fn non_null_base_for_missing_file_is_rejected_as_unknown_base() {
+fn non_null_base_for_missing_file_is_safe_reject_without_unexpected_revision() {
     let unknown_base = RevisionId::parse("rev_unknown").unwrap();
     let mut service = service(
         FakeRevisionRepository::default(),
