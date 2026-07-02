@@ -5,4 +5,5 @@
 //! access storage, or call Core services.
 
 pub mod changes;
+pub mod delete;
 pub mod files;
