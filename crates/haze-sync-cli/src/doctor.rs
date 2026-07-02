@@ -43,23 +43,22 @@ impl DoctorCommand {
     }
 }
 
-/// CLI parse error with no runtime or secret payloads.
-#[derive(Clone, Debug, Eq, PartialEq)]
+/// CLI parse error with no runtime, argument, or secret payloads.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CliParseError {
-    UnknownCommand(String),
-    UnknownDoctorFlag(String),
-    UnexpectedDoctorArgument(String),
+    UnknownCommand,
+    UnknownDoctorFlag,
+    UnexpectedDoctorArgument,
 }
 
 impl fmt::Display for CliParseError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::UnknownCommand(command) => write!(formatter, "unknown command: {command}"),
-            Self::UnknownDoctorFlag(flag) => write!(formatter, "unknown doctor flag: {flag}"),
-            Self::UnexpectedDoctorArgument(argument) => {
-                write!(formatter, "unexpected doctor argument: {argument}")
-            }
-        }
+        let message = match self {
+            Self::UnknownCommand => "unknown command",
+            Self::UnknownDoctorFlag => "unknown doctor flag",
+            Self::UnexpectedDoctorArgument => "unexpected doctor argument",
+        };
+        formatter.write_str(message)
     }
 }
 
@@ -79,7 +78,7 @@ where
     match first.as_ref() {
         "--help" | "-h" | "help" => Ok(CliCommand::Help),
         "doctor" => parse_doctor_args(&collected[1..]),
-        command => Err(CliParseError::UnknownCommand(command.to_owned())),
+        _command => Err(CliParseError::UnknownCommand),
     }
 }
 
@@ -119,12 +118,12 @@ where
         match argument.as_ref() {
             "--offline" => command.offline = true,
             "--repair" | "--apply" | "--fix" => {
-                return Err(CliParseError::UnknownDoctorFlag(argument.as_ref().to_owned()));
+                return Err(CliParseError::UnknownDoctorFlag);
             }
             value if value.starts_with('-') => {
-                return Err(CliParseError::UnknownDoctorFlag(value.to_owned()));
+                return Err(CliParseError::UnknownDoctorFlag);
             }
-            value => return Err(CliParseError::UnexpectedDoctorArgument(value.to_owned())),
+            _value => return Err(CliParseError::UnexpectedDoctorArgument),
         }
     }
 
@@ -149,14 +148,23 @@ mod tests {
     }
 
     #[test]
-    fn doctor_command_rejects_repair_or_mutation_flags() {
+    fn doctor_command_rejects_repair_or_mutation_flags_without_echoing_input() {
         assert_eq!(
             parse_cli_args(["doctor", "--repair"]).expect_err("repair is out of scope"),
-            CliParseError::UnknownDoctorFlag("--repair".to_owned())
+            CliParseError::UnknownDoctorFlag
         );
         assert_eq!(
             parse_cli_args(["doctor", "--apply"]).expect_err("apply is out of scope"),
-            CliParseError::UnknownDoctorFlag("--apply".to_owned())
+            CliParseError::UnknownDoctorFlag
+        );
+        assert_eq!(
+            parse_cli_args(["doctor", "unexpected-value"])
+                .expect_err("extra argument is out of scope"),
+            CliParseError::UnexpectedDoctorArgument
+        );
+        assert_eq!(
+            CliParseError::UnexpectedDoctorArgument.to_string(),
+            "unexpected doctor argument"
         );
     }
 
