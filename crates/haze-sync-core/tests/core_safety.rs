@@ -8,8 +8,8 @@ use haze_sync_core::{
     },
     revision_service::{
         compute_content_hash, AppendOperationRequest, ContentStore, InsertRevisionRequest,
-        OperationLog, OperationLogEntry, RevisionRepository, RevisionService,
-        RevisionServiceError, StoredContent, StoredRevision, UpsertFileRequest, UpsertOutcome,
+        OperationLog, OperationLogEntry, RevisionRepository, RevisionService, RevisionServiceError,
+        StoredContent, StoredRevision, UpsertFileRequest, UpsertOutcome,
     },
 };
 use serde_json::json;
@@ -296,19 +296,13 @@ fn null_base_existing_different_content_returns_conflict_saved() {
 #[test]
 #[ignore = "requires W3-P1 conflict path materialization implementation"]
 fn conflict_materialized_path_stays_under_open_conflicts_dir() {
-    pending_sibling_behavior(
-        "W3-P1",
-        "materialized paths under _haze_conflicts/open",
-    );
+    pending_sibling_behavior("W3-P1", "materialized paths under _haze_conflicts/open");
 }
 
 #[test]
 #[ignore = "requires W3-P1 recursive conflict guard implementation"]
 fn recursive_haze_conflicts_source_path_is_rejected_or_backed_up_without_explosion() {
-    pending_sibling_behavior(
-        "W3-P1",
-        "recursive _haze_conflicts source path rejection",
-    );
+    pending_sibling_behavior("W3-P1", "recursive _haze_conflicts source path rejection");
 }
 
 #[test]
