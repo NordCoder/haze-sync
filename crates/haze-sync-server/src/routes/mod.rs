@@ -20,7 +20,6 @@ pub fn build_router() -> Router {
 }
 
 /// Builds the Haze Sync router with caller-supplied runtime state.
-#[must_use]
 pub fn build_router_with_state(state: ServerAppState) -> Router {
     let readiness = state.readiness_state();
     build_router_with_state_and_readiness(state, readiness)
