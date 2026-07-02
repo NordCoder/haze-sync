@@ -44,7 +44,9 @@ fn conflict_row_keeps_open_materialized_path_under_conflicts_open() {
     };
 
     assert!(row.materialized_path.starts_with("_haze_conflicts/open/"));
-    assert!(!row.materialized_path.contains("/_haze_conflicts/open/_haze_conflicts/"));
+    assert!(!row
+        .materialized_path
+        .contains("/_haze_conflicts/open/_haze_conflicts/"));
 
     let serialized = serde_json::to_string(&row).expect("conflict row should serialize");
     assert!(serialized.contains("preserve_both"));
