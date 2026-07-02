@@ -53,21 +53,16 @@ pub struct ConflictSavedPreservationPlan {
 }
 
 impl ConflictSavedPreservationPlan {
+    #[must_use]
     fn from_policy_outcome(outcome: ConflictPolicyOutcome) -> Self {
-        match outcome {
-            ConflictPolicyOutcome::PreserveBoth(outcome) => Self::from_parts(
-                outcome.current_revision,
-                outcome.incoming_backup,
-                outcome.conflict_record,
-            ),
-            ConflictPolicyOutcome::CurrentWinsWithIncomingBackup(outcome) => Self::from_parts(
-                outcome.current_revision,
-                outcome.incoming_backup,
-                outcome.conflict_record,
-            ),
-        }
+        Self::from_parts(
+            outcome.current_revision().clone(),
+            outcome.incoming_backup().clone(),
+            outcome.conflict_record().clone(),
+        )
     }
 
+    #[must_use]
     fn from_parts(
         current_revision: CurrentRevision,
         incoming_backup: IncomingBackupPlan,
@@ -188,6 +183,7 @@ fn current_revision_from_stored(revision: &StoredRevision) -> CurrentRevision {
     )
 }
 
+#[must_use]
 const fn policy_from_hint(policy_hint: ConflictPolicyHint) -> ConflictPolicy {
     match policy_hint {
         ConflictPolicyHint::PreserveBoth => ConflictPolicy::PreserveBoth,
