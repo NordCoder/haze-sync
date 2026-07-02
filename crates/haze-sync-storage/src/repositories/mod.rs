@@ -9,6 +9,7 @@ pub mod idempotency;
 pub mod objects;
 pub mod operation_log;
 pub mod revisions;
+pub mod tombstones;
 
 pub use idempotency::{
     check_or_store_idempotency_record, compare_request_fingerprint, insert_idempotency_record,
