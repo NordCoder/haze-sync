@@ -9,8 +9,8 @@ use haze_sync_core::{
     revision_service::{
         compute_content_hash, AppendOperationRequest, ConflictPolicyHint, ConflictSavedOutcome,
         ContentStore, IncomingConflictContent, InsertRevisionRequest, OperationLog,
-        OperationLogEntry, RevisionRepository, RevisionService, RevisionServiceError, StoredContent,
-        StoredRevision, UpsertFileRequest, UpsertOutcome,
+        OperationLogEntry, RevisionRepository, RevisionService, RevisionServiceError,
+        StoredContent, StoredRevision, UpsertFileRequest, UpsertOutcome,
     },
 };
 use serde_json::json;
