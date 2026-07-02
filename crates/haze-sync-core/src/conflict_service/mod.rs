@@ -254,7 +254,10 @@ pub fn generate_conflict_path(
         reason: ValidationError::EmptyPath,
     })?;
     let (stem, extension) = split_filename(filename);
-    let timestamp = request.timestamp.format(CONFLICT_TIMESTAMP_FORMAT).to_string();
+    let timestamp = request
+        .timestamp
+        .format(CONFLICT_TIMESTAMP_FORMAT)
+        .to_string();
 
     let mut generated = String::from(CONFLICT_ROOT_SEGMENT);
     generated.push('/');
