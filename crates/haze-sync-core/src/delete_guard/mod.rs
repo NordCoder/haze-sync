@@ -29,7 +29,7 @@ pub struct DeleteRatioLimit {
 impl DeleteRatioLimit {
     /// Build a ratio limit. `0/positive` is allowed and blocks any non-zero
     /// delete count; a zero denominator is rejected.
-    pub const fn new(numerator: u64, denominator: u64) -> Result<Self, DeleteGuardError> {
+    pub fn new(numerator: u64, denominator: u64) -> Result<Self, DeleteGuardError> {
         if denominator == 0 {
             return Err(DeleteGuardError::InvalidDeleteRatioLimit);
         }
@@ -41,7 +41,7 @@ impl DeleteRatioLimit {
     }
 
     /// Build a percentage ratio, for example `5` means `5%`.
-    pub const fn percent(percent: u64) -> Result<Self, DeleteGuardError> {
+    pub fn percent(percent: u64) -> Result<Self, DeleteGuardError> {
         Self::new(percent, 100)
     }
 
@@ -97,7 +97,7 @@ pub struct DeleteGuardPolicy {
 impl DeleteGuardPolicy {
     /// Build a policy with explicit thresholds.
     #[must_use]
-    pub const fn new(
+    pub fn new(
         max_deletes_per_run: u64,
         max_delete_ratio_per_run: DeleteRatioLimit,
         require_manual_unlock_for_mass_delete: bool,
@@ -129,7 +129,10 @@ pub struct DeleteRunScope {
 
 impl DeleteRunScope {
     /// Validate and build a run scope.
-    pub fn new(adapter_id: AdapterId, run_id: impl Into<String>) -> Result<Self, DeleteGuardError> {
+    pub fn new(
+        adapter_id: AdapterId,
+        run_id: impl Into<String>,
+    ) -> Result<Self, DeleteGuardError> {
         let run_id = run_id.into();
         validate_run_id(&run_id)?;
         Ok(Self { adapter_id, run_id })
@@ -260,13 +263,13 @@ pub struct DeleteGuard {
 impl DeleteGuard {
     /// Build a guard from a policy.
     #[must_use]
-    pub const fn new(policy: DeleteGuardPolicy) -> Self {
+    pub fn new(policy: DeleteGuardPolicy) -> Self {
         Self { policy }
     }
 
     /// Return the policy used by this guard.
     #[must_use]
-    pub const fn policy(self) -> DeleteGuardPolicy {
+    pub fn policy(self) -> DeleteGuardPolicy {
         self.policy
     }
 
