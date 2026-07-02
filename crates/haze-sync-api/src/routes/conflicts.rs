@@ -213,7 +213,7 @@ pub fn parse_resolve_conflict_request(
 
     let resolution = parts
         .resolution
-        .ok_or_else(ConflictsRouteError::invalid_resolve_payload)
+        .ok_or(ConflictsRouteError::invalid_resolve_payload())
         .and_then(parse_resolution_action)?;
 
     Ok(ResolveConflictRouteRequest {
