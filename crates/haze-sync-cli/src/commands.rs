@@ -172,7 +172,14 @@ mod tests {
     fn parser_errors_are_safe() {
         let error = parse_cli(["haze-sync", "tokens"]).unwrap_err().to_string();
 
-        for forbidden in ["token_hash", "oauth", "secret", "database_url", "/srv/", "backtrace"] {
+        for forbidden in [
+            "token_hash",
+            "oauth",
+            "secret",
+            "database_url",
+            "/srv/",
+            "backtrace",
+        ] {
             assert!(!error.contains(forbidden));
         }
     }
