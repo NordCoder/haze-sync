@@ -173,10 +173,7 @@ fn stale_base_different_content_rejects_without_silent_overwrite() {
             conflict_saved,
         } => {
             assert_eq!(current_revision.as_ref(), Some(&current));
-            assert_eq!(
-                provided_base_revision_id.as_ref(),
-                Some(&revision_id("rev_stale"))
-            );
+            assert_eq!(provided_base_revision_id.as_ref(), Some(&revision_id("rev_stale")));
             conflict_saved
                 .as_ref()
                 .expect("different stale content should be preserved as a conflict")
@@ -185,10 +182,7 @@ fn stale_base_different_content_rejects_without_silent_overwrite() {
     };
     assert_eq!(outcome.public_status(), "conflict_saved");
     assert_eq!(conflict_saved.current_revision, current);
-    assert_eq!(
-        conflict_saved.provided_base_revision_id,
-        Some(revision_id("rev_stale"))
-    );
+    assert_eq!(conflict_saved.provided_base_revision_id, Some(revision_id("rev_stale")));
     assert_eq!(conflict_saved.incoming_content.path, path("Projects/Haze/plan.md"));
     assert_eq!(conflict_saved.incoming_content.adapter_id, adapter_id());
     assert_eq!(
@@ -196,10 +190,7 @@ fn stale_base_different_content_rejects_without_silent_overwrite() {
         compute_content_hash(b"incoming content")
     );
     assert_eq!(conflict_saved.incoming_content.size_bytes, 16);
-    assert_eq!(
-        conflict_saved.incoming_content.content.as_slice(),
-        b"incoming content"
-    );
+    assert_eq!(conflict_saved.incoming_content.content.as_slice(), b"incoming content");
     assert_eq!(conflict_saved.policy_hint, ConflictPolicyHint::PreserveBoth);
 
     let (repository, content_store, operation_log) = service.into_inner();
@@ -246,10 +237,7 @@ fn null_base_existing_different_content_rejects_without_silent_overwrite() {
         compute_content_hash(b"incoming content")
     );
     assert_eq!(conflict_saved.incoming_content.size_bytes, 16);
-    assert_eq!(
-        conflict_saved.incoming_content.content.as_slice(),
-        b"incoming content"
-    );
+    assert_eq!(conflict_saved.incoming_content.content.as_slice(), b"incoming content");
     assert_eq!(conflict_saved.policy_hint, ConflictPolicyHint::PreserveBoth);
 
     let (repository, content_store, operation_log) = service.into_inner();
