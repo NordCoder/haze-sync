@@ -15,10 +15,7 @@ use crate::{
     auth::AdapterRole,
     contracts::{
         errors::{ErrorResponse, PublicError, PublicErrorCode, SafeErrorDetails},
-        headers::{
-            BaseRevisionIdHeader, IdempotencyKey, IDEMPOTENCY_KEY_HEADER,
-            X_BASE_REVISION_ID_HEADER,
-        },
+        headers::{BaseRevisionIdHeader, IdempotencyKey, IDEMPOTENCY_KEY_HEADER, X_BASE_REVISION_ID_HEADER},
     },
     dto::{
         files::{DeleteFileRequestMetadata, DeleteFileResponse, DeleteRejectedReasonDto},
@@ -292,9 +289,7 @@ impl DeleteRouteError {
             Self::NotFound => "File not found",
             Self::StaleBaseConflict => "Delete conflicted with current state",
             Self::DeleteGuardBlocked => "Delete rejected by safety guard",
-            Self::IdempotencyMismatch => {
-                "Idempotency key reused with a different delete request"
-            }
+            Self::IdempotencyMismatch => "Idempotency key reused with a different delete request",
         }
     }
 
