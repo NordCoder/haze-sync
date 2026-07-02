@@ -1,8 +1,8 @@
 //! Safe doctor-check model primitives.
 //!
-//! The doctor surface is intentionally passive. These models describe diagnostic
-//! outcomes and redacted summaries only; they do not open database connections,
-//! touch providers, repair state, delete blobs, expose local absolute paths, or
+//! The doctor surface is passive. These models describe diagnostic outcomes and
+//! redacted summaries only; they do not open database connections, touch
+//! providers, repair state, delete blobs, expose local absolute paths, or
 //! serialize credentials.
 
 use haze_sync_common::ContentHash;
@@ -114,26 +114,16 @@ pub fn db_connectivity_check(input: DbConnectivityCheckInput) -> DoctorCheckResu
         live_check_performed: input.live_check_enabled && input.connectivity_verified.is_some(),
         connectivity_verified: input.connectivity_verified,
     };
-
     let (status, message) = if !input.metadata_configured {
-        (
-            DoctorCheckStatus::Warning,
-            "database metadata is not configured",
-        )
+        (DoctorCheckStatus::Warning, "database metadata is not configured")
     } else if !input.live_check_enabled {
-        (
-            DoctorCheckStatus::Skipped,
-            "database connectivity check skipped in offline mode",
-        )
+        (DoctorCheckStatus::Skipped, "database connectivity check skipped in offline mode")
     } else if input.connectivity_verified == Some(true) {
         (DoctorCheckStatus::Ok, "database connectivity verified")
     } else if input.connectivity_verified == Some(false) {
         (DoctorCheckStatus::Failed, "database connectivity check failed")
     } else {
-        (
-            DoctorCheckStatus::Skipped,
-            "database connectivity result was not provided",
-        )
+        (DoctorCheckStatus::Skipped, "database connectivity result was not provided")
     };
 
     DoctorCheckResult::new(
@@ -184,12 +174,8 @@ pub fn object_store_exists_writable_check(
         exists: input.exists,
         writable: input.writable,
     };
-
     let (status, message) = if !input.configured {
-        (
-            DoctorCheckStatus::Warning,
-            "object store root is not configured",
-        )
+        (DoctorCheckStatus::Warning, "object store root is not configured")
     } else if input.exists == Some(false) {
         (DoctorCheckStatus::Failed, "object store root does not exist")
     } else if input.writable == Some(false) {
@@ -197,10 +183,7 @@ pub fn object_store_exists_writable_check(
     } else if input.exists == Some(true) && input.writable == Some(true) {
         (DoctorCheckStatus::Ok, "object store root is accessible")
     } else {
-        (
-            DoctorCheckStatus::Skipped,
-            "object store filesystem check skipped in offline mode",
-        )
+        (DoctorCheckStatus::Skipped, "object store filesystem check skipped in offline mode")
     };
 
     DoctorCheckResult::new(
@@ -248,16 +231,13 @@ pub fn missing_blob_detection_check(input: MissingBlobDetectionInput) -> DoctorC
     let mut missing_hashes = input.missing_hashes;
     missing_hashes.sort();
     missing_hashes.dedup();
-
-    let missing_count = u64::try_from(missing_hashes.len()).unwrap_or(u64::MAX);
+    let missing_count = usize_to_u64(missing_hashes.len());
     let sample_hashes = missing_hashes.into_iter().take(input.sample_limit).collect();
-
     let details = MissingBlobDetectionDetails {
         input_count: input.input_count,
         missing_count,
         sample_hashes,
     };
-
     let (status, message) = if missing_count == 0 {
         (DoctorCheckStatus::Ok, "no missing blobs detected")
     } else {
@@ -301,7 +281,7 @@ pub struct AdapterTokenSanityInput {
 impl AdapterTokenSanityInput {
     /// Creates a token sanity input from already-redacted adapter rows.
     #[must_use]
-    pub const fn new(adapters: Vec<AdapterTokenInspection>) -> Self {
+    pub fn new(adapters: Vec<AdapterTokenInspection>) -> Self {
         Self { adapters }
     }
 }
@@ -328,25 +308,17 @@ pub fn adapter_token_sanity_check(input: AdapterTokenSanityInput) -> DoctorCheck
         .iter()
         .filter(|adapter| adapter.enabled && !adapter.role_valid)
         .count();
-
     let details = AdapterTokenSanityDetails {
         enabled_adapter_count: usize_to_u64(enabled_adapter_count),
         missing_token_hash_count: usize_to_u64(missing_token_hash_count),
         invalid_role_count: usize_to_u64(invalid_role_count),
     };
-
     let (status, message) = if invalid_role_count > 0 {
         (DoctorCheckStatus::Failed, "enabled adapter has invalid role")
     } else if missing_token_hash_count > 0 {
-        (
-            DoctorCheckStatus::Warning,
-            "enabled adapter is missing a token hash",
-        )
+        (DoctorCheckStatus::Warning, "enabled adapter is missing a token hash")
     } else if enabled_adapter_count == 0 {
-        (
-            DoctorCheckStatus::Skipped,
-            "no enabled adapters provided for token sanity check",
-        )
+        (DoctorCheckStatus::Skipped, "no enabled adapters provided for token sanity check")
     } else {
         (DoctorCheckStatus::Ok, "adapter token metadata is sane")
     };
@@ -378,7 +350,6 @@ impl DoctorReportSummary {
         let mut warning_count = 0_u64;
         let mut failed_count = 0_u64;
         let mut skipped_count = 0_u64;
-
         for result in results {
             match result.status {
                 DoctorCheckStatus::Ok => ok_count += 1,
@@ -387,7 +358,6 @@ impl DoctorReportSummary {
                 DoctorCheckStatus::Skipped => skipped_count += 1,
             }
         }
-
         let status = if failed_count > 0 {
             DoctorCheckStatus::Failed
         } else if warning_count > 0 {
@@ -397,7 +367,6 @@ impl DoctorReportSummary {
         } else {
             DoctorCheckStatus::Ok
         };
-
         Self {
             status,
             total_checks: usize_to_u64(results.len()),
@@ -426,12 +395,8 @@ impl DoctorReport {
     }
 }
 
-const fn usize_to_u64(value: usize) -> u64 {
-    if value > u64::MAX as usize {
-        u64::MAX
-    } else {
-        value as u64
-    }
+fn usize_to_u64(value: usize) -> u64 {
+    u64::try_from(value).unwrap_or(u64::MAX)
 }
 
 #[cfg(test)]
@@ -449,9 +414,7 @@ mod tests {
             exists: Some(true),
             writable: Some(false),
         });
-
         let serialized = serde_json::to_string(&result).expect("doctor result should serialize");
-
         assert_eq!(
             serialized,
             r#"{"check_id":"object_store_exists_writable","status":"failed","message":"object store root is not writable","details":{"kind":"object_store_exists_writable","configured":true,"exists":true,"writable":false}}"#
@@ -470,11 +433,7 @@ mod tests {
                 sample_hashes: Vec::new(),
             }),
         );
-        let warning = db_connectivity_check(DbConnectivityCheckInput {
-            metadata_configured: false,
-            live_check_enabled: false,
-            connectivity_verified: None,
-        });
+        let warning = db_connectivity_check(DbConnectivityCheckInput::offline(false));
         let skipped = object_store_exists_writable_check(ObjectStoreExistsWritableInput::offline(true));
         let failed = missing_blob_detection_check(MissingBlobDetectionInput::new(
             1,
@@ -511,7 +470,6 @@ mod tests {
         let report = DoctorReport::from_results(vec![missing_blob_detection_check(
             MissingBlobDetectionInput::new(3, vec![repeated_hash('b'), repeated_hash('a')], 1),
         )]);
-
         let serialized = serde_json::to_string(&report).expect("doctor report should serialize");
 
         assert!(serialized.contains("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
@@ -530,7 +488,6 @@ mod tests {
                 AdapterTokenInspection::new(false, false, false),
             ]),
         )]);
-
         let serialized = serde_json::to_string(&report).expect("doctor report should serialize");
 
         assert!(serialized.contains("\"enabled_adapter_count\":2"));
