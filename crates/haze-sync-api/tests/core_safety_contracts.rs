@@ -1,8 +1,9 @@
+use std::collections::BTreeMap;
+
 use haze_sync_api::contracts::errors::{
     ErrorResponse, PublicError, PublicErrorCode, SafeErrorDetails,
 };
 use serde_json::json;
-use std::collections::BTreeMap;
 
 #[test]
 fn conflict_delete_and_idempotency_errors_are_safe_public_json() {
@@ -16,7 +17,7 @@ fn conflict_delete_and_idempotency_errors_are_safe_public_json() {
         ErrorResponse {
             error: PublicError::new(PublicErrorCode::Conflict, "write preserved as conflict")
                 .with_request_id("req_conflict_01J")
-                .with_details(SafeErrorDetails::Map(details.clone())),
+                .with_details(SafeErrorDetails::Map(details)),
         },
         ErrorResponse {
             error: PublicError::new(
@@ -65,7 +66,9 @@ fn conflict_resolution_action_vocabulary_is_json_serializable_spec() {
 }
 
 fn pending_sibling_behavior(phase: &str, behavior: &str) -> ! {
-    panic!("{phase} must replace this ignored W3-P8 API spec placeholder with executable route-helper coverage for {behavior}");
+    panic!(
+        "{phase} must replace this ignored W3-P8 API spec placeholder with executable route-helper coverage for {behavior}"
+    );
 }
 
 #[test]
