@@ -1,8 +1,22 @@
-//! Haze Sync command-line placeholder binary.
+//! Haze Sync command-line foundation binary.
 //!
-//! Wave 0 skeleton only. It does not start network services, connect to
+//! This binary only parses safe operational-introspection commands. It does not
+//! start network services, call live servers, connect to databases, contact
 //! providers, read credentials, or perform synchronization.
 
-fn main() {
-    println!("haze-sync-cli skeleton");
+use std::process::ExitCode;
+
+mod commands;
+
+fn main() -> ExitCode {
+    match commands::parse_cli(std::env::args()) {
+        Ok(command) => {
+            println!("{}", command.foundation_message());
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            ExitCode::from(2)
+        }
+    }
 }
