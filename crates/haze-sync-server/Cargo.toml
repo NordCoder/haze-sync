@@ -13,7 +13,6 @@ path = "src/main.rs"
 
 [dependencies]
 axum = { version = "0.7", default-features = false, features = ["json", "query", "tokio", "http1"] }
-chrono = { version = "0.4", default-features = false, features = ["serde", "std", "clock"] }
 haze-sync-api = { path = "../haze-sync-api" }
 haze-sync-common = { path = "../haze-sync-common" }
 haze-sync-core = { path = "../haze-sync-core" }
