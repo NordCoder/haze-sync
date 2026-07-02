@@ -129,10 +129,7 @@ pub struct DeleteRunScope {
 
 impl DeleteRunScope {
     /// Validate and build a run scope.
-    pub fn new(
-        adapter_id: AdapterId,
-        run_id: impl Into<String>,
-    ) -> Result<Self, DeleteGuardError> {
+    pub fn new(adapter_id: AdapterId, run_id: impl Into<String>) -> Result<Self, DeleteGuardError> {
         let run_id = run_id.into();
         validate_run_id(&run_id)?;
         Ok(Self { adapter_id, run_id })
@@ -357,11 +354,9 @@ fn validate_run_id(run_id: &str) -> Result<(), DeleteGuardError> {
     if run_id.is_empty()
         || run_id.len() > MAX_RUN_ID_LEN
         || run_id.as_bytes().contains(&0)
-        || !run_id
-            .chars()
-            .all(|character| {
-                character.is_ascii_alphanumeric() || matches!(character, '_' | '-' | '.')
-            })
+        || !run_id.chars().all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '_' | '-' | '.')
+        })
     {
         return Err(DeleteGuardError::InvalidRunId);
     }
