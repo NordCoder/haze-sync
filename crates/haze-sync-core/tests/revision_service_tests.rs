@@ -202,6 +202,10 @@ fn assert_conflict_saved(
         conflict_saved.incoming_content.size_bytes,
         incoming_bytes.len() as u64
     );
+    assert_eq!(
+        conflict_saved.incoming_content.content.as_slice(),
+        incoming_bytes
+    );
     assert_eq!(conflict_saved.policy_hint, ConflictPolicyHint::PreserveBoth);
 }
 
@@ -354,10 +358,7 @@ fn stale_base_with_different_content_yields_conflict_saved() {
     let (repository, content_store, operation_log) = service.into_inner();
     assert_eq!(repository.current, Some(current));
     assert!(repository.inserted.is_empty());
-    assert_eq!(
-        content_store.put_calls,
-        vec![(compute_content_hash(b"incoming"), b"incoming".to_vec())]
-    );
+    assert!(content_store.put_calls.is_empty());
     assert!(operation_log.appended.is_empty());
 }
 
@@ -380,7 +381,7 @@ fn unknown_base_with_different_content_yields_conflict_saved() {
     let (repository, content_store, operation_log) = service.into_inner();
     assert_eq!(repository.current, Some(current));
     assert!(repository.inserted.is_empty());
-    assert_eq!(content_store.put_calls.len(), 1);
+    assert!(content_store.put_calls.is_empty());
     assert!(operation_log.appended.is_empty());
 }
 
@@ -400,7 +401,7 @@ fn null_base_for_existing_different_content_yields_conflict_saved() {
     let (repository, content_store, operation_log) = service.into_inner();
     assert_eq!(repository.current, Some(current));
     assert!(repository.inserted.is_empty());
-    assert_eq!(content_store.put_calls.len(), 1);
+    assert!(content_store.put_calls.is_empty());
     assert!(operation_log.appended.is_empty());
 }
 
