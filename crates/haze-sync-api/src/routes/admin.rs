@@ -11,8 +11,19 @@ use serde::{Deserialize, Serialize};
 use crate::dto::primitives::TimestampDto;
 
 /// Request shape for a future passive status summary endpoint.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct StatusSummaryRequest {}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StatusSummaryRequest {
+    /// Include unknown placeholder values when live dependency state is absent.
+    pub include_placeholders: bool,
+}
+
+impl Default for StatusSummaryRequest {
+    fn default() -> Self {
+        Self {
+            include_placeholders: true,
+        }
+    }
+}
 
 /// Request shape for a future passive adapters-list endpoint.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -228,7 +239,7 @@ impl AdapterListResponse {
     /// Build a deterministic adapters-list response from safe summaries.
     #[must_use]
     pub fn new(adapters: Vec<AdapterSummary>) -> Self {
-        let total_count = u64::try_from(adapters.len()).unwrap_or(u64::MAX);
+        let total_count = adapters.len() as u64;
         Self {
             total_count,
             adapters,
@@ -289,7 +300,10 @@ mod tests {
 
     #[test]
     fn request_shapes_are_deterministic() {
-        assert_eq!(serde_json::to_string(&StatusSummaryRequest {}).unwrap(), "{}");
+        assert_eq!(
+            serde_json::to_string(&StatusSummaryRequest::default()).unwrap(),
+            "{\"include_placeholders\":true}"
+        );
         assert_eq!(
             serde_json::to_string(&AdapterListRequest::default()).unwrap(),
             "{\"include_disabled\":true}"
