@@ -414,7 +414,7 @@ async fn read_existing_idempotency(
         .await
         .map_err(|_error| ApiError::internal())?;
     let Some(record) = read_idempotency_record(
-        &mut *connection,
+        &mut connection,
         principal.common_adapter_id(),
         idempotency_key,
     )
@@ -458,7 +458,7 @@ async fn store_successful_idempotency(
     )
     .map_err(|_error| ApiError::internal())?;
 
-    match insert_idempotency_record(&mut **transaction, &input)
+    match insert_idempotency_record(transaction, &input)
         .await
         .map_err(|_error| ApiError::internal())?
     {
