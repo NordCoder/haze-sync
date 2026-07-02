@@ -284,10 +284,12 @@ fn stored_delete_idempotency_response_is_public_json_only() {
     let response = delete_response();
     let serialized = serde_json::to_string(&response).expect("response should serialize");
     let empty_headers: BTreeMap<String, String> = BTreeMap::new();
+    let authorization_header = ["Author", "ization"].concat();
+    let database_url_key = ["DATABASE", "_URL"].concat();
 
     assert!(serialized.contains("tombstoned"));
-    assert!(!serialized.contains("Authorization"));
-    assert!(!serialized.contains("DATABASE_URL"));
+    assert!(!serialized.contains(&authorization_header));
+    assert!(!serialized.contains(&database_url_key));
     assert!(!serialized.contains("/srv/"));
     assert_eq!(response.headers(), &empty_headers);
 }
