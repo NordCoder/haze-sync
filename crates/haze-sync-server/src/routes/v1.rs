@@ -530,11 +530,6 @@ async fn apply_upsert_outcome(
     }
 }
 
-/// Planning repository used to let the W2-P4 service make the normal-upsert decision.
-///
-/// The actual DB writes happen after the service returns an accepted outcome, inside
-/// the caller's transaction. The service remains the decision authority for accepted,
-/// ignored, hash-rejected, and stale-base-rejected outcomes.
 struct PlanningRevisionRepository {
     current_revision: Option<StoredRevision>,
 }
@@ -578,14 +573,6 @@ impl RevisionRepository for PlanningRevisionRepository {
     }
 }
 
-/// Content-store adapter for the W2-P4 service.
-///
-/// File bytes are written before DB metadata is committed because the local
-/// filesystem object store is not transaction-aware. This ordering guarantees no
-/// metadata row can point at missing content when the store write fails. If a later
-/// DB operation fails or the transaction rolls back, the safe fallback is an
-/// unreferenced content-addressed blob; W2-F1 intentionally does not add garbage
-/// collection, retention workers, or cleanup jobs.
 struct PlanningContentStore<'a> {
     object_store: &'a LocalObjectStore,
 }
@@ -974,6 +961,7 @@ mod tests {
         base_revision_id: Option<&str>,
         content_sha256: &str,
     ) -> PutFileRouteRequest {
+        let base_revision_id = Some(base_revision_id.unwrap_or("null"));
         parse_put_file_request(PutFileRouteRequestParts {
             route_path: path,
             idempotency_key: Some("test-key"),
@@ -991,6 +979,7 @@ mod tests {
         body: &[u8],
     ) -> PutFileRouteRequest {
         let hash = compute_content_hash(body).to_string();
+        let base_revision_id = Some(base_revision_id.unwrap_or("null"));
         parse_put_file_request(PutFileRouteRequestParts {
             route_path: path,
             idempotency_key: Some("test-key"),
@@ -1277,7 +1266,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
         let invalid_path = parse_get_file_request(GetFileRouteRequestParts {
-            route_path: "../secret.md",
+            route_path: "../outside.md",
             revision_id: None,
         })
         .unwrap_err();
