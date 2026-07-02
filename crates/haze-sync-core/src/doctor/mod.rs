@@ -115,15 +115,27 @@ pub fn db_connectivity_check(input: DbConnectivityCheckInput) -> DoctorCheckResu
         connectivity_verified: input.connectivity_verified,
     };
     let (status, message) = if !input.metadata_configured {
-        (DoctorCheckStatus::Warning, "database metadata is not configured")
+        (
+            DoctorCheckStatus::Warning,
+            "database metadata is not configured",
+        )
     } else if !input.live_check_enabled {
-        (DoctorCheckStatus::Skipped, "database connectivity check skipped in offline mode")
+        (
+            DoctorCheckStatus::Skipped,
+            "database connectivity check skipped in offline mode",
+        )
     } else if input.connectivity_verified == Some(true) {
         (DoctorCheckStatus::Ok, "database connectivity verified")
     } else if input.connectivity_verified == Some(false) {
-        (DoctorCheckStatus::Failed, "database connectivity check failed")
+        (
+            DoctorCheckStatus::Failed,
+            "database connectivity check failed",
+        )
     } else {
-        (DoctorCheckStatus::Skipped, "database connectivity result was not provided")
+        (
+            DoctorCheckStatus::Skipped,
+            "database connectivity result was not provided",
+        )
     };
 
     DoctorCheckResult::new(
@@ -175,15 +187,27 @@ pub fn object_store_exists_writable_check(
         writable: input.writable,
     };
     let (status, message) = if !input.configured {
-        (DoctorCheckStatus::Warning, "object store root is not configured")
+        (
+            DoctorCheckStatus::Warning,
+            "object store root is not configured",
+        )
     } else if input.exists == Some(false) {
-        (DoctorCheckStatus::Failed, "object store root does not exist")
+        (
+            DoctorCheckStatus::Failed,
+            "object store root does not exist",
+        )
     } else if input.writable == Some(false) {
-        (DoctorCheckStatus::Failed, "object store root is not writable")
+        (
+            DoctorCheckStatus::Failed,
+            "object store root is not writable",
+        )
     } else if input.exists == Some(true) && input.writable == Some(true) {
         (DoctorCheckStatus::Ok, "object store root is accessible")
     } else {
-        (DoctorCheckStatus::Skipped, "object store filesystem check skipped in offline mode")
+        (
+            DoctorCheckStatus::Skipped,
+            "object store filesystem check skipped in offline mode",
+        )
     };
 
     DoctorCheckResult::new(
@@ -232,7 +256,10 @@ pub fn missing_blob_detection_check(input: MissingBlobDetectionInput) -> DoctorC
     missing_hashes.sort();
     missing_hashes.dedup();
     let missing_count = usize_to_u64(missing_hashes.len());
-    let sample_hashes = missing_hashes.into_iter().take(input.sample_limit).collect();
+    let sample_hashes = missing_hashes
+        .into_iter()
+        .take(input.sample_limit)
+        .collect();
     let details = MissingBlobDetectionDetails {
         input_count: input.input_count,
         missing_count,
@@ -297,7 +324,11 @@ pub struct AdapterTokenSanityDetails {
 /// Builds an adapter token sanity check result without raw token material.
 #[must_use]
 pub fn adapter_token_sanity_check(input: AdapterTokenSanityInput) -> DoctorCheckResult {
-    let enabled_adapter_count = input.adapters.iter().filter(|adapter| adapter.enabled).count();
+    let enabled_adapter_count = input
+        .adapters
+        .iter()
+        .filter(|adapter| adapter.enabled)
+        .count();
     let missing_token_hash_count = input
         .adapters
         .iter()
@@ -314,11 +345,20 @@ pub fn adapter_token_sanity_check(input: AdapterTokenSanityInput) -> DoctorCheck
         invalid_role_count: usize_to_u64(invalid_role_count),
     };
     let (status, message) = if invalid_role_count > 0 {
-        (DoctorCheckStatus::Failed, "enabled adapter has invalid role")
+        (
+            DoctorCheckStatus::Failed,
+            "enabled adapter has invalid role",
+        )
     } else if missing_token_hash_count > 0 {
-        (DoctorCheckStatus::Warning, "enabled adapter is missing a token hash")
+        (
+            DoctorCheckStatus::Warning,
+            "enabled adapter is missing a token hash",
+        )
     } else if enabled_adapter_count == 0 {
-        (DoctorCheckStatus::Skipped, "no enabled adapters provided for token sanity check")
+        (
+            DoctorCheckStatus::Skipped,
+            "no enabled adapters provided for token sanity check",
+        )
     } else {
         (DoctorCheckStatus::Ok, "adapter token metadata is sane")
     };
@@ -434,7 +474,8 @@ mod tests {
             }),
         );
         let warning = db_connectivity_check(DbConnectivityCheckInput::offline(false));
-        let skipped = object_store_exists_writable_check(ObjectStoreExistsWritableInput::offline(true));
+        let skipped =
+            object_store_exists_writable_check(ObjectStoreExistsWritableInput::offline(true));
         let failed = missing_blob_detection_check(MissingBlobDetectionInput::new(
             1,
             vec![repeated_hash('a')],
@@ -472,11 +513,13 @@ mod tests {
         )]);
         let serialized = serde_json::to_string(&report).expect("doctor report should serialize");
 
-        assert!(serialized.contains("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        assert!(serialized
+            .contains("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
         assert!(!serialized.contains("/srv/haze-sync/objects"));
         assert!(!serialized.contains("C:\\private"));
         assert!(!serialized.contains("Notes/a.md"));
-        assert!(!serialized.contains("sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"));
+        assert!(!serialized
+            .contains("sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"));
     }
 
     #[test]
@@ -494,6 +537,7 @@ mod tests {
         assert!(serialized.contains("\"missing_token_hash_count\":1"));
         assert!(serialized.contains("\"invalid_role_count\":1"));
         assert!(!serialized.contains("credential_material"));
-        assert!(!serialized.contains("sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"));
+        assert!(!serialized
+            .contains("sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"));
     }
 }
