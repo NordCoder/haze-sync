@@ -4,9 +4,11 @@
 //! routes, database pool creation, migrations, provider SDKs, and adapter loops
 //! live outside this crate.
 
+pub mod conflict_service;
 pub mod doctor;
 pub mod idempotency;
 pub mod operation_log;
+pub mod policy_engine;
 pub mod revision_service;
 
 /// Human-readable crate role used by skeleton smoke checks and documentation.
