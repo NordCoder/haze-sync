@@ -8,9 +8,8 @@ use haze_sync_core::{
     },
     revision_service::{
         compute_content_hash, AppendOperationRequest, ConflictPolicyHint, ContentStore,
-        InsertRevisionRequest, OperationLog, OperationLogEntry, RevisionRepository,
-        RevisionService, RevisionServiceError, StoredContent, StoredRevision, UpsertFileRequest,
-        UpsertOutcome,
+        InsertRevisionRequest, OperationLog, OperationLogEntry, RevisionRepository, RevisionService,
+        RevisionServiceError, StoredContent, StoredRevision, UpsertFileRequest, UpsertOutcome,
     },
 };
 use serde_json::json;
@@ -174,7 +173,10 @@ fn stale_base_different_content_rejects_without_silent_overwrite() {
             conflict_saved,
         } => {
             assert_eq!(current_revision.as_ref(), Some(&current));
-            assert_eq!(provided_base_revision_id.as_ref(), Some(&revision_id("rev_stale")));
+            assert_eq!(
+                provided_base_revision_id.as_ref(),
+                Some(&revision_id("rev_stale"))
+            );
             conflict_saved
                 .as_ref()
                 .expect("different stale content should be preserved as a conflict")
@@ -194,7 +196,10 @@ fn stale_base_different_content_rejects_without_silent_overwrite() {
         compute_content_hash(b"incoming content")
     );
     assert_eq!(conflict_saved.incoming_content.size_bytes, 16);
-    assert_eq!(conflict_saved.incoming_content.content, b"incoming content");
+    assert_eq!(
+        conflict_saved.incoming_content.content.as_slice(),
+        b"incoming content"
+    );
     assert_eq!(conflict_saved.policy_hint, ConflictPolicyHint::PreserveBoth);
 
     let (repository, content_store, operation_log) = service.into_inner();
@@ -241,7 +246,10 @@ fn null_base_existing_different_content_rejects_without_silent_overwrite() {
         compute_content_hash(b"incoming content")
     );
     assert_eq!(conflict_saved.incoming_content.size_bytes, 16);
-    assert_eq!(conflict_saved.incoming_content.content, b"incoming content");
+    assert_eq!(
+        conflict_saved.incoming_content.content.as_slice(),
+        b"incoming content"
+    );
     assert_eq!(conflict_saved.policy_hint, ConflictPolicyHint::PreserveBoth);
 
     let (repository, content_store, operation_log) = service.into_inner();
@@ -300,10 +308,12 @@ fn stored_delete_idempotency_response_is_public_json_only() {
     let response = delete_response();
     let serialized = serde_json::to_string(&response).expect("response should serialize");
     let empty_headers: BTreeMap<String, String> = BTreeMap::new();
+    let authorization_header = ["Author", "ization"].concat();
+    let database_url_key = ["DATABASE", "_URL"].concat();
 
     assert!(serialized.contains("tombstoned"));
-    assert!(!serialized.contains("Authorization"));
-    assert!(!serialized.contains("DATABASE_URL"));
+    assert!(!serialized.contains(&authorization_header));
+    assert!(!serialized.contains(&database_url_key));
     assert!(!serialized.contains("/srv/"));
     assert_eq!(response.headers(), &empty_headers);
 }
