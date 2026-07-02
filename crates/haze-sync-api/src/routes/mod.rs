@@ -4,5 +4,7 @@
 //! metadata only. They do not register server routes, perform authentication,
 //! access storage, or call Core services.
 
+pub mod admin;
 pub mod changes;
+pub mod conflicts;
 pub mod files;

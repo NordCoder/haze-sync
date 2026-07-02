@@ -11,8 +11,5 @@ rust-version.workspace = true
 name = "haze-sync"
 path = "src/main.rs"
 
-[dependencies]
-haze-sync-core = { path = "../haze-sync-core" }
-
 [lints]
 workspace = true
