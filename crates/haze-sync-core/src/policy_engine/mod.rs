@@ -69,7 +69,7 @@ pub struct CurrentWinsWithIncomingBackupOutcome {
 
 /// Safe conflict policy outcome variants.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case", tag = "policy_applied")]
+#[serde(rename_all = "snake_case", tag = "policy_applied", content = "outcome")]
 pub enum ConflictPolicyOutcome {
     /// Default V1 policy: preserve current and incoming content.
     PreserveBoth(PreserveBothOutcome),
@@ -80,7 +80,7 @@ pub enum ConflictPolicyOutcome {
 impl ConflictPolicyOutcome {
     /// Current winning revision after policy application.
     #[must_use]
-    pub const fn current_revision(&self) -> &CurrentRevision {
+    pub fn current_revision(&self) -> &CurrentRevision {
         match self {
             Self::PreserveBoth(outcome) => &outcome.current_revision,
             Self::CurrentWinsWithIncomingBackup(outcome) => &outcome.current_revision,
@@ -89,7 +89,7 @@ impl ConflictPolicyOutcome {
 
     /// Planned incoming-content backup/conflict copy.
     #[must_use]
-    pub const fn incoming_backup(&self) -> &IncomingBackupPlan {
+    pub fn incoming_backup(&self) -> &IncomingBackupPlan {
         match self {
             Self::PreserveBoth(outcome) => &outcome.incoming_backup,
             Self::CurrentWinsWithIncomingBackup(outcome) => &outcome.incoming_backup,
@@ -98,7 +98,7 @@ impl ConflictPolicyOutcome {
 
     /// Pure conflict record input for later storage/API fan-in.
     #[must_use]
-    pub const fn conflict_record(&self) -> &ConflictRecordInput {
+    pub fn conflict_record(&self) -> &ConflictRecordInput {
         match self {
             Self::PreserveBoth(outcome) => &outcome.conflict_record,
             Self::CurrentWinsWithIncomingBackup(outcome) => &outcome.conflict_record,
