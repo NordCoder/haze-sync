@@ -10,6 +10,7 @@ pub mod idempotency;
 pub mod operation_log;
 pub mod policy_engine;
 pub mod revision_service;
+pub mod safety_fan_in;
 
 /// Human-readable crate role used by skeleton smoke checks and documentation.
 pub const CRATE_ROLE: &str = "Core service-layer primitives for Haze Sync.";
