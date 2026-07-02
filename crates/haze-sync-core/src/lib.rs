@@ -4,9 +4,11 @@
 //! routes, database pool creation, migrations, provider SDKs, and adapter loops
 //! live outside this crate.
 
+pub mod delete_guard;
 pub mod idempotency;
 pub mod operation_log;
 pub mod revision_service;
+pub mod tombstone_service;
 
 /// Human-readable crate role used by skeleton smoke checks and documentation.
 pub const CRATE_ROLE: &str = "Core service-layer primitives for Haze Sync.";
