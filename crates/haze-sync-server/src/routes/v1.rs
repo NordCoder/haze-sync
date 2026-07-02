@@ -932,8 +932,8 @@ impl ApiError {
 
 impl From<FileRouteError> for ApiError {
     fn from(error: FileRouteError) -> Self {
-        let status =
-            StatusCode::from_u16(error.http_status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        let status = StatusCode::from_u16(error.http_status_code())
+            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
         Self {
             status,
             body: error.to_error_response(),
@@ -1168,13 +1168,9 @@ mod tests {
         let current = stored_revision("rev_current", "Notes/a.md", None, b"old");
 
         let null_base = parsed_request_with_body("Notes/a.md", None, b"new");
-        let null_outcome = run_core_normal_upsert(
-            &null_base,
-            &principal(),
-            Some(current.clone()),
-            &store,
-        )
-        .unwrap();
+        let null_outcome =
+            run_core_normal_upsert(&null_base, &principal(), Some(current.clone()), &store)
+                .unwrap();
         assert!(matches!(
             null_outcome,
             UpsertOutcome::RejectedStaleOrUnknownBase { .. }
