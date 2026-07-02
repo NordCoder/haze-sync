@@ -220,7 +220,10 @@ mod tests {
 
     #[test]
     fn validates_list_limit_before_querying() {
-        assert_eq!(validate_limit(0), Err(RepositoryError::InvalidLimit { max: 1_000 }));
+        assert_eq!(
+            validate_limit(0),
+            Err(RepositoryError::InvalidLimit { max: 1_000 })
+        );
         assert_eq!(validate_limit(1), Ok(()));
     }
 
