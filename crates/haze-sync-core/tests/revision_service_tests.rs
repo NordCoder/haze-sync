@@ -1,8 +1,8 @@
 use haze_sync_common::{AdapterId, ContentHash, OperationId, RevisionId, VaultPath};
 use haze_sync_core::revision_service::{
-    compute_content_hash, AppendOperationRequest, ContentStore, InsertRevisionRequest,
-    OperationLog, OperationLogEntry, RevisionRepository, RevisionService, RevisionServiceError,
-    StoredContent, StoredRevision, UpsertFileRequest, UpsertOutcome,
+    compute_content_hash, AppendOperationRequest, ConflictPolicyHint, ContentStore,
+    InsertRevisionRequest, OperationLog, OperationLogEntry, RevisionRepository, RevisionService,
+    RevisionServiceError, StoredContent, StoredRevision, UpsertFileRequest, UpsertOutcome,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -167,6 +167,48 @@ fn service(
     RevisionService::new(repository, content_store, operation_log)
 }
 
+fn assert_conflict_saved(
+    outcome: &UpsertOutcome,
+    current: &StoredRevision,
+    expected_base: Option<&RevisionId>,
+    incoming_bytes: &[u8],
+) {
+    assert_eq!(outcome.public_status(), "conflict_saved");
+
+    let UpsertOutcome::RejectedStaleOrUnknownBase {
+        current_revision,
+        provided_base_revision_id,
+        conflict_saved: Some(conflict_saved),
+    } = outcome
+    else {
+        panic!("unexpected outcome: {outcome:?}");
+    };
+
+    assert_eq!(current_revision.as_ref(), Some(current));
+    assert_eq!(provided_base_revision_id.as_ref(), expected_base);
+    assert_eq!(outcome.conflict_saved(), Some(conflict_saved.as_ref()));
+    assert_eq!(&conflict_saved.current_revision, current);
+    assert_eq!(
+        conflict_saved.provided_base_revision_id.as_ref(),
+        expected_base
+    );
+    assert_eq!(conflict_saved.incoming_content.path, path());
+    assert_eq!(conflict_saved.incoming_content.adapter_id, adapter_id());
+    assert_eq!(
+        conflict_saved.incoming_content.content_hash,
+        compute_content_hash(incoming_bytes)
+    );
+    assert_eq!(
+        conflict_saved.incoming_content.size_bytes,
+        incoming_bytes.len() as u64
+    );
+    assert_eq!(
+        conflict_saved.incoming_content.content.as_slice(),
+        incoming_bytes
+    );
+    assert_eq!(conflict_saved.policy_hint, ConflictPolicyHint::PreserveBoth);
+}
+
 #[test]
 fn new_file_with_null_base_is_accepted() {
     let events = Events::default();
@@ -300,13 +342,7 @@ fn stale_or_unknown_base_does_not_overwrite_different_current_content() {
         .upsert_file(request(Some(unknown_base.clone()), b"incoming"))
         .unwrap();
 
-    assert_eq!(
-        outcome,
-        UpsertOutcome::RejectedStaleOrUnknownBase {
-            current_revision: Some(current.clone()),
-            provided_base_revision_id: Some(unknown_base),
-        }
-    );
+    assert_conflict_saved(&outcome, &current, Some(&unknown_base), b"incoming");
 
     let (repository, content_store, operation_log) = service.into_inner();
     assert_eq!(repository.current, Some(current));
@@ -326,13 +362,7 @@ fn null_base_for_existing_file_does_not_overwrite_different_content() {
 
     let outcome = service.upsert_file(request(None, b"incoming")).unwrap();
 
-    assert_eq!(
-        outcome,
-        UpsertOutcome::RejectedStaleOrUnknownBase {
-            current_revision: Some(current.clone()),
-            provided_base_revision_id: None,
-        }
-    );
+    assert_conflict_saved(&outcome, &current, None, b"incoming");
 
     let (repository, content_store, operation_log) = service.into_inner();
     assert_eq!(repository.current, Some(current));
@@ -359,8 +389,11 @@ fn non_null_base_for_missing_file_is_rejected_as_unknown_base() {
         UpsertOutcome::RejectedStaleOrUnknownBase {
             current_revision: None,
             provided_base_revision_id: Some(unknown_base),
+            conflict_saved: None,
         }
     );
+    assert_eq!(outcome.public_status(), "rejected_stale_or_unknown_base");
+    assert!(outcome.conflict_saved().is_none());
 
     let (repository, content_store, operation_log) = service.into_inner();
     assert!(repository.inserted.is_empty());
