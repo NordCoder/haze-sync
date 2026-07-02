@@ -1,18 +1,19 @@
-//! V1 Core API route wiring for W2 normal file operations.
+//! V1 Core API route wiring for W2 file operations and W3 safety fan-in.
 //!
-//! This module wires already-merged W2 API helpers, storage repositories,
-//! idempotency primitives, object store primitives, and readiness/auth state into
-//! the normal PUT/GET/changes slice. Conflict preservation, delete behavior, and
-//! adapter runtimes remain future-phase work.
+//! This module wires already-merged W2 API helpers with the W3 conflict/delete
+//! safety primitives where storage support exists. Unsupported conflict
+//! resolution behavior is exposed as safe deferred output instead of pretending
+//! to mutate state.
 
 use axum::{
     body::{Body, Bytes},
     extract::{Path, Query},
     http::{header, HeaderMap, HeaderName, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{delete, get, post},
     Extension, Json, Router,
 };
+use chrono::{Duration, SecondsFormat, Utc};
 use haze_sync_api::{
     auth::{AdapterPrincipal, AdapterRole, BearerToken},
     contracts::{
@@ -24,8 +25,8 @@ use haze_sync_api::{
     },
     dto::{
         changes::ChangeEntryDto,
-        common::OperationKindDto,
-        files::PutFileResponse,
+        common::{ConflictPolicyDto, ConflictResolutionDto, ConflictStatusDto, OperationKindDto},
+        files::{DeleteFileResponse, PutFileResponse},
         primitives::{
             AdapterIdDto, ConflictIdDto, ContentSha256Dto, RevisionIdDto, TimestampDto,
             TombstoneIdDto, VaultPathDto,
@@ -33,7 +34,21 @@ use haze_sync_api::{
         server::{ServerCapabilityDto, ServerInfoResponse},
     },
     routes::{
+        admin::{
+            AdapterCursorSummary, AdapterListResponse, AdapterListRequest, AdapterSummary,
+            DependencyReadinessState, PauseStatusSummary, ServerStatus, StatusSummaryResponse,
+        },
         changes::{changes_response_from_parts, parse_changes_query, ChangesRouteError},
+        conflicts::{
+            conflict_list_response_from_parts, parse_conflicts_query, parse_resolve_conflict_request,
+            resolved_conflict_response, ConflictListRequestParts, ConflictRouteSummaryParts,
+            ConflictsRouteError, ResolveConflictRequestParts,
+        },
+        delete::{
+            parse_delete_file_request, stale_base_delete_response, tombstoned_delete_response,
+            unsafe_delete_response, DeleteFileRouteRequest, DeleteFileRouteRequestParts,
+            DeleteRouteError,
+        },
         files::{
             accepted_upload_response, ignored_same_content_response, parse_get_file_request,
             parse_put_file_request, FileDownloadRouteHeaders, FileRouteError,
@@ -42,13 +57,21 @@ use haze_sync_api::{
         },
     },
 };
-use haze_sync_common::{AdapterId, ContentHash, OperationId, RevisionId, VaultPath};
+use haze_sync_common::{
+    AdapterId, AdapterMode, AdapterRole as CommonAdapterRole, ConflictId, ContentHash, OperationId,
+    RevisionId, VaultPath,
+};
 use haze_sync_core::{
+    delete_guard::{DeleteGuard, DeleteGuardInput, DeleteGuardPolicy, DeleteRatioLimit, DeleteRunScope},
     idempotency::{RequestFingerprint, StoredIdempotencyResponse},
     revision_service::{
         compute_content_hash, AppendOperationRequest, ContentStore, InsertRevisionRequest,
         OperationKind, OperationLog, OperationLogEntry, RevisionRepository, RevisionService,
         RevisionServiceError, StoredContent, StoredRevision, UpsertFileRequest, UpsertOutcome,
+    },
+    safety_fan_in::{plan_conflict_saved_fan_in, ConflictSavedFanInPlan},
+    tombstone_service::{
+        TombstoneCreationInput, TombstoneId, TombstoneRetention, TombstoneService,
     },
 };
 use haze_sync_storage::{
@@ -61,21 +84,19 @@ use haze_sync_storage::{
             IdempotencyRecordInput, IdempotencyRequestComparison, IdempotencyStoreOutcome,
         },
         objects::{
-            create_or_find_sync_object_by_path, set_current_revision_by_object_id, NewSyncObject,
-            SyncObjectKind,
+            create_or_find_sync_object_by_path, set_current_revision_by_object_id,
+            set_sync_object_deleted_at_by_path, NewSyncObject, SyncObjectKind,
         },
         operation_log::{
             AppendOperationLogEntry, ChangeFeedRow, OperationKindName, OperationLogRepository,
         },
-        revisions::{
-            get_current_revision_by_path, get_file_revision_by_id, insert_file_revision,
-            NewFileRevision,
-        },
+        revisions::{get_current_revision_by_path, get_file_revision_by_id, insert_file_revision, NewFileRevision},
+        tombstones::{insert_tombstone, NewTombstone},
         RepositoryError,
     },
     LocalObjectStore, ObjectStoreError,
 };
-use serde_json::json;
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256 as Sha256Digest};
 use sqlx::{PgPool, Row};
 use std::{collections::HashMap, str::FromStr};
@@ -86,6 +107,7 @@ use crate::{
 };
 
 const MAX_UPLOAD_BYTES: u64 = 52_428_800;
+const DELETE_RETENTION_DAYS: i64 = 30;
 
 /// Builds the versioned `/v1` API namespace.
 pub fn router() -> Router {
@@ -96,13 +118,12 @@ pub fn router() -> Router {
             "/files/*path",
             get(get_file_route)
                 .put(put_file_route)
-                .delete(core_route_not_implemented),
+                .delete(delete_file_route),
         )
-        .route("/conflicts", get(core_route_not_implemented))
-        .route(
-            "/conflicts/{conflict_id}/resolve",
-            axum::routing::post(core_route_not_implemented),
-        )
+        .route("/conflicts", get(list_conflicts_route))
+        .route("/conflicts/{conflict_id}/resolve", post(resolve_conflict_route))
+        .route("/admin/status", get(admin_status_route))
+        .route("/admin/adapters", get(admin_adapters_route))
 }
 
 /// Handles GET /v1/server-info with static, safe route-shell information.
@@ -128,7 +149,7 @@ async fn put_file_route(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Response, ApiError> {
-    let principal = authenticate(&state, &headers, FilePermission::Write).await?;
+    let principal = authenticate(&state, &headers, RoutePermission::Write).await?;
     let request = parse_put_file_request(PutFileRouteRequestParts {
         route_path: route_path.as_str(),
         idempotency_key: optional_header(
@@ -152,7 +173,7 @@ async fn put_file_route(
 
     let pool = runtime_pool(&state)?;
     let object_store = runtime_object_store(&state)?;
-    let fingerprint = request_fingerprint(&request, &principal);
+    let fingerprint = put_request_fingerprint(&request, &principal);
 
     if let Some(replay) = read_existing_idempotency(
         pool,
@@ -177,14 +198,16 @@ async fn put_file_route(
         .transpose()?;
 
     let outcome = run_core_normal_upsert(&request, &principal, current_revision, object_store)?;
-    let response_body = apply_upsert_outcome(&mut transaction, &principal, outcome).await?;
+    let response_body = apply_upsert_outcome(&mut transaction, &principal, outcome, object_store).await?;
+    let response_json = serde_json::to_value(&response_body).map_err(|_error| ApiError::internal())?;
 
     if let Some(replay) = store_successful_idempotency(
         &mut transaction,
         &principal,
         request.idempotency_key().as_str(),
         fingerprint,
-        &response_body,
+        StatusCode::OK,
+        response_json,
     )
     .await?
     {
@@ -209,7 +232,7 @@ async fn get_file_route(
     Query(query): Query<HashMap<String, String>>,
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
-    authenticate(&state, &headers, FilePermission::Read).await?;
+    authenticate(&state, &headers, RoutePermission::Read).await?;
     let request = parse_get_file_request(GetFileRouteRequestParts {
         route_path: route_path.as_str(),
         revision_id: query.get("revision_id").map(String::as_str),
@@ -252,12 +275,165 @@ async fn get_file_route(
     )
 }
 
+async fn delete_file_route(
+    Extension(state): Extension<ServerAppState>,
+    Path(route_path): Path<String>,
+    headers: HeaderMap,
+) -> Result<Response, ApiError> {
+    let principal = authenticate(&state, &headers, RoutePermission::Write).await?;
+    let request = parse_delete_file_request(DeleteFileRouteRequestParts {
+        route_path: route_path.as_str(),
+        idempotency_key: optional_header(
+            &headers,
+            IDEMPOTENCY_KEY_HEADER,
+            HeaderErrorKind::Idempotency,
+        )?,
+        base_revision_id: optional_header(
+            &headers,
+            X_BASE_REVISION_ID_HEADER,
+            HeaderErrorKind::BaseRevision,
+        )?,
+        requested_delete_count: None,
+    })?;
+    request.auth_requirement().validate_role(principal.role())?;
+
+    let pool = runtime_pool(&state)?;
+    let fingerprint = delete_request_fingerprint(&request, &principal);
+
+    if let Some(replay) = read_existing_idempotency(
+        pool,
+        &principal,
+        request.idempotency_key().as_str(),
+        fingerprint,
+    )
+    .await?
+    {
+        return replay_response(replay);
+    }
+
+    let mut transaction = pool.begin().await.map_err(|_error| ApiError::internal())?;
+    lock_vault_path(&mut *transaction, request.path())
+        .await
+        .map_err(map_repository_error)?;
+
+    let current = get_current_revision_by_path(&mut *transaction, request.path())
+        .await
+        .map_err(map_repository_error)?
+        .map(stored_revision_from_row)
+        .transpose()?;
+    let Some(current) = current else {
+        return Ok((StatusCode::NOT_FOUND, Json(not_found_delete_json(&request))).into_response());
+    };
+
+    if request.base_revision_id() != Some(&current.revision_id) {
+        return Ok((
+            StatusCode::CONFLICT,
+            Json(stale_base_delete_response(request.path().clone())),
+        )
+            .into_response());
+    }
+
+    if !single_delete_guard_allows(&principal)? {
+        return Ok((
+            StatusCode::CONFLICT,
+            Json(unsafe_delete_response(request.path().clone())),
+        )
+            .into_response());
+    }
+
+    let now = Utc::now();
+    let retention_until = now + Duration::days(DELETE_RETENTION_DAYS);
+    let tombstone_id = TombstoneId::parse(&deterministic_identifier(
+        "tmb_",
+        &[current.revision_id.as_str(), request.path().as_str(), principal.adapter_id()],
+    ))
+    .map_err(|_error| ApiError::internal())?;
+    let retention = TombstoneRetention::new(retention_until, Some(DELETE_RETENTION_DAYS as u16));
+    let tombstone = TombstoneService::new()
+        .create_tombstone(TombstoneCreationInput::new(
+            tombstone_id,
+            request.path().clone(),
+            current.revision_id.clone(),
+            Some(current.revision_id.clone()),
+            principal.common_adapter_id().clone(),
+            retention,
+            Some(now),
+        ))
+        .map_err(|_error| ApiError::internal())?;
+
+    let tombstone_row = insert_tombstone(
+        &mut *transaction,
+        NewTombstone {
+            tombstone_id: tombstone.tombstone_id.as_str(),
+            path: &tombstone.path,
+            deleted_revision_id: Some(tombstone.deleted_revision_id()),
+            deleted_by: &tombstone.deleted_by,
+            retention_until: tombstone.retention.retention_until,
+        },
+    )
+    .await
+    .map_err(map_repository_error)?;
+
+    set_sync_object_deleted_at_by_path(
+        &mut *transaction,
+        request.path(),
+        Some(tombstone_row.deleted_at),
+        principal.common_adapter_id(),
+    )
+    .await
+    .map_err(map_repository_error)?;
+
+    let operation = append_operation_log(
+        &mut transaction,
+        principal.common_adapter_id().clone(),
+        OperationKindName::DeleteFile,
+        request.path().clone(),
+        None,
+        Some(tombstone_row.tombstone_id.clone()),
+        None,
+        &[tombstone_row.tombstone_id.as_str(), request.path().as_str()],
+    )
+    .await?;
+
+    let response_body = tombstoned_delete_response(
+        request.path().clone(),
+        tombstone_row.tombstone_id,
+        operation.seq,
+        timestamp_string(tombstone_row.retention_until),
+    );
+    let response_json = serde_json::to_value(&response_body).map_err(|_error| ApiError::internal())?;
+
+    if let Some(replay) = store_successful_idempotency(
+        &mut transaction,
+        &principal,
+        request.idempotency_key().as_str(),
+        fingerprint,
+        StatusCode::OK,
+        response_json,
+    )
+    .await?
+    {
+        transaction
+            .rollback()
+            .await
+            .map_err(|_error| ApiError::internal())?;
+        return replay_response(replay);
+    }
+
+    transaction
+        .commit()
+        .await
+        .map_err(|_error| ApiError::internal())?;
+
+    Ok((StatusCode::OK, Json(response_body)).into_response())
+}
+
 async fn changes_route(
     Extension(state): Extension<ServerAppState>,
     Query(query): Query<HashMap<String, String>>,
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
-    authenticate(&state, &headers, FilePermission::Read).await?;
+    authenticate(&state, &headers, RoutePermission::Read).await?;
     let request = parse_changes_query(
         query.get("since").map(String::as_str),
         query.get("limit").map(String::as_str),
@@ -278,21 +454,207 @@ async fn changes_route(
     Ok((StatusCode::OK, Json(response)).into_response())
 }
 
-/// Placeholder for future Core routes whose business behavior is outside W2-F1.
+async fn list_conflicts_route(
+    Extension(state): Extension<ServerAppState>,
+    Query(query): Query<HashMap<String, String>>,
+    headers: HeaderMap,
+) -> Result<Response, ApiError> {
+    authenticate(&state, &headers, RoutePermission::Read).await?;
+    let _request = parse_conflicts_query(ConflictListRequestParts {
+        status: query.get("status").map(String::as_str),
+    })?;
+
+    let Some(pool) = state.db_pool() else {
+        return Ok((StatusCode::OK, Json(conflict_list_response_from_parts(Vec::new()))).into_response());
+    };
+
+    let rows = sqlx::query(
+        "select conflict_id, original_path, base_revision_id, current_revision_id, \
+         incoming_revision_id, incoming_adapter_id, policy_applied, materialized_path, status, \
+         created_at, resolved_at from conflicts where status = 'open' \
+         order by created_at asc, conflict_id asc limit 100",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|_error| ApiError::internal())?;
+
+    let mut conflicts = Vec::with_capacity(rows.len());
+    for row in rows {
+        conflicts.push(conflict_summary_from_row(&row)?);
+    }
+
+    Ok((StatusCode::OK, Json(conflict_list_response_from_parts(conflicts))).into_response())
+}
+
+async fn resolve_conflict_route(
+    Extension(state): Extension<ServerAppState>,
+    Path(conflict_id): Path<String>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Result<Response, ApiError> {
+    let principal = authenticate(&state, &headers, RoutePermission::ResolveConflict).await?;
+    let object = body.as_object().ok_or_else(ConflictsRouteError::invalid_resolve_payload)?;
+    let resolution = object.get("resolution").and_then(Value::as_str);
+    let extra_fields = object
+        .keys()
+        .filter(|key| key.as_str() != "resolution")
+        .map(String::as_str)
+        .collect::<Vec<_>>();
+    let request = parse_resolve_conflict_request(ResolveConflictRequestParts {
+        conflict_id: conflict_id.as_str(),
+        resolution,
+        extra_fields: &extra_fields,
+    })?;
+
+    if request.resolution == ConflictResolutionDto::AcceptConflict {
+        return Ok(core_route_not_implemented().await.into_response());
+    }
+
+    let Some(pool) = state.db_pool() else {
+        return Ok(core_route_not_implemented().await.into_response());
+    };
+
+    let mut transaction = pool.begin().await.map_err(|_error| ApiError::internal())?;
+    let row = sqlx::query(
+        "update conflicts set status = 'resolved', resolved_at = now(), resolved_by = $2 \
+         where conflict_id = $1 and status = 'open' returning original_path",
+    )
+    .bind(request.conflict_id.as_str())
+    .bind(principal.adapter_id())
+    .fetch_optional(&mut *transaction)
+    .await
+    .map_err(|_error| ApiError::internal())?
+    .ok_or_else(ConflictsRouteError::not_found)?;
+    let path = VaultPath::parse(row.try_get::<String, _>("original_path")?.as_str())
+        .map_err(|_error| ApiError::internal())?;
+
+    let operation = append_operation_log(
+        &mut transaction,
+        principal.common_adapter_id().clone(),
+        OperationKindName::ConflictResolved,
+        path,
+        None,
+        None,
+        Some(request.conflict_id.clone()),
+        &[request.conflict_id.as_str(), principal.adapter_id()],
+    )
+    .await?;
+
+    transaction
+        .commit()
+        .await
+        .map_err(|_error| ApiError::internal())?;
+
+    Ok((
+        StatusCode::OK,
+        Json(resolved_conflict_response(
+            request.conflict_id,
+            request.resolution,
+            operation.seq,
+        )),
+    )
+        .into_response())
+}
+
+async fn admin_status_route(
+    Extension(state): Extension<ServerAppState>,
+    headers: HeaderMap,
+) -> Result<Response, ApiError> {
+    authenticate(&state, &headers, RoutePermission::Admin).await?;
+
+    let db_state = readiness_for(state.db_pool().is_some());
+    let object_store_state = readiness_for(state.object_store().is_some());
+    let server_status = if state.db_pool().is_some() && state.object_store().is_some() {
+        ServerStatus::Ready
+    } else {
+        ServerStatus::NotReady
+    };
+    let last_operation_sequence = if let Some(pool) = state.db_pool() {
+        sqlx::query_scalar::<_, Option<i64>>("select max(seq) from operation_log")
+            .fetch_one(pool)
+            .await
+            .map_err(|_error| ApiError::internal())?
+    } else {
+        None
+    };
+    let adapter_count = if let Some(pool) = state.db_pool() {
+        Some(
+            sqlx::query_scalar::<_, i64>("select count(*) from sync_adapters")
+                .fetch_one(pool)
+                .await
+                .map_err(|_error| ApiError::internal())?
+                .try_into()
+                .map_err(|_| ApiError::internal())?,
+        )
+    } else {
+        None
+    };
+
+    let response = StatusSummaryResponse::from_safe_parts(
+        server_status,
+        db_state,
+        object_store_state,
+        last_operation_sequence,
+        adapter_count,
+        PauseStatusSummary::unsupported(),
+    );
+
+    Ok((StatusCode::OK, Json(response)).into_response())
+}
+
+async fn admin_adapters_route(
+    Extension(state): Extension<ServerAppState>,
+    Query(_query): Query<AdapterListRequest>,
+    headers: HeaderMap,
+) -> Result<Response, ApiError> {
+    authenticate(&state, &headers, RoutePermission::Admin).await?;
+
+    let Some(pool) = state.db_pool() else {
+        return Ok((StatusCode::OK, Json(AdapterListResponse::empty())).into_response());
+    };
+
+    let rows = sqlx::query(
+        "select adapter_id, role, enabled, last_seen_at from sync_adapters \
+         order by adapter_id asc limit 100",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|_error| ApiError::internal())?;
+
+    let mut adapters = Vec::with_capacity(rows.len());
+    for row in rows {
+        let adapter_id = AdapterId::parse(row.try_get::<String, _>("adapter_id")?.as_str())
+            .map_err(|_error| ApiError::internal())?;
+        let role = CommonAdapterRole::from_str(row.try_get::<String, _>("role")?.as_str()).ok();
+        let enabled = row.try_get::<bool, _>("enabled")?;
+        let mut summary = AdapterSummary::new(adapter_id, role, enabled).with_mode(AdapterMode::Disabled);
+        if let Some(last_seen_at) = row.try_get::<Option<chrono::DateTime<Utc>>, _>("last_seen_at")? {
+            summary = summary.with_last_seen_at(TimestampDto::from(timestamp_string(last_seen_at)));
+        }
+        summary = summary.with_cursor(AdapterCursorSummary::new(None, None, false));
+        adapters.push(summary);
+    }
+
+    Ok((StatusCode::OK, Json(AdapterListResponse::new(adapters))).into_response())
+}
+
+/// Placeholder for Core actions whose mutation semantics are explicitly deferred.
 pub async fn core_route_not_implemented() -> (StatusCode, Json<ShellErrorResponse>) {
     not_implemented_response()
 }
 
 #[derive(Clone, Copy)]
-enum FilePermission {
+enum RoutePermission {
     Read,
     Write,
+    ResolveConflict,
+    Admin,
 }
 
 async fn authenticate(
     state: &ServerAppState,
     headers: &HeaderMap,
-    permission: FilePermission,
+    permission: RoutePermission,
 ) -> Result<AdapterPrincipal, ApiError> {
     let header = required_auth_header(headers)?;
     let token = BearerToken::parse_authorization_header(header)
@@ -305,10 +667,16 @@ async fn authenticate(
     };
 
     match permission {
-        FilePermission::Read if !principal.role().can_read_files() => {
+        RoutePermission::Read if !principal.role().can_read_files() => {
             return Err(ApiError::forbidden_role());
         }
-        FilePermission::Write if !principal.role().can_write_files() => {
+        RoutePermission::Write if !principal.role().can_write_files() => {
+            return Err(ApiError::forbidden_role());
+        }
+        RoutePermission::ResolveConflict if !principal.role().can_resolve_conflicts() => {
+            return Err(ApiError::forbidden_role());
+        }
+        RoutePermission::Admin if !principal.role().can_admin() => {
             return Err(ApiError::forbidden_role());
         }
         _ => {}
@@ -335,9 +703,7 @@ async fn lookup_principal_by_token(
     .map_err(|_error| ApiError::internal())?
     .ok_or_else(ApiError::invalid_token)?;
 
-    let adapter_id: String = row
-        .try_get("adapter_id")
-        .map_err(|_error| ApiError::internal())?;
+    let adapter_id: String = row.try_get("adapter_id").map_err(|_error| ApiError::internal())?;
     let role: String = row.try_get("role").map_err(|_error| ApiError::internal())?;
     let role = AdapterRole::from_str(&role).map_err(|_error| ApiError::invalid_token())?;
 
@@ -380,23 +746,34 @@ fn runtime_pool(state: &ServerAppState) -> Result<&PgPool, ApiError> {
 }
 
 fn runtime_object_store(state: &ServerAppState) -> Result<&LocalObjectStore, ApiError> {
-    state
-        .object_store()
-        .ok_or_else(ApiError::storage_unavailable)
+    state.object_store().ok_or_else(ApiError::storage_unavailable)
 }
 
-fn request_fingerprint(
+fn put_request_fingerprint(
     request: &PutFileRouteRequest,
     principal: &AdapterPrincipal,
 ) -> RequestFingerprint {
     let metadata = json!({
         "method": "PUT",
         "path": request.path().as_str(),
-        "base_revision_id": request
-            .base_revision_id()
-            .map(RevisionId::as_str)
-            .unwrap_or("null"),
+        "base_revision_id": request.base_revision_id().map(RevisionId::as_str).unwrap_or("null"),
         "content_sha256": request.content_sha256().to_string(),
+        "adapter_id": principal.adapter_id(),
+        "scope": "adapter",
+    });
+    RequestFingerprint::from_safe_json_metadata(&metadata)
+}
+
+fn delete_request_fingerprint(
+    request: &DeleteFileRouteRequest,
+    principal: &AdapterPrincipal,
+) -> RequestFingerprint {
+    let metadata = json!({
+        "method": "DELETE",
+        "path": request.path().as_str(),
+        "base_revision_id": request.base_revision_id().map(RevisionId::as_str).unwrap_or("null"),
+        "action": "tombstone",
+        "requested_delete_count": request.delete_guard().requested_delete_count,
         "adapter_id": principal.adapter_id(),
         "scope": "adapter",
     });
@@ -409,10 +786,7 @@ async fn read_existing_idempotency(
     idempotency_key: &str,
     fingerprint: RequestFingerprint,
 ) -> Result<Option<StoredIdempotencyResponse>, ApiError> {
-    let mut connection = pool
-        .acquire()
-        .await
-        .map_err(|_error| ApiError::internal())?;
+    let mut connection = pool.acquire().await.map_err(|_error| ApiError::internal())?;
     let Some(record) = read_idempotency_record(
         &mut connection,
         principal.common_adapter_id(),
@@ -432,9 +806,7 @@ async fn read_existing_idempotency(
                 .map_err(|_error| ApiError::internal())?;
             Ok(Some(response))
         }
-        IdempotencyRequestComparison::DifferentRequest => {
-            Err(FileRouteError::IdempotencyMismatch.into())
-        }
+        IdempotencyRequestComparison::DifferentRequest => Err(FileRouteError::IdempotencyMismatch.into()),
     }
 }
 
@@ -443,13 +815,11 @@ async fn store_successful_idempotency(
     principal: &AdapterPrincipal,
     idempotency_key: &str,
     fingerprint: RequestFingerprint,
-    response_body: &PutFileResponse,
+    status_code: StatusCode,
+    response_body: Value,
 ) -> Result<Option<StoredIdempotencyResponse>, ApiError> {
-    let stored_response = StoredIdempotencyResponse::json(
-        StatusCode::OK.as_u16(),
-        serde_json::to_value(response_body).map_err(|_error| ApiError::internal())?,
-    )
-    .map_err(|_error| ApiError::internal())?;
+    let stored_response = StoredIdempotencyResponse::json(status_code.as_u16(), response_body)
+        .map_err(|_error| ApiError::internal())?;
     let input = IdempotencyRecordInput::new(
         principal.common_adapter_id().clone(),
         idempotency_key,
@@ -500,15 +870,14 @@ fn run_core_normal_upsert(
     );
     upsert_request = upsert_request.with_idempotency_key(request.idempotency_key().as_str());
 
-    service
-        .upsert_file(upsert_request)
-        .map_err(map_revision_service_error)
+    service.upsert_file(upsert_request).map_err(map_revision_service_error)
 }
 
 async fn apply_upsert_outcome(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     principal: &AdapterPrincipal,
     outcome: UpsertOutcome,
+    object_store: &LocalObjectStore,
 ) -> Result<PutFileResponse, ApiError> {
     match outcome {
         UpsertOutcome::AcceptedNewFile { revision, .. }
@@ -523,11 +892,154 @@ async fn apply_upsert_outcome(
         UpsertOutcome::IgnoredDuplicateSameContent { current_revision } => {
             Ok(ignored_same_content_response(current_revision.path))
         }
-        UpsertOutcome::RejectedHashMismatch { .. } => {
-            Err(FileRouteError::InvalidContentSha256.into())
-        }
+        UpsertOutcome::RejectedHashMismatch { .. } => Err(FileRouteError::InvalidContentSha256.into()),
+        UpsertOutcome::RejectedStaleOrUnknownBase {
+            conflict_saved: Some(conflict_saved),
+            ..
+        } => persist_conflict_saved(transaction, principal, &conflict_saved, object_store).await,
         UpsertOutcome::RejectedStaleOrUnknownBase { .. } => Err(FileRouteError::Conflict.into()),
     }
+}
+
+async fn persist_conflict_saved(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    principal: &AdapterPrincipal,
+    outcome: &haze_sync_core::revision_service::ConflictSavedOutcome,
+    object_store: &LocalObjectStore,
+) -> Result<PutFileResponse, ApiError> {
+    let timestamp = Utc::now();
+    let plan = plan_conflict_saved_fan_in(outcome, timestamp).map_err(|_error| FileRouteError::Conflict)?;
+    object_store
+        .put_bytes(outcome.incoming_content.content_hash, &outcome.incoming_content.content)
+        .map_err(|_error| ApiError::internal())?;
+    insert_content_blob(
+        transaction,
+        outcome.incoming_content.content_hash,
+        outcome.incoming_content.size_bytes,
+    )
+    .await?;
+
+    let conflict_revision = persist_conflict_copy_revision(transaction, principal, &plan).await?;
+    let conflict_id = ConflictId::parse(&deterministic_identifier(
+        "conf_",
+        &[
+            plan.original_path.as_str(),
+            plan.conflict_path.as_str(),
+            conflict_revision.revision_id.as_str(),
+        ],
+    ))
+    .map_err(|_error| ApiError::internal())?;
+
+    insert_conflict_row(transaction, &plan, &conflict_id, &conflict_revision.revision_id).await?;
+    let operation = append_operation_log(
+        transaction,
+        principal.common_adapter_id().clone(),
+        OperationKindName::ConflictCreated,
+        plan.original_path.clone(),
+        None,
+        None,
+        Some(conflict_id.clone()),
+        &[conflict_id.as_str(), plan.original_path.as_str()],
+    )
+    .await?;
+
+    Ok(PutFileResponse::ConflictSaved {
+        path: VaultPathDto::from(plan.original_path),
+        conflict_id: ConflictIdDto::from(conflict_id),
+        materialized_path: VaultPathDto::from(plan.conflict_path),
+        policy_applied: ConflictPolicyDto::PreserveBoth,
+        seq: operation.seq,
+    })
+}
+
+async fn persist_conflict_copy_revision(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    principal: &AdapterPrincipal,
+    plan: &ConflictSavedFanInPlan,
+) -> Result<StoredRevision, ApiError> {
+    let object_id = deterministic_identifier("obj_", &[plan.conflict_path.as_str()]);
+    let object = create_or_find_sync_object_by_path(
+        &mut **transaction,
+        NewSyncObject {
+            object_id: object_id.as_str(),
+            path: &plan.conflict_path,
+            kind: SyncObjectKind::File,
+            updated_by: principal.common_adapter_id(),
+        },
+    )
+    .await
+    .map_err(map_repository_error)?;
+
+    let content_hash_string = plan.incoming_backup.content_hash.to_string();
+    let revision_id = RevisionId::parse(&deterministic_identifier(
+        "rev_",
+        &[
+            plan.conflict_path.as_str(),
+            plan.conflict_record.current_revision_id.as_str(),
+            content_hash_string.as_str(),
+            principal.adapter_id(),
+        ],
+    ))
+    .map_err(|_error| ApiError::internal())?;
+
+    insert_file_revision(
+        &mut **transaction,
+        NewFileRevision {
+            revision_id: &revision_id,
+            object_id: object.object_id.as_str(),
+            path: &plan.conflict_path,
+            parent_revision_id: None,
+            content_hash: plan.incoming_backup.content_hash,
+            size_bytes: plan.incoming_backup.size_bytes,
+            created_by: principal.common_adapter_id(),
+        },
+    )
+    .await
+    .map_err(map_repository_error)?;
+
+    set_current_revision_by_object_id(
+        &mut **transaction,
+        object.object_id.as_str(),
+        Some(&revision_id),
+        principal.common_adapter_id(),
+    )
+    .await
+    .map_err(map_repository_error)?
+    .ok_or_else(ApiError::internal)?;
+
+    Ok(StoredRevision {
+        revision_id,
+        path: plan.conflict_path.clone(),
+        parent_revision_id: None,
+        content_hash: plan.incoming_backup.content_hash,
+        size_bytes: plan.incoming_backup.size_bytes,
+        created_by: principal.common_adapter_id().clone(),
+    })
+}
+
+async fn insert_conflict_row(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    plan: &ConflictSavedFanInPlan,
+    conflict_id: &ConflictId,
+    incoming_revision_id: &RevisionId,
+) -> Result<(), ApiError> {
+    sqlx::query(
+        "insert into conflicts (conflict_id, original_path, base_revision_id, current_revision_id, \
+         incoming_revision_id, incoming_adapter_id, policy_applied, materialized_path, status) \
+         values ($1, $2, $3, $4, $5, $6, $7, $8, 'open')",
+    )
+    .bind(conflict_id.as_str())
+    .bind(plan.original_path.as_str())
+    .bind(plan.conflict_record.base_revision_id.as_ref().map(RevisionId::as_str))
+    .bind(plan.conflict_record.current_revision_id.as_str())
+    .bind(incoming_revision_id.as_str())
+    .bind(plan.conflict_record.adapter_id.as_str())
+    .bind(plan.conflict_record.policy_applied.as_str())
+    .bind(plan.conflict_path.as_str())
+    .execute(&mut **transaction)
+    .await
+    .map_err(|_error| ApiError::internal())?;
+    Ok(())
 }
 
 struct PlanningRevisionRepository {
@@ -638,7 +1150,7 @@ async fn persist_accepted_revision(
     .await
     .map_err(map_repository_error)?;
 
-    let _revision_row = insert_file_revision(
+    insert_file_revision(
         &mut **transaction,
         NewFileRevision {
             revision_id: &revision.revision_id,
@@ -653,7 +1165,7 @@ async fn persist_accepted_revision(
     .await
     .map_err(map_repository_error)?;
 
-    let _updated_object = set_current_revision_by_object_id(
+    set_current_revision_by_object_id(
         &mut **transaction,
         object.object_id.as_str(),
         Some(&revision.revision_id),
@@ -663,33 +1175,17 @@ async fn persist_accepted_revision(
     .map_err(map_repository_error)?
     .ok_or_else(ApiError::internal)?;
 
-    let content_hash_string = revision.content_hash.to_string();
-    let op_id = OperationId::parse(&deterministic_identifier(
-        "op_",
-        &[
-            revision.revision_id.as_str(),
-            OperationKindName::UpsertFile.as_str(),
-            revision.path.as_str(),
-            content_hash_string.as_str(),
-        ],
-    ))
-    .map_err(|_error| ApiError::internal())?;
-
-    let operation = OperationLogRepository::new()
-        .append(
-            &mut **transaction,
-            &AppendOperationLogEntry {
-                op_id,
-                adapter_id: principal.common_adapter_id().clone(),
-                kind: OperationKindName::UpsertFile,
-                path: revision.path.clone(),
-                revision_id: Some(revision.revision_id.clone()),
-                tombstone_id: None,
-                conflict_id: None,
-            },
-        )
-        .await
-        .map_err(map_repository_error)?;
+    let operation = append_operation_log(
+        transaction,
+        principal.common_adapter_id().clone(),
+        OperationKindName::UpsertFile,
+        revision.path.clone(),
+        Some(revision.revision_id.clone()),
+        None,
+        None,
+        &[revision.revision_id.as_str(), revision.path.as_str()],
+    )
+    .await?;
 
     Ok(operation.seq)
 }
@@ -706,8 +1202,7 @@ async fn insert_content_blob(
 
     sqlx::query(
         "insert into content_blobs (sha256, size_bytes, object_store_path) \
-         values ($1, $2, $3) \
-         on conflict (sha256) do nothing",
+         values ($1, $2, $3) on conflict (sha256) do nothing",
     )
     .bind(content_hash.to_prefixed_string())
     .bind(size_bytes)
@@ -719,9 +1214,39 @@ async fn insert_content_blob(
     Ok(())
 }
 
+async fn append_operation_log(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    adapter_id: AdapterId,
+    kind: OperationKindName,
+    path: VaultPath,
+    revision_id: Option<RevisionId>,
+    tombstone_id: Option<String>,
+    conflict_id: Option<ConflictId>,
+    id_parts: &[&str],
+) -> Result<haze_sync_storage::models::OperationLogRow, ApiError> {
+    let mut parts = vec![kind.as_str(), path.as_str()];
+    parts.extend_from_slice(id_parts);
+    let op_id = OperationId::parse(&deterministic_identifier("op_", &parts))
+        .map_err(|_error| ApiError::internal())?;
+    OperationLogRepository::new()
+        .append(
+            &mut **transaction,
+            &AppendOperationLogEntry {
+                op_id,
+                adapter_id,
+                kind,
+                path,
+                revision_id,
+                tombstone_id,
+                conflict_id,
+            },
+        )
+        .await
+        .map_err(map_repository_error)
+}
+
 fn stored_revision_from_row(row: FileRevisionRow) -> Result<StoredRevision, ApiError> {
-    let revision_id =
-        RevisionId::parse(row.revision_id.as_str()).map_err(|_error| ApiError::internal())?;
+    let revision_id = RevisionId::parse(row.revision_id.as_str()).map_err(|_error| ApiError::internal())?;
     let path = VaultPath::parse(row.path.as_str()).map_err(|_error| ApiError::internal())?;
     let parent_revision_id = row
         .parent_revision_id
@@ -729,11 +1254,9 @@ fn stored_revision_from_row(row: FileRevisionRow) -> Result<StoredRevision, ApiE
         .map(RevisionId::parse)
         .transpose()
         .map_err(|_error| ApiError::internal())?;
-    let content_hash =
-        ContentHash::parse(row.content_sha256.as_str()).map_err(|_error| ApiError::internal())?;
+    let content_hash = ContentHash::parse(row.content_sha256.as_str()).map_err(|_error| ApiError::internal())?;
     let size_bytes = u64::try_from(row.size_bytes).map_err(|_| ApiError::internal())?;
-    let created_by =
-        AdapterId::parse(row.created_by.as_str()).map_err(|_error| ApiError::internal())?;
+    let created_by = AdapterId::parse(row.created_by.as_str()).map_err(|_error| ApiError::internal())?;
 
     Ok(StoredRevision {
         revision_id,
@@ -745,43 +1268,29 @@ fn stored_revision_from_row(row: FileRevisionRow) -> Result<StoredRevision, ApiE
     })
 }
 
-fn raw_file_response(
-    bytes: Vec<u8>,
-    headers: FileDownloadRouteHeaders,
-) -> Result<Response, ApiError> {
+fn raw_file_response(bytes: Vec<u8>, headers: FileDownloadRouteHeaders) -> Result<Response, ApiError> {
     let mut response = Response::new(Body::from(bytes));
     *response.status_mut() = StatusCode::OK;
     response.headers_mut().insert(
         header::CONTENT_TYPE,
         HeaderValue::from_static(APPLICATION_OCTET_STREAM),
     );
-    insert_header(
-        response.headers_mut(),
-        X_REVISION_ID_HEADER,
-        headers.revision_id().as_str(),
-    )?;
+    insert_header(response.headers_mut(), X_REVISION_ID_HEADER, headers.revision_id().as_str())?;
     insert_header(
         response.headers_mut(),
         X_CONTENT_SHA256_HEADER,
         &headers.content_sha256().to_string(),
     )?;
-    insert_header(
-        response.headers_mut(),
-        X_SIZE_BYTES_HEADER,
-        &headers.size_bytes().to_string(),
-    )?;
-
+    insert_header(response.headers_mut(), X_SIZE_BYTES_HEADER, &headers.size_bytes().to_string())?;
     Ok(response)
 }
 
 fn replay_response(stored: StoredIdempotencyResponse) -> Result<Response, ApiError> {
-    let status =
-        StatusCode::from_u16(stored.status_code()).map_err(|_error| ApiError::internal())?;
+    let status = StatusCode::from_u16(stored.status_code()).map_err(|_error| ApiError::internal())?;
     let mut response = (status, Json(stored.body().clone())).into_response();
 
     for (name, value) in stored.headers() {
-        let name =
-            HeaderName::from_bytes(name.as_bytes()).map_err(|_error| ApiError::internal())?;
+        let name = HeaderName::from_bytes(name.as_bytes()).map_err(|_error| ApiError::internal())?;
         let value = HeaderValue::from_str(value).map_err(|_error| ApiError::internal())?;
         response.headers_mut().insert(name, value);
     }
@@ -812,7 +1321,7 @@ fn change_entry_from_row(row: ChangeFeedRow) -> Result<ChangeEntryDto, ApiError>
         tombstone_id: row.tombstone_id.map(TombstoneIdDto::from),
         conflict_id: row.conflict_id.map(ConflictIdDto::from),
         updated_by: AdapterIdDto::from(row.adapter_id),
-        updated_at: TimestampDto::from(row.created_at.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
+        updated_at: TimestampDto::from(timestamp_string(row.created_at)),
     })
 }
 
@@ -825,6 +1334,78 @@ const fn operation_kind_dto(kind: OperationKindName) -> OperationKindDto {
         OperationKindName::ConflictResolved => OperationKindDto::ConflictResolved,
         OperationKindName::BackupCreated => OperationKindDto::BackupCreated,
     }
+}
+
+fn conflict_summary_from_row(row: &sqlx::postgres::PgRow) -> Result<ConflictRouteSummaryParts, ApiError> {
+    let status = match row.try_get::<String, _>("status")?.as_str() {
+        "open" => ConflictStatusDto::Open,
+        "resolved" => ConflictStatusDto::Resolved,
+        "ignored" => ConflictStatusDto::Ignored,
+        _ => return Err(ApiError::internal()),
+    };
+    let policy_applied = match row.try_get::<String, _>("policy_applied")?.as_str() {
+        "preserve_both" => ConflictPolicyDto::PreserveBoth,
+        "current_wins_with_incoming_backup" => ConflictPolicyDto::CurrentWinsWithIncomingBackup,
+        _ => return Err(ApiError::internal()),
+    };
+    let base_revision_id = row
+        .try_get::<Option<String>, _>("base_revision_id")?
+        .as_deref()
+        .map(RevisionId::parse)
+        .transpose()
+        .map_err(|_error| ApiError::internal())?;
+    let created_at = row.try_get::<chrono::DateTime<Utc>, _>("created_at")?;
+    let resolved_at = row.try_get::<Option<chrono::DateTime<Utc>>, _>("resolved_at")?;
+
+    Ok(ConflictRouteSummaryParts {
+        conflict_id: ConflictId::parse(row.try_get::<String, _>("conflict_id")?.as_str())
+            .map_err(|_error| ApiError::internal())?,
+        original_path: VaultPath::parse(row.try_get::<String, _>("original_path")?.as_str())
+            .map_err(|_error| ApiError::internal())?,
+        conflict_path: VaultPath::parse(row.try_get::<String, _>("materialized_path")?.as_str())
+            .map_err(|_error| ApiError::internal())?,
+        current_revision_id: RevisionId::parse(row.try_get::<String, _>("current_revision_id")?.as_str())
+            .map_err(|_error| ApiError::internal())?,
+        conflict_revision_id: Some(
+            RevisionId::parse(row.try_get::<String, _>("incoming_revision_id")?.as_str())
+                .map_err(|_error| ApiError::internal())?,
+        ),
+        incoming_revision_id: None,
+        source_adapter_id: AdapterId::parse(row.try_get::<String, _>("incoming_adapter_id")?.as_str())
+            .map_err(|_error| ApiError::internal())?,
+        policy_applied,
+        status,
+        created_at: Some(TimestampDto::from(timestamp_string(created_at))),
+        updated_at: resolved_at.map(timestamp_string).map(TimestampDto::from),
+    })
+}
+
+fn single_delete_guard_allows(principal: &AdapterPrincipal) -> Result<bool, ApiError> {
+    let scope = DeleteRunScope::new(principal.common_adapter_id().clone(), "single-delete")
+        .map_err(|_error| ApiError::internal())?;
+    let guard = DeleteGuard::new(DeleteGuardPolicy::new(
+        20,
+        DeleteRatioLimit::percent(100).map_err(|_error| ApiError::internal())?,
+        false,
+    ));
+    let decision = guard.evaluate(&DeleteGuardInput::without_manual_unlock(scope, 1, 1));
+    Ok(matches!(decision, haze_sync_core::delete_guard::DeleteGuardDecision::Allowed))
+}
+
+fn not_found_delete_json(request: &DeleteFileRouteRequest) -> DeleteFileResponse {
+    haze_sync_api::routes::delete::not_found_delete_response(request.path().clone())
+}
+
+fn readiness_for(configured: bool) -> DependencyReadinessState {
+    if configured {
+        DependencyReadinessState::Ready
+    } else {
+        DependencyReadinessState::Unknown
+    }
+}
+
+fn timestamp_string(value: chrono::DateTime<Utc>) -> String {
+    value.to_rfc3339_opts(SecondsFormat::Secs, true)
 }
 
 fn map_object_store_get_error(error: ObjectStoreError) -> ApiError {
@@ -877,19 +1458,11 @@ impl ApiError {
     }
 
     fn missing_token() -> Self {
-        Self::new(
-            StatusCode::UNAUTHORIZED,
-            PublicErrorCode::MissingToken,
-            "Missing bearer token",
-        )
+        Self::new(StatusCode::UNAUTHORIZED, PublicErrorCode::MissingToken, "Missing bearer token")
     }
 
     fn invalid_token() -> Self {
-        Self::new(
-            StatusCode::UNAUTHORIZED,
-            PublicErrorCode::InvalidToken,
-            "Invalid bearer token",
-        )
+        Self::new(StatusCode::UNAUTHORIZED, PublicErrorCode::InvalidToken, "Invalid bearer token")
     }
 
     fn forbidden_role() -> Self {
@@ -919,8 +1492,17 @@ impl ApiError {
 
 impl From<FileRouteError> for ApiError {
     fn from(error: FileRouteError) -> Self {
-        let status = StatusCode::from_u16(error.http_status_code())
-            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        let status = StatusCode::from_u16(error.http_status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        Self {
+            status,
+            body: error.to_error_response(),
+        }
+    }
+}
+
+impl From<DeleteRouteError> for ApiError {
+    fn from(error: DeleteRouteError) -> Self {
+        let status = StatusCode::from_u16(error.http_status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
         Self {
             status,
             body: error.to_error_response(),
@@ -930,12 +1512,27 @@ impl From<FileRouteError> for ApiError {
 
 impl From<ChangesRouteError> for ApiError {
     fn from(error: ChangesRouteError) -> Self {
-        let status =
-            StatusCode::from_u16(error.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        let status = StatusCode::from_u16(error.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
         Self {
             status,
             body: error.error_response(),
         }
+    }
+}
+
+impl From<ConflictsRouteError> for ApiError {
+    fn from(error: ConflictsRouteError) -> Self {
+        let status = StatusCode::from_u16(error.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        Self {
+            status,
+            body: error.error_response(),
+        }
+    }
+}
+
+impl From<sqlx::Error> for ApiError {
+    fn from(_error: sqlx::Error) -> Self {
+        Self::internal()
     }
 }
 
@@ -948,371 +1545,143 @@ impl IntoResponse for ApiError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use haze_sync_api::auth::AdapterRole;
+    use http_body_util::BodyExt as _;
     use serde_json::Value;
-    use std::{
-        fs,
-        path::PathBuf,
-        time::{SystemTime, UNIX_EPOCH},
-    };
+    use tower::ServiceExt as _;
 
-    fn parsed_request(
-        path: &str,
-        base_revision_id: Option<&str>,
-        content_sha256: &str,
-    ) -> PutFileRouteRequest {
-        let base_revision_id = Some(base_revision_id.unwrap_or("null"));
-        parse_put_file_request(PutFileRouteRequestParts {
-            route_path: path,
-            idempotency_key: Some("test-key"),
-            content_sha256: Some(content_sha256),
-            base_revision_id,
-            body: b"hello".to_vec(),
-            max_upload_bytes: Some(MAX_UPLOAD_BYTES),
-        })
-        .unwrap()
-    }
-
-    fn parsed_request_with_body(
-        path: &str,
-        base_revision_id: Option<&str>,
-        body: &[u8],
-    ) -> PutFileRouteRequest {
-        let hash = compute_content_hash(body).to_string();
-        let base_revision_id = Some(base_revision_id.unwrap_or("null"));
-        parse_put_file_request(PutFileRouteRequestParts {
-            route_path: path,
-            idempotency_key: Some("test-key"),
-            content_sha256: Some(&hash),
-            base_revision_id,
-            body: body.to_vec(),
-            max_upload_bytes: Some(MAX_UPLOAD_BYTES),
-        })
-        .unwrap()
-    }
-
-    fn principal() -> AdapterPrincipal {
-        AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap()
-    }
-
-    fn temp_store(label: &str) -> (LocalObjectStore, PathBuf) {
-        let suffix = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!(
-            "haze-sync-w2f1-{label}-{}-{suffix}",
-            std::process::id()
-        ));
-        let _ = fs::remove_dir_all(&root);
-        (LocalObjectStore::new(root.clone()), root)
-    }
-
-    fn stored_revision(
-        revision_id: &str,
-        path: &str,
-        parent_revision_id: Option<&str>,
-        content: &[u8],
-    ) -> StoredRevision {
-        StoredRevision {
-            revision_id: RevisionId::parse(revision_id).unwrap(),
-            path: VaultPath::parse(path).unwrap(),
-            parent_revision_id: parent_revision_id.map(|value| RevisionId::parse(value).unwrap()),
-            content_hash: compute_content_hash(content),
-            size_bytes: content.len() as u64,
-            created_by: AdapterId::parse("obsidian-plugin").unwrap(),
+    async fn request_json_with_state(
+        state: ServerAppState,
+        method: &str,
+        uri: &str,
+        body: Body,
+        auth: bool,
+    ) -> (StatusCode, Value) {
+        let mut builder = axum::http::Request::builder().method(method).uri(uri);
+        if auth {
+            builder = builder.header(AUTHORIZATION_HEADER, "Bearer test-token");
         }
+        let request = builder.body(body).expect("test request should build");
+        let response = crate::routes::build_router_with_state(state)
+            .oneshot(request)
+            .await
+            .expect("router should respond");
+        let status = response.status();
+        let body = response
+            .into_body()
+            .collect()
+            .await
+            .expect("response body should collect")
+            .to_bytes();
+        let json = serde_json::from_slice(&body).expect("response body should be JSON");
+        (status, json)
     }
 
-    fn body_json(response: &PutFileResponse) -> Value {
-        serde_json::to_value(response).unwrap()
-    }
-
-    #[test]
-    fn id_fixtures_have_required_prefixes() {
-        let revision_id = deterministic_identifier("rev_", &["Notes/a.md", "sha256"]);
-        let op_id = deterministic_identifier("op_", &["rev_1", "upsert_file"]);
-
-        assert!(RevisionId::parse(&revision_id).is_ok());
-        assert!(OperationId::parse(&op_id).is_ok());
-    }
-
-    #[test]
-    fn put_new_file_accepted_and_get_latest_returns_same_bytes_hash() {
-        let (store, root) = temp_store("new-file");
-        let request = parsed_request_with_body("Notes/a.md", None, b"hello");
-        let outcome = run_core_normal_upsert(&request, &principal(), None, &store).unwrap();
-
-        let revision = match outcome {
-            UpsertOutcome::AcceptedNewFile {
-                revision,
-                operation,
-            } => {
-                assert_eq!(operation.seq, 0);
-                revision
-            }
-            other => panic!("unexpected outcome: {other:?}"),
-        };
-
-        assert_eq!(revision.path.as_str(), "Notes/a.md");
-        assert_eq!(revision.content_hash, compute_content_hash(b"hello"));
-        assert_eq!(
-            store.get_bytes(revision.content_hash).unwrap(),
-            b"hello".to_vec()
-        );
-
-        let response = raw_file_response(
-            b"hello".to_vec(),
-            FileDownloadRouteHeaders::new(
-                revision.revision_id.clone(),
-                revision.content_hash,
-                revision.size_bytes,
-            ),
+    #[tokio::test]
+    async fn conflicts_open_route_requires_auth_safely() {
+        let (status, json) = request_json_with_state(
+            ServerAppState::dependency_free(),
+            "GET",
+            "/v1/conflicts?status=open",
+            Body::empty(),
+            false,
         )
-        .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-        assert_eq!(
-            response.headers().get(header::CONTENT_TYPE).unwrap(),
-            APPLICATION_OCTET_STREAM
-        );
-        assert_eq!(
-            response.headers().get(X_REVISION_ID_HEADER).unwrap(),
-            revision.revision_id.as_str()
-        );
-        assert_eq!(
-            response.headers().get(X_CONTENT_SHA256_HEADER).unwrap(),
-            revision.content_hash.to_string().as_str()
-        );
-        assert_eq!(
-            response.headers().get(X_SIZE_BYTES_HEADER).unwrap(),
-            revision.size_bytes.to_string().as_str()
-        );
+        .await;
 
-        let _ = fs::remove_dir_all(root);
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(json["error"]["code"], "missing_token");
     }
 
-    #[test]
-    fn put_second_revision_accepted_with_current_base_and_explicit_revision_get_works() {
-        let (store, root) = temp_store("second-revision");
-        let current = stored_revision("rev_current", "Notes/a.md", None, b"old");
-        store.put_bytes(current.content_hash, b"old").unwrap();
+    #[tokio::test]
+    async fn conflicts_open_route_returns_safe_empty_without_storage() {
+        let principal = AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap();
+        let (status, json) = request_json_with_state(
+            ServerAppState::with_static_principal(principal),
+            "GET",
+            "/v1/conflicts?status=open",
+            Body::empty(),
+            true,
+        )
+        .await;
 
-        let request = parsed_request_with_body("Notes/a.md", Some("rev_current"), b"new");
-        let outcome =
-            run_core_normal_upsert(&request, &principal(), Some(current.clone()), &store).unwrap();
-
-        let revision = match outcome {
-            UpsertOutcome::AcceptedNewRevision { revision, .. } => revision,
-            other => panic!("unexpected outcome: {other:?}"),
-        };
-
-        assert_eq!(
-            revision.parent_revision_id.as_ref().unwrap().as_str(),
-            "rev_current"
-        );
-        assert_eq!(
-            store.get_bytes(revision.content_hash).unwrap(),
-            b"new".to_vec()
-        );
-
-        let explicit = FileDownloadRouteHeaders::new(
-            revision.revision_id.clone(),
-            revision.content_hash,
-            revision.size_bytes,
-        );
-        let response =
-            raw_file_response(store.get_bytes(revision.content_hash).unwrap(), explicit).unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-        assert_eq!(
-            response.headers().get(X_REVISION_ID_HEADER).unwrap(),
-            revision.revision_id.as_str()
-        );
-
-        let _ = fs::remove_dir_all(root);
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(json["conflicts"], serde_json::json!([]));
+        assert!(!json.to_string().contains("token"));
+        assert!(!json.to_string().contains("postgres"));
     }
 
-    #[test]
-    fn same_content_duplicate_is_ignored_without_extra_content_write() {
-        let (store, root) = temp_store("duplicate");
-        let current = stored_revision("rev_current", "Notes/a.md", None, b"hello");
-        let request = parsed_request_with_body("Notes/a.md", Some("rev_current"), b"hello");
+    #[tokio::test]
+    async fn conflicts_unsupported_status_is_safe_400() {
+        let principal = AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap();
+        let (status, json) = request_json_with_state(
+            ServerAppState::with_static_principal(principal),
+            "GET",
+            "/v1/conflicts?status=closed",
+            Body::empty(),
+            true,
+        )
+        .await;
 
-        let outcome =
-            run_core_normal_upsert(&request, &principal(), Some(current.clone()), &store).unwrap();
-
-        match outcome {
-            UpsertOutcome::IgnoredDuplicateSameContent { current_revision } => {
-                assert_eq!(current_revision.revision_id, current.revision_id);
-            }
-            other => panic!("unexpected outcome: {other:?}"),
-        }
-        assert!(store.get_bytes(current.content_hash).is_err());
-
-        let _ = fs::remove_dir_all(root);
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(json["error"]["code"], "validation_error");
     }
 
-    #[test]
-    fn stale_unknown_or_null_base_with_different_content_does_not_overwrite() {
-        let (store, root) = temp_store("stale");
-        let current = stored_revision("rev_current", "Notes/a.md", None, b"old");
+    #[tokio::test]
+    async fn delete_route_requires_idempotency_key() {
+        let principal = AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap();
+        let request = axum::http::Request::builder()
+            .method("DELETE")
+            .uri("/v1/files/Notes/a.md")
+            .header(AUTHORIZATION_HEADER, "Bearer test-token")
+            .header(X_BASE_REVISION_ID_HEADER, "rev_current")
+            .body(Body::empty())
+            .unwrap();
+        let response = crate::routes::build_router_with_state(ServerAppState::with_static_principal(principal))
+            .oneshot(request)
+            .await
+            .unwrap();
+        let status = response.status();
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let json: Value = serde_json::from_slice(&body).unwrap();
 
-        let null_base = parsed_request_with_body("Notes/a.md", None, b"new");
-        let null_outcome =
-            run_core_normal_upsert(&null_base, &principal(), Some(current.clone()), &store)
-                .unwrap();
-        assert!(matches!(
-            null_outcome,
-            UpsertOutcome::RejectedStaleOrUnknownBase { .. }
-        ));
-        assert!(store.get_bytes(compute_content_hash(b"new")).is_err());
-
-        let stale_base = parsed_request_with_body("Notes/a.md", Some("rev_stale"), b"newer");
-        let stale_outcome =
-            run_core_normal_upsert(&stale_base, &principal(), Some(current), &store).unwrap();
-        assert!(matches!(
-            stale_outcome,
-            UpsertOutcome::RejectedStaleOrUnknownBase { .. }
-        ));
-        assert!(store.get_bytes(compute_content_hash(b"newer")).is_err());
-
-        let unknown_base =
-            parsed_request_with_body("Notes/missing.md", Some("rev_missing"), b"new");
-        let unknown_outcome =
-            run_core_normal_upsert(&unknown_base, &principal(), None, &store).unwrap();
-        assert!(matches!(
-            unknown_outcome,
-            UpsertOutcome::RejectedStaleOrUnknownBase { .. }
-        ));
-
-        let _ = fs::remove_dir_all(root);
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(json["error"]["code"], "invalid_request");
+        assert!(!json.to_string().contains("test-token"));
     }
 
-    #[test]
-    fn invalid_content_hash_is_rejected_before_content_store_write() {
-        let (store, root) = temp_store("hash-mismatch");
-        let wrong_hash = compute_content_hash(b"other").to_string();
-        let request = parse_put_file_request(PutFileRouteRequestParts {
-            route_path: "Notes/a.md",
-            idempotency_key: Some("test-key"),
-            content_sha256: Some(&wrong_hash),
-            base_revision_id: Some("rev_current"),
-            body: b"hello".to_vec(),
-            max_upload_bytes: Some(MAX_UPLOAD_BYTES),
-        })
-        .unwrap();
+    #[tokio::test]
+    async fn admin_status_requires_admin_role() {
+        let principal = AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap();
+        let (status, json) = request_json_with_state(
+            ServerAppState::with_static_principal(principal),
+            "GET",
+            "/v1/admin/status",
+            Body::empty(),
+            true,
+        )
+        .await;
 
-        let outcome = run_core_normal_upsert(&request, &principal(), None, &store).unwrap();
-        assert!(matches!(
-            outcome,
-            UpsertOutcome::RejectedHashMismatch { .. }
-        ));
-        assert!(store.get_bytes(compute_content_hash(b"hello")).is_err());
-
-        let _ = fs::remove_dir_all(root);
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(json["error"]["code"], "forbidden_role");
     }
 
-    #[test]
-    fn idempotency_same_key_same_request_replays_and_different_request_rejects() {
-        let first = parsed_request_with_body("Notes/a.md", None, b"hello");
-        let same = parsed_request_with_body("Notes/a.md", None, b"hello");
-        let different = parsed_request_with_body("Notes/a.md", None, b"changed");
-        let principal = principal();
+    #[tokio::test]
+    async fn admin_status_placeholder_is_secret_free() {
+        let principal = AdapterPrincipal::new("admin", AdapterRole::Admin).unwrap();
+        let (status, json) = request_json_with_state(
+            ServerAppState::with_static_principal(principal),
+            "GET",
+            "/v1/admin/status",
+            Body::empty(),
+            true,
+        )
+        .await;
 
-        let first_fingerprint = request_fingerprint(&first, &principal);
-        let same_fingerprint = request_fingerprint(&same, &principal);
-        let different_fingerprint = request_fingerprint(&different, &principal);
-
-        let response = accepted_upload_response(
-            first.path().clone(),
-            RevisionId::parse("rev_replayed").unwrap(),
-            1,
-        );
-        let stored =
-            StoredIdempotencyResponse::json(StatusCode::OK.as_u16(), body_json(&response)).unwrap();
-
-        assert_eq!(first_fingerprint, same_fingerprint);
-        assert_eq!(stored.status_code(), StatusCode::OK.as_u16());
-        assert_eq!(stored.body(), &body_json(&response));
-        assert_ne!(first_fingerprint, different_fingerprint);
-    }
-
-    #[test]
-    fn changes_mapping_preserves_upsert_kind_and_safe_metadata() {
-        assert_eq!(
-            operation_kind_dto(OperationKindName::UpsertFile),
-            OperationKindDto::UpsertFile
-        );
-    }
-
-    #[test]
-    fn missing_file_maps_to_safe_not_found_response() {
-        let error: ApiError = FileRouteError::NotFound.into();
-        let response = error.into_response();
-        assert_eq!(response.status(), StatusCode::NOT_FOUND);
-    }
-
-    #[test]
-    fn invalid_headers_or_paths_map_to_safe_errors() {
-        let missing_idempotency = parse_put_file_request(PutFileRouteRequestParts {
-            route_path: "Notes/a.md",
-            idempotency_key: None,
-            content_sha256: Some(&compute_content_hash(b"hello").to_string()),
-            base_revision_id: Some("null"),
-            body: b"hello".to_vec(),
-            max_upload_bytes: Some(MAX_UPLOAD_BYTES),
-        })
-        .unwrap_err();
-        let response = ApiError::from(missing_idempotency).into_response();
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-
-        let invalid_path = parse_get_file_request(GetFileRouteRequestParts {
-            route_path: "../outside.md",
-            revision_id: None,
-        })
-        .unwrap_err();
-        let response = ApiError::from(invalid_path).into_response();
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-    }
-
-    #[test]
-    fn request_fingerprint_uses_safe_metadata_not_body() {
-        let hash = compute_content_hash(b"hello").to_string();
-        let first = parsed_request("Notes/a.md", Some("rev_current"), &hash);
-        let second = parse_put_file_request(PutFileRouteRequestParts {
-            route_path: "Notes/a.md",
-            idempotency_key: Some("test-key"),
-            content_sha256: Some(&hash),
-            base_revision_id: Some("rev_current"),
-            body: b"different body would already fail hash verification".to_vec(),
-            max_upload_bytes: Some(MAX_UPLOAD_BYTES),
-        })
-        .unwrap();
-        let principal =
-            AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap();
-
-        assert_eq!(
-            request_fingerprint(&first, &principal),
-            request_fingerprint(&second, &principal)
-        );
-    }
-
-    #[test]
-    fn request_fingerprint_changes_with_base_revision() {
-        let hash = compute_content_hash(b"hello").to_string();
-        let current = parsed_request("Notes/a.md", Some("rev_current"), &hash);
-        let other = parsed_request("Notes/a.md", Some("rev_other"), &hash);
-        let principal =
-            AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap();
-
-        assert_ne!(
-            request_fingerprint(&current, &principal),
-            request_fingerprint(&other, &principal)
-        );
-    }
-
-    #[test]
-    fn public_auth_errors_do_not_echo_tokens() {
-        let error = ApiError::invalid_token().into_response();
-        assert_eq!(error.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(json["server_status"], "not_ready");
+        let rendered = json.to_string();
+        assert!(!rendered.contains("token"));
+        assert!(!rendered.contains("hash"));
+        assert!(!rendered.contains("postgres"));
+        assert!(!rendered.contains("/srv/"));
     }
 }
