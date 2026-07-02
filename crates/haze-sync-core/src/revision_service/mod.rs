@@ -172,7 +172,7 @@ pub enum UpsertOutcome {
         current_revision: Option<StoredRevision>,
         provided_base_revision_id: Option<RevisionId>,
         #[serde(skip_serializing_if = "Option::is_none")]
-        conflict_saved: Option<ConflictSavedOutcome>,
+        conflict_saved: Option<Box<ConflictSavedOutcome>>,
     },
 }
 
@@ -181,10 +181,7 @@ impl UpsertOutcome {
     #[must_use]
     pub fn conflict_saved(&self) -> Option<&ConflictSavedOutcome> {
         match self {
-            Self::RejectedStaleOrUnknownBase {
-                conflict_saved: Some(conflict_saved),
-                ..
-            } => Some(conflict_saved),
+            Self::RejectedStaleOrUnknownBase { conflict_saved, .. } => conflict_saved.as_deref(),
             _ => None,
         }
     }
@@ -357,7 +354,7 @@ where
         Ok(UpsertOutcome::RejectedStaleOrUnknownBase {
             current_revision: Some(current_revision),
             provided_base_revision_id: request.base_revision_id,
-            conflict_saved: Some(conflict_saved),
+            conflict_saved: Some(Box::new(conflict_saved)),
         })
     }
 
