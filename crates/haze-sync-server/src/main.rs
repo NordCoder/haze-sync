@@ -2,17 +2,18 @@
 //!
 //! This phase exposes deterministic HTTP route boundaries and server-side
 //! database/readiness helpers. It does not start a production listener, auto-run
-//! migrations, verify adapter tokens, or perform Core sync behavior.
+//! migrations, verify adapter tokens, or perform adapter runtime behavior.
 
 pub mod config;
 pub mod db;
 pub mod http;
 pub mod readiness;
 pub mod routes;
+pub mod state;
 
 /// Human-readable crate role used by skeleton smoke checks and documentation.
 pub const CRATE_ROLE: &str =
-    "Haze Sync HTTP route shell, configuration, DB readiness, and migration foundation.";
+    "Haze Sync HTTP route shell, configuration, DB readiness, migration foundation, and W2 Core file routes.";
 
 /// Returns the package name for this crate.
 #[must_use]
