@@ -7,9 +7,10 @@ use haze_sync_core::{
         RequestFingerprint, StoredIdempotencyRecord, StoredIdempotencyResponse,
     },
     revision_service::{
-        compute_content_hash, AppendOperationRequest, ConflictPolicyHint, ContentStore,
-        InsertRevisionRequest, OperationLog, OperationLogEntry, RevisionRepository, RevisionService,
-        RevisionServiceError, StoredContent, StoredRevision, UpsertFileRequest, UpsertOutcome,
+        compute_content_hash, AppendOperationRequest, ConflictPolicyHint, ConflictSavedOutcome,
+        ContentStore, IncomingConflictContent, InsertRevisionRequest, OperationLog,
+        OperationLogEntry, RevisionRepository, RevisionService, RevisionServiceError, StoredContent,
+        StoredRevision, UpsertFileRequest, UpsertOutcome,
     },
 };
 use serde_json::json;
@@ -129,6 +130,25 @@ fn upsert_request(base_revision_id: Option<RevisionId>, bytes: &[u8]) -> UpsertF
     )
 }
 
+fn expected_conflict_saved(
+    current_revision: &StoredRevision,
+    provided_base_revision_id: Option<RevisionId>,
+    bytes: &[u8],
+) -> Box<ConflictSavedOutcome> {
+    Box::new(ConflictSavedOutcome {
+        current_revision: current_revision.clone(),
+        provided_base_revision_id,
+        incoming_content: IncomingConflictContent {
+            path: path("Projects/Haze/plan.md"),
+            adapter_id: adapter_id(),
+            content_hash: compute_content_hash(bytes),
+            size_bytes: bytes.len() as u64,
+            content: bytes.to_vec(),
+        },
+        policy_hint: ConflictPolicyHint::PreserveBoth,
+    })
+}
+
 fn delete_response() -> StoredIdempotencyResponse {
     StoredIdempotencyResponse::json(
         200,
@@ -166,32 +186,18 @@ fn stale_base_different_content_rejects_without_silent_overwrite() {
         ))
         .expect("fake-backed service should not fail");
 
-    let conflict_saved = match &outcome {
-        UpsertOutcome::RejectedStaleOrUnknownBase {
-            current_revision,
-            provided_base_revision_id,
-            conflict_saved,
-        } => {
-            assert_eq!(current_revision.as_ref(), Some(&current));
-            assert_eq!(provided_base_revision_id.as_ref(), Some(&revision_id("rev_stale")));
-            conflict_saved
-                .as_ref()
-                .expect("different stale content should be preserved as a conflict")
-        }
-        other => panic!("unexpected upsert outcome: {other:?}"),
-    };
-    assert_eq!(outcome.public_status(), "conflict_saved");
-    assert_eq!(conflict_saved.current_revision, current);
-    assert_eq!(conflict_saved.provided_base_revision_id, Some(revision_id("rev_stale")));
-    assert_eq!(conflict_saved.incoming_content.path, path("Projects/Haze/plan.md"));
-    assert_eq!(conflict_saved.incoming_content.adapter_id, adapter_id());
     assert_eq!(
-        conflict_saved.incoming_content.content_hash,
-        compute_content_hash(b"incoming content")
+        outcome,
+        UpsertOutcome::RejectedStaleOrUnknownBase {
+            current_revision: Some(current.clone()),
+            provided_base_revision_id: Some(revision_id("rev_stale")),
+            conflict_saved: Some(expected_conflict_saved(
+                &current,
+                Some(revision_id("rev_stale")),
+                b"incoming content",
+            )),
+        }
     );
-    assert_eq!(conflict_saved.incoming_content.size_bytes, 16);
-    assert_eq!(conflict_saved.incoming_content.content.as_slice(), b"incoming content");
-    assert_eq!(conflict_saved.policy_hint, ConflictPolicyHint::PreserveBoth);
 
     let (repository, content_store, operation_log) = service.into_inner();
     assert_eq!(repository.current, Some(current));
@@ -213,32 +219,14 @@ fn null_base_existing_different_content_rejects_without_silent_overwrite() {
         .upsert_file(upsert_request(None, b"incoming content"))
         .expect("fake-backed service should not fail");
 
-    let conflict_saved = match &outcome {
-        UpsertOutcome::RejectedStaleOrUnknownBase {
-            current_revision,
-            provided_base_revision_id,
-            conflict_saved,
-        } => {
-            assert_eq!(current_revision.as_ref(), Some(&current));
-            assert_eq!(provided_base_revision_id, &None);
-            conflict_saved
-                .as_ref()
-                .expect("different null-base content should be preserved as a conflict")
-        }
-        other => panic!("unexpected upsert outcome: {other:?}"),
-    };
-    assert_eq!(outcome.public_status(), "conflict_saved");
-    assert_eq!(conflict_saved.current_revision, current);
-    assert_eq!(conflict_saved.provided_base_revision_id, None);
-    assert_eq!(conflict_saved.incoming_content.path, path("Projects/Haze/plan.md"));
-    assert_eq!(conflict_saved.incoming_content.adapter_id, adapter_id());
     assert_eq!(
-        conflict_saved.incoming_content.content_hash,
-        compute_content_hash(b"incoming content")
+        outcome,
+        UpsertOutcome::RejectedStaleOrUnknownBase {
+            current_revision: Some(current.clone()),
+            provided_base_revision_id: None,
+            conflict_saved: Some(expected_conflict_saved(&current, None, b"incoming content")),
+        }
     );
-    assert_eq!(conflict_saved.incoming_content.size_bytes, 16);
-    assert_eq!(conflict_saved.incoming_content.content.as_slice(), b"incoming content");
-    assert_eq!(conflict_saved.policy_hint, ConflictPolicyHint::PreserveBoth);
 
     let (repository, content_store, operation_log) = service.into_inner();
     assert_eq!(repository.current, Some(current));
