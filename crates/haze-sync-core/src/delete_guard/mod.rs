@@ -138,9 +138,10 @@ impl DeleteRunScope {
 
 /// Manual unlock flag. An unlock is valid only for the exact adapter/run scope it
 /// names and only for the threshold categories it explicitly covers.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case", tag = "state")]
 pub enum ManualDeleteUnlock {
+    #[default]
     NotGranted,
     Scoped {
         scope: DeleteRunScope,
@@ -180,12 +181,6 @@ impl ManualDeleteUnlock {
                 ..
             } if unlock_scope == scope
         )
-    }
-}
-
-impl Default for ManualDeleteUnlock {
-    fn default() -> Self {
-        Self::NotGranted
     }
 }
 
