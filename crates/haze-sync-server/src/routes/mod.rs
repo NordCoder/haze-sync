@@ -32,7 +32,10 @@ pub fn build_router_with_readiness(readiness: ReadinessState) -> Router {
     build_router_with_state_and_readiness(ServerAppState::dependency_free(), readiness)
 }
 
-fn build_router_with_state_and_readiness(state: ServerAppState, readiness: ReadinessState) -> Router {
+fn build_router_with_state_and_readiness(
+    state: ServerAppState,
+    readiness: ReadinessState,
+) -> Router {
     Router::new()
         .route("/health", get(health::health))
         .route("/ready", get(health::ready))
