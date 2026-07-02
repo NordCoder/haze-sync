@@ -55,7 +55,9 @@ pub enum CliParseError {
 impl fmt::Display for CliParseError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MissingCommand => formatter.write_str("missing command: expected status or adapters"),
+            Self::MissingCommand => {
+                formatter.write_str("missing command: expected status or adapters")
+            }
             Self::UnknownCommand(command) => write!(formatter, "unknown command: {command}"),
             Self::MissingAdaptersCommand => {
                 formatter.write_str("missing adapters command: expected list")
@@ -63,7 +65,9 @@ impl fmt::Display for CliParseError {
             Self::UnknownAdaptersCommand(command) => {
                 write!(formatter, "unknown adapters command: {command}")
             }
-            Self::UnexpectedArgument(argument) => write!(formatter, "unexpected argument: {argument}"),
+            Self::UnexpectedArgument(argument) => {
+                write!(formatter, "unexpected argument: {argument}")
+            }
         }
     }
 }
@@ -158,8 +162,8 @@ mod tests {
 
     #[test]
     fn parser_rejects_unscoped_network_arguments() {
-        let error = parse_cli(["haze-sync", "status", "--server", "https://example.test"])
-            .unwrap_err();
+        let error =
+            parse_cli(["haze-sync", "status", "--server", "https://example.test"]).unwrap_err();
 
         assert_eq!(error, CliParseError::UnexpectedArgument("--server".to_owned()));
     }
