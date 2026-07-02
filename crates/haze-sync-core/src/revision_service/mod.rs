@@ -75,6 +75,45 @@ pub struct StoredContent {
     pub size_bytes: u64,
 }
 
+/// Minimal conflict policy marker exposed by W3-P2 for later fan-in wiring.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConflictPolicyHint {
+    /// Preserve current content and save incoming content for a future conflict copy.
+    PreserveBoth,
+}
+
+/// Incoming content preserved after a stale, unknown, or explicit-null base conflict.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct IncomingConflictContent {
+    /// Original vault path submitted by the adapter.
+    pub path: VaultPath,
+    /// Adapter that submitted the incoming content.
+    pub adapter_id: AdapterId,
+    /// Verified incoming content hash.
+    pub content_hash: ContentHash,
+    /// Verified incoming content size.
+    pub size_bytes: u64,
+    /// Raw incoming bytes retained in-memory for future fan-in materialization.
+    ///
+    /// This intentionally skips serde so public JSON serialization does not leak file content.
+    #[serde(skip, default)]
+    pub content: Vec<u8>,
+}
+
+/// Safe Core conflict-saved planning data for later fan-in phases.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ConflictSavedOutcome {
+    /// Current revision that must remain current until explicit conflict resolution.
+    pub current_revision: StoredRevision,
+    /// Base revision provided by the caller, or null when the caller explicitly had no base.
+    pub provided_base_revision_id: Option<RevisionId>,
+    /// Incoming content retained without overwriting or writing the current revision.
+    pub incoming_content: IncomingConflictContent,
+    /// Policy the future conflict fan-in should materialize.
+    pub policy_hint: ConflictPolicyHint,
+}
+
 /// Metadata required to insert an accepted normal revision.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InsertRevisionRequest {
@@ -127,10 +166,49 @@ pub enum UpsertOutcome {
         expected: ContentHash,
         actual: ContentHash,
     },
+    /// Stale/unknown-base safety outcome.
+    ///
+    /// The Rust variant name is retained for existing W2 route-source
+    /// compatibility. When `conflict_saved` is `Some`, the Core outcome is a
+    /// conflict_saved result and the current revision was not overwritten.
+    /// When `conflict_saved` is `None`, there was no current file to preserve and
+    /// the non-null base was rejected safely without creating an unexpected file.
     RejectedStaleOrUnknownBase {
         current_revision: Option<StoredRevision>,
         provided_base_revision_id: Option<RevisionId>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        conflict_saved: Option<Box<ConflictSavedOutcome>>,
     },
+}
+
+impl UpsertOutcome {
+    /// Return conflict_saved planning data when this outcome preserved incoming content.
+    #[must_use]
+    pub fn conflict_saved(&self) -> Option<&ConflictSavedOutcome> {
+        match self {
+            Self::RejectedStaleOrUnknownBase { conflict_saved, .. } => conflict_saved.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// Public semantic status for callers that need to distinguish safe rejects from conflicts.
+    #[must_use]
+    pub fn public_status(&self) -> &'static str {
+        match self {
+            Self::AcceptedNewFile { .. } => "accepted_new_file",
+            Self::AcceptedNewRevision { .. } => "accepted_new_revision",
+            Self::IgnoredDuplicateSameContent { .. } => "same_content",
+            Self::RejectedHashMismatch { .. } => "rejected_hash_mismatch",
+            Self::RejectedStaleOrUnknownBase {
+                conflict_saved: Some(_),
+                ..
+            } => "conflict_saved",
+            Self::RejectedStaleOrUnknownBase {
+                conflict_saved: None,
+                ..
+            } => "rejected_stale_or_unknown_base",
+        }
+    }
 }
 
 /// Caller-owned repository boundary for current revision lookup and revision insertion.
@@ -195,7 +273,7 @@ where
     C: ContentStore,
     L: OperationLog,
 {
-    /// Apply the Wave 2 normal file upsert rules without conflict preservation.
+    /// Apply normal file upsert rules with W3 stale/unknown-base conflict preservation.
     pub fn upsert_file(
         &mut self,
         request: UpsertFileRequest,
@@ -224,6 +302,7 @@ where
             return Ok(UpsertOutcome::RejectedStaleOrUnknownBase {
                 current_revision: None,
                 provided_base_revision_id: request.base_revision_id,
+                conflict_saved: None,
             });
         }
 
@@ -247,10 +326,7 @@ where
 
         let current_revision_id = current_revision.revision_id.clone();
         if request.base_revision_id.as_ref() != Some(&current_revision_id) {
-            return Ok(UpsertOutcome::RejectedStaleOrUnknownBase {
-                current_revision: Some(current_revision),
-                provided_base_revision_id: request.base_revision_id,
-            });
+            return Self::save_incoming_conflict(request, current_revision);
         }
 
         let revision = self.store_and_insert_revision(request, Some(current_revision_id))?;
@@ -262,19 +338,39 @@ where
         })
     }
 
+    fn save_incoming_conflict(
+        request: UpsertFileRequest,
+        current_revision: StoredRevision,
+    ) -> Result<UpsertOutcome, RevisionServiceError> {
+        let size_bytes = u64::try_from(request.content.len())
+            .map_err(|_error| RevisionServiceError::content_store("content_size"))?;
+        let provided_base_revision_id = request.base_revision_id;
+        let conflict_saved = ConflictSavedOutcome {
+            current_revision: current_revision.clone(),
+            provided_base_revision_id: provided_base_revision_id.clone(),
+            incoming_content: IncomingConflictContent {
+                path: request.path,
+                adapter_id: request.adapter_id,
+                content_hash: request.expected_hash,
+                size_bytes,
+                content: request.content,
+            },
+            policy_hint: ConflictPolicyHint::PreserveBoth,
+        };
+
+        Ok(UpsertOutcome::RejectedStaleOrUnknownBase {
+            current_revision: Some(current_revision),
+            provided_base_revision_id,
+            conflict_saved: Some(Box::new(conflict_saved)),
+        })
+    }
+
     fn store_and_insert_revision(
         &mut self,
         request: UpsertFileRequest,
         parent_revision_id: Option<RevisionId>,
     ) -> Result<StoredRevision, RevisionServiceError> {
-        let stored_content = self
-            .content_store
-            .put_content(request.expected_hash, &request.content)?;
-        if stored_content.hash != request.expected_hash {
-            return Err(RevisionServiceError::content_store(
-                "put_content_returned_unexpected_hash",
-            ));
-        }
+        let stored_content = self.store_content(request.expected_hash, &request.content)?;
 
         self.repository.insert_revision(InsertRevisionRequest {
             path: request.path,
@@ -283,6 +379,21 @@ where
             content_hash: stored_content.hash,
             size_bytes: stored_content.size_bytes,
         })
+    }
+
+    fn store_content(
+        &mut self,
+        expected_hash: ContentHash,
+        bytes: &[u8],
+    ) -> Result<StoredContent, RevisionServiceError> {
+        let stored_content = self.content_store.put_content(expected_hash, bytes)?;
+        if stored_content.hash != expected_hash {
+            return Err(RevisionServiceError::content_store(
+                "put_content_returned_unexpected_hash",
+            ));
+        }
+
+        Ok(stored_content)
     }
 
     fn append_upsert_operation(
