@@ -27,8 +27,8 @@ use haze_sync_api::{
         common::OperationKindDto,
         files::PutFileResponse,
         primitives::{
-            AdapterIdDto, ConflictIdDto, ContentSha256Dto, RevisionIdDto, TimestampDto, TombstoneIdDto,
-            VaultPathDto,
+            AdapterIdDto, ConflictIdDto, ContentSha256Dto, RevisionIdDto, TimestampDto,
+            TombstoneIdDto, VaultPathDto,
         },
         server::{ServerCapabilityDto, ServerInfoResponse},
     },
@@ -67,7 +67,10 @@ use haze_sync_storage::{
         operation_log::{
             AppendOperationLogEntry, ChangeFeedRow, OperationKindName, OperationLogRepository,
         },
-        revisions::{get_current_revision_by_path, get_file_revision_by_id, insert_file_revision, NewFileRevision},
+        revisions::{
+            get_current_revision_by_path, get_file_revision_by_id, insert_file_revision,
+            NewFileRevision,
+        },
         RepositoryError,
     },
     LocalObjectStore, ObjectStoreError,
@@ -128,9 +131,21 @@ async fn put_file_route(
     let principal = authenticate(&state, &headers, FilePermission::Write).await?;
     let request = parse_put_file_request(PutFileRouteRequestParts {
         route_path: route_path.as_str(),
-        idempotency_key: optional_header(&headers, IDEMPOTENCY_KEY_HEADER, HeaderErrorKind::Idempotency)?,
-        content_sha256: optional_header(&headers, X_CONTENT_SHA256_HEADER, HeaderErrorKind::ContentSha256)?,
-        base_revision_id: optional_header(&headers, X_BASE_REVISION_ID_HEADER, HeaderErrorKind::BaseRevision)?,
+        idempotency_key: optional_header(
+            &headers,
+            IDEMPOTENCY_KEY_HEADER,
+            HeaderErrorKind::Idempotency,
+        )?,
+        content_sha256: optional_header(
+            &headers,
+            X_CONTENT_SHA256_HEADER,
+            HeaderErrorKind::ContentSha256,
+        )?,
+        base_revision_id: optional_header(
+            &headers,
+            X_BASE_REVISION_ID_HEADER,
+            HeaderErrorKind::BaseRevision,
+        )?,
         body: body.to_vec(),
         max_upload_bytes: Some(MAX_UPLOAD_BYTES),
     })?;
@@ -139,9 +154,13 @@ async fn put_file_route(
     let object_store = runtime_object_store(&state)?;
     let fingerprint = request_fingerprint(&request, &principal);
 
-    if let Some(replay) =
-        read_existing_idempotency(pool, &principal, request.idempotency_key().as_str(), fingerprint)
-            .await?
+    if let Some(replay) = read_existing_idempotency(
+        pool,
+        &principal,
+        request.idempotency_key().as_str(),
+        fingerprint,
+    )
+    .await?
     {
         return replay_response(replay);
     }
@@ -276,8 +295,8 @@ async fn authenticate(
     permission: FilePermission,
 ) -> Result<AdapterPrincipal, ApiError> {
     let header = required_auth_header(headers)?;
-    let token =
-        BearerToken::parse_authorization_header(header).map_err(|_error| ApiError::invalid_token())?;
+    let token = BearerToken::parse_authorization_header(header)
+        .map_err(|_error| ApiError::invalid_token())?;
 
     let principal = match state.auth() {
         AuthState::Disabled => return Err(ApiError::invalid_token()),
@@ -316,7 +335,9 @@ async fn lookup_principal_by_token(
     .map_err(|_error| ApiError::internal())?
     .ok_or_else(ApiError::invalid_token)?;
 
-    let adapter_id: String = row.try_get("adapter_id").map_err(|_error| ApiError::internal())?;
+    let adapter_id: String = row
+        .try_get("adapter_id")
+        .map_err(|_error| ApiError::internal())?;
     let role: String = row.try_get("role").map_err(|_error| ApiError::internal())?;
     let role = AdapterRole::from_str(&role).map_err(|_error| ApiError::invalid_token())?;
 
@@ -388,7 +409,10 @@ async fn read_existing_idempotency(
     idempotency_key: &str,
     fingerprint: RequestFingerprint,
 ) -> Result<Option<StoredIdempotencyResponse>, ApiError> {
-    let mut connection = pool.acquire().await.map_err(|_error| ApiError::internal())?;
+    let mut connection = pool
+        .acquire()
+        .await
+        .map_err(|_error| ApiError::internal())?;
     let Some(record) = read_idempotency_record(
         &mut *connection,
         principal.common_adapter_id(),
@@ -499,7 +523,9 @@ async fn apply_upsert_outcome(
         UpsertOutcome::IgnoredDuplicateSameContent { current_revision } => {
             Ok(ignored_same_content_response(current_revision.path))
         }
-        UpsertOutcome::RejectedHashMismatch { .. } => Err(FileRouteError::InvalidContentSha256.into()),
+        UpsertOutcome::RejectedHashMismatch { .. } => {
+            Err(FileRouteError::InvalidContentSha256.into())
+        }
         UpsertOutcome::RejectedStaleOrUnknownBase { .. } => Err(FileRouteError::Conflict.into()),
     }
 }
@@ -732,7 +758,10 @@ fn stored_revision_from_row(row: FileRevisionRow) -> Result<StoredRevision, ApiE
     })
 }
 
-fn raw_file_response(bytes: Vec<u8>, headers: FileDownloadRouteHeaders) -> Result<Response, ApiError> {
+fn raw_file_response(
+    bytes: Vec<u8>,
+    headers: FileDownloadRouteHeaders,
+) -> Result<Response, ApiError> {
     let mut response = Response::new(Body::from(bytes));
     *response.status_mut() = StatusCode::OK;
     response.headers_mut().insert(
@@ -759,11 +788,13 @@ fn raw_file_response(bytes: Vec<u8>, headers: FileDownloadRouteHeaders) -> Resul
 }
 
 fn replay_response(stored: StoredIdempotencyResponse) -> Result<Response, ApiError> {
-    let status = StatusCode::from_u16(stored.status_code()).map_err(|_error| ApiError::internal())?;
+    let status =
+        StatusCode::from_u16(stored.status_code()).map_err(|_error| ApiError::internal())?;
     let mut response = (status, Json(stored.body().clone())).into_response();
 
     for (name, value) in stored.headers() {
-        let name = HeaderName::from_bytes(name.as_bytes()).map_err(|_error| ApiError::internal())?;
+        let name =
+            HeaderName::from_bytes(name.as_bytes()).map_err(|_error| ApiError::internal())?;
         let value = HeaderValue::from_str(value).map_err(|_error| ApiError::internal())?;
         response.headers_mut().insert(name, value);
     }
@@ -901,7 +932,8 @@ impl ApiError {
 
 impl From<FileRouteError> for ApiError {
     fn from(error: FileRouteError) -> Self {
-        let status = StatusCode::from_u16(error.http_status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        let status =
+            StatusCode::from_u16(error.http_status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
         Self {
             status,
             body: error.to_error_response(),
@@ -911,7 +943,8 @@ impl From<FileRouteError> for ApiError {
 
 impl From<ChangesRouteError> for ApiError {
     fn from(error: ChangesRouteError) -> Self {
-        let status = StatusCode::from_u16(error.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        let status =
+            StatusCode::from_u16(error.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
         Self {
             status,
             body: error.error_response(),
@@ -936,7 +969,11 @@ mod tests {
         time::{SystemTime, UNIX_EPOCH},
     };
 
-    fn parsed_request(path: &str, base_revision_id: Option<&str>, content_sha256: &str) -> PutFileRouteRequest {
+    fn parsed_request(
+        path: &str,
+        base_revision_id: Option<&str>,
+        content_sha256: &str,
+    ) -> PutFileRouteRequest {
         parse_put_file_request(PutFileRouteRequestParts {
             route_path: path,
             idempotency_key: Some("test-key"),
@@ -1018,7 +1055,10 @@ mod tests {
         let outcome = run_core_normal_upsert(&request, &principal(), None, &store).unwrap();
 
         let revision = match outcome {
-            UpsertOutcome::AcceptedNewFile { revision, operation } => {
+            UpsertOutcome::AcceptedNewFile {
+                revision,
+                operation,
+            } => {
                 assert_eq!(operation.seq, 0);
                 revision
             }
@@ -1081,14 +1121,18 @@ mod tests {
             revision.parent_revision_id.as_ref().unwrap().as_str(),
             "rev_current"
         );
-        assert_eq!(store.get_bytes(revision.content_hash).unwrap(), b"new".to_vec());
+        assert_eq!(
+            store.get_bytes(revision.content_hash).unwrap(),
+            b"new".to_vec()
+        );
 
         let explicit = FileDownloadRouteHeaders::new(
             revision.revision_id.clone(),
             revision.content_hash,
             revision.size_bytes,
         );
-        let response = raw_file_response(store.get_bytes(revision.content_hash).unwrap(), explicit).unwrap();
+        let response =
+            raw_file_response(store.get_bytes(revision.content_hash).unwrap(), explicit).unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
             response.headers().get(X_REVISION_ID_HEADER).unwrap(),
@@ -1124,8 +1168,13 @@ mod tests {
         let current = stored_revision("rev_current", "Notes/a.md", None, b"old");
 
         let null_base = parsed_request_with_body("Notes/a.md", None, b"new");
-        let null_outcome =
-            run_core_normal_upsert(&null_base, &principal(), Some(current.clone()), &store).unwrap();
+        let null_outcome = run_core_normal_upsert(
+            &null_base,
+            &principal(),
+            Some(current.clone()),
+            &store,
+        )
+        .unwrap();
         assert!(matches!(
             null_outcome,
             UpsertOutcome::RejectedStaleOrUnknownBase { .. }
@@ -1141,7 +1190,8 @@ mod tests {
         ));
         assert!(store.get_bytes(compute_content_hash(b"newer")).is_err());
 
-        let unknown_base = parsed_request_with_body("Notes/missing.md", Some("rev_missing"), b"new");
+        let unknown_base =
+            parsed_request_with_body("Notes/missing.md", Some("rev_missing"), b"new");
         let unknown_outcome =
             run_core_normal_upsert(&unknown_base, &principal(), None, &store).unwrap();
         assert!(matches!(
@@ -1167,7 +1217,10 @@ mod tests {
         .unwrap();
 
         let outcome = run_core_normal_upsert(&request, &principal(), None, &store).unwrap();
-        assert!(matches!(outcome, UpsertOutcome::RejectedHashMismatch { .. }));
+        assert!(matches!(
+            outcome,
+            UpsertOutcome::RejectedHashMismatch { .. }
+        ));
         assert!(store.get_bytes(compute_content_hash(b"hello")).is_err());
 
         let _ = fs::remove_dir_all(root);
@@ -1189,8 +1242,8 @@ mod tests {
             RevisionId::parse("rev_replayed").unwrap(),
             1,
         );
-        let stored = StoredIdempotencyResponse::json(StatusCode::OK.as_u16(), body_json(&response))
-            .unwrap();
+        let stored =
+            StoredIdempotencyResponse::json(StatusCode::OK.as_u16(), body_json(&response)).unwrap();
 
         assert_eq!(first_fingerprint, same_fingerprint);
         assert_eq!(stored.status_code(), StatusCode::OK.as_u16());
@@ -1249,7 +1302,8 @@ mod tests {
             max_upload_bytes: Some(MAX_UPLOAD_BYTES),
         })
         .unwrap();
-        let principal = AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap();
+        let principal =
+            AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap();
 
         assert_eq!(
             request_fingerprint(&first, &principal),
@@ -1262,7 +1316,8 @@ mod tests {
         let hash = compute_content_hash(b"hello").to_string();
         let current = parsed_request("Notes/a.md", Some("rev_current"), &hash);
         let other = parsed_request("Notes/a.md", Some("rev_other"), &hash);
-        let principal = AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap();
+        let principal =
+            AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap();
 
         assert_ne!(
             request_fingerprint(&current, &principal),
