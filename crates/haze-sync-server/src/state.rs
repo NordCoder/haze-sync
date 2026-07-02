@@ -102,11 +102,9 @@ impl ServerAppState {
     pub fn readiness_state(&self) -> ReadinessState {
         ReadinessState::from_optional(
             self.db_pool.clone(),
-            self.object_store
-                .as_ref()
-                .map(|store| ObjectStoreConfig {
-                    root: store.root().to_path_buf(),
-                }),
+            self.object_store.as_ref().map(|store| ObjectStoreConfig {
+                root: store.root().to_path_buf(),
+            }),
         )
     }
 }
