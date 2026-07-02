@@ -165,7 +165,10 @@ mod tests {
         let error =
             parse_cli(["haze-sync", "status", "--server", "https://example.test"]).unwrap_err();
 
-        assert_eq!(error, CliParseError::UnexpectedArgument("--server".to_owned()));
+        assert_eq!(
+            error,
+            CliParseError::UnexpectedArgument("--server".to_owned())
+        );
     }
 
     #[test]
