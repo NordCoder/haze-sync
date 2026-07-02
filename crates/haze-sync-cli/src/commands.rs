@@ -6,6 +6,7 @@ use std::fmt;
 pub enum CliCommand {
     Status,
     Adapters(AdaptersCommand),
+    Doctor,
 }
 
 impl CliCommand {
@@ -16,6 +17,7 @@ impl CliCommand {
             Self::Adapters(AdaptersCommand::List) => {
                 "adapters list command parsed; live server calls are not implemented in this foundation"
             }
+            Self::Doctor => crate::doctor::usage(),
         }
     }
 }
@@ -37,7 +39,7 @@ pub enum CliParseError {
 impl fmt::Display for CliParseError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MissingCommand => formatter.write_str("missing command: expected status or adapters"),
+            Self::MissingCommand => formatter.write_str("missing command: expected status, adapters, or doctor"),
             Self::UnknownCommand(command) => write!(formatter, "unknown command: {command}"),
             Self::MissingAdaptersCommand => formatter.write_str("missing adapters command: expected list"),
             Self::UnknownAdaptersCommand(command) => {
@@ -65,6 +67,10 @@ where
             Ok(CliCommand::Status)
         }
         "adapters" => parse_adapters_command(args),
+        "doctor" => {
+            reject_trailing(args)?;
+            Ok(CliCommand::Doctor)
+        }
         _ => Err(CliParseError::UnknownCommand(command)),
     }
 }
