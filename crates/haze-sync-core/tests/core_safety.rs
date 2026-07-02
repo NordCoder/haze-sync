@@ -7,8 +7,9 @@ use haze_sync_core::{
         RequestFingerprint, StoredIdempotencyRecord, StoredIdempotencyResponse,
     },
     revision_service::{
-        compute_content_hash, AppendOperationRequest, ContentStore, InsertRevisionRequest,
-        OperationLog, OperationLogEntry, RevisionRepository, RevisionService, RevisionServiceError,
+        compute_content_hash, AppendOperationRequest, ConflictPolicyHint, ConflictSavedOutcome,
+        ContentStore, IncomingConflictContent, InsertRevisionRequest, OperationLog,
+        OperationLogEntry, RevisionRepository, RevisionService, RevisionServiceError,
         StoredContent, StoredRevision, UpsertFileRequest, UpsertOutcome,
     },
 };
@@ -129,6 +130,25 @@ fn upsert_request(base_revision_id: Option<RevisionId>, bytes: &[u8]) -> UpsertF
     )
 }
 
+fn expected_conflict_saved(
+    current_revision: &StoredRevision,
+    provided_base_revision_id: Option<RevisionId>,
+    bytes: &[u8],
+) -> Box<ConflictSavedOutcome> {
+    Box::new(ConflictSavedOutcome {
+        current_revision: current_revision.clone(),
+        provided_base_revision_id,
+        incoming_content: IncomingConflictContent {
+            path: path("Projects/Haze/plan.md"),
+            adapter_id: adapter_id(),
+            content_hash: compute_content_hash(bytes),
+            size_bytes: bytes.len() as u64,
+            content: bytes.to_vec(),
+        },
+        policy_hint: ConflictPolicyHint::PreserveBoth,
+    })
+}
+
 fn delete_response() -> StoredIdempotencyResponse {
     StoredIdempotencyResponse::json(
         200,
@@ -171,6 +191,11 @@ fn stale_base_different_content_rejects_without_silent_overwrite() {
         UpsertOutcome::RejectedStaleOrUnknownBase {
             current_revision: Some(current.clone()),
             provided_base_revision_id: Some(revision_id("rev_stale")),
+            conflict_saved: Some(expected_conflict_saved(
+                &current,
+                Some(revision_id("rev_stale")),
+                b"incoming content",
+            )),
         }
     );
 
@@ -199,6 +224,7 @@ fn null_base_existing_different_content_rejects_without_silent_overwrite() {
         UpsertOutcome::RejectedStaleOrUnknownBase {
             current_revision: Some(current.clone()),
             provided_base_revision_id: None,
+            conflict_saved: Some(expected_conflict_saved(&current, None, b"incoming content")),
         }
     );
 
