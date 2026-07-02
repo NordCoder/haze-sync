@@ -23,11 +23,9 @@ impl TombstoneId {
             || input.len() > MAX_TOMBSTONE_ID_LEN
             || !input.starts_with(TOMBSTONE_ID_PREFIX)
             || input.as_bytes().contains(&0)
-            || !input
-                .chars()
-                .all(|character| {
-                    character.is_ascii_alphanumeric() || matches!(character, '_' | '-' | '.')
-                })
+            || !input.chars().all(|character| {
+                character.is_ascii_alphanumeric() || matches!(character, '_' | '-' | '.')
+            })
         {
             return Err(TombstoneServiceError::InvalidTombstoneId);
         }
@@ -99,8 +97,8 @@ impl TombstonedRevisionRef {
     /// revision when callers have no separate current snapshot.
     #[must_use]
     pub fn new(deleted_revision_id: RevisionId, current_revision_id: Option<RevisionId>) -> Self {
-        let current_revision_id = current_revision_id
-            .unwrap_or_else(|| deleted_revision_id.clone());
+        let current_revision_id =
+            current_revision_id.unwrap_or_else(|| deleted_revision_id.clone());
         Self {
             deleted_revision_id,
             current_revision_id,
@@ -188,8 +186,8 @@ impl TombstoneCreationInput {
             .map(RevisionId::parse)
             .transpose()
             .map_err(|_error| TombstoneServiceError::InvalidRevisionId)?;
-        let deleted_by =
-            AdapterId::parse(deleted_by).map_err(|_error| TombstoneServiceError::InvalidAdapterId)?;
+        let deleted_by = AdapterId::parse(deleted_by)
+            .map_err(|_error| TombstoneServiceError::InvalidAdapterId)?;
 
         Ok(Self::new(
             tombstone_id,
@@ -389,7 +387,10 @@ mod tests {
         assert_eq!(tombstone.current_revision_id().as_str(), "rev_01JCURRENT");
         assert_eq!(tombstone.deleted_by.as_str(), "worktree-adapter");
         assert_eq!(tombstone.retention.retention_days, Some(30));
-        assert_eq!(tombstone.created_at, Some(timestamp("2026-07-01T00:00:00Z")));
+        assert_eq!(
+            tombstone.created_at,
+            Some(timestamp("2026-07-01T00:00:00Z"))
+        );
         assert_eq!(tombstone.restore, RestoreMetadata::default());
     }
 
