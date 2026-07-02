@@ -9,6 +9,7 @@ use axum::{routing::get, Extension, Router};
 use crate::{readiness::ReadinessState, state::ServerAppState};
 
 pub mod health;
+#[cfg_attr(not(test), allow(unused_imports))]
 pub mod v1;
 
 /// Builds the Haze Sync router with safe not-ready dependency defaults.
