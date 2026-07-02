@@ -272,7 +272,7 @@ fn current_base_is_accepted_as_new_revision() {
 #[test]
 fn same_content_duplicate_is_ignored_without_persistence_for_any_base() {
     let current = stored_revision("rev_0001", b"same");
-    let cases = vec![
+    let cases = [
         Some(current.revision_id.clone()),
         Some(RevisionId::parse("rev_0000").unwrap()),
         Some(RevisionId::parse("rev_unknown").unwrap()),
