@@ -34,7 +34,6 @@ impl DoctorCommand {
     /// Builds the default passive doctor report without runtime dependency calls.
     #[must_use]
     pub fn build_offline_report(self) -> DoctorReport {
-        let _offline = self.offline;
         DoctorReport::from_results(vec![
             db_connectivity_check(DbConnectivityCheckInput::offline(false)),
             object_store_exists_writable_check(ObjectStoreExistsWritableInput::offline(false)),
