@@ -16,7 +16,7 @@ use crate::{
         generate_conflict_path, ConflictPathRequest, ConflictPolicy, ConflictPolicyError,
         ConflictRecordInput, ConflictRecordStatus, IncomingBackupPlan,
     },
-    revision_service::{ConflictSavedOutcome, ConflictPolicyHint},
+    revision_service::{ConflictPolicyHint, ConflictSavedOutcome},
 };
 
 /// Deterministic pure plan for materializing a W3 conflict_saved outcome.
@@ -163,7 +163,11 @@ mod tests {
 
     #[test]
     fn plans_conflict_saved_preserve_both_without_raw_bytes() {
-        let plan = plan_conflict_saved_fan_in(&outcome("Projects/Haze/plan.md"), timestamp()).unwrap();
+        let plan = plan_conflict_saved_fan_in(
+            &outcome("Projects/Haze/plan.md"),
+            timestamp(),
+        )
+        .unwrap();
 
         assert_eq!(plan.public_status(), "conflict_saved");
         assert_eq!(plan.original_path.as_str(), "Projects/Haze/plan.md");
