@@ -101,7 +101,10 @@ fn resolve_accept_current_parses() {
 
     assert_eq!(request.conflict_id.as_str(), "conf_01JTEST");
     assert_eq!(request.resolution, ConflictResolutionDto::AcceptCurrent);
-    assert_eq!(request.to_dto().resolution, ConflictResolutionDto::AcceptCurrent);
+    assert_eq!(
+        request.to_dto().resolution,
+        ConflictResolutionDto::AcceptCurrent
+    );
 }
 
 #[test]
