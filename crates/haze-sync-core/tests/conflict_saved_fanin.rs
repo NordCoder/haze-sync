@@ -177,18 +177,24 @@ fn assert_conflict_saved_plan(
         .expect("conflict_saved outcome should produce a preservation plan");
 
     assert_eq!(outcome.public_status(), "conflict_saved");
-    assert_eq!(&plan.original_path, &current.path);
-    assert_eq!(&plan.provided_base_revision_id, &provided_base_revision_id);
-    assert_eq!(&plan.current_revision_id, &current.revision_id);
+    assert_eq!(plan.original_path.as_str(), current.path.as_str());
+    assert_eq!(
+        plan.provided_base_revision_id.as_ref().map(RevisionId::as_str),
+        provided_base_revision_id.as_ref().map(RevisionId::as_str)
+    );
+    assert_eq!(plan.current_revision_id.as_str(), current.revision_id.as_str());
     assert_eq!(plan.current_content_hash, current.content_hash);
     assert_eq!(plan.current_size_bytes, current.size_bytes);
-    assert_eq!(plan.incoming_adapter_id, adapter_id());
+    assert_eq!(plan.incoming_adapter_id.as_str(), adapter_id().as_str());
     assert_eq!(plan.incoming_content_hash, compute_content_hash(incoming_bytes));
     assert_eq!(plan.incoming_size_bytes, incoming_bytes.len() as u64);
     assert_eq!(plan.policy_applied, ConflictPolicy::PreserveBoth);
     assert_eq!(plan.status, ConflictRecordStatus::Open);
     assert_eq!(plan.created_at, fixed_timestamp());
-    assert_eq!(&plan.conflict_record.conflict_path, &plan.materialized_path);
+    assert_eq!(
+        plan.conflict_record.conflict_path.as_str(),
+        plan.materialized_path.as_str()
+    );
 }
 
 #[test]
@@ -320,12 +326,12 @@ fn recursive_haze_conflicts_source_path_is_rejected() {
 }
 
 #[test]
-fn conflict_saved_plan_serializes_without_raw_incoming_bytes() {
+fn conflict_saved_plan_serializes_without_source_bytes() {
     let result = run_upsert(
         "Projects/Haze/plan.md",
         b"current content",
         Some(revision_id("rev_stale")),
-        b"do not leak raw incoming bytes",
+        b"private source bytes",
     );
     let plan = require_upsert_conflict_saved_plan(&result.outcome, fixed_timestamp())
         .expect("stale conflict should produce plan");
@@ -333,5 +339,5 @@ fn conflict_saved_plan_serializes_without_raw_incoming_bytes() {
 
     assert!(serialized.contains("_haze_conflicts/open"));
     assert!(serialized.contains("preserve_both"));
-    assert!(!serialized.contains("do not leak raw incoming bytes"));
+    assert!(!serialized.contains("private source bytes"));
 }
