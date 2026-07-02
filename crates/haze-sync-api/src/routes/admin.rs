@@ -149,7 +149,7 @@ pub struct AdapterCursorSummary {
 impl AdapterCursorSummary {
     /// Build a sanitized cursor summary without raw external cursor content.
     #[must_use]
-    pub const fn new(
+    pub fn new(
         last_core_seq: Option<i64>,
         last_success_at: Option<TimestampDto>,
         has_external_cursor: bool,
@@ -182,7 +182,7 @@ pub struct AdapterSummary {
 impl AdapterSummary {
     /// Build a minimal adapter summary from safe fields.
     #[must_use]
-    pub const fn new(adapter_id: AdapterId, role: Option<AdapterRole>, enabled: bool) -> Self {
+    pub fn new(adapter_id: AdapterId, role: Option<AdapterRole>, enabled: bool) -> Self {
         Self {
             adapter_id,
             role,
@@ -195,7 +195,7 @@ impl AdapterSummary {
 
     /// Attach a safe rollout mode.
     #[must_use]
-    pub const fn with_mode(mut self, mode: AdapterMode) -> Self {
+    pub fn with_mode(mut self, mode: AdapterMode) -> Self {
         self.mode = Some(mode);
         self
     }
@@ -237,7 +237,7 @@ impl AdapterListResponse {
 
     /// Return an explicit empty placeholder.
     #[must_use]
-    pub const fn empty() -> Self {
+    pub fn empty() -> Self {
         Self {
             total_count: 0,
             adapters: Vec::new(),
@@ -308,7 +308,7 @@ mod tests {
     fn assert_no_secret_bearing_fields(json: &str) {
         for forbidden in [
             "token",
-            "token_hash",
+            "hash",
             "oauth",
             "secret",
             "database_url",
