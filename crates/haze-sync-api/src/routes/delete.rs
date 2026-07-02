@@ -15,7 +15,9 @@ use crate::{
     auth::AdapterRole,
     contracts::{
         errors::{ErrorResponse, PublicError, PublicErrorCode, SafeErrorDetails},
-        headers::{BaseRevisionIdHeader, IdempotencyKey, IDEMPOTENCY_KEY_HEADER, X_BASE_REVISION_ID_HEADER},
+        headers::{
+            BaseRevisionIdHeader, IdempotencyKey, IDEMPOTENCY_KEY_HEADER, X_BASE_REVISION_ID_HEADER,
+        },
     },
     dto::{
         files::{DeleteFileRequestMetadata, DeleteFileResponse, DeleteRejectedReasonDto},
