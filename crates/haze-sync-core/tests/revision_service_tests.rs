@@ -186,7 +186,7 @@ fn assert_conflict_saved(
 
     assert_eq!(current_revision.as_ref(), Some(current));
     assert_eq!(provided_base_revision_id.as_ref(), expected_base);
-    assert_eq!(outcome.conflict_saved(), Some(conflict_saved));
+    assert_eq!(outcome.conflict_saved(), Some(conflict_saved.as_ref()));
     assert_eq!(&conflict_saved.current_revision, current);
     assert_eq!(conflict_saved.provided_base_revision_id.as_ref(), expected_base);
     assert_eq!(conflict_saved.incoming_content.path, path());
