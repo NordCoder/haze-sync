@@ -90,10 +90,15 @@ pub struct IncomingConflictContent {
     pub path: VaultPath,
     /// Adapter that submitted the incoming content.
     pub adapter_id: AdapterId,
-    /// Stored incoming content hash.
+    /// Verified incoming content hash.
     pub content_hash: ContentHash,
-    /// Stored incoming content size.
+    /// Verified incoming content size.
     pub size_bytes: u64,
+    /// Raw incoming bytes retained in-memory for future fan-in materialization.
+    ///
+    /// This intentionally skips serde so public JSON serialization does not leak file content.
+    #[serde(skip, default)]
+    pub content: Vec<u8>,
 }
 
 /// Safe Core conflict-saved planning data for later fan-in phases.
@@ -103,7 +108,7 @@ pub struct ConflictSavedOutcome {
     pub current_revision: StoredRevision,
     /// Base revision provided by the caller, or null when the caller explicitly had no base.
     pub provided_base_revision_id: Option<RevisionId>,
-    /// Incoming content that was stored without overwriting the current revision.
+    /// Incoming content retained without overwriting or writing the current revision.
     pub incoming_content: IncomingConflictContent,
     /// Policy the future conflict fan-in should materialize.
     pub policy_hint: ConflictPolicyHint,
@@ -321,7 +326,7 @@ where
 
         let current_revision_id = current_revision.revision_id.clone();
         if request.base_revision_id.as_ref() != Some(&current_revision_id) {
-            return self.save_incoming_conflict(request, current_revision);
+            return Self::save_incoming_conflict(request, current_revision);
         }
 
         let revision = self.store_and_insert_revision(request, Some(current_revision_id))?;
@@ -334,26 +339,28 @@ where
     }
 
     fn save_incoming_conflict(
-        &mut self,
         request: UpsertFileRequest,
         current_revision: StoredRevision,
     ) -> Result<UpsertOutcome, RevisionServiceError> {
-        let stored_content = self.store_content(request.expected_hash, &request.content)?;
+        let size_bytes = u64::try_from(request.content.len())
+            .map_err(|_error| RevisionServiceError::content_store("content_size"))?;
+        let provided_base_revision_id = request.base_revision_id;
         let conflict_saved = ConflictSavedOutcome {
             current_revision: current_revision.clone(),
-            provided_base_revision_id: request.base_revision_id.clone(),
+            provided_base_revision_id: provided_base_revision_id.clone(),
             incoming_content: IncomingConflictContent {
                 path: request.path,
                 adapter_id: request.adapter_id,
-                content_hash: stored_content.hash,
-                size_bytes: stored_content.size_bytes,
+                content_hash: request.expected_hash,
+                size_bytes,
+                content: request.content,
             },
             policy_hint: ConflictPolicyHint::PreserveBoth,
         };
 
         Ok(UpsertOutcome::RejectedStaleOrUnknownBase {
             current_revision: Some(current_revision),
-            provided_base_revision_id: request.base_revision_id,
+            provided_base_revision_id,
             conflict_saved: Some(Box::new(conflict_saved)),
         })
     }
