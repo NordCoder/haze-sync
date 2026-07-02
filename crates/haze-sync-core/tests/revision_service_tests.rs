@@ -188,7 +188,10 @@ fn assert_conflict_saved(
     assert_eq!(provided_base_revision_id.as_ref(), expected_base);
     assert_eq!(outcome.conflict_saved(), Some(conflict_saved.as_ref()));
     assert_eq!(&conflict_saved.current_revision, current);
-    assert_eq!(conflict_saved.provided_base_revision_id.as_ref(), expected_base);
+    assert_eq!(
+        conflict_saved.provided_base_revision_id.as_ref(),
+        expected_base
+    );
     assert_eq!(conflict_saved.incoming_content.path, path());
     assert_eq!(conflict_saved.incoming_content.adapter_id, adapter_id());
     assert_eq!(
@@ -286,7 +289,9 @@ fn same_content_duplicate_is_ignored_without_persistence_for_any_base() {
             FakeOperationLog::default(),
         );
 
-        let outcome = service.upsert_file(request(base_revision_id, b"same")).unwrap();
+        let outcome = service
+            .upsert_file(request(base_revision_id, b"same"))
+            .unwrap();
 
         assert_eq!(
             outcome,
