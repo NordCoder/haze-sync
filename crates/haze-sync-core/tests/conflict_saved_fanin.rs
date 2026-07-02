@@ -170,9 +170,9 @@ fn assert_conflict_saved_plan(
         .expect("conflict_saved outcome should produce a preservation plan");
 
     assert_eq!(outcome.public_status(), "conflict_saved");
-    assert_eq!(plan.original_path, current.path);
+    assert_eq!(plan.original_path, current.path.clone());
     assert_eq!(plan.provided_base_revision_id, provided_base_revision_id);
-    assert_eq!(plan.current_revision_id, current.revision_id);
+    assert_eq!(plan.current_revision_id, current.revision_id.clone());
     assert_eq!(plan.current_content_hash, current.content_hash);
     assert_eq!(plan.current_size_bytes, current.size_bytes);
     assert_eq!(plan.incoming_adapter_id, adapter_id());
