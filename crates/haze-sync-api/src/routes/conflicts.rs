@@ -14,7 +14,9 @@ use serde::{Deserialize, Serialize};
 use crate::{
     contracts::errors::{ErrorResponse, PublicError, PublicErrorCode, SafeErrorDetails},
     dto::{
-        common::{ConflictPolicyDto, ConflictResolutionDto, ConflictResolveStatusDto, ConflictStatusDto},
+        common::{
+            ConflictPolicyDto, ConflictResolutionDto, ConflictResolveStatusDto, ConflictStatusDto,
+        },
         conflicts::{ConflictListQuery, ResolveConflictRequest, ResolveConflictResponse},
         primitives::{AdapterIdDto, ConflictIdDto, RevisionIdDto, TimestampDto, VaultPathDto},
     },
