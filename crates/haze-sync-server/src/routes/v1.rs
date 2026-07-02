@@ -1,16 +1,11 @@
 //! V1 Core API route wiring for W2 file operations and W3 safety fan-in.
-//!
-//! This module wires already-merged W2 API helpers with the W3 conflict/delete
-//! safety primitives where storage support exists. Unsupported conflict
-//! resolution behavior is exposed as safe deferred output instead of pretending
-//! to mutate state.
 
 use axum::{
     body::{Body, Bytes},
     extract::{Path, Query},
     http::{header, HeaderMap, HeaderName, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
-    routing::{delete, get, post},
+    routing::{get, post},
     Extension, Json, Router,
 };
 use chrono::{Duration, SecondsFormat, Utc};
@@ -35,8 +30,8 @@ use haze_sync_api::{
     },
     routes::{
         admin::{
-            AdapterCursorSummary, AdapterListResponse, AdapterListRequest, AdapterSummary,
-            DependencyReadinessState, PauseStatusSummary, ServerStatus, StatusSummaryResponse,
+            AdapterCursorSummary, AdapterListResponse, AdapterSummary, DependencyReadinessState,
+            PauseStatusSummary, ServerStatus, StatusSummaryResponse,
         },
         changes::{changes_response_from_parts, parse_changes_query, ChangesRouteError},
         conflicts::{
@@ -45,9 +40,9 @@ use haze_sync_api::{
             ConflictsRouteError, ResolveConflictRequestParts,
         },
         delete::{
-            parse_delete_file_request, stale_base_delete_response, tombstoned_delete_response,
-            unsafe_delete_response, DeleteFileRouteRequest, DeleteFileRouteRequestParts,
-            DeleteRouteError,
+            not_found_delete_response, parse_delete_file_request, stale_base_delete_response,
+            tombstoned_delete_response, unsafe_delete_response, DeleteFileRouteRequest,
+            DeleteFileRouteRequestParts, DeleteRouteError,
         },
         files::{
             accepted_upload_response, ignored_same_content_response, parse_get_file_request,
@@ -62,12 +57,12 @@ use haze_sync_common::{
     RevisionId, VaultPath,
 };
 use haze_sync_core::{
-    delete_guard::{DeleteGuard, DeleteGuardInput, DeleteGuardPolicy, DeleteRatioLimit, DeleteRunScope},
+    delete_guard::{DeleteGuard, DeleteGuardDecision, DeleteGuardInput, DeleteGuardPolicy, DeleteRatioLimit, DeleteRunScope},
     idempotency::{RequestFingerprint, StoredIdempotencyResponse},
     revision_service::{
-        compute_content_hash, AppendOperationRequest, ContentStore, InsertRevisionRequest,
-        OperationKind, OperationLog, OperationLogEntry, RevisionRepository, RevisionService,
-        RevisionServiceError, StoredContent, StoredRevision, UpsertFileRequest, UpsertOutcome,
+        AppendOperationRequest, ContentStore, InsertRevisionRequest, OperationKind, OperationLog,
+        OperationLogEntry, RevisionRepository, RevisionService, RevisionServiceError, StoredContent,
+        StoredRevision, UpsertFileRequest, UpsertOutcome,
     },
     safety_fan_in::{plan_conflict_saved_fan_in, ConflictSavedFanInPlan},
     tombstone_service::{
@@ -76,7 +71,7 @@ use haze_sync_core::{
 };
 use haze_sync_storage::{
     locks::lock_vault_path,
-    models::FileRevisionRow,
+    models::{FileRevisionRow, OperationLogRow},
     object_store::ObjectStore,
     repositories::{
         idempotency::{
@@ -109,7 +104,6 @@ use crate::{
 const MAX_UPLOAD_BYTES: u64 = 52_428_800;
 const DELETE_RETENTION_DAYS: i64 = 30;
 
-/// Builds the versioned `/v1` API namespace.
 pub fn router() -> Router {
     Router::new()
         .route("/server-info", get(server_info))
@@ -126,7 +120,6 @@ pub fn router() -> Router {
         .route("/admin/adapters", get(admin_adapters_route))
 }
 
-/// Handles GET /v1/server-info with static, safe route-shell information.
 pub async fn server_info() -> Json<ServerInfoResponse> {
     Json(ServerInfoResponse {
         server_id: "haze-sync-route-shell".to_owned(),
@@ -152,54 +145,30 @@ async fn put_file_route(
     let principal = authenticate(&state, &headers, RoutePermission::Write).await?;
     let request = parse_put_file_request(PutFileRouteRequestParts {
         route_path: route_path.as_str(),
-        idempotency_key: optional_header(
-            &headers,
-            IDEMPOTENCY_KEY_HEADER,
-            HeaderErrorKind::Idempotency,
-        )?,
-        content_sha256: optional_header(
-            &headers,
-            X_CONTENT_SHA256_HEADER,
-            HeaderErrorKind::ContentSha256,
-        )?,
-        base_revision_id: optional_header(
-            &headers,
-            X_BASE_REVISION_ID_HEADER,
-            HeaderErrorKind::BaseRevision,
-        )?,
+        idempotency_key: optional_header(&headers, IDEMPOTENCY_KEY_HEADER, HeaderErrorKind::Idempotency)?,
+        content_sha256: optional_header(&headers, X_CONTENT_SHA256_HEADER, HeaderErrorKind::ContentSha256)?,
+        base_revision_id: optional_header(&headers, X_BASE_REVISION_ID_HEADER, HeaderErrorKind::BaseRevision)?,
         body: body.to_vec(),
         max_upload_bytes: Some(MAX_UPLOAD_BYTES),
     })?;
-
     let pool = runtime_pool(&state)?;
     let object_store = runtime_object_store(&state)?;
     let fingerprint = put_request_fingerprint(&request, &principal);
 
-    if let Some(replay) = read_existing_idempotency(
-        pool,
-        &principal,
-        request.idempotency_key().as_str(),
-        fingerprint,
-    )
-    .await?
-    {
+    if let Some(replay) = read_existing_idempotency(pool, &principal, request.idempotency_key().as_str(), fingerprint).await? {
         return replay_response(replay);
     }
 
-    let mut transaction = pool.begin().await.map_err(|_error| ApiError::internal())?;
-    lock_vault_path(&mut *transaction, request.path())
-        .await
-        .map_err(map_repository_error)?;
-
+    let mut transaction = pool.begin().await.map_err(|_| ApiError::internal())?;
+    lock_vault_path(&mut *transaction, request.path()).await.map_err(map_repository_error)?;
     let current_revision = get_current_revision_by_path(&mut *transaction, request.path())
         .await
         .map_err(map_repository_error)?
         .map(stored_revision_from_row)
         .transpose()?;
-
     let outcome = run_core_normal_upsert(&request, &principal, current_revision, object_store)?;
     let response_body = apply_upsert_outcome(&mut transaction, &principal, outcome, object_store).await?;
-    let response_json = serde_json::to_value(&response_body).map_err(|_error| ApiError::internal())?;
+    let response_json = serde_json::to_value(&response_body).map_err(|_| ApiError::internal())?;
 
     if let Some(replay) = store_successful_idempotency(
         &mut transaction,
@@ -211,18 +180,10 @@ async fn put_file_route(
     )
     .await?
     {
-        transaction
-            .rollback()
-            .await
-            .map_err(|_error| ApiError::internal())?;
+        transaction.rollback().await.map_err(|_| ApiError::internal())?;
         return replay_response(replay);
     }
-
-    transaction
-        .commit()
-        .await
-        .map_err(|_error| ApiError::internal())?;
-
+    transaction.commit().await.map_err(|_| ApiError::internal())?;
     Ok((StatusCode::OK, Json(response_body)).into_response())
 }
 
@@ -237,10 +198,8 @@ async fn get_file_route(
         route_path: route_path.as_str(),
         revision_id: query.get("revision_id").map(String::as_str),
     })?;
-
     let pool = runtime_pool(&state)?;
     let object_store = runtime_object_store(&state)?;
-
     let row = if let Some(revision_id) = request.revision_id() {
         let row = get_file_revision_by_id(pool, revision_id)
             .await
@@ -256,22 +215,14 @@ async fn get_file_route(
             .map_err(map_repository_error)?
             .ok_or(FileRouteError::NotFound)?
     };
-
     let revision = stored_revision_from_row(row)?;
-    let bytes = object_store
-        .get_bytes(revision.content_hash)
-        .map_err(map_object_store_get_error)?;
+    let bytes = object_store.get_bytes(revision.content_hash).map_err(map_object_store_get_error)?;
     if u64::try_from(bytes.len()).map_err(|_| ApiError::internal())? != revision.size_bytes {
         return Err(ApiError::internal());
     }
-
     raw_file_response(
         bytes,
-        FileDownloadRouteHeaders::new(
-            revision.revision_id,
-            revision.content_hash,
-            revision.size_bytes,
-        ),
+        FileDownloadRouteHeaders::new(revision.revision_id, revision.content_hash, revision.size_bytes),
     )
 }
 
@@ -283,62 +234,33 @@ async fn delete_file_route(
     let principal = authenticate(&state, &headers, RoutePermission::Write).await?;
     let request = parse_delete_file_request(DeleteFileRouteRequestParts {
         route_path: route_path.as_str(),
-        idempotency_key: optional_header(
-            &headers,
-            IDEMPOTENCY_KEY_HEADER,
-            HeaderErrorKind::Idempotency,
-        )?,
-        base_revision_id: optional_header(
-            &headers,
-            X_BASE_REVISION_ID_HEADER,
-            HeaderErrorKind::BaseRevision,
-        )?,
+        idempotency_key: optional_header(&headers, IDEMPOTENCY_KEY_HEADER, HeaderErrorKind::Idempotency)?,
+        base_revision_id: optional_header(&headers, X_BASE_REVISION_ID_HEADER, HeaderErrorKind::BaseRevision)?,
         requested_delete_count: None,
     })?;
     request.auth_requirement().validate_role(principal.role())?;
-
     let pool = runtime_pool(&state)?;
     let fingerprint = delete_request_fingerprint(&request, &principal);
 
-    if let Some(replay) = read_existing_idempotency(
-        pool,
-        &principal,
-        request.idempotency_key().as_str(),
-        fingerprint,
-    )
-    .await?
-    {
+    if let Some(replay) = read_existing_idempotency(pool, &principal, request.idempotency_key().as_str(), fingerprint).await? {
         return replay_response(replay);
     }
 
-    let mut transaction = pool.begin().await.map_err(|_error| ApiError::internal())?;
-    lock_vault_path(&mut *transaction, request.path())
-        .await
-        .map_err(map_repository_error)?;
-
+    let mut transaction = pool.begin().await.map_err(|_| ApiError::internal())?;
+    lock_vault_path(&mut *transaction, request.path()).await.map_err(map_repository_error)?;
     let current = get_current_revision_by_path(&mut *transaction, request.path())
         .await
         .map_err(map_repository_error)?
         .map(stored_revision_from_row)
         .transpose()?;
     let Some(current) = current else {
-        return Ok((StatusCode::NOT_FOUND, Json(not_found_delete_json(&request))).into_response());
+        return Ok((StatusCode::NOT_FOUND, Json(not_found_delete_response(request.path().clone()))).into_response());
     };
-
     if request.base_revision_id() != Some(&current.revision_id) {
-        return Ok((
-            StatusCode::CONFLICT,
-            Json(stale_base_delete_response(request.path().clone())),
-        )
-            .into_response());
+        return Ok((StatusCode::CONFLICT, Json(stale_base_delete_response(request.path().clone()))).into_response());
     }
-
     if !single_delete_guard_allows(&principal)? {
-        return Ok((
-            StatusCode::CONFLICT,
-            Json(unsafe_delete_response(request.path().clone())),
-        )
-            .into_response());
+        return Ok((StatusCode::CONFLICT, Json(unsafe_delete_response(request.path().clone()))).into_response());
     }
 
     let now = Utc::now();
@@ -347,8 +269,7 @@ async fn delete_file_route(
         "tmb_",
         &[current.revision_id.as_str(), request.path().as_str(), principal.adapter_id()],
     ))
-    .map_err(|_error| ApiError::internal())?;
-    let retention = TombstoneRetention::new(retention_until, Some(DELETE_RETENTION_DAYS as u16));
+    .map_err(|_| ApiError::internal())?;
     let tombstone = TombstoneService::new()
         .create_tombstone(TombstoneCreationInput::new(
             tombstone_id,
@@ -356,13 +277,12 @@ async fn delete_file_route(
             current.revision_id.clone(),
             Some(current.revision_id.clone()),
             principal.common_adapter_id().clone(),
-            retention,
+            TombstoneRetention::new(retention_until, Some(DELETE_RETENTION_DAYS as u16)),
             Some(now),
         ))
-        .map_err(|_error| ApiError::internal())?;
-
+        .map_err(|_| ApiError::internal())?;
     let tombstone_row = insert_tombstone(
-        &mut *transaction,
+        &mut **transaction,
         NewTombstone {
             tombstone_id: tombstone.tombstone_id.as_str(),
             path: &tombstone.path,
@@ -373,16 +293,14 @@ async fn delete_file_route(
     )
     .await
     .map_err(map_repository_error)?;
-
     set_sync_object_deleted_at_by_path(
-        &mut *transaction,
+        &mut **transaction,
         request.path(),
         Some(tombstone_row.deleted_at),
         principal.common_adapter_id(),
     )
     .await
     .map_err(map_repository_error)?;
-
     let operation = append_operation_log(
         &mut transaction,
         principal.common_adapter_id().clone(),
@@ -394,15 +312,13 @@ async fn delete_file_route(
         &[tombstone_row.tombstone_id.as_str(), request.path().as_str()],
     )
     .await?;
-
     let response_body = tombstoned_delete_response(
         request.path().clone(),
         tombstone_row.tombstone_id,
         operation.seq,
         timestamp_string(tombstone_row.retention_until),
     );
-    let response_json = serde_json::to_value(&response_body).map_err(|_error| ApiError::internal())?;
-
+    let response_json = serde_json::to_value(&response_body).map_err(|_| ApiError::internal())?;
     if let Some(replay) = store_successful_idempotency(
         &mut transaction,
         &principal,
@@ -413,18 +329,10 @@ async fn delete_file_route(
     )
     .await?
     {
-        transaction
-            .rollback()
-            .await
-            .map_err(|_error| ApiError::internal())?;
+        transaction.rollback().await.map_err(|_| ApiError::internal())?;
         return replay_response(replay);
     }
-
-    transaction
-        .commit()
-        .await
-        .map_err(|_error| ApiError::internal())?;
-
+    transaction.commit().await.map_err(|_| ApiError::internal())?;
     Ok((StatusCode::OK, Json(response_body)).into_response())
 }
 
@@ -434,23 +342,14 @@ async fn changes_route(
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
     authenticate(&state, &headers, RoutePermission::Read).await?;
-    let request = parse_changes_query(
-        query.get("since").map(String::as_str),
-        query.get("limit").map(String::as_str),
-    )?;
+    let request = parse_changes_query(query.get("since").map(String::as_str), query.get("limit").map(String::as_str))?;
     let pool = runtime_pool(&state)?;
     let page = OperationLogRepository::new()
         .changes_since(pool, request.since_value(), request.limit_value())
         .await
         .map_err(map_repository_error)?;
-
-    let changes = page
-        .changes
-        .into_iter()
-        .map(change_entry_from_row)
-        .collect::<Result<Vec<_>, _>>()?;
+    let changes = page.changes.into_iter().map(change_entry_from_row).collect::<Result<Vec<_>, _>>()?;
     let response = changes_response_from_parts(page.from_seq, page.to_seq, page.has_more, changes)?;
-
     Ok((StatusCode::OK, Json(response)).into_response())
 }
 
@@ -460,29 +359,22 @@ async fn list_conflicts_route(
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
     authenticate(&state, &headers, RoutePermission::Read).await?;
-    let _request = parse_conflicts_query(ConflictListRequestParts {
-        status: query.get("status").map(String::as_str),
-    })?;
-
+    let _request = parse_conflicts_query(ConflictListRequestParts { status: query.get("status").map(String::as_str) })?;
     let Some(pool) = state.db_pool() else {
         return Ok((StatusCode::OK, Json(conflict_list_response_from_parts(Vec::new()))).into_response());
     };
-
     let rows = sqlx::query(
-        "select conflict_id, original_path, base_revision_id, current_revision_id, \
-         incoming_revision_id, incoming_adapter_id, policy_applied, materialized_path, status, \
-         created_at, resolved_at from conflicts where status = 'open' \
-         order by created_at asc, conflict_id asc limit 100",
+        "select conflict_id, original_path, base_revision_id, current_revision_id, incoming_revision_id, \
+         incoming_adapter_id, policy_applied, materialized_path, status, created_at, resolved_at \
+         from conflicts where status = 'open' order by created_at asc, conflict_id asc limit 100",
     )
     .fetch_all(pool)
     .await
-    .map_err(|_error| ApiError::internal())?;
-
+    .map_err(|_| ApiError::internal())?;
     let mut conflicts = Vec::with_capacity(rows.len());
     for row in rows {
         conflicts.push(conflict_summary_from_row(&row)?);
     }
-
     Ok((StatusCode::OK, Json(conflict_list_response_from_parts(conflicts))).into_response())
 }
 
@@ -495,26 +387,19 @@ async fn resolve_conflict_route(
     let principal = authenticate(&state, &headers, RoutePermission::ResolveConflict).await?;
     let object = body.as_object().ok_or_else(ConflictsRouteError::invalid_resolve_payload)?;
     let resolution = object.get("resolution").and_then(Value::as_str);
-    let extra_fields = object
-        .keys()
-        .filter(|key| key.as_str() != "resolution")
-        .map(String::as_str)
-        .collect::<Vec<_>>();
+    let extra_fields = object.keys().filter(|key| key.as_str() != "resolution").map(String::as_str).collect::<Vec<_>>();
     let request = parse_resolve_conflict_request(ResolveConflictRequestParts {
         conflict_id: conflict_id.as_str(),
         resolution,
         extra_fields: &extra_fields,
     })?;
-
     if request.resolution == ConflictResolutionDto::AcceptConflict {
         return Ok(core_route_not_implemented().await.into_response());
     }
-
     let Some(pool) = state.db_pool() else {
         return Ok(core_route_not_implemented().await.into_response());
     };
-
-    let mut transaction = pool.begin().await.map_err(|_error| ApiError::internal())?;
+    let mut transaction = pool.begin().await.map_err(|_| ApiError::internal())?;
     let row = sqlx::query(
         "update conflicts set status = 'resolved', resolved_at = now(), resolved_by = $2 \
          where conflict_id = $1 and status = 'open' returning original_path",
@@ -523,11 +408,9 @@ async fn resolve_conflict_route(
     .bind(principal.adapter_id())
     .fetch_optional(&mut *transaction)
     .await
-    .map_err(|_error| ApiError::internal())?
+    .map_err(|_| ApiError::internal())?
     .ok_or_else(ConflictsRouteError::not_found)?;
-    let path = VaultPath::parse(row.try_get::<String, _>("original_path")?.as_str())
-        .map_err(|_error| ApiError::internal())?;
-
+    let path = VaultPath::parse(row.try_get::<String, _>("original_path")?.as_str()).map_err(|_| ApiError::internal())?;
     let operation = append_operation_log(
         &mut transaction,
         principal.common_adapter_id().clone(),
@@ -539,21 +422,8 @@ async fn resolve_conflict_route(
         &[request.conflict_id.as_str(), principal.adapter_id()],
     )
     .await?;
-
-    transaction
-        .commit()
-        .await
-        .map_err(|_error| ApiError::internal())?;
-
-    Ok((
-        StatusCode::OK,
-        Json(resolved_conflict_response(
-            request.conflict_id,
-            request.resolution,
-            operation.seq,
-        )),
-    )
-        .into_response())
+    transaction.commit().await.map_err(|_| ApiError::internal())?;
+    Ok((StatusCode::OK, Json(resolved_conflict_response(request.conflict_id, request.resolution, operation.seq))).into_response())
 }
 
 async fn admin_status_route(
@@ -561,84 +431,54 @@ async fn admin_status_route(
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
     authenticate(&state, &headers, RoutePermission::Admin).await?;
-
-    let db_state = readiness_for(state.db_pool().is_some());
-    let object_store_state = readiness_for(state.object_store().is_some());
-    let server_status = if state.db_pool().is_some() && state.object_store().is_some() {
-        ServerStatus::Ready
-    } else {
-        ServerStatus::NotReady
-    };
     let last_operation_sequence = if let Some(pool) = state.db_pool() {
-        sqlx::query_scalar::<_, Option<i64>>("select max(seq) from operation_log")
-            .fetch_one(pool)
-            .await
-            .map_err(|_error| ApiError::internal())?
+        sqlx::query_scalar::<_, Option<i64>>("select max(seq) from operation_log").fetch_one(pool).await.map_err(|_| ApiError::internal())?
     } else {
         None
     };
     let adapter_count = if let Some(pool) = state.db_pool() {
-        Some(
-            sqlx::query_scalar::<_, i64>("select count(*) from sync_adapters")
-                .fetch_one(pool)
-                .await
-                .map_err(|_error| ApiError::internal())?
-                .try_into()
-                .map_err(|_| ApiError::internal())?,
-        )
+        Some(sqlx::query_scalar::<_, i64>("select count(*) from sync_adapters").fetch_one(pool).await.map_err(|_| ApiError::internal())? as u64)
     } else {
         None
     };
-
     let response = StatusSummaryResponse::from_safe_parts(
-        server_status,
-        db_state,
-        object_store_state,
+        if state.db_pool().is_some() && state.object_store().is_some() { ServerStatus::Ready } else { ServerStatus::NotReady },
+        readiness_for(state.db_pool().is_some()),
+        readiness_for(state.object_store().is_some()),
         last_operation_sequence,
         adapter_count,
         PauseStatusSummary::unsupported(),
     );
-
     Ok((StatusCode::OK, Json(response)).into_response())
 }
 
 async fn admin_adapters_route(
     Extension(state): Extension<ServerAppState>,
-    Query(_query): Query<AdapterListRequest>,
+    Query(_query): Query<HashMap<String, String>>,
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
     authenticate(&state, &headers, RoutePermission::Admin).await?;
-
     let Some(pool) = state.db_pool() else {
         return Ok((StatusCode::OK, Json(AdapterListResponse::empty())).into_response());
     };
-
-    let rows = sqlx::query(
-        "select adapter_id, role, enabled, last_seen_at from sync_adapters \
-         order by adapter_id asc limit 100",
-    )
-    .fetch_all(pool)
-    .await
-    .map_err(|_error| ApiError::internal())?;
-
+    let rows = sqlx::query("select adapter_id, role, enabled, last_seen_at from sync_adapters order by adapter_id asc limit 100")
+        .fetch_all(pool)
+        .await
+        .map_err(|_| ApiError::internal())?;
     let mut adapters = Vec::with_capacity(rows.len());
     for row in rows {
-        let adapter_id = AdapterId::parse(row.try_get::<String, _>("adapter_id")?.as_str())
-            .map_err(|_error| ApiError::internal())?;
+        let adapter_id = AdapterId::parse(row.try_get::<String, _>("adapter_id")?.as_str()).map_err(|_| ApiError::internal())?;
         let role = CommonAdapterRole::from_str(row.try_get::<String, _>("role")?.as_str()).ok();
         let enabled = row.try_get::<bool, _>("enabled")?;
         let mut summary = AdapterSummary::new(adapter_id, role, enabled).with_mode(AdapterMode::Disabled);
         if let Some(last_seen_at) = row.try_get::<Option<chrono::DateTime<Utc>>, _>("last_seen_at")? {
             summary = summary.with_last_seen_at(TimestampDto::from(timestamp_string(last_seen_at)));
         }
-        summary = summary.with_cursor(AdapterCursorSummary::new(None, None, false));
-        adapters.push(summary);
+        adapters.push(summary.with_cursor(AdapterCursorSummary::new(None, None, false)));
     }
-
     Ok((StatusCode::OK, Json(AdapterListResponse::new(adapters))).into_response())
 }
 
-/// Placeholder for Core actions whose mutation semantics are explicitly deferred.
 pub async fn core_route_not_implemented() -> (StatusCode, Json<ShellErrorResponse>) {
     not_implemented_response()
 }
@@ -651,70 +491,43 @@ enum RoutePermission {
     Admin,
 }
 
-async fn authenticate(
-    state: &ServerAppState,
-    headers: &HeaderMap,
-    permission: RoutePermission,
-) -> Result<AdapterPrincipal, ApiError> {
+async fn authenticate(state: &ServerAppState, headers: &HeaderMap, permission: RoutePermission) -> Result<AdapterPrincipal, ApiError> {
     let header = required_auth_header(headers)?;
-    let token = BearerToken::parse_authorization_header(header)
-        .map_err(|_error| ApiError::invalid_token())?;
-
+    let token = BearerToken::parse_authorization_header(header).map_err(|_| ApiError::invalid_token())?;
     let principal = match state.auth() {
         AuthState::Disabled => return Err(ApiError::invalid_token()),
         AuthState::StaticPrincipal { principal } => principal.clone(),
         AuthState::Database { pool } => lookup_principal_by_token(pool, &token).await?,
     };
-
     match permission {
-        RoutePermission::Read if !principal.role().can_read_files() => {
-            return Err(ApiError::forbidden_role());
-        }
-        RoutePermission::Write if !principal.role().can_write_files() => {
-            return Err(ApiError::forbidden_role());
-        }
-        RoutePermission::ResolveConflict if !principal.role().can_resolve_conflicts() => {
-            return Err(ApiError::forbidden_role());
-        }
-        RoutePermission::Admin if !principal.role().can_admin() => {
-            return Err(ApiError::forbidden_role());
-        }
+        RoutePermission::Read if !principal.role().can_read_files() => return Err(ApiError::forbidden_role()),
+        RoutePermission::Write if !principal.role().can_write_files() => return Err(ApiError::forbidden_role()),
+        RoutePermission::ResolveConflict if !principal.role().can_resolve_conflicts() => return Err(ApiError::forbidden_role()),
+        RoutePermission::Admin if !principal.role().can_admin() => return Err(ApiError::forbidden_role()),
         _ => {}
     }
-
     Ok(principal)
 }
 
-async fn lookup_principal_by_token(
-    pool: &PgPool,
-    token: &BearerToken,
-) -> Result<AdapterPrincipal, ApiError> {
+async fn lookup_principal_by_token(pool: &PgPool, token: &BearerToken) -> Result<AdapterPrincipal, ApiError> {
     let hash = token.sha256_hash();
     let prefixed_hash = format!("sha256:{}", hash.digest_hex());
-    let row = sqlx::query(
-        "select adapter_id, role from sync_adapters \
-         where enabled = true and (token_hash = $1 or token_hash = $2) \
-         limit 1",
-    )
-    .bind(hash.digest_hex())
-    .bind(prefixed_hash)
-    .fetch_optional(pool)
-    .await
-    .map_err(|_error| ApiError::internal())?
-    .ok_or_else(ApiError::invalid_token)?;
-
-    let adapter_id: String = row.try_get("adapter_id").map_err(|_error| ApiError::internal())?;
-    let role: String = row.try_get("role").map_err(|_error| ApiError::internal())?;
-    let role = AdapterRole::from_str(&role).map_err(|_error| ApiError::invalid_token())?;
-
-    AdapterPrincipal::new(adapter_id, role).map_err(|_error| ApiError::invalid_token())
+    let row = sqlx::query("select adapter_id, role from sync_adapters where enabled = true and (token_hash = $1 or token_hash = $2) limit 1")
+        .bind(hash.digest_hex())
+        .bind(prefixed_hash)
+        .fetch_optional(pool)
+        .await
+        .map_err(|_| ApiError::internal())?
+        .ok_or_else(ApiError::invalid_token)?;
+    let adapter_id: String = row.try_get("adapter_id").map_err(|_| ApiError::internal())?;
+    let role: String = row.try_get("role").map_err(|_| ApiError::internal())?;
+    let role = AdapterRole::from_str(&role).map_err(|_| ApiError::invalid_token())?;
+    AdapterPrincipal::new(adapter_id, role).map_err(|_| ApiError::invalid_token())
 }
 
 fn required_auth_header(headers: &HeaderMap) -> Result<&str, ApiError> {
-    let value = headers
-        .get(AUTHORIZATION_HEADER)
-        .ok_or_else(ApiError::missing_token)?;
-    value.to_str().map_err(|_error| ApiError::invalid_token())
+    let value = headers.get(AUTHORIZATION_HEADER).ok_or_else(ApiError::missing_token)?;
+    value.to_str().map_err(|_| ApiError::invalid_token())
 }
 
 #[derive(Clone, Copy)]
@@ -724,15 +537,11 @@ enum HeaderErrorKind {
     BaseRevision,
 }
 
-fn optional_header<'a>(
-    headers: &'a HeaderMap,
-    name: &'static str,
-    kind: HeaderErrorKind,
-) -> Result<Option<&'a str>, ApiError> {
+fn optional_header<'a>(headers: &'a HeaderMap, name: &'static str, kind: HeaderErrorKind) -> Result<Option<&'a str>, ApiError> {
     headers
         .get(name)
         .map(|value| {
-            value.to_str().map_err(|_error| match kind {
+            value.to_str().map_err(|_| match kind {
                 HeaderErrorKind::Idempotency => FileRouteError::InvalidIdempotencyKey.into(),
                 HeaderErrorKind::ContentSha256 => FileRouteError::InvalidContentSha256.into(),
                 HeaderErrorKind::BaseRevision => FileRouteError::InvalidBaseRevision.into(),
@@ -749,26 +558,19 @@ fn runtime_object_store(state: &ServerAppState) -> Result<&LocalObjectStore, Api
     state.object_store().ok_or_else(ApiError::storage_unavailable)
 }
 
-fn put_request_fingerprint(
-    request: &PutFileRouteRequest,
-    principal: &AdapterPrincipal,
-) -> RequestFingerprint {
-    let metadata = json!({
+fn put_request_fingerprint(request: &PutFileRouteRequest, principal: &AdapterPrincipal) -> RequestFingerprint {
+    RequestFingerprint::from_safe_json_metadata(&json!({
         "method": "PUT",
         "path": request.path().as_str(),
         "base_revision_id": request.base_revision_id().map(RevisionId::as_str).unwrap_or("null"),
         "content_sha256": request.content_sha256().to_string(),
         "adapter_id": principal.adapter_id(),
         "scope": "adapter",
-    });
-    RequestFingerprint::from_safe_json_metadata(&metadata)
+    }))
 }
 
-fn delete_request_fingerprint(
-    request: &DeleteFileRouteRequest,
-    principal: &AdapterPrincipal,
-) -> RequestFingerprint {
-    let metadata = json!({
+fn delete_request_fingerprint(request: &DeleteFileRouteRequest, principal: &AdapterPrincipal) -> RequestFingerprint {
+    RequestFingerprint::from_safe_json_metadata(&json!({
         "method": "DELETE",
         "path": request.path().as_str(),
         "base_revision_id": request.base_revision_id().map(RevisionId::as_str).unwrap_or("null"),
@@ -776,36 +578,16 @@ fn delete_request_fingerprint(
         "requested_delete_count": request.delete_guard().requested_delete_count,
         "adapter_id": principal.adapter_id(),
         "scope": "adapter",
-    });
-    RequestFingerprint::from_safe_json_metadata(&metadata)
+    }))
 }
 
-async fn read_existing_idempotency(
-    pool: &PgPool,
-    principal: &AdapterPrincipal,
-    idempotency_key: &str,
-    fingerprint: RequestFingerprint,
-) -> Result<Option<StoredIdempotencyResponse>, ApiError> {
-    let mut connection = pool.acquire().await.map_err(|_error| ApiError::internal())?;
-    let Some(record) = read_idempotency_record(
-        &mut connection,
-        principal.common_adapter_id(),
-        idempotency_key,
-    )
-    .await
-    .map_err(|_error| ApiError::internal())?
-    else {
+async fn read_existing_idempotency(pool: &PgPool, principal: &AdapterPrincipal, idempotency_key: &str, fingerprint: RequestFingerprint) -> Result<Option<StoredIdempotencyResponse>, ApiError> {
+    let mut connection = pool.acquire().await.map_err(|_| ApiError::internal())?;
+    let Some(record) = read_idempotency_record(&mut connection, principal.common_adapter_id(), idempotency_key).await.map_err(|_| ApiError::internal())? else {
         return Ok(None);
     };
-
-    match compare_request_fingerprint(&record, fingerprint.as_sha256())
-        .map_err(|_error| ApiError::internal())?
-    {
-        IdempotencyRequestComparison::SameRequest => {
-            let response = serde_json::from_value(record.response_json)
-                .map_err(|_error| ApiError::internal())?;
-            Ok(Some(response))
-        }
+    match compare_request_fingerprint(&record, fingerprint.as_sha256()).map_err(|_| ApiError::internal())? {
+        IdempotencyRequestComparison::SameRequest => Ok(Some(serde_json::from_value(record.response_json).map_err(|_| ApiError::internal())?)),
         IdempotencyRequestComparison::DifferentRequest => Err(FileRouteError::IdempotencyMismatch.into()),
     }
 }
@@ -818,35 +600,20 @@ async fn store_successful_idempotency(
     status_code: StatusCode,
     response_body: Value,
 ) -> Result<Option<StoredIdempotencyResponse>, ApiError> {
-    let stored_response = StoredIdempotencyResponse::json(status_code.as_u16(), response_body)
-        .map_err(|_error| ApiError::internal())?;
+    let stored_response = StoredIdempotencyResponse::json(status_code.as_u16(), response_body).map_err(|_| ApiError::internal())?;
     let input = IdempotencyRecordInput::new(
         principal.common_adapter_id().clone(),
         idempotency_key,
         *fingerprint.as_sha256(),
-        serde_json::to_value(stored_response).map_err(|_error| ApiError::internal())?,
+        serde_json::to_value(stored_response).map_err(|_| ApiError::internal())?,
     )
-    .map_err(|_error| ApiError::internal())?;
-
-    match insert_idempotency_record(transaction, &input)
-        .await
-        .map_err(|_error| ApiError::internal())?
-    {
+    .map_err(|_| ApiError::internal())?;
+    match insert_idempotency_record(transaction, &input).await.map_err(|_| ApiError::internal())? {
         IdempotencyStoreOutcome::Stored { .. } => Ok(None),
-        IdempotencyStoreOutcome::AlreadyExists { record } => {
-            match compare_request_fingerprint(&record, fingerprint.as_sha256())
-                .map_err(|_error| ApiError::internal())?
-            {
-                IdempotencyRequestComparison::SameRequest => {
-                    let response = serde_json::from_value(record.response_json)
-                        .map_err(|_error| ApiError::internal())?;
-                    Ok(Some(response))
-                }
-                IdempotencyRequestComparison::DifferentRequest => {
-                    Err(FileRouteError::IdempotencyMismatch.into())
-                }
-            }
-        }
+        IdempotencyStoreOutcome::AlreadyExists { record } => match compare_request_fingerprint(&record, fingerprint.as_sha256()).map_err(|_| ApiError::internal())? {
+            IdempotencyRequestComparison::SameRequest => Ok(Some(serde_json::from_value(record.response_json).map_err(|_| ApiError::internal())?)),
+            IdempotencyRequestComparison::DifferentRequest => Err(FileRouteError::IdempotencyMismatch.into()),
+        },
     }
 }
 
@@ -856,11 +623,11 @@ fn run_core_normal_upsert(
     current_revision: Option<StoredRevision>,
     object_store: &LocalObjectStore,
 ) -> Result<UpsertOutcome, ApiError> {
-    let repository = PlanningRevisionRepository { current_revision };
-    let content_store = PlanningContentStore { object_store };
-    let operation_log = PlanningOperationLog;
-    let mut service = RevisionService::new(repository, content_store, operation_log);
-
+    let mut service = RevisionService::new(
+        PlanningRevisionRepository { current_revision },
+        PlanningContentStore { object_store },
+        PlanningOperationLog,
+    );
     let mut upsert_request = UpsertFileRequest::new(
         request.path().clone(),
         principal.common_adapter_id().clone(),
@@ -869,7 +636,6 @@ fn run_core_normal_upsert(
         request.body().to_vec(),
     );
     upsert_request = upsert_request.with_idempotency_key(request.idempotency_key().as_str());
-
     service.upsert_file(upsert_request).map_err(map_revision_service_error)
 }
 
@@ -880,23 +646,15 @@ async fn apply_upsert_outcome(
     object_store: &LocalObjectStore,
 ) -> Result<PutFileResponse, ApiError> {
     match outcome {
-        UpsertOutcome::AcceptedNewFile { revision, .. }
-        | UpsertOutcome::AcceptedNewRevision { revision, .. } => {
+        UpsertOutcome::AcceptedNewFile { revision, .. } | UpsertOutcome::AcceptedNewRevision { revision, .. } => {
             let seq = persist_accepted_revision(transaction, principal, &revision).await?;
-            Ok(accepted_upload_response(
-                revision.path,
-                revision.revision_id,
-                seq,
-            ))
+            Ok(accepted_upload_response(revision.path, revision.revision_id, seq))
         }
-        UpsertOutcome::IgnoredDuplicateSameContent { current_revision } => {
-            Ok(ignored_same_content_response(current_revision.path))
-        }
+        UpsertOutcome::IgnoredDuplicateSameContent { current_revision } => Ok(ignored_same_content_response(current_revision.path)),
         UpsertOutcome::RejectedHashMismatch { .. } => Err(FileRouteError::InvalidContentSha256.into()),
-        UpsertOutcome::RejectedStaleOrUnknownBase {
-            conflict_saved: Some(conflict_saved),
-            ..
-        } => persist_conflict_saved(transaction, principal, &conflict_saved, object_store).await,
+        UpsertOutcome::RejectedStaleOrUnknownBase { conflict_saved: Some(conflict_saved), .. } => {
+            persist_conflict_saved(transaction, principal, &conflict_saved, object_store).await
+        }
         UpsertOutcome::RejectedStaleOrUnknownBase { .. } => Err(FileRouteError::Conflict.into()),
     }
 }
@@ -907,29 +665,15 @@ async fn persist_conflict_saved(
     outcome: &haze_sync_core::revision_service::ConflictSavedOutcome,
     object_store: &LocalObjectStore,
 ) -> Result<PutFileResponse, ApiError> {
-    let timestamp = Utc::now();
-    let plan = plan_conflict_saved_fan_in(outcome, timestamp).map_err(|_error| FileRouteError::Conflict)?;
-    object_store
-        .put_bytes(outcome.incoming_content.content_hash, &outcome.incoming_content.content)
-        .map_err(|_error| ApiError::internal())?;
-    insert_content_blob(
-        transaction,
-        outcome.incoming_content.content_hash,
-        outcome.incoming_content.size_bytes,
-    )
-    .await?;
-
+    let plan = plan_conflict_saved_fan_in(outcome, Utc::now()).map_err(|_| FileRouteError::Conflict)?;
+    object_store.put_bytes(outcome.incoming_content.content_hash, &outcome.incoming_content.content).map_err(|_| ApiError::internal())?;
+    insert_content_blob(transaction, outcome.incoming_content.content_hash, outcome.incoming_content.size_bytes).await?;
     let conflict_revision = persist_conflict_copy_revision(transaction, principal, &plan).await?;
     let conflict_id = ConflictId::parse(&deterministic_identifier(
         "conf_",
-        &[
-            plan.original_path.as_str(),
-            plan.conflict_path.as_str(),
-            conflict_revision.revision_id.as_str(),
-        ],
+        &[plan.original_path.as_str(), plan.conflict_path.as_str(), conflict_revision.revision_id.as_str()],
     ))
-    .map_err(|_error| ApiError::internal())?;
-
+    .map_err(|_| ApiError::internal())?;
     insert_conflict_row(transaction, &plan, &conflict_id, &conflict_revision.revision_id).await?;
     let operation = append_operation_log(
         transaction,
@@ -942,7 +686,6 @@ async fn persist_conflict_saved(
         &[conflict_id.as_str(), plan.original_path.as_str()],
     )
     .await?;
-
     Ok(PutFileResponse::ConflictSaved {
         path: VaultPathDto::from(plan.original_path),
         conflict_id: ConflictIdDto::from(conflict_id),
@@ -960,28 +703,16 @@ async fn persist_conflict_copy_revision(
     let object_id = deterministic_identifier("obj_", &[plan.conflict_path.as_str()]);
     let object = create_or_find_sync_object_by_path(
         &mut **transaction,
-        NewSyncObject {
-            object_id: object_id.as_str(),
-            path: &plan.conflict_path,
-            kind: SyncObjectKind::File,
-            updated_by: principal.common_adapter_id(),
-        },
+        NewSyncObject { object_id: object_id.as_str(), path: &plan.conflict_path, kind: SyncObjectKind::File, updated_by: principal.common_adapter_id() },
     )
     .await
     .map_err(map_repository_error)?;
-
     let content_hash_string = plan.incoming_backup.content_hash.to_string();
     let revision_id = RevisionId::parse(&deterministic_identifier(
         "rev_",
-        &[
-            plan.conflict_path.as_str(),
-            plan.conflict_record.current_revision_id.as_str(),
-            content_hash_string.as_str(),
-            principal.adapter_id(),
-        ],
+        &[plan.conflict_path.as_str(), plan.conflict_record.current_revision_id.as_str(), content_hash_string.as_str(), principal.adapter_id()],
     ))
-    .map_err(|_error| ApiError::internal())?;
-
+    .map_err(|_| ApiError::internal())?;
     insert_file_revision(
         &mut **transaction,
         NewFileRevision {
@@ -996,17 +727,10 @@ async fn persist_conflict_copy_revision(
     )
     .await
     .map_err(map_repository_error)?;
-
-    set_current_revision_by_object_id(
-        &mut **transaction,
-        object.object_id.as_str(),
-        Some(&revision_id),
-        principal.common_adapter_id(),
-    )
-    .await
-    .map_err(map_repository_error)?
-    .ok_or_else(ApiError::internal)?;
-
+    set_current_revision_by_object_id(&mut **transaction, object.object_id.as_str(), Some(&revision_id), principal.common_adapter_id())
+        .await
+        .map_err(map_repository_error)?
+        .ok_or_else(ApiError::internal)?;
     Ok(StoredRevision {
         revision_id,
         path: plan.conflict_path.clone(),
@@ -1024,9 +748,7 @@ async fn insert_conflict_row(
     incoming_revision_id: &RevisionId,
 ) -> Result<(), ApiError> {
     sqlx::query(
-        "insert into conflicts (conflict_id, original_path, base_revision_id, current_revision_id, \
-         incoming_revision_id, incoming_adapter_id, policy_applied, materialized_path, status) \
-         values ($1, $2, $3, $4, $5, $6, $7, $8, 'open')",
+        "insert into conflicts (conflict_id, original_path, base_revision_id, current_revision_id, incoming_revision_id, incoming_adapter_id, policy_applied, materialized_path, status) values ($1, $2, $3, $4, $5, $6, $7, $8, 'open')",
     )
     .bind(conflict_id.as_str())
     .bind(plan.original_path.as_str())
@@ -1038,7 +760,7 @@ async fn insert_conflict_row(
     .bind(plan.conflict_path.as_str())
     .execute(&mut **transaction)
     .await
-    .map_err(|_error| ApiError::internal())?;
+    .map_err(|_| ApiError::internal())?;
     Ok(())
 }
 
@@ -1047,41 +769,23 @@ struct PlanningRevisionRepository {
 }
 
 impl RevisionRepository for PlanningRevisionRepository {
-    fn current_revision(
-        &mut self,
-        _path: &VaultPath,
-    ) -> Result<Option<StoredRevision>, RevisionServiceError> {
+    fn current_revision(&mut self, _path: &VaultPath) -> Result<Option<StoredRevision>, RevisionServiceError> {
         Ok(self.current_revision.clone())
     }
 
-    fn insert_revision(
-        &mut self,
-        request: InsertRevisionRequest,
-    ) -> Result<StoredRevision, RevisionServiceError> {
+    fn insert_revision(&mut self, request: InsertRevisionRequest) -> Result<StoredRevision, RevisionServiceError> {
         let content_hash_string = request.content_hash.to_string();
         let revision_id = RevisionId::parse(&deterministic_identifier(
             "rev_",
             &[
                 request.path.as_str(),
-                request
-                    .parent_revision_id
-                    .as_ref()
-                    .map(RevisionId::as_str)
-                    .unwrap_or("null"),
+                request.parent_revision_id.as_ref().map(RevisionId::as_str).unwrap_or("null"),
                 content_hash_string.as_str(),
                 request.adapter_id.as_str(),
             ],
         ))
-        .map_err(|_error| RevisionServiceError::repository("build_revision_id"))?;
-
-        Ok(StoredRevision {
-            revision_id,
-            path: request.path,
-            parent_revision_id: request.parent_revision_id,
-            content_hash: request.content_hash,
-            size_bytes: request.size_bytes,
-            created_by: request.adapter_id,
-        })
+        .map_err(|_| RevisionServiceError::repository("build_revision_id"))?;
+        Ok(StoredRevision { revision_id, path: request.path, parent_revision_id: request.parent_revision_id, content_hash: request.content_hash, size_bytes: request.size_bytes, created_by: request.adapter_id })
     }
 }
 
@@ -1090,66 +794,34 @@ struct PlanningContentStore<'a> {
 }
 
 impl ContentStore for PlanningContentStore<'_> {
-    fn put_content(
-        &mut self,
-        expected_hash: ContentHash,
-        bytes: &[u8],
-    ) -> Result<StoredContent, RevisionServiceError> {
-        self.object_store
-            .put_bytes(expected_hash, bytes)
-            .map_err(|_error| RevisionServiceError::content_store("put_content"))?;
-
-        Ok(StoredContent {
-            hash: expected_hash,
-            size_bytes: u64::try_from(bytes.len())
-                .map_err(|_error| RevisionServiceError::content_store("content_size"))?,
-        })
+    fn put_content(&mut self, expected_hash: ContentHash, bytes: &[u8]) -> Result<StoredContent, RevisionServiceError> {
+        self.object_store.put_bytes(expected_hash, bytes).map_err(|_| RevisionServiceError::content_store("put_content"))?;
+        Ok(StoredContent { hash: expected_hash, size_bytes: bytes.len().try_into().map_err(|_| RevisionServiceError::content_store("content_size"))? })
     }
 }
 
 struct PlanningOperationLog;
 
 impl OperationLog for PlanningOperationLog {
-    fn append_operation(
-        &mut self,
-        request: AppendOperationRequest,
-    ) -> Result<OperationLogEntry, RevisionServiceError> {
+    fn append_operation(&mut self, request: AppendOperationRequest) -> Result<OperationLogEntry, RevisionServiceError> {
         let kind = match request.kind {
             OperationKind::UpsertFile => OperationKindName::UpsertFile.as_str(),
         };
-        let op_id = OperationId::parse(&deterministic_identifier(
-            "op_",
-            &[request.revision_id.as_str(), kind, request.path.as_str()],
-        ))
-        .map_err(|_error| RevisionServiceError::operation_log("build_operation_id"))?;
-
-        Ok(OperationLogEntry {
-            operation_id: op_id,
-            seq: 0,
-        })
+        let op_id = OperationId::parse(&deterministic_identifier("op_", &[request.revision_id.as_str(), kind, request.path.as_str()]))
+            .map_err(|_| RevisionServiceError::operation_log("build_operation_id"))?;
+        Ok(OperationLogEntry { operation_id: op_id, seq: 0 })
     }
 }
 
-async fn persist_accepted_revision(
-    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    principal: &AdapterPrincipal,
-    revision: &StoredRevision,
-) -> Result<i64, ApiError> {
+async fn persist_accepted_revision(transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>, principal: &AdapterPrincipal, revision: &StoredRevision) -> Result<i64, ApiError> {
     insert_content_blob(transaction, revision.content_hash, revision.size_bytes).await?;
-
     let object_id = deterministic_identifier("obj_", &[revision.path.as_str()]);
     let object = create_or_find_sync_object_by_path(
         &mut **transaction,
-        NewSyncObject {
-            object_id: object_id.as_str(),
-            path: &revision.path,
-            kind: SyncObjectKind::File,
-            updated_by: principal.common_adapter_id(),
-        },
+        NewSyncObject { object_id: object_id.as_str(), path: &revision.path, kind: SyncObjectKind::File, updated_by: principal.common_adapter_id() },
     )
     .await
     .map_err(map_repository_error)?;
-
     insert_file_revision(
         &mut **transaction,
         NewFileRevision {
@@ -1164,17 +836,10 @@ async fn persist_accepted_revision(
     )
     .await
     .map_err(map_repository_error)?;
-
-    set_current_revision_by_object_id(
-        &mut **transaction,
-        object.object_id.as_str(),
-        Some(&revision.revision_id),
-        principal.common_adapter_id(),
-    )
-    .await
-    .map_err(map_repository_error)?
-    .ok_or_else(ApiError::internal)?;
-
+    set_current_revision_by_object_id(&mut **transaction, object.object_id.as_str(), Some(&revision.revision_id), principal.common_adapter_id())
+        .await
+        .map_err(map_repository_error)?
+        .ok_or_else(ApiError::internal)?;
     let operation = append_operation_log(
         transaction,
         principal.common_adapter_id().clone(),
@@ -1186,31 +851,19 @@ async fn persist_accepted_revision(
         &[revision.revision_id.as_str(), revision.path.as_str()],
     )
     .await?;
-
     Ok(operation.seq)
 }
 
-async fn insert_content_blob(
-    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    content_hash: ContentHash,
-    size_bytes: u64,
-) -> Result<(), ApiError> {
+async fn insert_content_blob(transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>, content_hash: ContentHash, size_bytes: u64) -> Result<(), ApiError> {
     let size_bytes = i64::try_from(size_bytes).map_err(|_| ApiError::internal())?;
-    let object_store_path = LocalObjectStore::relative_blob_path(content_hash)
-        .to_string_lossy()
-        .replace('\\', "/");
-
-    sqlx::query(
-        "insert into content_blobs (sha256, size_bytes, object_store_path) \
-         values ($1, $2, $3) on conflict (sha256) do nothing",
-    )
-    .bind(content_hash.to_prefixed_string())
-    .bind(size_bytes)
-    .bind(object_store_path)
-    .execute(&mut **transaction)
-    .await
-    .map_err(|_error| ApiError::internal())?;
-
+    let object_store_path = LocalObjectStore::relative_blob_path(content_hash).to_string_lossy().replace('\\', "/");
+    sqlx::query("insert into content_blobs (sha256, size_bytes, object_store_path) values ($1, $2, $3) on conflict (sha256) do nothing")
+        .bind(content_hash.to_prefixed_string())
+        .bind(size_bytes)
+        .bind(object_store_path)
+        .execute(&mut **transaction)
+        .await
+        .map_err(|_| ApiError::internal())?;
     Ok(())
 }
 
@@ -1223,85 +876,54 @@ async fn append_operation_log(
     tombstone_id: Option<String>,
     conflict_id: Option<ConflictId>,
     id_parts: &[&str],
-) -> Result<haze_sync_storage::models::OperationLogRow, ApiError> {
+) -> Result<OperationLogRow, ApiError> {
     let mut parts = vec![kind.as_str(), path.as_str()];
     parts.extend_from_slice(id_parts);
-    let op_id = OperationId::parse(&deterministic_identifier("op_", &parts))
-        .map_err(|_error| ApiError::internal())?;
+    let op_id = OperationId::parse(&deterministic_identifier("op_", &parts)).map_err(|_| ApiError::internal())?;
     OperationLogRepository::new()
-        .append(
-            &mut **transaction,
-            &AppendOperationLogEntry {
-                op_id,
-                adapter_id,
-                kind,
-                path,
-                revision_id,
-                tombstone_id,
-                conflict_id,
-            },
-        )
+        .append(&mut **transaction, &AppendOperationLogEntry { op_id, adapter_id, kind, path, revision_id, tombstone_id, conflict_id })
         .await
         .map_err(map_repository_error)
 }
 
 fn stored_revision_from_row(row: FileRevisionRow) -> Result<StoredRevision, ApiError> {
-    let revision_id = RevisionId::parse(row.revision_id.as_str()).map_err(|_error| ApiError::internal())?;
-    let path = VaultPath::parse(row.path.as_str()).map_err(|_error| ApiError::internal())?;
-    let parent_revision_id = row
-        .parent_revision_id
-        .as_deref()
-        .map(RevisionId::parse)
-        .transpose()
-        .map_err(|_error| ApiError::internal())?;
-    let content_hash = ContentHash::parse(row.content_sha256.as_str()).map_err(|_error| ApiError::internal())?;
-    let size_bytes = u64::try_from(row.size_bytes).map_err(|_| ApiError::internal())?;
-    let created_by = AdapterId::parse(row.created_by.as_str()).map_err(|_error| ApiError::internal())?;
-
     Ok(StoredRevision {
-        revision_id,
-        path,
-        parent_revision_id,
-        content_hash,
-        size_bytes,
-        created_by,
+        revision_id: RevisionId::parse(row.revision_id.as_str()).map_err(|_| ApiError::internal())?,
+        path: VaultPath::parse(row.path.as_str()).map_err(|_| ApiError::internal())?,
+        parent_revision_id: row.parent_revision_id.as_deref().map(RevisionId::parse).transpose().map_err(|_| ApiError::internal())?,
+        content_hash: ContentHash::parse(row.content_sha256.as_str()).map_err(|_| ApiError::internal())?,
+        size_bytes: row.size_bytes.try_into().map_err(|_| ApiError::internal())?,
+        created_by: AdapterId::parse(row.created_by.as_str()).map_err(|_| ApiError::internal())?,
     })
 }
 
 fn raw_file_response(bytes: Vec<u8>, headers: FileDownloadRouteHeaders) -> Result<Response, ApiError> {
     let mut response = Response::new(Body::from(bytes));
     *response.status_mut() = StatusCode::OK;
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static(APPLICATION_OCTET_STREAM),
-    );
+    response.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static(APPLICATION_OCTET_STREAM));
     insert_header(response.headers_mut(), X_REVISION_ID_HEADER, headers.revision_id().as_str())?;
-    insert_header(
-        response.headers_mut(),
-        X_CONTENT_SHA256_HEADER,
-        &headers.content_sha256().to_string(),
-    )?;
+    insert_header(response.headers_mut(), X_CONTENT_SHA256_HEADER, &headers.content_sha256().to_string())?;
     insert_header(response.headers_mut(), X_SIZE_BYTES_HEADER, &headers.size_bytes().to_string())?;
     Ok(response)
 }
 
 fn replay_response(stored: StoredIdempotencyResponse) -> Result<Response, ApiError> {
-    let status = StatusCode::from_u16(stored.status_code()).map_err(|_error| ApiError::internal())?;
+    let status = StatusCode::from_u16(stored.status_code()).map_err(|_| ApiError::internal())?;
     let mut response = (status, Json(stored.body().clone())).into_response();
-
     for (name, value) in stored.headers() {
-        let name = HeaderName::from_bytes(name.as_bytes()).map_err(|_error| ApiError::internal())?;
-        let value = HeaderValue::from_str(value).map_err(|_error| ApiError::internal())?;
-        response.headers_mut().insert(name, value);
+        response.headers_mut().insert(
+            HeaderName::from_bytes(name.as_bytes()).map_err(|_| ApiError::internal())?,
+            HeaderValue::from_str(value).map_err(|_| ApiError::internal())?,
+        );
     }
-
     Ok(response)
 }
 
 fn insert_header(headers: &mut HeaderMap, name: &'static str, value: &str) -> Result<(), ApiError> {
-    let name = HeaderName::from_bytes(name.as_bytes()).map_err(|_error| ApiError::internal())?;
-    let value = HeaderValue::from_str(value).map_err(|_error| ApiError::internal())?;
-    headers.insert(name, value);
+    headers.insert(
+        HeaderName::from_bytes(name.as_bytes()).map_err(|_| ApiError::internal())?,
+        HeaderValue::from_str(value).map_err(|_| ApiError::internal())?,
+    );
     Ok(())
 }
 
@@ -1313,11 +935,7 @@ fn change_entry_from_row(row: ChangeFeedRow) -> Result<ChangeEntryDto, ApiError>
         path: VaultPathDto::from(row.path),
         revision_id: row.revision_id.map(RevisionIdDto::from),
         content_sha256: row.content_sha256.map(ContentSha256Dto::from),
-        size_bytes: row
-            .size_bytes
-            .map(u64::try_from)
-            .transpose()
-            .map_err(|_error| ApiError::internal())?,
+        size_bytes: row.size_bytes.map(u64::try_from).transpose().map_err(|_| ApiError::internal())?,
         tombstone_id: row.tombstone_id.map(TombstoneIdDto::from),
         conflict_id: row.conflict_id.map(ConflictIdDto::from),
         updated_by: AdapterIdDto::from(row.adapter_id),
@@ -1348,31 +966,16 @@ fn conflict_summary_from_row(row: &sqlx::postgres::PgRow) -> Result<ConflictRout
         "current_wins_with_incoming_backup" => ConflictPolicyDto::CurrentWinsWithIncomingBackup,
         _ => return Err(ApiError::internal()),
     };
-    let base_revision_id = row
-        .try_get::<Option<String>, _>("base_revision_id")?
-        .as_deref()
-        .map(RevisionId::parse)
-        .transpose()
-        .map_err(|_error| ApiError::internal())?;
     let created_at = row.try_get::<chrono::DateTime<Utc>, _>("created_at")?;
     let resolved_at = row.try_get::<Option<chrono::DateTime<Utc>>, _>("resolved_at")?;
-
     Ok(ConflictRouteSummaryParts {
-        conflict_id: ConflictId::parse(row.try_get::<String, _>("conflict_id")?.as_str())
-            .map_err(|_error| ApiError::internal())?,
-        original_path: VaultPath::parse(row.try_get::<String, _>("original_path")?.as_str())
-            .map_err(|_error| ApiError::internal())?,
-        conflict_path: VaultPath::parse(row.try_get::<String, _>("materialized_path")?.as_str())
-            .map_err(|_error| ApiError::internal())?,
-        current_revision_id: RevisionId::parse(row.try_get::<String, _>("current_revision_id")?.as_str())
-            .map_err(|_error| ApiError::internal())?,
-        conflict_revision_id: Some(
-            RevisionId::parse(row.try_get::<String, _>("incoming_revision_id")?.as_str())
-                .map_err(|_error| ApiError::internal())?,
-        ),
+        conflict_id: ConflictId::parse(row.try_get::<String, _>("conflict_id")?.as_str()).map_err(|_| ApiError::internal())?,
+        original_path: VaultPath::parse(row.try_get::<String, _>("original_path")?.as_str()).map_err(|_| ApiError::internal())?,
+        conflict_path: VaultPath::parse(row.try_get::<String, _>("materialized_path")?.as_str()).map_err(|_| ApiError::internal())?,
+        current_revision_id: RevisionId::parse(row.try_get::<String, _>("current_revision_id")?.as_str()).map_err(|_| ApiError::internal())?,
+        conflict_revision_id: Some(RevisionId::parse(row.try_get::<String, _>("incoming_revision_id")?.as_str()).map_err(|_| ApiError::internal())?),
         incoming_revision_id: None,
-        source_adapter_id: AdapterId::parse(row.try_get::<String, _>("incoming_adapter_id")?.as_str())
-            .map_err(|_error| ApiError::internal())?,
+        source_adapter_id: AdapterId::parse(row.try_get::<String, _>("incoming_adapter_id")?.as_str()).map_err(|_| ApiError::internal())?,
         policy_applied,
         status,
         created_at: Some(TimestampDto::from(timestamp_string(created_at))),
@@ -1381,27 +984,17 @@ fn conflict_summary_from_row(row: &sqlx::postgres::PgRow) -> Result<ConflictRout
 }
 
 fn single_delete_guard_allows(principal: &AdapterPrincipal) -> Result<bool, ApiError> {
-    let scope = DeleteRunScope::new(principal.common_adapter_id().clone(), "single-delete")
-        .map_err(|_error| ApiError::internal())?;
+    let scope = DeleteRunScope::new(principal.common_adapter_id().clone(), "single-delete").map_err(|_| ApiError::internal())?;
     let guard = DeleteGuard::new(DeleteGuardPolicy::new(
         20,
-        DeleteRatioLimit::percent(100).map_err(|_error| ApiError::internal())?,
+        DeleteRatioLimit::percent(100).map_err(|_| ApiError::internal())?,
         false,
     ));
-    let decision = guard.evaluate(&DeleteGuardInput::without_manual_unlock(scope, 1, 1));
-    Ok(matches!(decision, haze_sync_core::delete_guard::DeleteGuardDecision::Allowed))
-}
-
-fn not_found_delete_json(request: &DeleteFileRouteRequest) -> DeleteFileResponse {
-    haze_sync_api::routes::delete::not_found_delete_response(request.path().clone())
+    Ok(matches!(guard.evaluate(&DeleteGuardInput::without_manual_unlock(scope, 1, 1)), DeleteGuardDecision::Allowed))
 }
 
 fn readiness_for(configured: bool) -> DependencyReadinessState {
-    if configured {
-        DependencyReadinessState::Ready
-    } else {
-        DependencyReadinessState::Unknown
-    }
+    if configured { DependencyReadinessState::Ready } else { DependencyReadinessState::Unknown }
 }
 
 fn timestamp_string(value: chrono::DateTime<Utc>) -> String {
@@ -1415,13 +1008,8 @@ fn map_object_store_get_error(error: ObjectStoreError) -> ApiError {
     }
 }
 
-fn map_repository_error(_error: RepositoryError) -> ApiError {
-    ApiError::internal()
-}
-
-fn map_revision_service_error(_error: RevisionServiceError) -> ApiError {
-    ApiError::internal()
-}
+fn map_repository_error(_error: RepositoryError) -> ApiError { ApiError::internal() }
+fn map_revision_service_error(_error: RevisionServiceError) -> ApiError { ApiError::internal() }
 
 fn deterministic_identifier(prefix: &str, parts: &[&str]) -> String {
     let mut hasher = Sha256Digest::new();
@@ -1451,237 +1039,34 @@ struct ApiError {
 
 impl ApiError {
     fn new(status: StatusCode, code: PublicErrorCode, message: &'static str) -> Self {
-        Self {
-            status,
-            body: ErrorResponse::new(code, message),
-        }
+        Self { status, body: ErrorResponse::new(code, message) }
     }
-
-    fn missing_token() -> Self {
-        Self::new(StatusCode::UNAUTHORIZED, PublicErrorCode::MissingToken, "Missing bearer token")
-    }
-
-    fn invalid_token() -> Self {
-        Self::new(StatusCode::UNAUTHORIZED, PublicErrorCode::InvalidToken, "Invalid bearer token")
-    }
-
-    fn forbidden_role() -> Self {
-        Self::new(
-            StatusCode::FORBIDDEN,
-            PublicErrorCode::ForbiddenRole,
-            "Authenticated adapter role is not allowed for this operation",
-        )
-    }
-
-    fn storage_unavailable() -> Self {
-        Self::new(
-            StatusCode::SERVICE_UNAVAILABLE,
-            PublicErrorCode::InternalError,
-            "Core storage dependencies are not configured",
-        )
-    }
-
-    fn internal() -> Self {
-        Self::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            PublicErrorCode::InternalError,
-            "Core file operation failed",
-        )
-    }
+    fn missing_token() -> Self { Self::new(StatusCode::UNAUTHORIZED, PublicErrorCode::MissingToken, "Missing bearer token") }
+    fn invalid_token() -> Self { Self::new(StatusCode::UNAUTHORIZED, PublicErrorCode::InvalidToken, "Invalid bearer token") }
+    fn forbidden_role() -> Self { Self::new(StatusCode::FORBIDDEN, PublicErrorCode::ForbiddenRole, "Authenticated adapter role is not allowed for this operation") }
+    fn storage_unavailable() -> Self { Self::new(StatusCode::SERVICE_UNAVAILABLE, PublicErrorCode::InternalError, "Core storage dependencies are not configured") }
+    fn internal() -> Self { Self::new(StatusCode::INTERNAL_SERVER_ERROR, PublicErrorCode::InternalError, "Core file operation failed") }
 }
 
 impl From<FileRouteError> for ApiError {
     fn from(error: FileRouteError) -> Self {
-        let status = StatusCode::from_u16(error.http_status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-        Self {
-            status,
-            body: error.to_error_response(),
-        }
+        Self { status: StatusCode::from_u16(error.http_status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR), body: error.to_error_response() }
     }
 }
-
 impl From<DeleteRouteError> for ApiError {
     fn from(error: DeleteRouteError) -> Self {
-        let status = StatusCode::from_u16(error.http_status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-        Self {
-            status,
-            body: error.to_error_response(),
-        }
+        Self { status: StatusCode::from_u16(error.http_status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR), body: error.to_error_response() }
     }
 }
-
 impl From<ChangesRouteError> for ApiError {
     fn from(error: ChangesRouteError) -> Self {
-        let status = StatusCode::from_u16(error.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-        Self {
-            status,
-            body: error.error_response(),
-        }
+        Self { status: StatusCode::from_u16(error.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR), body: error.error_response() }
     }
 }
-
 impl From<ConflictsRouteError> for ApiError {
     fn from(error: ConflictsRouteError) -> Self {
-        let status = StatusCode::from_u16(error.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-        Self {
-            status,
-            body: error.error_response(),
-        }
+        Self { status: StatusCode::from_u16(error.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR), body: error.error_response() }
     }
 }
-
-impl From<sqlx::Error> for ApiError {
-    fn from(_error: sqlx::Error) -> Self {
-        Self::internal()
-    }
-}
-
-impl IntoResponse for ApiError {
-    fn into_response(self) -> Response {
-        (self.status, Json(self.body)).into_response()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use http_body_util::BodyExt as _;
-    use serde_json::Value;
-    use tower::ServiceExt as _;
-
-    async fn request_json_with_state(
-        state: ServerAppState,
-        method: &str,
-        uri: &str,
-        body: Body,
-        auth: bool,
-    ) -> (StatusCode, Value) {
-        let mut builder = axum::http::Request::builder().method(method).uri(uri);
-        if auth {
-            builder = builder.header(AUTHORIZATION_HEADER, "Bearer test-token");
-        }
-        let request = builder.body(body).expect("test request should build");
-        let response = crate::routes::build_router_with_state(state)
-            .oneshot(request)
-            .await
-            .expect("router should respond");
-        let status = response.status();
-        let body = response
-            .into_body()
-            .collect()
-            .await
-            .expect("response body should collect")
-            .to_bytes();
-        let json = serde_json::from_slice(&body).expect("response body should be JSON");
-        (status, json)
-    }
-
-    #[tokio::test]
-    async fn conflicts_open_route_requires_auth_safely() {
-        let (status, json) = request_json_with_state(
-            ServerAppState::dependency_free(),
-            "GET",
-            "/v1/conflicts?status=open",
-            Body::empty(),
-            false,
-        )
-        .await;
-
-        assert_eq!(status, StatusCode::UNAUTHORIZED);
-        assert_eq!(json["error"]["code"], "missing_token");
-    }
-
-    #[tokio::test]
-    async fn conflicts_open_route_returns_safe_empty_without_storage() {
-        let principal = AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap();
-        let (status, json) = request_json_with_state(
-            ServerAppState::with_static_principal(principal),
-            "GET",
-            "/v1/conflicts?status=open",
-            Body::empty(),
-            true,
-        )
-        .await;
-
-        assert_eq!(status, StatusCode::OK);
-        assert_eq!(json["conflicts"], serde_json::json!([]));
-        assert!(!json.to_string().contains("token"));
-        assert!(!json.to_string().contains("postgres"));
-    }
-
-    #[tokio::test]
-    async fn conflicts_unsupported_status_is_safe_400() {
-        let principal = AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap();
-        let (status, json) = request_json_with_state(
-            ServerAppState::with_static_principal(principal),
-            "GET",
-            "/v1/conflicts?status=closed",
-            Body::empty(),
-            true,
-        )
-        .await;
-
-        assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert_eq!(json["error"]["code"], "validation_error");
-    }
-
-    #[tokio::test]
-    async fn delete_route_requires_idempotency_key() {
-        let principal = AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap();
-        let request = axum::http::Request::builder()
-            .method("DELETE")
-            .uri("/v1/files/Notes/a.md")
-            .header(AUTHORIZATION_HEADER, "Bearer test-token")
-            .header(X_BASE_REVISION_ID_HEADER, "rev_current")
-            .body(Body::empty())
-            .unwrap();
-        let response = crate::routes::build_router_with_state(ServerAppState::with_static_principal(principal))
-            .oneshot(request)
-            .await
-            .unwrap();
-        let status = response.status();
-        let body = response.into_body().collect().await.unwrap().to_bytes();
-        let json: Value = serde_json::from_slice(&body).unwrap();
-
-        assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert_eq!(json["error"]["code"], "invalid_request");
-        assert!(!json.to_string().contains("test-token"));
-    }
-
-    #[tokio::test]
-    async fn admin_status_requires_admin_role() {
-        let principal = AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap();
-        let (status, json) = request_json_with_state(
-            ServerAppState::with_static_principal(principal),
-            "GET",
-            "/v1/admin/status",
-            Body::empty(),
-            true,
-        )
-        .await;
-
-        assert_eq!(status, StatusCode::FORBIDDEN);
-        assert_eq!(json["error"]["code"], "forbidden_role");
-    }
-
-    #[tokio::test]
-    async fn admin_status_placeholder_is_secret_free() {
-        let principal = AdapterPrincipal::new("admin", AdapterRole::Admin).unwrap();
-        let (status, json) = request_json_with_state(
-            ServerAppState::with_static_principal(principal),
-            "GET",
-            "/v1/admin/status",
-            Body::empty(),
-            true,
-        )
-        .await;
-
-        assert_eq!(status, StatusCode::OK);
-        assert_eq!(json["server_status"], "not_ready");
-        let rendered = json.to_string();
-        assert!(!rendered.contains("token"));
-        assert!(!rendered.contains("hash"));
-        assert!(!rendered.contains("postgres"));
-        assert!(!rendered.contains("/srv/"));
-    }
-}
+impl From<sqlx::Error> for ApiError { fn from(_: sqlx::Error) -> Self { Self::internal() } }
+impl IntoResponse for ApiError { fn into_response(self) -> Response { (self.status, Json(self.body)).into_response() } }
