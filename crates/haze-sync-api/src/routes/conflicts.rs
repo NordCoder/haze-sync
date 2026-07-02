@@ -14,10 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     contracts::errors::{ErrorResponse, PublicError, PublicErrorCode, SafeErrorDetails},
     dto::{
-        common::{
-            ConflictPolicyDto, ConflictResolutionDto, ConflictResolveStatusDto,
-            ConflictStatusDto,
-        },
+        common::{ConflictPolicyDto, ConflictResolutionDto, ConflictResolveStatusDto, ConflictStatusDto},
         conflicts::{ConflictListQuery, ResolveConflictRequest, ResolveConflictResponse},
         primitives::{AdapterIdDto, ConflictIdDto, RevisionIdDto, TimestampDto, VaultPathDto},
     },
@@ -166,7 +163,10 @@ pub fn conflict_list_response_from_parts(
     conflicts: Vec<ConflictRouteSummaryParts>,
 ) -> ConflictListRouteResponse {
     ConflictListRouteResponse {
-        conflicts: conflicts.into_iter().map(ConflictRouteSummaryDto::from).collect(),
+        conflicts: conflicts
+            .into_iter()
+            .map(ConflictRouteSummaryDto::from)
+            .collect(),
     }
 }
 
