@@ -257,16 +257,19 @@ fn idempotent_delete_same_key_different_request_is_rejected() {
 fn stored_delete_idempotency_response_is_public_json_only() {
     let response = delete_response();
     let serialized = serde_json::to_string(&response).expect("response should serialize");
+    let empty_headers: BTreeMap<String, String> = BTreeMap::new();
 
     assert!(serialized.contains("tombstoned"));
     assert!(!serialized.contains("Authorization"));
     assert!(!serialized.contains("DATABASE_URL"));
     assert!(!serialized.contains("/srv/"));
-    assert_eq!(response.headers(), &BTreeMap::new());
+    assert_eq!(response.headers(), &empty_headers);
 }
 
 fn pending_sibling_behavior(phase: &str, behavior: &str) -> ! {
-    panic!("{phase} must replace this ignored W3-P8 spec placeholder with executable coverage for {behavior}");
+    panic!(
+        "{phase} must replace this ignored W3-P8 spec placeholder with executable coverage for {behavior}"
+    );
 }
 
 #[test]
