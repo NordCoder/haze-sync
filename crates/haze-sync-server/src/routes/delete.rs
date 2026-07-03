@@ -173,7 +173,8 @@ async fn apply_delete_request(
         .await
         .map_err(map_repository_error)?;
 
-    clear_current_revision_and_mark_deleted(transaction, principal, &object, &tombstone_row).await?;
+    clear_current_revision_and_mark_deleted(transaction, principal, &object, &tombstone_row)
+        .await?;
     let operation = append_delete_operation(
         transaction,
         principal,
@@ -204,7 +205,10 @@ fn active_current_revision_id(object: &SyncObjectRow) -> Result<Option<RevisionI
         .map_err(|_error| ApiError::internal())
 }
 
-fn delete_base_is_current(request: &DeleteFileRouteRequest, current_revision_id: &RevisionId) -> bool {
+fn delete_base_is_current(
+    request: &DeleteFileRouteRequest,
+    current_revision_id: &RevisionId,
+) -> bool {
     request.base_revision_id() == Some(current_revision_id)
 }
 
@@ -457,7 +461,8 @@ fn replay_response(stored: StoredIdempotencyResponse) -> Result<Response, ApiErr
     let mut response = (status, Json(stored.body().clone())).into_response();
 
     for (name, value) in stored.headers() {
-        let name = HeaderName::from_bytes(name.as_bytes()).map_err(|_error| ApiError::internal())?;
+        let name =
+            HeaderName::from_bytes(name.as_bytes()).map_err(|_error| ApiError::internal())?;
         let value = HeaderValue::from_str(value).map_err(|_error| ApiError::internal())?;
         response.headers_mut().insert(name, value);
     }
@@ -617,8 +622,8 @@ impl ApiError {
 
 impl From<DeleteRouteError> for ApiError {
     fn from(error: DeleteRouteError) -> Self {
-        let status =
-            StatusCode::from_u16(error.http_status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        let status = StatusCode::from_u16(error.http_status_code())
+            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
         Self {
             status,
             body: error.to_error_response(),
@@ -637,7 +642,7 @@ mod tests {
     use super::*;
     use haze_sync_api::{
         dto::{
-            files::{DeleteRejectedReasonDto, DeleteFileResponse},
+            files::{DeleteFileResponse, DeleteRejectedReasonDto},
             primitives::{RevisionIdDto, TombstoneIdDto, VaultPathDto},
         },
         routes::delete::{rejected_delete_response, tombstoned_delete_response},
@@ -694,8 +699,8 @@ mod tests {
 
     #[test]
     fn delete_guard_blocks_unsafe_count_or_ratio() {
-        let scope = DeleteRunScope::new(AdapterId::parse("gdrive-adapter").unwrap(), "scan-1")
-            .unwrap();
+        let scope =
+            DeleteRunScope::new(AdapterId::parse("gdrive-adapter").unwrap(), "scan-1").unwrap();
         let count_guard = DeleteGuard::new(DeleteGuardPolicy::new(
             2,
             DeleteRatioLimit::percent(100).unwrap(),
@@ -776,7 +781,11 @@ mod tests {
         assert_eq!(OperationKindName::DeleteFile.as_str(), "delete_file");
         let op_id = OperationId::parse(&deterministic_identifier(
             "op_",
-            &["rev_current", OperationKindName::DeleteFile.as_str(), "Notes/a.md"],
+            &[
+                "rev_current",
+                OperationKindName::DeleteFile.as_str(),
+                "Notes/a.md",
+            ],
         ));
         assert!(op_id.is_ok());
     }
@@ -833,6 +842,9 @@ mod tests {
         assert_eq!(replayed["path"], "Notes/old.md");
         assert_eq!(replayed["tombstone_id"], "tmb_01JDELETE");
         assert_eq!(replayed["seq"], 8);
-        assert_eq!(RevisionIdDto::from("rev_current"), RevisionIdDto::from("rev_current"));
+        assert_eq!(
+            RevisionIdDto::from("rev_current"),
+            RevisionIdDto::from("rev_current")
+        );
     }
 }
