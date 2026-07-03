@@ -17,7 +17,10 @@ use haze_sync_api::{
         errors::{ErrorResponse, PublicErrorCode},
         headers::AUTHORIZATION_HEADER,
     },
-    dto::common::{ConflictPolicyDto, ConflictResolutionDto, ConflictStatusDto},
+    dto::{
+        common::{ConflictPolicyDto, ConflictResolutionDto, ConflictStatusDto},
+        primitives::TimestampDto,
+    },
     routes::conflicts::{
         conflict_list_response_from_parts, parse_conflicts_query, parse_resolve_conflict_request,
         resolved_conflict_response, ConflictListRequestParts, ConflictRouteSummaryParts,
@@ -50,7 +53,7 @@ pub fn router() -> Router {
         .route("/conflicts/{conflict_id}/resolve", post(resolve_conflict_route))
 }
 
-async fn list_conflicts_route(
+pub(super) async fn list_conflicts_route(
     Extension(state): Extension<ServerAppState>,
     Query(query): Query<HashMap<String, String>>,
     headers: HeaderMap,
@@ -83,7 +86,7 @@ async fn list_conflicts_route(
     Ok((StatusCode::OK, Json(response)).into_response())
 }
 
-async fn resolve_conflict_route(
+pub(super) async fn resolve_conflict_route(
     Extension(state): Extension<ServerAppState>,
     Path(conflict_id): Path<String>,
     headers: HeaderMap,
@@ -180,6 +183,11 @@ async fn mark_conflict_resolved_with_operation(
 }
 
 fn conflict_route_summary_from_row(row: ConflictRow) -> Result<ConflictRouteSummaryParts, ApiError> {
+    let created_at = TimestampDto::from(row.created_at.format("%Y-%m-%dT%H:%M:%SZ").to_string());
+    let updated_at = row
+        .resolved_at
+        .map(|value| TimestampDto::from(value.format("%Y-%m-%dT%H:%M:%SZ").to_string()));
+
     Ok(ConflictRouteSummaryParts {
         conflict_id: ConflictId::parse(row.conflict_id.as_str())
             .map_err(|_error| ApiError::internal())?,
@@ -201,8 +209,8 @@ fn conflict_route_summary_from_row(row: ConflictRow) -> Result<ConflictRouteSumm
             .map_err(|_error| ApiError::internal())?,
         policy_applied: conflict_policy_from_storage(row.policy_applied.as_str())?,
         status: conflict_status_from_storage(row.status.as_str())?,
-        created_at: Some(timestamp(row.created_at)),
-        updated_at: row.resolved_at.map(timestamp),
+        created_at: Some(created_at),
+        updated_at,
     })
 }
 
@@ -220,12 +228,6 @@ fn conflict_status_from_storage(value: &str) -> Result<ConflictStatusDto, ApiErr
         ConflictStatusName::Resolved => Ok(ConflictStatusDto::Resolved),
         ConflictStatusName::Ignored => Ok(ConflictStatusDto::Ignored),
     }
-}
-
-fn timestamp(value: chrono::DateTime<chrono::Utc>) -> haze_sync_api::dto::primitives::TimestampDto {
-    haze_sync_api::dto::primitives::TimestampDto::from(
-        value.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
-    )
 }
 
 fn resolution_is_metadata_only(resolution: &ConflictResolutionDto) -> bool {
@@ -345,7 +347,7 @@ fn map_repository_error(_error: RepositoryError) -> ApiError {
 }
 
 #[derive(Debug)]
-struct ApiError {
+pub(super) struct ApiError {
     status: StatusCode,
     body: ErrorResponse,
 }
@@ -468,18 +470,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn resolve_accept_current_without_storage_safely_defers() {
-        let (status, json) = request_json(
-            "POST",
-            "/conflicts/conf_test/resolve",
-            Body::from(r#"{"resolution":"accept_current"}"#),
-        )
-        .await;
+    async fn resolve_actions_without_storage_are_safe_and_deterministic() {
+        for action in ["accept_current", "accept_conflict", "keep_both", "mark_resolved"] {
+            let body = Body::from(format!(r#"{{"resolution":"{action}"}}"#));
+            let (status, json) = request_json("POST", "/conflicts/conf_01J/resolve", body).await;
 
-        assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
-        assert_eq!(json["error"]["code"], "not_implemented");
-        assert!(!json.to_string().contains("stack"));
-        assert!(!json.to_string().contains("postgres"));
+            assert_eq!(status, StatusCode::NOT_IMPLEMENTED, "action {action}");
+            assert_eq!(json["error"]["code"], "not_implemented");
+            assert!(!json.to_string().contains("stack"));
+            assert!(!json.to_string().contains("postgres"));
+            assert!(!json.to_string().contains("secret"));
+        }
     }
 
     #[test]
@@ -492,7 +493,7 @@ mod tests {
 
     #[test]
     fn deterministic_conflict_resolved_operation_id_is_safe() {
-        let conflict_id = ConflictId::parse("conf_test").unwrap();
+        let conflict_id = ConflictId::parse("conf_01J").unwrap();
         let adapter_id = AdapterId::parse("obsidian-plugin").unwrap();
         let op_id = conflict_resolved_operation_id(&conflict_id, &adapter_id).unwrap();
 
