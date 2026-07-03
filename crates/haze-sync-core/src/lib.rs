@@ -6,11 +6,13 @@
 
 pub mod conflict_saved_planner;
 pub mod conflict_service;
+pub mod delete_guard;
 pub mod doctor;
 pub mod idempotency;
 pub mod operation_log;
 pub mod policy_engine;
 pub mod revision_service;
+pub mod tombstone_service;
 
 /// Human-readable crate role used by skeleton smoke checks and documentation.
 pub const CRATE_ROLE: &str = "Core service-layer primitives for Haze Sync.";
