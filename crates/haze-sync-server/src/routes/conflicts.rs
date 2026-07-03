@@ -45,7 +45,10 @@ use crate::{
 pub fn router() -> Router {
     Router::new()
         .route("/conflicts", get(list_conflicts_route))
-        .route("/conflicts/:conflict_id/resolve", post(resolve_conflict_route))
+        .route(
+            "/conflicts/:conflict_id/resolve",
+            post(resolve_conflict_route),
+        )
 }
 
 pub(super) async fn list_conflicts_route(
@@ -59,7 +62,10 @@ pub(super) async fn list_conflicts_route(
     })?;
 
     let Some(pool) = state.db_pool() else {
-        return Ok((StatusCode::OK, Json(conflict_list_response_from_parts(Vec::new())))
+        return Ok((
+            StatusCode::OK,
+            Json(conflict_list_response_from_parts(Vec::new())),
+        )
             .into_response());
     };
 
@@ -108,10 +114,7 @@ pub(super) async fn resolve_conflict_route(
 fn parse_resolve_body(
     conflict_id: &str,
     body: &Value,
-) -> Result<
-    haze_sync_api::routes::conflicts::ResolveConflictRouteRequest,
-    ConflictsRouteError,
-> {
+) -> Result<haze_sync_api::routes::conflicts::ResolveConflictRouteRequest, ConflictsRouteError> {
     let Some(object) = body.as_object() else {
         return Err(ConflictsRouteError::invalid_resolve_payload());
     };
