@@ -110,7 +110,9 @@ impl ConflictSavedPlanningError {
     #[must_use]
     pub const fn message(&self) -> &'static str {
         match self {
-            Self::MissingConflictSavedOutcome => "upsert outcome did not contain conflict_saved data",
+            Self::MissingConflictSavedOutcome => {
+                "upsert outcome did not contain conflict_saved data"
+            }
             Self::ConflictPolicy { reason } => reason.message(),
         }
     }
