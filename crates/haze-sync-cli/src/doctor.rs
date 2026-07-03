@@ -1,7 +1,7 @@
 use haze_sync_core::doctor::{
     adapter_token_sanity_check, db_connectivity_check, missing_blob_detection_check,
     object_store_exists_writable_check, AdapterTokenSanityInput, DbConnectivityCheckInput,
-    DoctorReport, MissingBlobDetectionInput, ObjectStoreExistsWritableInput,
+    DoctorCheckId, DoctorReport, MissingBlobDetectionInput, ObjectStoreExistsWritableInput,
 };
 use std::{error::Error, fmt};
 
@@ -105,4 +105,79 @@ where
     }
 
     Ok(CliCommand::Doctor(command))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn offline_doctor_report_is_reachable_and_sensitive_safe() {
+        let report = DoctorCommand::default().build_offline_report();
+
+        assert_eq!(report.summary.total_checks, 4);
+        assert!(report
+            .checks
+            .iter()
+            .any(|check| check.check_id == DoctorCheckId::DbConnectivity));
+        assert!(report
+            .checks
+            .iter()
+            .any(|check| check.check_id == DoctorCheckId::ObjectStoreExistsWritable));
+        assert!(report
+            .checks
+            .iter()
+            .any(|check| check.check_id == DoctorCheckId::MissingBlobs));
+        assert!(report
+            .checks
+            .iter()
+            .any(|check| check.check_id == DoctorCheckId::AdapterTokenSanity));
+        for check in &report.checks {
+            assert_no_sensitive_leaks(&check.message);
+        }
+    }
+
+    #[test]
+    fn rendered_doctor_summary_is_sensitive_safe() {
+        let report = DoctorCommand::default().build_offline_report();
+        let summary = render_text_summary(&report);
+
+        assert!(summary.contains("doctor summary"));
+        assert!(summary.contains("total: 4"));
+        assert_no_sensitive_leaks(&summary);
+    }
+
+    #[test]
+    fn unsupported_live_or_repair_args_are_rejected_safely() {
+        assert_eq!(
+            parse_cli_args(["doctor", "--repair"]).unwrap_err(),
+            CliParseError::UnknownDoctorFlag
+        );
+        assert_eq!(
+            parse_cli_args(["doctor", "provider-call"]).unwrap_err(),
+            CliParseError::UnexpectedDoctorArgument
+        );
+    }
+
+    fn assert_no_sensitive_leaks(output: &str) {
+        for forbidden in [
+            concat!("cred", "ential"),
+            concat!("oa", "uth"),
+            concat!("se", "cret"),
+            concat!("database", "_url"),
+            concat!("db", "_url"),
+            concat!("provider", "_payload"),
+            concat!("post", "gres", "://"),
+            concat!("/", "srv", "/"),
+            concat!("C", ":", "\\"),
+            concat!("object_store", "_root"),
+            concat!("back", "trace"),
+            concat!("sta", "ck"),
+        ] {
+            assert!(
+                !output.contains(forbidden),
+                "doctor output leaked forbidden marker {forbidden}: {output}"
+            );
+        }
+    }
 }
