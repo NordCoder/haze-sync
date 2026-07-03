@@ -20,6 +20,7 @@ use std::collections::HashMap;
 use crate::{readiness::ReadinessState, state::ServerAppState};
 
 pub mod conflicts;
+pub mod delete;
 pub mod health;
 #[cfg_attr(not(test), allow(unused_imports))]
 pub mod v1;
@@ -62,6 +63,15 @@ async fn conflict_route_intercept(request: Request<Body>, next: Next) -> Respons
     let Some(state) = request.extensions().get::<ServerAppState>().cloned() else {
         return next.run(request).await;
     };
+
+    if request.method() == Method::DELETE {
+        if let Some(route_path) = delete_file_path(request.uri().path()) {
+            let headers = request.headers().clone();
+            return delete_response(
+                delete::delete_file_route(Extension(state), Path(route_path), headers).await,
+            );
+        }
+    }
 
     if request.method() == Method::GET && request.uri().path() == "/v1/conflicts" {
         let headers = request.headers().clone();
@@ -116,6 +126,13 @@ fn conflict_response(result: Result<Response, conflicts::ApiError>) -> Response 
     }
 }
 
+fn delete_response(result: Result<Response, delete::ApiError>) -> Response {
+    match result {
+        Ok(response) => response,
+        Err(error) => error.into_response(),
+    }
+}
+
 fn invalid_conflict_json_response() -> Response {
     (
         StatusCode::BAD_REQUEST,
@@ -146,6 +163,15 @@ fn conflict_resolve_id(path: &str) -> Option<String> {
         .strip_prefix("/v1/conflicts/")?
         .strip_suffix("/resolve")?;
     if value.is_empty() || value.contains('/') {
+        return None;
+    }
+
+    Some(value.to_owned())
+}
+
+fn delete_file_path(path: &str) -> Option<String> {
+    let value = path.strip_prefix("/v1/files/")?;
+    if value.is_empty() {
         return None;
     }
 
@@ -285,6 +311,30 @@ mod tests {
 
         assert_eq!(status, StatusCode::UNAUTHORIZED);
         assert_eq!(json["error"]["code"], "missing_token");
+    }
+
+    #[tokio::test]
+    async fn delete_file_route_requires_auth_without_runtime_state() {
+        let (status, json) = request_json("DELETE", "/v1/files/Notes/a.md", Body::empty()).await;
+
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(json["error"]["code"], "missing_token");
+        assert!(!json.to_string().contains("Notes/a.md"));
+        assert!(!json.to_string().contains("Bearer"));
+    }
+
+    #[tokio::test]
+    async fn delete_file_route_requires_idempotency_key_before_storage_mutation() {
+        let state = static_principal_state();
+        let (status, json) =
+            request_json_with_state(state, "DELETE", "/v1/files/Notes/a.md", Body::empty()).await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(json["error"]["code"], "invalid_request");
+        assert!(json.to_string().contains("Idempotency-Key"));
+        assert!(!json.to_string().contains("route_test_token"));
+        assert!(!json.to_string().contains("postgres://"));
+        assert!(!json.to_string().contains("/srv/"));
     }
 
     #[tokio::test]
