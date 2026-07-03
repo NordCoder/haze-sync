@@ -22,9 +22,9 @@ use haze_sync_core::{
     },
     revision_service::{
         compute_content_hash, AppendOperationRequest, ConflictPolicyHint, ConflictSavedOutcome,
-        ContentStore, IncomingConflictContent, InsertRevisionRequest, OperationKind,
-        OperationLog, OperationLogEntry, RevisionRepository, RevisionService,
-        RevisionServiceError, StoredContent, StoredRevision, UpsertFileRequest, UpsertOutcome,
+        ContentStore, IncomingConflictContent, InsertRevisionRequest, OperationKind, OperationLog,
+        OperationLogEntry, RevisionRepository, RevisionService, RevisionServiceError,
+        StoredContent, StoredRevision, UpsertFileRequest, UpsertOutcome,
     },
     tombstone_service::{
         TombstoneCreationInput, TombstoneId, TombstoneRetention, TombstoneService,
@@ -247,7 +247,10 @@ fn stale_base_different_content_creates_conflict_saved() {
     let plan = require_upsert_conflict_saved_plan(&outcome, timestamp("2026-07-01T12:00:00Z"))
         .expect("conflict_saved should produce preservation plan");
     assert_eq!(plan.original_path.as_str(), "Projects/Haze/plan.md");
-    assert_eq!(plan.provided_base_revision_id, Some(revision_id("rev_stale")));
+    assert_eq!(
+        plan.provided_base_revision_id,
+        Some(revision_id("rev_stale"))
+    );
     assert_eq!(plan.policy_applied, ConflictPolicy::PreserveBoth);
     assert_eq!(plan.status, ConflictRecordStatus::Open);
     assert!(plan
@@ -264,7 +267,8 @@ fn stale_base_different_content_creates_conflict_saved() {
 
 #[test]
 fn unknown_base_different_content_creates_conflict_saved() {
-    let outcome = run_upsert_against_current(Some(revision_id("rev_unknown_remote")), b"remote edit");
+    let outcome =
+        run_upsert_against_current(Some(revision_id("rev_unknown_remote")), b"remote edit");
 
     let conflict_saved = outcome
         .conflict_saved()
@@ -274,7 +278,10 @@ fn unknown_base_different_content_creates_conflict_saved() {
         conflict_saved.provided_base_revision_id,
         Some(revision_id("rev_unknown_remote"))
     );
-    assert_eq!(conflict_saved.incoming_content.content_hash, compute_content_hash(b"remote edit"));
+    assert_eq!(
+        conflict_saved.incoming_content.content_hash,
+        compute_content_hash(b"remote edit")
+    );
     assert_eq!(conflict_saved.policy_hint, ConflictPolicyHint::PreserveBoth);
 }
 
@@ -457,7 +464,10 @@ fn manual_unlock_allows_explicitly_authorized_delete_batch() {
     );
 
     let unlocked_input = locked_input.with_manual_unlock(ManualDeleteUnlock::scoped_for_all(scope));
-    assert_eq!(guard.evaluate(&unlocked_input), DeleteGuardDecision::Allowed);
+    assert_eq!(
+        guard.evaluate(&unlocked_input),
+        DeleteGuardDecision::Allowed
+    );
 }
 
 #[test]
@@ -469,10 +479,7 @@ fn delete_never_hard_deletes_content_in_core() {
             revision_id("rev_deleted"),
             Some(revision_id("rev_current")),
             adapter_id(),
-            TombstoneRetention::new(
-                timestamp("2026-08-01T00:00:00Z"),
-                Some(30),
-            ),
+            TombstoneRetention::new(timestamp("2026-08-01T00:00:00Z"), Some(30)),
             Some(timestamp("2026-07-01T00:00:00Z")),
         ))
         .expect("tombstone metadata should be created");
@@ -512,8 +519,14 @@ fn changes_feed_includes_w3_delete_and_conflict_entries() {
 
     assert_eq!(page.from_seq.value(), 100);
     assert_eq!(page.to_seq.value(), 102);
-    assert_eq!(page.changes[0].operation.kind, FeedOperationKind::DeleteFile);
-    assert_eq!(page.changes[1].operation.kind, FeedOperationKind::ConflictResolved);
+    assert_eq!(
+        page.changes[0].operation.kind,
+        FeedOperationKind::DeleteFile
+    );
+    assert_eq!(
+        page.changes[1].operation.kind,
+        FeedOperationKind::ConflictResolved
+    );
 }
 
 #[test]
