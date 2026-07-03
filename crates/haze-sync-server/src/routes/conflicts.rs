@@ -108,7 +108,10 @@ pub(super) async fn resolve_conflict_route(
 fn parse_resolve_body(
     conflict_id: &str,
     body: &Value,
-) -> Result<haze_sync_api::routes::conflicts::ResolveConflictRouteRequest, ConflictsRouteError> {
+) -> Result<
+    haze_sync_api::routes::conflicts::ResolveConflictRouteRequest,
+    ConflictsRouteError,
+> {
     let Some(object) = body.as_object() else {
         return Err(ConflictsRouteError::invalid_resolve_payload());
     };
@@ -213,7 +216,9 @@ fn conflict_route_summary_from_row(
             "current_wins_with_incoming_backup" => ConflictPolicyDto::CurrentWinsWithIncomingBackup,
             _ => return Err(ApiError::internal()),
         },
-        status: match ConflictStatusName::from_str(row.status.as_str()).map_err(map_repository_error)? {
+        status: match ConflictStatusName::from_str(row.status.as_str())
+            .map_err(map_repository_error)?
+        {
             ConflictStatusName::Open => ConflictStatusDto::Open,
             ConflictStatusName::Resolved => ConflictStatusDto::Resolved,
             ConflictStatusName::Ignored => ConflictStatusDto::Ignored,
@@ -376,14 +381,13 @@ impl IntoResponse for ApiError {
 mod tests {
     use super::*;
     use axum::{body::Body, http::Request};
+    use haze_sync_api::auth::AdapterRole;
     use http_body_util::BodyExt as _;
     use serde_json::json;
     use tower::ServiceExt as _;
 
     fn static_state() -> ServerAppState {
-        let principal =
-            AdapterPrincipal::new("obsidian-plugin", haze_sync_api::auth::AdapterRole::ObsidianPlugin)
-                .unwrap();
+        let principal = AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap();
         ServerAppState::with_static_principal(principal)
     }
 
