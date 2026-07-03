@@ -5,9 +5,17 @@
 //! created by router construction.
 
 use axum::{
-    routing::{get, post},
-    Extension, Router,
+    body::{to_bytes, Body},
+    extract::{Extension, Path, Query},
+    http::{HeaderMap, Method, Request, StatusCode},
+    middleware::{self, Next},
+    response::{IntoResponse, Response},
+    routing::get,
+    Json, Router,
 };
+use haze_sync_api::contracts::errors::{ErrorResponse, PublicErrorCode};
+use serde_json::Value;
+use std::collections::HashMap;
 
 use crate::{readiness::ReadinessState, state::ServerAppState};
 
@@ -43,14 +51,100 @@ fn build_router_with_state_and_readiness(
     Router::new()
         .route("/health", get(health::health))
         .route("/ready", get(health::ready))
-        .route("/v1/conflicts", get(conflicts::list_conflicts_route))
-        .route(
-            "/v1/conflicts/{conflict_id}/resolve",
-            post(conflicts::resolve_conflict_route),
-        )
         .nest("/v1", v1::router())
+        .fallback(conflict_fallback)
+        .layer(middleware::from_fn(conflict_route_intercept))
         .layer(Extension(readiness))
         .layer(Extension(state))
+}
+
+async fn conflict_route_intercept(request: Request<Body>, next: Next) -> Response {
+    let Some(state) = request.extensions().get::<ServerAppState>().cloned() else {
+        return next.run(request).await;
+    };
+
+    if request.method() == Method::GET && request.uri().path() == "/v1/conflicts" {
+        let headers = request.headers().clone();
+        let query = query_map(request.uri().query());
+        return conflict_response(
+            conflicts::list_conflicts_route(Extension(state), Query(query), headers).await,
+        );
+    }
+
+    next.run(request).await
+}
+
+async fn conflict_fallback(request: Request<Body>) -> Response {
+    let Some(state) = request.extensions().get::<ServerAppState>().cloned() else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+
+    if request.method() != Method::POST {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+
+    let Some(conflict_id) = conflict_resolve_id(request.uri().path()) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+
+    let headers = request.headers().clone();
+    let body = request.into_body();
+    let bytes = match to_bytes(body, 16_384).await {
+        Ok(bytes) => bytes,
+        Err(_error) => return invalid_conflict_json_response(),
+    };
+    let value = match serde_json::from_slice::<Value>(&bytes) {
+        Ok(value) => value,
+        Err(_error) => Value::Null,
+    };
+
+    conflict_response(
+        conflicts::resolve_conflict_route(Extension(state), Path(conflict_id), headers, Json(value))
+            .await,
+    )
+}
+
+fn conflict_response(result: Result<Response, conflicts::ApiError>) -> Response {
+    match result {
+        Ok(response) => response,
+        Err(error) => error.into_response(),
+    }
+}
+
+fn invalid_conflict_json_response() -> Response {
+    (
+        StatusCode::BAD_REQUEST,
+        Json(ErrorResponse::new(
+            PublicErrorCode::ValidationError,
+            "Invalid conflict resolution request",
+        )),
+    )
+        .into_response()
+}
+
+fn query_map(query: Option<&str>) -> HashMap<String, String> {
+    let mut output = HashMap::new();
+    let Some(query) = query else {
+        return output;
+    };
+
+    for pair in query.split('&').filter(|pair| !pair.is_empty()) {
+        let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+        output.insert(key.to_owned(), value.to_owned());
+    }
+
+    output
+}
+
+fn conflict_resolve_id(path: &str) -> Option<String> {
+    let value = path
+        .strip_prefix("/v1/conflicts/")?
+        .strip_suffix("/resolve")?;
+    if value.is_empty() || value.contains('/') {
+        return None;
+    }
+
+    Some(value.to_owned())
 }
 
 #[cfg(test)]
