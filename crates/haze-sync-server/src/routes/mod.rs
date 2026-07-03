@@ -116,6 +116,12 @@ mod tests {
         (status, json)
     }
 
+    fn static_principal_state() -> ServerAppState {
+        let principal = AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin)
+            .expect("fixture principal should be valid");
+        ServerAppState::with_static_principal(principal)
+    }
+
     #[test]
     fn router_builds_without_runtime_dependencies() {
         let _router = build_router();
@@ -184,9 +190,7 @@ mod tests {
 
     #[tokio::test]
     async fn conflict_list_route_is_wired_without_storage_mutation() {
-        let principal = AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin)
-            .expect("fixture principal should be valid");
-        let state = ServerAppState::with_static_principal(principal);
+        let state = static_principal_state();
         let (status, json) =
             request_json_with_state(state, "GET", "/v1/conflicts?status=open", Body::empty()).await;
 
@@ -195,5 +199,23 @@ mod tests {
         assert!(!json.to_string().contains("postgres://"));
         assert!(!json.to_string().contains("secret"));
         assert!(!json.to_string().contains("/srv/"));
+    }
+
+    #[tokio::test]
+    async fn unsupported_conflict_resolution_action_returns_safe_bad_request() {
+        let state = static_principal_state();
+        let (status, json) = request_json_with_state(
+            state,
+            "POST",
+            "/v1/conflicts/conf_01J/resolve",
+            Body::from(r#"{"resolution":"overwrite"}"#),
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(json["error"]["code"], "validation_error");
+        assert!(!json.to_string().contains("overwrite"));
+        assert!(!json.to_string().contains("postgres://"));
+        assert!(!json.to_string().contains("secret"));
     }
 }
