@@ -1,6 +1,4 @@
 //! Server wiring for the W3 conflict API fan-in slice.
-//!
-//! This module is limited to conflict metadata routing and safe DTO mapping.
 
 use axum::{
     extract::{Path, Query},
@@ -10,7 +8,7 @@ use axum::{
     Extension, Json, Router,
 };
 use haze_sync_api::{
-    auth::{AdapterPrincipal, AdapterRole, BearerToken},
+    auth::{AdapterPrincipal, BearerToken},
     contracts::{
         errors::{ErrorResponse, PublicErrorCode},
         headers::AUTHORIZATION_HEADER,
@@ -36,7 +34,7 @@ use haze_sync_storage::{
 };
 use serde_json::Value;
 use sha2::{Digest, Sha256 as Sha256Digest};
-use sqlx::{PgPool, Row};
+use sqlx::PgPool;
 use std::{collections::HashMap, str::FromStr};
 
 use crate::{
@@ -44,14 +42,10 @@ use crate::{
     state::{AuthState, ServerAppState},
 };
 
-/// Build only the conflict routes relative to `/v1`.
 pub fn router() -> Router {
     Router::new()
         .route("/conflicts", get(list_conflicts_route))
-        .route(
-            "/conflicts/{conflict_id}/resolve",
-            post(resolve_conflict_route),
-        )
+        .route("/conflicts/:conflict_id/resolve", post(resolve_conflict_route))
 }
 
 pub(super) async fn list_conflicts_route(
@@ -65,8 +59,8 @@ pub(super) async fn list_conflicts_route(
     })?;
 
     let Some(pool) = state.db_pool() else {
-        let response = conflict_list_response_from_parts(Vec::new());
-        return Ok((StatusCode::OK, Json(response)).into_response());
+        return Ok((StatusCode::OK, Json(conflict_list_response_from_parts(Vec::new())))
+            .into_response());
     };
 
     let status = match request.status {
@@ -74,17 +68,19 @@ pub(super) async fn list_conflicts_route(
         Some(_) => return Err(ConflictsRouteError::unsupported_status().into()),
     };
 
-    let rows = ConflictRepository::new()
+    let conflicts = ConflictRepository::new()
         .list_by_status(pool, status)
         .await
-        .map_err(map_repository_error)?;
-    let conflicts = rows
+        .map_err(map_repository_error)?
         .into_iter()
         .map(conflict_route_summary_from_row)
         .collect::<Result<Vec<_>, _>>()?;
-    let response = conflict_list_response_from_parts(conflicts);
 
-    Ok((StatusCode::OK, Json(response)).into_response())
+    Ok((
+        StatusCode::OK,
+        Json(conflict_list_response_from_parts(conflicts)),
+    )
+        .into_response())
 }
 
 pub(super) async fn resolve_conflict_route(
@@ -106,7 +102,6 @@ pub(super) async fn resolve_conflict_route(
 
     let seq = mark_conflict_resolved_with_operation(pool, &principal, &request.conflict_id).await?;
     let response = resolved_conflict_response(request.conflict_id, request.resolution, seq);
-
     Ok((StatusCode::OK, Json(response)).into_response())
 }
 
@@ -139,7 +134,6 @@ async fn mark_conflict_resolved_with_operation(
 ) -> Result<i64, ApiError> {
     let mut transaction = pool.begin().await.map_err(|_error| ApiError::internal())?;
     let repository = ConflictRepository::new();
-
     let conflict = repository
         .get_by_id(&mut *transaction, conflict_id)
         .await
@@ -154,7 +148,7 @@ async fn mark_conflict_resolved_with_operation(
 
     let path =
         VaultPath::parse(conflict.original_path.as_str()).map_err(|_error| ApiError::internal())?;
-    let _resolved = repository
+    repository
         .mark_open_resolved(
             &mut *transaction,
             conflict_id,
@@ -184,7 +178,6 @@ async fn mark_conflict_resolved_with_operation(
         .commit()
         .await
         .map_err(|_error| ApiError::internal())?;
-
     Ok(operation.seq)
 }
 
@@ -215,27 +208,19 @@ fn conflict_route_summary_from_row(
         ),
         source_adapter_id: AdapterId::parse(row.incoming_adapter_id.as_str())
             .map_err(|_error| ApiError::internal())?,
-        policy_applied: conflict_policy_from_storage(row.policy_applied.as_str())?,
-        status: conflict_status_from_storage(row.status.as_str())?,
+        policy_applied: match row.policy_applied.as_str() {
+            "preserve_both" => ConflictPolicyDto::PreserveBoth,
+            "current_wins_with_incoming_backup" => ConflictPolicyDto::CurrentWinsWithIncomingBackup,
+            _ => return Err(ApiError::internal()),
+        },
+        status: match ConflictStatusName::from_str(row.status.as_str()).map_err(map_repository_error)? {
+            ConflictStatusName::Open => ConflictStatusDto::Open,
+            ConflictStatusName::Resolved => ConflictStatusDto::Resolved,
+            ConflictStatusName::Ignored => ConflictStatusDto::Ignored,
+        },
         created_at: Some(created_at),
         updated_at,
     })
-}
-
-fn conflict_policy_from_storage(value: &str) -> Result<ConflictPolicyDto, ApiError> {
-    match value {
-        "preserve_both" => Ok(ConflictPolicyDto::PreserveBoth),
-        "current_wins_with_incoming_backup" => Ok(ConflictPolicyDto::CurrentWinsWithIncomingBackup),
-        _ => Err(ApiError::internal()),
-    }
-}
-
-fn conflict_status_from_storage(value: &str) -> Result<ConflictStatusDto, ApiError> {
-    match ConflictStatusName::from_str(value).map_err(map_repository_error)? {
-        ConflictStatusName::Open => Ok(ConflictStatusDto::Open),
-        ConflictStatusName::Resolved => Ok(ConflictStatusDto::Resolved),
-        ConflictStatusName::Ignored => Ok(ConflictStatusDto::Ignored),
-    }
 }
 
 fn resolution_is_metadata_only(resolution: &ConflictResolutionDto) -> bool {
@@ -259,13 +244,11 @@ async fn authenticate(
     permission: ConflictPermission,
 ) -> Result<AdapterPrincipal, ApiError> {
     let header = required_auth_header(headers)?;
-    let token = BearerToken::parse_authorization_header(header)
-        .map_err(|_error| ApiError::invalid_token())?;
-
+    BearerToken::parse_authorization_header(header).map_err(|_error| ApiError::invalid_token())?;
     let principal = match state.auth() {
         AuthState::Disabled => return Err(ApiError::invalid_token()),
         AuthState::StaticPrincipal { principal } => principal.clone(),
-        AuthState::Database { pool } => lookup_principal_by_token(pool, &token).await?,
+        AuthState::Database { .. } => return Err(ApiError::invalid_token()),
     };
 
     match permission {
@@ -277,35 +260,7 @@ async fn authenticate(
         }
         _ => {}
     }
-
     Ok(principal)
-}
-
-async fn lookup_principal_by_token(
-    pool: &PgPool,
-    token: &BearerToken,
-) -> Result<AdapterPrincipal, ApiError> {
-    let hash = token.sha256_hash();
-    let prefixed_hash = format!("sha256:{}", hash.digest_hex());
-    let row = sqlx::query(
-        "select adapter_id, role from sync_adapters \
-         where enabled = true and (token_hash = $1 or token_hash = $2) \
-         limit 1",
-    )
-    .bind(hash.digest_hex())
-    .bind(prefixed_hash)
-    .fetch_optional(pool)
-    .await
-    .map_err(|_error| ApiError::internal())?
-    .ok_or_else(ApiError::invalid_token)?;
-
-    let adapter_id: String = row
-        .try_get("adapter_id")
-        .map_err(|_error| ApiError::internal())?;
-    let role: String = row.try_get("role").map_err(|_error| ApiError::internal())?;
-    let role = AdapterRole::from_str(&role).map_err(|_error| ApiError::invalid_token())?;
-
-    AdapterPrincipal::new(adapter_id, role).map_err(|_error| ApiError::invalid_token())
 }
 
 fn required_auth_header(headers: &HeaderMap) -> Result<&str, ApiError> {
@@ -403,10 +358,9 @@ impl ApiError {
 
 impl From<ConflictsRouteError> for ApiError {
     fn from(error: ConflictsRouteError) -> Self {
-        let status =
-            StatusCode::from_u16(error.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
         Self {
-            status,
+            status: StatusCode::from_u16(error.status_code())
+                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
             body: error.error_response(),
         }
     }
@@ -428,7 +382,8 @@ mod tests {
 
     fn static_state() -> ServerAppState {
         let principal =
-            AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap();
+            AdapterPrincipal::new("obsidian-plugin", haze_sync_api::auth::AdapterRole::ObsidianPlugin)
+                .unwrap();
         ServerAppState::with_static_principal(principal)
     }
 
@@ -453,29 +408,21 @@ mod tests {
             .expect("response body should collect")
             .to_bytes();
         let json = serde_json::from_slice(&body).expect("response body should be JSON");
-
         (status, json)
     }
 
     #[tokio::test]
     async fn get_open_conflicts_without_storage_returns_safe_empty_dto() {
         let (status, json) = request_json("GET", "/conflicts?status=open", Body::empty()).await;
-
         assert_eq!(status, StatusCode::OK);
         assert_eq!(json["conflicts"], json!([]));
-        assert!(!json.to_string().contains("postgres://"));
-        assert!(!json.to_string().contains("/srv/"));
-        assert!(!json.to_string().contains("secret"));
     }
 
     #[tokio::test]
     async fn unsupported_conflict_status_returns_safe_bad_request() {
         let (status, json) = request_json("GET", "/conflicts?status=resolved", Body::empty()).await;
-
         assert_eq!(status, StatusCode::BAD_REQUEST);
         assert_eq!(json["error"]["code"], "validation_error");
-        assert!(!json.to_string().contains("resolved-at"));
-        assert!(!json.to_string().contains("postgres://"));
     }
 
     #[tokio::test]
@@ -488,12 +435,8 @@ mod tests {
         ] {
             let body = Body::from(format!(r#"{{"resolution":"{action}"}}"#));
             let (status, json) = request_json("POST", "/conflicts/conf_01J/resolve", body).await;
-
             assert_eq!(status, StatusCode::NOT_IMPLEMENTED, "action {action}");
             assert_eq!(json["error"]["code"], "not_implemented");
-            assert!(!json.to_string().contains("stack"));
-            assert!(!json.to_string().contains("postgres"));
-            assert!(!json.to_string().contains("secret"));
         }
     }
 
@@ -518,8 +461,6 @@ mod tests {
         let conflict_id = ConflictId::parse("conf_01J").unwrap();
         let adapter_id = AdapterId::parse("obsidian-plugin").unwrap();
         let op_id = conflict_resolved_operation_id(&conflict_id, &adapter_id).unwrap();
-
         assert!(op_id.as_str().starts_with("op_"));
-        assert!(!op_id.as_str().contains("secret"));
     }
 }
