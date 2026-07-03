@@ -5,6 +5,7 @@
 //! migrations, resolve conflicts, or implement Core apply policy.
 
 pub mod adapter_cursors;
+pub mod conflicts;
 pub mod idempotency;
 pub mod objects;
 pub mod operation_log;
@@ -38,6 +39,8 @@ pub enum RepositoryError {
     InvalidLimit { max: u32 },
     /// An operation kind string is not part of the V1 contract vocabulary.
     InvalidOperationKind,
+    /// A conflict status string is not part of the V1 contract vocabulary.
+    InvalidConflictStatus,
     /// A requested cursor update would move the adapter backwards.
     CursorRegression,
     /// A database operation failed. The underlying database error is not exposed
@@ -55,6 +58,7 @@ impl RepositoryError {
             Self::InvalidSequence => "invalid_sequence",
             Self::InvalidLimit { .. } => "invalid_limit",
             Self::InvalidOperationKind => "invalid_operation_kind",
+            Self::InvalidConflictStatus => "invalid_conflict_status",
             Self::CursorRegression => "cursor_regression",
             Self::DatabaseOperationFailed => "storage_database_operation_failed",
             Self::InvalidSizeBytes => "invalid_size_bytes",
@@ -68,6 +72,7 @@ impl RepositoryError {
             Self::InvalidSequence => "sequence must be non-negative",
             Self::InvalidLimit { .. } => "limit is outside the supported range",
             Self::InvalidOperationKind => "operation kind is not supported",
+            Self::InvalidConflictStatus => "conflict status is not supported",
             Self::CursorRegression => "cursor update would move backwards",
             Self::DatabaseOperationFailed => "storage database operation failed",
             Self::InvalidSizeBytes => "size is outside the supported storage range",
@@ -139,5 +144,14 @@ mod tests {
         assert_eq!(validate_sequence(0), Ok(()));
         assert_eq!(validate_sequence(42), Ok(()));
         assert_eq!(validate_sequence(-1), Err(RepositoryError::InvalidSequence));
+    }
+
+    #[test]
+    fn conflict_status_error_is_safe() {
+        let error = RepositoryError::InvalidConflictStatus;
+        assert_eq!(error.code(), "invalid_conflict_status");
+        assert!(!error.message().contains("postgres://"));
+        assert!(!error.message().contains("/srv/"));
+        assert!(!error.message().contains("secret"));
     }
 }
