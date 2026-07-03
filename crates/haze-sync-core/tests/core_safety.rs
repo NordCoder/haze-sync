@@ -1,16 +1,33 @@
 use std::collections::BTreeMap;
 
-use haze_sync_common::{AdapterId, ContentHash, OperationId, RevisionId, VaultPath};
+use chrono::{DateTime, Utc};
+use haze_sync_common::{AdapterId, ConflictId, ContentHash, OperationId, RevisionId, VaultPath};
 use haze_sync_core::{
+    conflict_saved_planner::require_upsert_conflict_saved_plan,
+    conflict_service::{
+        generate_conflict_path, ConflictPathRequest, ConflictPolicy, ConflictPolicyError,
+        ConflictRecordStatus,
+    },
+    delete_guard::{
+        DeleteGuard, DeleteGuardBlockReason, DeleteGuardDecision, DeleteGuardInput,
+        DeleteGuardPolicy, DeleteRatioLimit, DeleteRunScope, ManualDeleteUnlock,
+    },
     idempotency::{
         IdempotencyKey, IdempotencyReplayOutcome, IdempotencyScope, IdempotencyService,
         RequestFingerprint, StoredIdempotencyRecord, StoredIdempotencyResponse,
     },
+    operation_log::{
+        ChangeFeedEntry, ChangesPage, ChangesQuery, OperationKind as FeedOperationKind,
+        OperationSequence, SyncOperation, TombstoneId as OperationLogTombstoneId,
+    },
     revision_service::{
         compute_content_hash, AppendOperationRequest, ConflictPolicyHint, ConflictSavedOutcome,
-        ContentStore, IncomingConflictContent, InsertRevisionRequest, OperationLog,
+        ContentStore, IncomingConflictContent, InsertRevisionRequest, OperationKind, OperationLog,
         OperationLogEntry, RevisionRepository, RevisionService, RevisionServiceError,
         StoredContent, StoredRevision, UpsertFileRequest, UpsertOutcome,
+    },
+    tombstone_service::{
+        TombstoneCreationInput, TombstoneId, TombstoneRetention, TombstoneService,
     },
 };
 use serde_json::json;
@@ -105,8 +122,22 @@ fn revision_id(input: &str) -> RevisionId {
     RevisionId::parse(input).expect("fixture revision id should parse")
 }
 
+fn operation_id(input: &str) -> OperationId {
+    OperationId::parse(input).expect("fixture operation id should parse")
+}
+
+fn conflict_id(input: &str) -> ConflictId {
+    ConflictId::parse(input).expect("fixture conflict id should parse")
+}
+
 fn path(input: &str) -> VaultPath {
     VaultPath::parse(input).expect("fixture vault path should parse")
+}
+
+fn timestamp(value: &str) -> DateTime<Utc> {
+    DateTime::parse_from_rfc3339(value)
+        .expect("fixture timestamp should parse")
+        .with_timezone(&Utc)
 }
 
 fn current_revision(bytes: &[u8]) -> StoredRevision {
@@ -149,6 +180,19 @@ fn expected_conflict_saved(
     })
 }
 
+fn run_upsert_against_current(base_revision_id: Option<RevisionId>, bytes: &[u8]) -> UpsertOutcome {
+    let current = current_revision(b"current content");
+    let mut service = RevisionService::new(
+        FakeRevisionRepository::with_current(current),
+        FakeContentStore::default(),
+        FakeOperationLog::default(),
+    );
+
+    service
+        .upsert_file(upsert_request(base_revision_id, bytes))
+        .expect("fake-backed service should not fail")
+}
+
 fn delete_response() -> StoredIdempotencyResponse {
     StoredIdempotencyResponse::json(
         200,
@@ -171,7 +215,7 @@ fn delete_fingerprint(path: &str, base_revision_id: Option<&str>) -> RequestFing
 }
 
 #[test]
-fn stale_base_different_content_rejects_without_silent_overwrite() {
+fn stale_base_different_content_creates_conflict_saved() {
     let current = current_revision(b"current content");
     let mut service = RevisionService::new(
         FakeRevisionRepository::with_current(current.clone()),
@@ -186,6 +230,7 @@ fn stale_base_different_content_rejects_without_silent_overwrite() {
         ))
         .expect("fake-backed service should not fail");
 
+    assert_eq!(outcome.public_status(), "conflict_saved");
     assert_eq!(
         outcome,
         UpsertOutcome::RejectedStaleOrUnknownBase {
@@ -199,6 +244,20 @@ fn stale_base_different_content_rejects_without_silent_overwrite() {
         }
     );
 
+    let plan = require_upsert_conflict_saved_plan(&outcome, timestamp("2026-07-01T12:00:00Z"))
+        .expect("conflict_saved should produce preservation plan");
+    assert_eq!(plan.original_path.as_str(), "Projects/Haze/plan.md");
+    assert_eq!(
+        plan.provided_base_revision_id,
+        Some(revision_id("rev_stale"))
+    );
+    assert_eq!(plan.policy_applied, ConflictPolicy::PreserveBoth);
+    assert_eq!(plan.status, ConflictRecordStatus::Open);
+    assert!(plan
+        .materialized_path
+        .as_str()
+        .starts_with("_haze_conflicts/open/Projects/Haze/plan.conflict.iphone-anna."));
+
     let (repository, content_store, operation_log) = service.into_inner();
     assert_eq!(repository.current, Some(current));
     assert!(repository.inserted.is_empty());
@@ -207,7 +266,27 @@ fn stale_base_different_content_rejects_without_silent_overwrite() {
 }
 
 #[test]
-fn null_base_existing_different_content_rejects_without_silent_overwrite() {
+fn unknown_base_different_content_creates_conflict_saved() {
+    let outcome =
+        run_upsert_against_current(Some(revision_id("rev_unknown_remote")), b"remote edit");
+
+    let conflict_saved = outcome
+        .conflict_saved()
+        .expect("unknown base different content should save conflict");
+    assert_eq!(outcome.public_status(), "conflict_saved");
+    assert_eq!(
+        conflict_saved.provided_base_revision_id,
+        Some(revision_id("rev_unknown_remote"))
+    );
+    assert_eq!(
+        conflict_saved.incoming_content.content_hash,
+        compute_content_hash(b"remote edit")
+    );
+    assert_eq!(conflict_saved.policy_hint, ConflictPolicyHint::PreserveBoth);
+}
+
+#[test]
+fn null_base_existing_different_content_creates_conflict_saved() {
     let current = current_revision(b"current content");
     let mut service = RevisionService::new(
         FakeRevisionRepository::with_current(current.clone()),
@@ -219,6 +298,7 @@ fn null_base_existing_different_content_rejects_without_silent_overwrite() {
         .upsert_file(upsert_request(None, b"incoming content"))
         .expect("fake-backed service should not fail");
 
+    assert_eq!(outcome.public_status(), "conflict_saved");
     assert_eq!(
         outcome,
         UpsertOutcome::RejectedStaleOrUnknownBase {
@@ -233,6 +313,220 @@ fn null_base_existing_different_content_rejects_without_silent_overwrite() {
     assert!(repository.inserted.is_empty());
     assert!(content_store.writes.is_empty());
     assert!(operation_log.entries.is_empty());
+}
+
+#[test]
+fn same_content_stale_unknown_and_null_base_are_ignored() {
+    for base_revision_id in [
+        Some(revision_id("rev_stale")),
+        Some(revision_id("rev_unknown_remote")),
+        None,
+    ] {
+        let current = current_revision(b"current content");
+        let mut service = RevisionService::new(
+            FakeRevisionRepository::with_current(current.clone()),
+            FakeContentStore::default(),
+            FakeOperationLog::default(),
+        );
+
+        let outcome = service
+            .upsert_file(upsert_request(base_revision_id, b"current content"))
+            .expect("fake-backed service should not fail");
+
+        assert_eq!(outcome.public_status(), "same_content");
+        assert_eq!(
+            outcome,
+            UpsertOutcome::IgnoredDuplicateSameContent {
+                current_revision: current.clone()
+            }
+        );
+        let (repository, content_store, operation_log) = service.into_inner();
+        assert_eq!(repository.current, Some(current));
+        assert!(repository.inserted.is_empty());
+        assert!(content_store.writes.is_empty());
+        assert!(operation_log.entries.is_empty());
+    }
+}
+
+#[test]
+fn conflict_materialized_path_stays_under_open_conflicts_dir() {
+    let request = ConflictPathRequest::parse(
+        "Projects/Haze/plan.md",
+        "iphone-anna",
+        timestamp("2026-07-01T12:00:00Z"),
+    )
+    .expect("conflict path request should parse");
+
+    let conflict_path = generate_conflict_path(&request).expect("path generation should succeed");
+
+    assert_eq!(
+        conflict_path.as_str(),
+        "_haze_conflicts/open/Projects/Haze/plan.conflict.iphone-anna.2026-07-01-120000.md"
+    );
+    assert!(conflict_path.as_str().starts_with("_haze_conflicts/open/"));
+    assert!(!conflict_path
+        .as_str()
+        .contains("/_haze_conflicts/open/_haze_conflicts/"));
+}
+
+#[test]
+fn recursive_haze_conflicts_source_path_is_rejected() {
+    let err = ConflictPathRequest::parse(
+        "_haze_conflicts/open/Projects/Haze/plan.md",
+        "iphone-anna",
+        timestamp("2026-07-01T12:00:00Z"),
+    )
+    .expect_err("recursive conflict source paths must be rejected");
+
+    assert_eq!(err, ConflictPolicyError::RecursiveConflictPath);
+    assert_eq!(err.code(), "recursive_conflict_path");
+}
+
+#[test]
+fn delete_creates_tombstone_and_retains_revision_history() {
+    let created_at = timestamp("2026-07-01T00:00:00Z");
+    let retention_until = timestamp("2026-08-01T00:00:00Z");
+    let input = TombstoneCreationInput::new(
+        TombstoneId::parse("tmb_01JW3DELETE").expect("fixture tombstone id should parse"),
+        path("Projects/Haze/old.md"),
+        revision_id("rev_deleted"),
+        Some(revision_id("rev_current")),
+        adapter_id(),
+        TombstoneRetention::new(retention_until, Some(30)),
+        Some(created_at),
+    );
+
+    let tombstone = TombstoneService::new()
+        .create_tombstone(input)
+        .expect("tombstone metadata should be created");
+
+    assert_eq!(tombstone.path.as_str(), "Projects/Haze/old.md");
+    assert_eq!(tombstone.deleted_revision_id().as_str(), "rev_deleted");
+    assert_eq!(tombstone.current_revision_id().as_str(), "rev_current");
+    assert_eq!(tombstone.retention.retention_until, retention_until);
+    assert_eq!(tombstone.restore.restored_at, None);
+}
+
+#[test]
+fn mass_delete_is_blocked_by_count() {
+    let guard = DeleteGuard::new(DeleteGuardPolicy::new(
+        2,
+        DeleteRatioLimit::percent(100).expect("ratio should parse"),
+        false,
+    ));
+    let input = DeleteGuardInput::without_manual_unlock(delete_scope("scan-count"), 3, 100);
+
+    assert_eq!(
+        guard.evaluate(&input),
+        DeleteGuardDecision::BlockedTooManyDeletes {
+            proposed_delete_count: 3,
+            max_deletes_per_run: 2,
+        }
+    );
+}
+
+#[test]
+fn mass_delete_is_blocked_by_ratio() {
+    let guard = DeleteGuard::new(DeleteGuardPolicy::new(
+        20,
+        DeleteRatioLimit::percent(5).expect("ratio should parse"),
+        false,
+    ));
+    let input = DeleteGuardInput::without_manual_unlock(delete_scope("scan-ratio"), 6, 100);
+
+    assert_eq!(
+        guard.evaluate(&input),
+        DeleteGuardDecision::BlockedDeleteRatio {
+            proposed_delete_count: 6,
+            total_files_before_run: 100,
+            max_delete_ratio_per_run: DeleteRatioLimit::percent(5).expect("ratio should parse"),
+        }
+    );
+}
+
+#[test]
+fn manual_unlock_allows_explicitly_authorized_delete_batch() {
+    let guard = DeleteGuard::new(DeleteGuardPolicy::new(
+        2,
+        DeleteRatioLimit::percent(5).expect("ratio should parse"),
+        true,
+    ));
+    let scope = delete_scope("scan-unlocked");
+    let locked_input = DeleteGuardInput::without_manual_unlock(scope.clone(), 6, 100);
+
+    assert_eq!(
+        guard.evaluate(&locked_input),
+        DeleteGuardDecision::BlockedRequiresManualUnlock {
+            proposed_delete_count: 6,
+            total_files_before_run: 100,
+            reason: DeleteGuardBlockReason::TooManyDeletes,
+        }
+    );
+
+    let unlocked_input = locked_input.with_manual_unlock(ManualDeleteUnlock::scoped_for_all(scope));
+    assert_eq!(
+        guard.evaluate(&unlocked_input),
+        DeleteGuardDecision::Allowed
+    );
+}
+
+#[test]
+fn delete_never_hard_deletes_content_in_core() {
+    let tombstone = TombstoneService::new()
+        .create_tombstone(TombstoneCreationInput::new(
+            TombstoneId::parse("tmb_01JNOHARDDELETE").expect("fixture tombstone id should parse"),
+            path("Projects/Haze/old.md"),
+            revision_id("rev_deleted"),
+            Some(revision_id("rev_current")),
+            adapter_id(),
+            TombstoneRetention::new(timestamp("2026-08-01T00:00:00Z"), Some(30)),
+            Some(timestamp("2026-07-01T00:00:00Z")),
+        ))
+        .expect("tombstone metadata should be created");
+
+    let serialized = serde_json::to_string(&tombstone).expect("tombstone should serialize");
+    assert!(serialized.contains("tmb_01JNOHARDDELETE"));
+    assert!(serialized.contains("retention_until"));
+    assert!(!serialized.contains("hard_delete"));
+    assert!(!serialized.contains("file_bytes"));
+    assert!(!serialized.contains("content"));
+}
+
+#[test]
+fn changes_feed_includes_w3_delete_and_conflict_entries() {
+    let query = ChangesQuery::new(100, 10).expect("changes query should parse");
+    let page = ChangesPage::new(
+        query,
+        vec![
+            change_entry(
+                101,
+                FeedOperationKind::DeleteFile,
+                Some(revision_id("rev_deleted")),
+                Some(OperationLogTombstoneId::parse("tmb_01JW3DELETE").unwrap()),
+                None,
+            ),
+            change_entry(
+                102,
+                FeedOperationKind::ConflictResolved,
+                None,
+                None,
+                Some(conflict_id("conf_01JW3")),
+            ),
+        ],
+        false,
+    )
+    .expect("W3 changes page should validate");
+
+    assert_eq!(page.from_seq.value(), 100);
+    assert_eq!(page.to_seq.value(), 102);
+    assert_eq!(
+        page.changes[0].operation.kind,
+        FeedOperationKind::DeleteFile
+    );
+    assert_eq!(
+        page.changes[1].operation.kind,
+        FeedOperationKind::ConflictResolved
+    );
 }
 
 #[test]
@@ -294,71 +588,61 @@ fn stored_delete_idempotency_response_is_public_json_only() {
     assert_eq!(response.headers(), &empty_headers);
 }
 
-fn pending_sibling_behavior(phase: &str, behavior: &str) -> ! {
-    panic!(
-        "{phase} must replace this ignored W3-P8 spec placeholder with executable coverage for {behavior}"
+#[test]
+fn w2_put_current_base_still_accepts_new_revision_and_logs_upsert() {
+    let current = current_revision(b"current content");
+    let mut service = RevisionService::new(
+        FakeRevisionRepository::with_current(current.clone()),
+        FakeContentStore::default(),
+        FakeOperationLog::default(),
     );
+
+    let outcome = service
+        .upsert_file(upsert_request(
+            Some(current.revision_id.clone()),
+            b"next content",
+        ))
+        .expect("fake-backed service should not fail");
+
+    let UpsertOutcome::AcceptedNewRevision {
+        revision,
+        operation,
+    } = outcome
+    else {
+        panic!("current-base write should remain accepted");
+    };
+
+    assert_eq!(revision.parent_revision_id, Some(current.revision_id));
+    assert_eq!(operation.seq, 1);
+    let (_repository, content_store, operation_log) = service.into_inner();
+    assert_eq!(content_store.writes.len(), 1);
+    assert_eq!(operation_log.entries[0].kind, OperationKind::UpsertFile);
 }
 
-#[test]
-#[ignore = "requires W3-P1/W3-P2 conflict preservation implementation"]
-fn stale_base_different_content_returns_conflict_saved() {
-    pending_sibling_behavior("W3-P1/W3-P2", "stale base conflict_saved");
+fn delete_scope(run_id: &str) -> DeleteRunScope {
+    DeleteRunScope::new(adapter_id(), run_id).expect("fixture delete scope should parse")
 }
 
-#[test]
-#[ignore = "requires W3-P1/W3-P2 conflict preservation implementation"]
-fn unknown_base_different_content_returns_conflict_saved() {
-    pending_sibling_behavior("W3-P1/W3-P2", "unknown base conflict_saved");
-}
-
-#[test]
-#[ignore = "requires W3-P1/W3-P2 conflict preservation implementation"]
-fn null_base_existing_different_content_returns_conflict_saved() {
-    pending_sibling_behavior(
-        "W3-P1/W3-P2",
-        "null base existing different content conflict_saved",
-    );
-}
-
-#[test]
-#[ignore = "requires W3-P1 conflict path materialization implementation"]
-fn conflict_materialized_path_stays_under_open_conflicts_dir() {
-    pending_sibling_behavior("W3-P1", "materialized paths under _haze_conflicts/open");
-}
-
-#[test]
-#[ignore = "requires W3-P1 recursive conflict guard implementation"]
-fn recursive_haze_conflicts_source_path_is_rejected_or_backed_up_without_explosion() {
-    pending_sibling_behavior("W3-P1", "recursive _haze_conflicts source path rejection");
-}
-
-#[test]
-#[ignore = "requires W3-P3 tombstone service implementation"]
-fn delete_creates_tombstone_and_retains_revision_history() {
-    pending_sibling_behavior("W3-P3", "delete creates tombstone");
-}
-
-#[test]
-#[ignore = "requires W3-P3 delete guard implementation"]
-fn mass_delete_is_blocked_by_count() {
-    pending_sibling_behavior("W3-P3", "mass delete blocked by count");
-}
-
-#[test]
-#[ignore = "requires W3-P3 delete guard implementation"]
-fn mass_delete_is_blocked_by_ratio() {
-    pending_sibling_behavior("W3-P3", "mass delete blocked by ratio");
-}
-
-#[test]
-#[ignore = "requires W3-P3 manual unlock implementation"]
-fn manual_unlock_allows_explicitly_authorized_delete_batch() {
-    pending_sibling_behavior("W3-P3", "manual unlock behavior");
-}
-
-#[test]
-#[ignore = "requires W3-P3 tombstone service implementation"]
-fn delete_never_hard_deletes_content_in_core() {
-    pending_sibling_behavior("W3-P3", "delete never hard-deletes content");
+fn change_entry(
+    seq: i64,
+    kind: FeedOperationKind,
+    revision_id: Option<RevisionId>,
+    tombstone_id: Option<OperationLogTombstoneId>,
+    conflict_id: Option<ConflictId>,
+) -> ChangeFeedEntry {
+    ChangeFeedEntry {
+        operation: SyncOperation {
+            seq: OperationSequence::new(seq).expect("fixture sequence should parse"),
+            op_id: operation_id(&format!("op_{seq}")),
+            adapter_id: adapter_id(),
+            kind,
+            path: path("Projects/Haze/plan.md"),
+            revision_id,
+            tombstone_id,
+            conflict_id,
+            created_at: timestamp("2026-07-01T12:00:00Z"),
+        },
+        content_sha256: None,
+        size_bytes: None,
+    }
 }
