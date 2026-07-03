@@ -4,6 +4,7 @@
 //! routes, database pool creation, migrations, provider SDKs, and adapter loops
 //! live outside this crate.
 
+pub mod conflict_saved_planner;
 pub mod conflict_service;
 pub mod doctor;
 pub mod idempotency;
