@@ -7,7 +7,7 @@
 use axum::{
     body::{to_bytes, Body},
     extract::{Extension, Path, Query},
-    http::{HeaderMap, Method, Request, StatusCode},
+    http::{Method, Request, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::get,
