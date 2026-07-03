@@ -2,8 +2,7 @@ use chrono::{DateTime, TimeZone, Utc};
 use haze_sync_common::{AdapterId, ContentHash, OperationId, RevisionId, VaultPath};
 use haze_sync_core::{
     conflict_saved_planner::{
-        plan_upsert_conflict_saved, require_upsert_conflict_saved_plan,
-        ConflictSavedPlanningError,
+        plan_upsert_conflict_saved, require_upsert_conflict_saved_plan, ConflictSavedPlanningError,
     },
     conflict_service::{ConflictPolicy, ConflictPolicyError, ConflictRecordStatus},
     revision_service::{
@@ -155,7 +154,11 @@ fn run_upsert(
         FakeOperationLog::default(),
     );
     let outcome = service
-        .upsert_file(upsert_request_at(path_input, base_revision_id, incoming_bytes))
+        .upsert_file(upsert_request_at(
+            path_input,
+            base_revision_id,
+            incoming_bytes,
+        ))
         .expect("fake-backed service should not fail");
     let (repository, content_store, operation_log) = service.into_inner();
 
@@ -179,14 +182,22 @@ fn assert_conflict_saved_plan(
     assert_eq!(outcome.public_status(), "conflict_saved");
     assert_eq!(plan.original_path.as_str(), current.path.as_str());
     assert_eq!(
-        plan.provided_base_revision_id.as_ref().map(RevisionId::as_str),
+        plan.provided_base_revision_id
+            .as_ref()
+            .map(RevisionId::as_str),
         provided_base_revision_id.as_ref().map(RevisionId::as_str)
     );
-    assert_eq!(plan.current_revision_id.as_str(), current.revision_id.as_str());
+    assert_eq!(
+        plan.current_revision_id.as_str(),
+        current.revision_id.as_str()
+    );
     assert_eq!(plan.current_content_hash, current.content_hash);
     assert_eq!(plan.current_size_bytes, current.size_bytes);
     assert_eq!(plan.incoming_adapter_id.as_str(), adapter_id().as_str());
-    assert_eq!(plan.incoming_content_hash, compute_content_hash(incoming_bytes));
+    assert_eq!(
+        plan.incoming_content_hash,
+        compute_content_hash(incoming_bytes)
+    );
     assert_eq!(plan.incoming_size_bytes, incoming_bytes.len() as u64);
     assert_eq!(plan.policy_applied, ConflictPolicy::PreserveBoth);
     assert_eq!(plan.status, ConflictRecordStatus::Open);
