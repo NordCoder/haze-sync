@@ -1,50 +1,43 @@
 # W3 Core Safety Test Strategy
 
-This directory documents the Wave 3 Core safety coverage added by `W3-P8 — Core safety tests`.
+This directory documents the Wave 3 Core safety coverage originally added by `W3-P8 — Core safety tests` and converted by `W3-F1E — Safety regression fan-in` after the W3-F1A-D fan-in slices were merged.
 
 ## What runs by default
 
-Default test coverage is limited to behavior that already exists on current `main` at the W3-P8 base SHA. These tests are fake-backed or DTO-only and do not require PostgreSQL, real providers, network access, runtime services, secrets, or W3-F1 fan-in wiring.
+Default W3 safety coverage is fake-backed, DTO-only, or dependency-free route-contract coverage. It does not require PostgreSQL, real providers, network access, runtime services, secrets, Google Drive OAuth, adapter loops, or production object-store roots.
 
-The default coverage currently asserts:
+The default coverage now asserts:
 
-- stale-base and unknown/null-base writes with different existing content do not silently overwrite the current revision;
-- rejected stale/unknown writes do not store new content blobs or append operations in the fake Core boundary;
-- delete idempotency fingerprints can replay the same DELETE request and reject a different DELETE request with the same key;
-- public API errors for conflict, unsafe delete, and idempotency conflict serialize as safe public JSON;
-- storage row models represent tombstones and conflicts as metadata records rather than embedded file content.
+- stale-base writes with different existing content produce `conflict_saved` metadata and do not overwrite current content;
+- unknown-base writes with different existing content produce `conflict_saved` metadata and do not overwrite current content;
+- explicit-null-base writes against an existing different file produce `conflict_saved` metadata;
+- stale, unknown, and explicit-null bases with the same content are ignored as `same_content`;
+- conflict materialized paths stay under `_haze_conflicts/open`;
+- source paths already under `_haze_conflicts` are rejected to avoid recursive conflict explosions;
+- GET conflict listing maps open conflicts to safe public DTOs, or safely returns an empty dependency-free response without storage;
+- conflict resolution request actions parse safely, while route/runtime behavior remains narrow where full product behavior is not implemented;
+- DELETE route helpers require `Idempotency-Key` and keep delete errors safe;
+- tombstone metadata can be created without hard deleting content or revision history;
+- delete guard blocks unsafe batches by count and ratio, and requires an explicit scoped unlock where configured;
+- idempotent delete replays the same request and rejects a different request for the same key;
+- W3 operation kinds such as `delete_file` and `conflict_resolved` are represented in changes-feed DTOs;
+- admin/status and doctor public outputs remain secret-free in their crate-local tests;
+- W2 PUT, GET, changes, idempotency, and operation-log semantics remain covered.
 
-## Ignored/spec-only coverage
+## Still deferred or spec-only behavior
 
-Some W3 safety behavior belongs to sibling branches that may not be merged when this phase runs. Those cases are represented as ignored spec placeholders. They compile, but they do not run by default and intentionally do not implement production behavior.
+Some product behavior is intentionally not implemented by W3-F1E and remains deferred to later phases or opt-in DB-backed coverage:
 
-Ignored/spec-only targets include:
+- full `accept_conflict` resolution that replaces the main file by creating a new current revision;
+- adapter/provider runtime behavior;
+- hard delete, cleanup workers, retention jobs, restore workflows, or background jobs;
+- broad E2E database scenarios unless they use an existing explicit opt-in safe harness.
 
-- stale base `conflict_saved`;
-- unknown base `conflict_saved`;
-- null base with existing different content `conflict_saved`;
-- `accept_current`;
-- `accept_conflict`;
-- `keep_both`;
-- `mark_resolved`;
-- conflict materialization under `_haze_conflicts/open`;
-- rejection of recursive `_haze_conflicts/**` source paths;
-- delete tombstone creation;
-- mass delete blocked by count;
-- mass delete blocked by ratio;
-- manual unlock behavior;
-- delete never hard-deletes content.
+## Safety notes
 
-## W3-F1 conversion notes
+The tests should remain safe for default CI/local runs:
 
-W3-F1 should convert each ignored placeholder into integration coverage after the relevant sibling implementations are merged. The recommended conversion path is:
-
-1. replace placeholder `panic!` bodies with calls into the merged Core/API/storage interfaces;
-2. keep default tests fake-backed where possible;
-3. use ignored DB-backed tests only for behavior that truly requires PostgreSQL repositories;
-4. verify conflict materialized paths always stay below `_haze_conflicts/open`;
-5. verify recursive conflict inputs do not create nested conflict explosions;
-6. verify deletes create tombstone and retention metadata without hard-deleting content;
-7. verify public errors never expose filesystem paths, SQL/database details, provider payloads, tokens, request bodies, stack traces, or runtime internals.
-
-This phase does not rewrite architecture docs, modify migrations, require CI changes, or add production conflict/delete behavior.
+1. keep default tests pure, fake-backed, DTO-only, or dependency-free;
+2. keep real database tests ignored or behind existing explicit opt-in harnesses;
+3. do not require provider credentials, network access, production paths, or secrets;
+4. do not serialize raw file content, tokens, token hashes, database URLs, local absolute paths, request bodies, stack traces, provider payloads, SDK/client internals, or runtime internals in public outputs.
