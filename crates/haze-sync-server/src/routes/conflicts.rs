@@ -1,8 +1,6 @@
 //! Server wiring for the W3 conflict API fan-in slice.
 //!
-//! These handlers wire W3-P4 route-contract helpers to conflict metadata storage
-//! only. They do not implement DELETE behavior, adapter/provider calls, hard
-//! deletes, semantic merges, background jobs, or future admin/doctor surfaces.
+//! This module is limited to conflict metadata routing and safe DTO mapping.
 
 use axum::{
     extract::{Path, Query},
@@ -50,7 +48,10 @@ use crate::{
 pub fn router() -> Router {
     Router::new()
         .route("/conflicts", get(list_conflicts_route))
-        .route("/conflicts/{conflict_id}/resolve", post(resolve_conflict_route))
+        .route(
+            "/conflicts/{conflict_id}/resolve",
+            post(resolve_conflict_route),
+        )
 }
 
 pub(super) async fn list_conflicts_route(
@@ -151,9 +152,14 @@ async fn mark_conflict_resolved_with_operation(
         return Err(ConflictsRouteError::already_resolved().into());
     }
 
-    let path = VaultPath::parse(conflict.original_path.as_str()).map_err(|_error| ApiError::internal())?;
+    let path =
+        VaultPath::parse(conflict.original_path.as_str()).map_err(|_error| ApiError::internal())?;
     let _resolved = repository
-        .mark_open_resolved(&mut *transaction, conflict_id, principal.common_adapter_id())
+        .mark_open_resolved(
+            &mut *transaction,
+            conflict_id,
+            principal.common_adapter_id(),
+        )
         .await
         .map_err(map_repository_error)?
         .ok_or_else(ConflictsRouteError::already_resolved)?;
@@ -182,7 +188,9 @@ async fn mark_conflict_resolved_with_operation(
     Ok(operation.seq)
 }
 
-fn conflict_route_summary_from_row(row: ConflictRow) -> Result<ConflictRouteSummaryParts, ApiError> {
+fn conflict_route_summary_from_row(
+    row: ConflictRow,
+) -> Result<ConflictRouteSummaryParts, ApiError> {
     let created_at = TimestampDto::from(row.created_at.format("%Y-%m-%dT%H:%M:%SZ").to_string());
     let updated_at = row
         .resolved_at
@@ -395,8 +403,8 @@ impl ApiError {
 
 impl From<ConflictsRouteError> for ApiError {
     fn from(error: ConflictsRouteError) -> Self {
-        let status = StatusCode::from_u16(error.status_code())
-            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        let status =
+            StatusCode::from_u16(error.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
         Self {
             status,
             body: error.error_response(),
@@ -419,7 +427,8 @@ mod tests {
     use tower::ServiceExt as _;
 
     fn static_state() -> ServerAppState {
-        let principal = AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap();
+        let principal =
+            AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap();
         ServerAppState::with_static_principal(principal)
     }
 
@@ -471,7 +480,12 @@ mod tests {
 
     #[tokio::test]
     async fn resolve_actions_without_storage_are_safe_and_deterministic() {
-        for action in ["accept_current", "accept_conflict", "keep_both", "mark_resolved"] {
+        for action in [
+            "accept_current",
+            "accept_conflict",
+            "keep_both",
+            "mark_resolved",
+        ] {
             let body = Body::from(format!(r#"{{"resolution":"{action}"}}"#));
             let (status, json) = request_json("POST", "/conflicts/conf_01J/resolve", body).await;
 
@@ -485,10 +499,18 @@ mod tests {
 
     #[test]
     fn conflict_resolution_action_support_is_narrow_and_explicit() {
-        assert!(resolution_is_metadata_only(&ConflictResolutionDto::AcceptCurrent));
-        assert!(resolution_is_metadata_only(&ConflictResolutionDto::KeepBoth));
-        assert!(resolution_is_metadata_only(&ConflictResolutionDto::MarkResolved));
-        assert!(!resolution_is_metadata_only(&ConflictResolutionDto::AcceptConflict));
+        assert!(resolution_is_metadata_only(
+            &ConflictResolutionDto::AcceptCurrent
+        ));
+        assert!(resolution_is_metadata_only(
+            &ConflictResolutionDto::KeepBoth
+        ));
+        assert!(resolution_is_metadata_only(
+            &ConflictResolutionDto::MarkResolved
+        ));
+        assert!(!resolution_is_metadata_only(
+            &ConflictResolutionDto::AcceptConflict
+        ));
     }
 
     #[test]
