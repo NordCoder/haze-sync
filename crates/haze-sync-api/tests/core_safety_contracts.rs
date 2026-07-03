@@ -210,9 +210,15 @@ fn delete_route_public_errors_are_safe_for_stale_and_mass_delete_rejections() {
         "2026-08-01T00:00:00Z",
     );
 
-    assert!(serde_json::to_string(&stale).unwrap().contains("stale_base_revision"));
-    assert!(serde_json::to_string(&unsafe_delete).unwrap().contains("unsafe_delete"));
-    assert!(serde_json::to_string(&tombstoned).unwrap().contains("tombstoned"));
+    assert!(serde_json::to_string(&stale)
+        .unwrap()
+        .contains("stale_base_revision"));
+    assert!(serde_json::to_string(&unsafe_delete)
+        .unwrap()
+        .contains("unsafe_delete"));
+    assert!(serde_json::to_string(&tombstoned)
+        .unwrap()
+        .contains("tombstoned"));
 
     for error in [
         DeleteRouteError::DeleteGuardBlocked,
@@ -249,7 +255,8 @@ fn w2_put_get_file_route_contracts_remain_intact() {
     assert!(!format!("{request:?}").contains("put-001"));
     assert!(!format!("{request:?}").contains("w2 file body"));
 
-    let accepted = accepted_upload_response(path("Projects/Haze/plan.md"), revision_id("rev_w2"), 11);
+    let accepted =
+        accepted_upload_response(path("Projects/Haze/plan.md"), revision_id("rev_w2"), 11);
     assert!(matches!(accepted, PutFileResponse::Accepted { .. }));
 
     let ignored = ignored_same_content_response(path("Projects/Haze/plan.md"));
@@ -277,8 +284,8 @@ fn w2_put_get_file_route_contracts_remain_intact() {
 
 #[test]
 fn w2_changes_route_semantics_remain_intact_and_include_w3_entries() {
-    let request = parse_changes_query(Some("10"), Some("100"))
-        .expect("W2 changes query should still parse");
+    let request =
+        parse_changes_query(Some("10"), Some("100")).expect("W2 changes query should still parse");
     assert_eq!(request.since_value(), 10);
     assert_eq!(request.limit_value(), 100);
 
