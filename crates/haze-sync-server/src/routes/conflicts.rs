@@ -387,7 +387,8 @@ mod tests {
     use tower::ServiceExt as _;
 
     fn static_state() -> ServerAppState {
-        let principal = AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap();
+        let principal =
+            AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap();
         ServerAppState::with_static_principal(principal)
     }
 
