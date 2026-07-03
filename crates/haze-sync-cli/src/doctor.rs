@@ -106,3 +106,65 @@ where
 
     Ok(CliCommand::Doctor(command))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn offline_doctor_report_is_reachable_and_secret_safe() {
+        let report = DoctorCommand::default().build_offline_report();
+        let json = serde_json::to_string(&report).expect("doctor report should serialize");
+
+        assert_eq!(report.summary.total_checks, 4);
+        assert!(json.contains("db_connectivity"));
+        assert!(json.contains("object_store_exists_writable"));
+        assert!(json.contains("missing_blobs"));
+        assert!(json.contains("adapter_token_sanity"));
+        assert_no_secret_leaks(&json);
+    }
+
+    #[test]
+    fn rendered_doctor_summary_is_secret_safe() {
+        let report = DoctorCommand::default().build_offline_report();
+        let summary = render_text_summary(&report);
+
+        assert!(summary.contains("doctor summary"));
+        assert!(summary.contains("total: 4"));
+        assert_no_secret_leaks(&summary);
+    }
+
+    #[test]
+    fn unsupported_live_or_repair_args_are_rejected_safely() {
+        assert_eq!(
+            parse_cli_args(["doctor", "--repair"]).unwrap_err(),
+            CliParseError::UnknownDoctorFlag
+        );
+        assert_eq!(
+            parse_cli_args(["doctor", "provider-call"]).unwrap_err(),
+            CliParseError::UnexpectedDoctorArgument
+        );
+    }
+
+    fn assert_no_secret_leaks(output: &str) {
+        for forbidden in [
+            "credential",
+            "oauth",
+            "secret",
+            "database_url",
+            "db_url",
+            "provider_payload",
+            "postgres://",
+            "/srv/",
+            "C:\\",
+            "object_store_root",
+            "backtrace",
+            "stack",
+        ] {
+            assert!(
+                !output.contains(forbidden),
+                "doctor output leaked forbidden marker {forbidden}: {output}"
+            );
+        }
+    }
+}
