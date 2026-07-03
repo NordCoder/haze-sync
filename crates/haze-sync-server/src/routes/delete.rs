@@ -25,7 +25,7 @@ use haze_sync_api::{
         DeleteFileRouteRequestParts, DeleteRouteError,
     },
 };
-use haze_sync_common::{AdapterId, OperationId, RevisionId, VaultPath};
+use haze_sync_common::{OperationId, RevisionId, VaultPath};
 use haze_sync_core::{
     delete_guard::{DeleteGuard, DeleteGuardDecision, DeleteGuardInput, DeleteRunScope},
     idempotency::{RequestFingerprint, StoredIdempotencyResponse},
@@ -643,10 +643,11 @@ mod tests {
     use haze_sync_api::{
         dto::{
             files::{DeleteFileResponse, DeleteRejectedReasonDto},
-            primitives::{RevisionIdDto, TombstoneIdDto, VaultPathDto},
+            primitives::{TombstoneIdDto, VaultPathDto},
         },
         routes::delete::{rejected_delete_response, tombstoned_delete_response},
     };
+    use haze_sync_common::AdapterId;
     use haze_sync_core::delete_guard::{DeleteGuardPolicy, DeleteRatioLimit};
     use serde_json::Value;
 
@@ -842,9 +843,5 @@ mod tests {
         assert_eq!(replayed["path"], "Notes/old.md");
         assert_eq!(replayed["tombstone_id"], "tmb_01JDELETE");
         assert_eq!(replayed["seq"], 8);
-        assert_eq!(
-            RevisionIdDto::from("rev_current"),
-            RevisionIdDto::from("rev_current")
-        );
     }
 }
