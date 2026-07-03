@@ -77,14 +77,13 @@ impl ConflictRepository {
     where
         E: Executor<'executor, Database = Postgres>,
     {
-        sqlx::query(conflict_select_sql(
-            "where status = $1 order by created_at asc, conflict_id asc",
-        ))
-        .bind(status.as_str())
-        .try_map(conflict_row_from_pg)
-        .fetch_all(executor)
-        .await
-        .map_err(map_sqlx_error)
+        let sql = conflict_select_sql("where status = $1 order by created_at asc, conflict_id asc");
+        sqlx::query(&sql)
+            .bind(status.as_str())
+            .try_map(conflict_row_from_pg)
+            .fetch_all(executor)
+            .await
+            .map_err(map_sqlx_error)
     }
 
     /// Read one conflict by id.
@@ -96,7 +95,8 @@ impl ConflictRepository {
     where
         E: Executor<'executor, Database = Postgres>,
     {
-        sqlx::query(conflict_select_sql("where conflict_id = $1"))
+        let sql = conflict_select_sql("where conflict_id = $1");
+        sqlx::query(&sql)
             .bind(conflict_id.as_str())
             .try_map(conflict_row_from_pg)
             .fetch_optional(executor)
