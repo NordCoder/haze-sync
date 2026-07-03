@@ -99,8 +99,13 @@ async fn conflict_fallback(request: Request<Body>) -> Response {
     };
 
     conflict_response(
-        conflicts::resolve_conflict_route(Extension(state), Path(conflict_id), headers, Json(value))
-            .await,
+        conflicts::resolve_conflict_route(
+            Extension(state),
+            Path(conflict_id),
+            headers,
+            Json(value),
+        )
+        .await,
     )
 }
 
@@ -298,11 +303,12 @@ mod tests {
     #[tokio::test]
     async fn unsupported_conflict_resolution_action_returns_safe_bad_request() {
         let state = static_principal_state();
+        let body = serde_json::json!({ "resolution": "overwrite" }).to_string();
         let (status, json) = request_json_with_state(
             state,
             "POST",
             "/v1/conflicts/conf_01J/resolve",
-            Body::from(r#"{"resolution":"overwrite"}"#),
+            Body::from(body),
         )
         .await;
 
