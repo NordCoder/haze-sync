@@ -4,10 +4,14 @@
 //! explicit caller-owned state when supplied; no hidden global runtime state is
 //! created by router construction.
 
-use axum::{routing::get, Extension, Router};
+use axum::{
+    routing::{get, post},
+    Extension, Router,
+};
 
 use crate::{readiness::ReadinessState, state::ServerAppState};
 
+pub mod conflicts;
 pub mod health;
 #[cfg_attr(not(test), allow(unused_imports))]
 pub mod v1;
@@ -39,6 +43,11 @@ fn build_router_with_state_and_readiness(
     Router::new()
         .route("/health", get(health::health))
         .route("/ready", get(health::ready))
+        .route("/v1/conflicts", get(conflicts::list_conflicts_route))
+        .route(
+            "/v1/conflicts/{conflict_id}/resolve",
+            post(conflicts::resolve_conflict_route),
+        )
         .nest("/v1", v1::router())
         .layer(Extension(readiness))
         .layer(Extension(state))
@@ -51,6 +60,7 @@ mod tests {
         body::Body,
         http::{Request, StatusCode},
     };
+    use haze_sync_api::auth::{AdapterPrincipal, AdapterRole};
     use http_body_util::BodyExt as _;
     use serde_json::Value;
     use tower::ServiceExt as _;
@@ -62,6 +72,35 @@ mod tests {
             .body(body)
             .expect("test request should build");
         let response = build_router()
+            .oneshot(request)
+            .await
+            .expect("router should respond");
+        let status = response.status();
+        let body = response
+            .into_body()
+            .collect()
+            .await
+            .expect("response body should collect")
+            .to_bytes();
+        let json = serde_json::from_slice(&body).expect("response body should be JSON");
+
+        (status, json)
+    }
+
+    async fn request_json_with_state(
+        state: ServerAppState,
+        method: &str,
+        uri: &str,
+        body: Body,
+    ) -> (StatusCode, Value) {
+        let request = Request::builder()
+            .method(method)
+            .uri(uri)
+            .header("authorization", "Bearer route_test_token")
+            .header("content-type", "application/json")
+            .body(body)
+            .expect("test request should build");
+        let response = build_router_with_state(state)
             .oneshot(request)
             .await
             .expect("router should respond");
@@ -141,5 +180,20 @@ mod tests {
 
         assert_eq!(status, StatusCode::UNAUTHORIZED);
         assert_eq!(json["error"]["code"], "missing_token");
+    }
+
+    #[tokio::test]
+    async fn conflict_list_route_is_wired_without_storage_mutation() {
+        let principal = AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin)
+            .expect("fixture principal should be valid");
+        let state = ServerAppState::with_static_principal(principal);
+        let (status, json) =
+            request_json_with_state(state, "GET", "/v1/conflicts?status=open", Body::empty()).await;
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(json["conflicts"], serde_json::json!([]));
+        assert!(!json.to_string().contains("postgres://"));
+        assert!(!json.to_string().contains("secret"));
+        assert!(!json.to_string().contains("/srv/"));
     }
 }
