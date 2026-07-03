@@ -4,10 +4,22 @@
 //! explicit caller-owned state when supplied; no hidden global runtime state is
 //! created by router construction.
 
-use axum::{routing::get, Extension, Router};
+use axum::{
+    body::{to_bytes, Body},
+    extract::{Extension, Path, Query},
+    http::{Method, Request, StatusCode},
+    middleware::{self, Next},
+    response::{IntoResponse, Response},
+    routing::get,
+    Json, Router,
+};
+use haze_sync_api::contracts::errors::{ErrorResponse, PublicErrorCode};
+use serde_json::Value;
+use std::collections::HashMap;
 
 use crate::{readiness::ReadinessState, state::ServerAppState};
 
+pub mod conflicts;
 pub mod health;
 #[cfg_attr(not(test), allow(unused_imports))]
 pub mod v1;
@@ -40,8 +52,104 @@ fn build_router_with_state_and_readiness(
         .route("/health", get(health::health))
         .route("/ready", get(health::ready))
         .nest("/v1", v1::router())
+        .fallback(conflict_fallback)
+        .layer(middleware::from_fn(conflict_route_intercept))
         .layer(Extension(readiness))
         .layer(Extension(state))
+}
+
+async fn conflict_route_intercept(request: Request<Body>, next: Next) -> Response {
+    let Some(state) = request.extensions().get::<ServerAppState>().cloned() else {
+        return next.run(request).await;
+    };
+
+    if request.method() == Method::GET && request.uri().path() == "/v1/conflicts" {
+        let headers = request.headers().clone();
+        let query = query_map(request.uri().query());
+        return conflict_response(
+            conflicts::list_conflicts_route(Extension(state), Query(query), headers).await,
+        );
+    }
+
+    next.run(request).await
+}
+
+async fn conflict_fallback(request: Request<Body>) -> Response {
+    let Some(state) = request.extensions().get::<ServerAppState>().cloned() else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+
+    if request.method() != Method::POST {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+
+    let Some(conflict_id) = conflict_resolve_id(request.uri().path()) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+
+    let headers = request.headers().clone();
+    let body = request.into_body();
+    let bytes = match to_bytes(body, 16_384).await {
+        Ok(bytes) => bytes,
+        Err(_error) => return invalid_conflict_json_response(),
+    };
+    let value = match serde_json::from_slice::<Value>(&bytes) {
+        Ok(value) => value,
+        Err(_error) => Value::Null,
+    };
+
+    conflict_response(
+        conflicts::resolve_conflict_route(
+            Extension(state),
+            Path(conflict_id),
+            headers,
+            Json(value),
+        )
+        .await,
+    )
+}
+
+fn conflict_response(result: Result<Response, conflicts::ApiError>) -> Response {
+    match result {
+        Ok(response) => response,
+        Err(error) => error.into_response(),
+    }
+}
+
+fn invalid_conflict_json_response() -> Response {
+    (
+        StatusCode::BAD_REQUEST,
+        Json(ErrorResponse::new(
+            PublicErrorCode::ValidationError,
+            "Invalid conflict resolution request",
+        )),
+    )
+        .into_response()
+}
+
+fn query_map(query: Option<&str>) -> HashMap<String, String> {
+    let mut output = HashMap::new();
+    let Some(query) = query else {
+        return output;
+    };
+
+    for pair in query.split('&').filter(|pair| !pair.is_empty()) {
+        let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+        output.insert(key.to_owned(), value.to_owned());
+    }
+
+    output
+}
+
+fn conflict_resolve_id(path: &str) -> Option<String> {
+    let value = path
+        .strip_prefix("/v1/conflicts/")?
+        .strip_suffix("/resolve")?;
+    if value.is_empty() || value.contains('/') {
+        return None;
+    }
+
+    Some(value.to_owned())
 }
 
 #[cfg(test)]
@@ -51,6 +159,7 @@ mod tests {
         body::Body,
         http::{Request, StatusCode},
     };
+    use haze_sync_api::auth::{AdapterPrincipal, AdapterRole};
     use http_body_util::BodyExt as _;
     use serde_json::Value;
     use tower::ServiceExt as _;
@@ -75,6 +184,41 @@ mod tests {
         let json = serde_json::from_slice(&body).expect("response body should be JSON");
 
         (status, json)
+    }
+
+    async fn request_json_with_state(
+        state: ServerAppState,
+        method: &str,
+        uri: &str,
+        body: Body,
+    ) -> (StatusCode, Value) {
+        let request = Request::builder()
+            .method(method)
+            .uri(uri)
+            .header("authorization", "Bearer route_test_token")
+            .header("content-type", "application/json")
+            .body(body)
+            .expect("test request should build");
+        let response = build_router_with_state(state)
+            .oneshot(request)
+            .await
+            .expect("router should respond");
+        let status = response.status();
+        let body = response
+            .into_body()
+            .collect()
+            .await
+            .expect("response body should collect")
+            .to_bytes();
+        let json = serde_json::from_slice(&body).expect("response body should be JSON");
+
+        (status, json)
+    }
+
+    fn static_principal_state() -> ServerAppState {
+        let principal = AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin)
+            .expect("fixture principal should be valid");
+        ServerAppState::with_static_principal(principal)
     }
 
     #[test]
@@ -141,5 +285,37 @@ mod tests {
 
         assert_eq!(status, StatusCode::UNAUTHORIZED);
         assert_eq!(json["error"]["code"], "missing_token");
+    }
+
+    #[tokio::test]
+    async fn conflict_list_route_is_wired_without_storage_mutation() {
+        let state = static_principal_state();
+        let (status, json) =
+            request_json_with_state(state, "GET", "/v1/conflicts?status=open", Body::empty()).await;
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(json["conflicts"], serde_json::json!([]));
+        assert!(!json.to_string().contains("postgres://"));
+        assert!(!json.to_string().contains("secret"));
+        assert!(!json.to_string().contains("/srv/"));
+    }
+
+    #[tokio::test]
+    async fn unsupported_conflict_resolution_action_returns_safe_bad_request() {
+        let state = static_principal_state();
+        let body = serde_json::json!({ "resolution": "overwrite" }).to_string();
+        let (status, json) = request_json_with_state(
+            state,
+            "POST",
+            "/v1/conflicts/conf_01J/resolve",
+            Body::from(body),
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(json["error"]["code"], "validation_error");
+        assert!(!json.to_string().contains("overwrite"));
+        assert!(!json.to_string().contains("postgres://"));
+        assert!(!json.to_string().contains("secret"));
     }
 }
