@@ -19,6 +19,7 @@ use std::collections::HashMap;
 
 use crate::{readiness::ReadinessState, state::ServerAppState};
 
+pub mod admin;
 pub mod conflicts;
 pub mod delete;
 pub mod health;
@@ -63,6 +64,20 @@ async fn conflict_route_intercept(request: Request<Body>, next: Next) -> Respons
     let Some(state) = request.extensions().get::<ServerAppState>().cloned() else {
         return next.run(request).await;
     };
+
+    if request.method() == Method::GET {
+        match request.uri().path() {
+            "/v1/admin/status" => {
+                let headers = request.headers().clone();
+                return admin_response(admin::status_route(Extension(state), headers).await);
+            }
+            "/v1/admin/adapters" => {
+                let headers = request.headers().clone();
+                return admin_response(admin::adapters_route(Extension(state), headers).await);
+            }
+            _ => {}
+        }
+    }
 
     if request.method() == Method::DELETE {
         if let Some(route_path) = delete_file_path(request.uri().path()) {
@@ -117,6 +132,13 @@ async fn conflict_fallback(request: Request<Body>) -> Response {
         )
         .await,
     )
+}
+
+fn admin_response(result: Result<Response, admin::ApiError>) -> Response {
+    match result {
+        Ok(response) => response,
+        Err(error) => error.into_response(),
+    }
 }
 
 fn conflict_response(result: Result<Response, conflicts::ApiError>) -> Response {
@@ -241,8 +263,34 @@ mod tests {
         (status, json)
     }
 
+    async fn request_status_with_state(
+        state: ServerAppState,
+        method: &str,
+        uri: &str,
+        body: Body,
+    ) -> StatusCode {
+        let request = Request::builder()
+            .method(method)
+            .uri(uri)
+            .header("authorization", "Bearer route_test_token")
+            .header("content-type", "application/json")
+            .body(body)
+            .expect("test request should build");
+        build_router_with_state(state)
+            .oneshot(request)
+            .await
+            .expect("router should respond")
+            .status()
+    }
+
     fn static_principal_state() -> ServerAppState {
         let principal = AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin)
+            .expect("fixture principal should be valid");
+        ServerAppState::with_static_principal(principal)
+    }
+
+    fn admin_principal_state() -> ServerAppState {
+        let principal = AdapterPrincipal::new("admin-cli", AdapterRole::Admin)
             .expect("fixture principal should be valid");
         ServerAppState::with_static_principal(principal)
     }
@@ -335,6 +383,63 @@ mod tests {
         assert!(!json.to_string().contains("route_test_token"));
         assert!(!json.to_string().contains("postgres://"));
         assert!(!json.to_string().contains("/srv/"));
+    }
+
+    #[tokio::test]
+    async fn admin_status_route_returns_safe_placeholder_without_runtime_state() {
+        let state = admin_principal_state();
+        let (status, json) =
+            request_json_with_state(state, "GET", "/v1/admin/status", Body::empty()).await;
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(json["server_status"], "not_ready");
+        assert_eq!(json["adapter_count"], Value::Null);
+        assert_eq!(json["pause"]["supported"], false);
+        assert!(!json.to_string().contains("route_test_token"));
+        assert!(!json.to_string().contains("postgres://"));
+        assert!(!json.to_string().contains("/srv/"));
+        assert!(!json.to_string().contains("token_hash"));
+        assert!(!json.to_string().contains("oauth"));
+    }
+
+    #[tokio::test]
+    async fn adapters_list_route_returns_safe_empty_placeholder_without_runtime_state() {
+        let state = admin_principal_state();
+        let (status, json) =
+            request_json_with_state(state, "GET", "/v1/admin/adapters", Body::empty()).await;
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(json["total_count"], 0);
+        assert_eq!(json["adapters"], serde_json::json!([]));
+        assert!(!json.to_string().contains("route_test_token"));
+        assert!(!json.to_string().contains("token_hash"));
+        assert!(!json.to_string().contains("external_cursor_json"));
+        assert!(!json.to_string().contains("/srv/"));
+    }
+
+    #[tokio::test]
+    async fn admin_routes_reject_non_admin_roles_safely() {
+        let state = static_principal_state();
+        let (status, json) =
+            request_json_with_state(state, "GET", "/v1/admin/status", Body::empty()).await;
+
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(json["error"]["code"], "forbidden_role");
+        assert!(!json.to_string().contains("route_test_token"));
+    }
+
+    #[tokio::test]
+    async fn unsupported_admin_mutation_remains_unavailable() {
+        let state = admin_principal_state();
+        let status = request_status_with_state(
+            state,
+            "POST",
+            "/v1/admin/pause",
+            Body::from("{\"active\":true}"),
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
