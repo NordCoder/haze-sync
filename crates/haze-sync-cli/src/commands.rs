@@ -9,22 +9,23 @@ use std::fmt;
 /// Parsed top-level CLI command.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CliCommand {
-    /// `haze-sync status` foundation command.
+    /// `haze-sync --help` / `haze-sync help`.
+    Help,
+    /// `haze-sync status` scaffold command.
     Status,
-    /// `haze-sync adapters ...` foundation command group.
+    /// `haze-sync adapters ...` scaffold command group.
     Adapters(AdaptersCommand),
 }
 
 impl CliCommand {
-    /// Human-readable foundation message printed by the placeholder binary.
+    /// Human-readable summary printed by the current scaffold binary.
     #[must_use]
-    pub const fn foundation_message(&self) -> &'static str {
+    pub const fn summary_message(&self) -> &'static str {
         match self {
-            Self::Status => {
-                "status command parsed; live server calls are not implemented in this foundation"
-            }
+            Self::Help => usage(),
+            Self::Status => "status command parsed; live server calls remain unavailable",
             Self::Adapters(AdaptersCommand::List) => {
-                "adapters list command parsed; live server calls are not implemented in this foundation"
+                "adapters list command parsed; live server calls remain unavailable"
             }
         }
     }
@@ -33,15 +34,13 @@ impl CliCommand {
 /// Parsed adapters subcommand.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AdaptersCommand {
-    /// `haze-sync adapters list` foundation command.
+    /// `haze-sync adapters list` scaffold command.
     List,
 }
 
 /// Safe CLI parse error.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CliParseError {
-    /// No top-level command was provided.
-    MissingCommand,
     /// Unknown top-level command.
     UnknownCommand(String),
     /// No adapters subcommand was provided.
@@ -55,9 +54,6 @@ pub enum CliParseError {
 impl fmt::Display for CliParseError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MissingCommand => {
-                formatter.write_str("missing command: expected status or adapters")
-            }
             Self::UnknownCommand(command) => write!(formatter, "unknown command: {command}"),
             Self::MissingAdaptersCommand => {
                 formatter.write_str("missing adapters command: expected list")
@@ -74,6 +70,11 @@ impl fmt::Display for CliParseError {
 
 impl std::error::Error for CliParseError {}
 
+#[must_use]
+pub const fn usage() -> &'static str {
+    "usage: haze-sync <command>\n\ncommands:\n  status             read-only placeholder status summary\n  adapters list      read-only placeholder adapter summary\n  doctor [--offline] read-only offline doctor summary"
+}
+
 /// Parse process arguments into the minimal command model.
 ///
 /// The first item is treated as the program name and ignored.
@@ -84,9 +85,15 @@ where
 {
     let mut args = args.into_iter();
     let _program_name = args.next();
-    let command = next_argument(&mut args).ok_or(CliParseError::MissingCommand)?;
+    let Some(command) = next_argument(&mut args) else {
+        return Ok(CliCommand::Help);
+    };
 
     match command.as_str() {
+        "--help" | "-h" | "help" => {
+            reject_trailing(args)?;
+            Ok(CliCommand::Help)
+        }
         "status" => {
             reject_trailing(args)?;
             Ok(CliCommand::Status)
@@ -144,8 +151,8 @@ mod tests {
 
         assert_eq!(command, CliCommand::Status);
         assert_eq!(
-            command.foundation_message(),
-            "status command parsed; live server calls are not implemented in this foundation"
+            command.summary_message(),
+            "status command parsed; live server calls remain unavailable"
         );
     }
 
@@ -155,9 +162,20 @@ mod tests {
 
         assert_eq!(command, CliCommand::Adapters(AdaptersCommand::List));
         assert_eq!(
-            command.foundation_message(),
-            "adapters list command parsed; live server calls are not implemented in this foundation"
+            command.summary_message(),
+            "adapters list command parsed; live server calls remain unavailable"
         );
+    }
+
+    #[test]
+    fn help_and_empty_invocation_render_usage() {
+        assert_eq!(parse_cli(["haze-sync"]).unwrap(), CliCommand::Help);
+        assert_eq!(
+            parse_cli(["haze-sync", "--help"]).unwrap(),
+            CliCommand::Help
+        );
+        assert!(usage().contains("doctor [--offline]"));
+        assert!(usage().contains("read-only"));
     }
 
     #[test]

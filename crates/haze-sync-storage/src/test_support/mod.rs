@@ -1,4 +1,4 @@
-//! Test-only helpers for storage and future integration-test harnesses.
+//! Test-only helpers for storage integration tests.
 //!
 //! This module is available only for crate tests or when the explicit
 //! `test-support` feature is enabled. It is not production storage behavior and

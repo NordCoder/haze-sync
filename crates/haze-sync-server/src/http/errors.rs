@@ -1,13 +1,13 @@
-//! Safe public error responses for server shell routes.
+//! Safe public error responses for not-yet-wired server routes.
 //!
-//! The route shell uses these local HTTP errors for endpoints whose Core
-//! implementation belongs to later phases. Placeholder write routes return
-//! `not_implemented` and never claim that data was persisted.
+//! These local HTTP errors cover endpoints whose business behavior is still
+//! intentionally deferred. Placeholder write routes return `not_implemented`
+//! and never claim that data was persisted.
 
 use axum::{http::StatusCode, Json};
 use serde::Serialize;
 
-/// Top-level safe JSON error response returned by route shell placeholders.
+/// Top-level safe JSON error response returned by placeholder routes.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct ShellErrorResponse {
     /// Sanitized public error payload.
@@ -36,7 +36,7 @@ pub struct ShellPublicError {
     pub message: String,
 }
 
-/// Route-shell-specific public error codes.
+/// Placeholder-route-specific public error codes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ShellErrorCode {
@@ -44,13 +44,13 @@ pub enum ShellErrorCode {
     NotImplemented,
 }
 
-/// Returns a 501 response for Core API surfaces that are only route shells.
+/// Returns a 501 response for Core API surfaces that are not wired yet.
 pub fn not_implemented_response() -> (StatusCode, Json<ShellErrorResponse>) {
     (
         StatusCode::NOT_IMPLEMENTED,
         Json(ShellErrorResponse::new(
             ShellErrorCode::NotImplemented,
-            "Core operation is not implemented in this server route shell.",
+            "Core operation is not wired in this server yet.",
         )),
     )
 }
@@ -63,7 +63,7 @@ mod tests {
     fn shell_error_serializes_safe_not_implemented_code() {
         let json = serde_json::to_value(ShellErrorResponse::new(
             ShellErrorCode::NotImplemented,
-            "Core operation is not implemented in this server route shell.",
+            "Core operation is not wired in this server yet.",
         ))
         .expect("shell error should serialize");
 

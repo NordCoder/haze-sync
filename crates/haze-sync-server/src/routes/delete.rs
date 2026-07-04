@@ -13,10 +13,10 @@ use axum::{
 };
 use chrono::{Duration, Utc};
 use haze_sync_api::{
-    auth::{AdapterPrincipal, AdapterRole, BearerToken},
+    auth::AdapterPrincipal,
     contracts::{
         errors::{ErrorResponse, PublicErrorCode},
-        headers::{AUTHORIZATION_HEADER, IDEMPOTENCY_KEY_HEADER, X_BASE_REVISION_ID_HEADER},
+        headers::{IDEMPOTENCY_KEY_HEADER, X_BASE_REVISION_ID_HEADER},
     },
     dto::files::DeleteFileResponse,
     routes::delete::{
@@ -52,13 +52,19 @@ use haze_sync_storage::{
 };
 use serde_json::json;
 use sha2::{Digest, Sha256 as Sha256Digest};
-use sqlx::{PgPool, Row};
-use std::str::FromStr;
+use sqlx::PgPool;
 
-use crate::state::{AuthState, ServerAppState};
+use crate::{
+    routes::auth::{authenticate_principal, AuthFailure},
+    state::ServerAppState,
+};
 
 const DELETE_RETENTION_DAYS: i64 = 30;
 const ROUTE_SINGLE_DELETE_RATIO_FLOOR: u64 = 100;
+
+pub fn router() -> axum::Router {
+    axum::Router::new().route("/files/*path", axum::routing::delete(delete_file_route))
+}
 
 pub(super) async fn delete_file_route(
     Extension(state): Extension<ServerAppState>,
@@ -474,49 +480,9 @@ async fn authenticate(
     state: &ServerAppState,
     headers: &HeaderMap,
 ) -> Result<AdapterPrincipal, ApiError> {
-    let header = required_auth_header(headers)?;
-    let token = BearerToken::parse_authorization_header(header)
-        .map_err(|_error| ApiError::invalid_token())?;
-
-    match state.auth() {
-        AuthState::Disabled => Err(ApiError::invalid_token()),
-        AuthState::StaticPrincipal { principal } => Ok(principal.clone()),
-        AuthState::Database { pool } => lookup_principal_by_token(pool, &token).await,
-    }
-}
-
-async fn lookup_principal_by_token(
-    pool: &PgPool,
-    token: &BearerToken,
-) -> Result<AdapterPrincipal, ApiError> {
-    let hash = token.sha256_hash();
-    let prefixed_hash = format!("sha256:{}", hash.digest_hex());
-    let row = sqlx::query(
-        "select adapter_id, role from sync_adapters \
-         where enabled = true and (token_hash = $1 or token_hash = $2) \
-         limit 1",
-    )
-    .bind(hash.digest_hex())
-    .bind(prefixed_hash)
-    .fetch_optional(pool)
-    .await
-    .map_err(|_error| ApiError::internal())?
-    .ok_or_else(ApiError::invalid_token)?;
-
-    let adapter_id: String = row
-        .try_get("adapter_id")
-        .map_err(|_error| ApiError::internal())?;
-    let role: String = row.try_get("role").map_err(|_error| ApiError::internal())?;
-    let role = AdapterRole::from_str(&role).map_err(|_error| ApiError::invalid_token())?;
-
-    AdapterPrincipal::new(adapter_id, role).map_err(|_error| ApiError::invalid_token())
-}
-
-fn required_auth_header(headers: &HeaderMap) -> Result<&str, ApiError> {
-    let value = headers
-        .get(AUTHORIZATION_HEADER)
-        .ok_or_else(ApiError::missing_token)?;
-    value.to_str().map_err(|_error| ApiError::invalid_token())
+    authenticate_principal(state, headers)
+        .await
+        .map_err(ApiError::from_auth_failure)
 }
 
 #[derive(Clone, Copy)]
@@ -618,6 +584,14 @@ impl ApiError {
             "Core delete operation failed",
         )
     }
+
+    fn from_auth_failure(error: AuthFailure) -> Self {
+        match error {
+            AuthFailure::MissingToken => Self::missing_token(),
+            AuthFailure::InvalidToken => Self::invalid_token(),
+            AuthFailure::Internal => Self::internal(),
+        }
+    }
 }
 
 impl From<DeleteRouteError> for ApiError {
@@ -636,212 +610,5 @@ impl IntoResponse for ApiError {
         (self.status, Json(self.body)).into_response()
     }
 }
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use haze_sync_api::{
-        dto::{
-            files::{DeleteFileResponse, DeleteRejectedReasonDto},
-            primitives::{TombstoneIdDto, VaultPathDto},
-        },
-        routes::delete::{rejected_delete_response, tombstoned_delete_response},
-    };
-    use haze_sync_common::AdapterId;
-    use haze_sync_core::delete_guard::{DeleteGuardPolicy, DeleteRatioLimit};
-    use serde_json::Value;
-
-    fn principal() -> AdapterPrincipal {
-        AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap()
-    }
-
-    fn parsed_delete(path: &str, base_revision_id: &str) -> DeleteFileRouteRequest {
-        parse_delete_file_request(DeleteFileRouteRequestParts {
-            route_path: path,
-            idempotency_key: Some("delete-key-1"),
-            base_revision_id: Some(base_revision_id),
-            requested_delete_count: None,
-        })
-        .unwrap()
-    }
-
-    #[test]
-    fn delete_request_fingerprint_uses_safe_metadata_not_key_or_token() {
-        let principal = principal();
-        let first = parsed_delete("Notes/a.md", "rev_current");
-        let same = parsed_delete("Notes/a.md", "rev_current");
-        let different_base = parsed_delete("Notes/a.md", "rev_other");
-
-        assert_eq!(
-            delete_request_fingerprint(&first, &principal),
-            delete_request_fingerprint(&same, &principal)
-        );
-        assert_ne!(
-            delete_request_fingerprint(&first, &principal),
-            delete_request_fingerprint(&different_base, &principal)
-        );
-
-        let rendered = format!("{:?}", first);
-        assert!(!rendered.contains("delete-key-1"));
-        assert!(!rendered.contains("Bearer"));
-    }
-
-    #[test]
-    fn delete_base_revision_must_match_current() {
-        let current = RevisionId::parse("rev_current").unwrap();
-        let matching = parsed_delete("Notes/a.md", "rev_current");
-        let stale = parsed_delete("Notes/a.md", "rev_stale");
-        let explicit_null = parsed_delete("Notes/a.md", "null");
-
-        assert!(delete_base_is_current(&matching, &current));
-        assert!(!delete_base_is_current(&stale, &current));
-        assert!(!delete_base_is_current(&explicit_null, &current));
-    }
-
-    #[test]
-    fn delete_guard_blocks_unsafe_count_or_ratio() {
-        let scope =
-            DeleteRunScope::new(AdapterId::parse("gdrive-adapter").unwrap(), "scan-1").unwrap();
-        let count_guard = DeleteGuard::new(DeleteGuardPolicy::new(
-            2,
-            DeleteRatioLimit::percent(100).unwrap(),
-            false,
-        ));
-        let ratio_guard = DeleteGuard::new(DeleteGuardPolicy::new(
-            20,
-            DeleteRatioLimit::percent(5).unwrap(),
-            false,
-        ));
-
-        assert!(matches!(
-            count_guard.evaluate(&DeleteGuardInput::without_manual_unlock(
-                scope.clone(),
-                3,
-                100
-            )),
-            DeleteGuardDecision::BlockedTooManyDeletes { .. }
-        ));
-        assert!(matches!(
-            ratio_guard.evaluate(&DeleteGuardInput::without_manual_unlock(scope, 6, 100)),
-            DeleteGuardDecision::BlockedDeleteRatio { .. }
-        ));
-    }
-
-    #[test]
-    fn route_single_delete_guard_floor_allows_normal_single_delete() {
-        let request = parsed_delete("Notes/a.md", "rev_current");
-        let allowed = delete_guard_allows(
-            &principal(),
-            &request,
-            delete_guard_total_files(1, u64::from(request.delete_guard().requested_delete_count)),
-        )
-        .unwrap();
-
-        assert!(allowed);
-    }
-
-    #[test]
-    fn build_tombstone_uses_service_primitives_without_hard_delete() {
-        let current = RevisionId::parse("rev_current").unwrap();
-        let path = VaultPath::parse("Notes/old.md").unwrap();
-        let tombstone = build_tombstone(&principal(), &path, &current).unwrap();
-
-        assert!(tombstone.tombstone_id.as_str().starts_with("tmb_"));
-        assert_eq!(tombstone.path.as_str(), "Notes/old.md");
-        assert_eq!(tombstone.deleted_revision_id().as_str(), "rev_current");
-        assert_eq!(tombstone.current_revision_id().as_str(), "rev_current");
-        assert_eq!(tombstone.deleted_by.as_str(), "obsidian-plugin");
-        assert!(tombstone.retention.cleanup_after_retention_only);
-    }
-
-    #[test]
-    fn tombstone_and_operation_response_metadata_is_safe_json() {
-        let response = tombstoned_delete_response(
-            VaultPath::parse("Notes/old.md").unwrap(),
-            "tmb_01JDELETE",
-            7,
-            "2026-08-01T00:00:00Z",
-        );
-        let stored = StoredIdempotencyResponse::json(
-            StatusCode::OK.as_u16(),
-            serde_json::to_value(&response).unwrap(),
-        )
-        .unwrap();
-        let json = serde_json::to_string(stored.body()).unwrap();
-
-        assert_eq!(delete_response_status(&response), StatusCode::OK);
-        assert!(json.contains("tombstoned"));
-        assert!(json.contains("tmb_01JDELETE"));
-        assert!(!json.contains("Bearer"));
-        assert!(!json.contains("postgres://"));
-        assert!(!json.contains("/srv/"));
-    }
-
-    #[test]
-    fn delete_operation_kind_maps_to_delete_file() {
-        assert_eq!(OperationKindName::DeleteFile.as_str(), "delete_file");
-        let op_id = OperationId::parse(&deterministic_identifier(
-            "op_",
-            &[
-                "rev_current",
-                OperationKindName::DeleteFile.as_str(),
-                "Notes/a.md",
-            ],
-        ));
-        assert!(op_id.is_ok());
-    }
-
-    #[test]
-    fn rejected_delete_responses_map_to_safe_statuses() {
-        let stale = stale_base_delete_response(VaultPath::parse("Notes/a.md").unwrap());
-        let unsafe_delete = unsafe_delete_response(VaultPath::parse("Notes/a.md").unwrap());
-        let custom = rejected_delete_response(
-            VaultPath::parse("Notes/a.md").unwrap(),
-            DeleteRejectedReasonDto::IdempotencyConflict,
-        );
-
-        assert_eq!(delete_response_status(&stale), StatusCode::CONFLICT);
-        assert_eq!(delete_response_status(&unsafe_delete), StatusCode::CONFLICT);
-        assert_eq!(delete_response_status(&custom), StatusCode::CONFLICT);
-    }
-
-    #[test]
-    fn public_delete_errors_do_not_leak_tokens_paths_or_stack_details() {
-        let error = ApiError::from(DeleteRouteError::IdempotencyMismatch).into_response();
-        assert_eq!(error.status(), StatusCode::CONFLICT);
-
-        let forbidden = ApiError::from(DeleteRouteError::ForbiddenRole).into_response();
-        assert_eq!(forbidden.status(), StatusCode::FORBIDDEN);
-
-        let path_error = ApiError::from(DeleteRouteError::InvalidPath);
-        let rendered = serde_json::to_string(&path_error.body).unwrap();
-        assert!(!rendered.contains("../secret.md"));
-        assert!(!rendered.contains("Bearer"));
-        assert!(!rendered.contains("postgres://"));
-        assert!(!rendered.contains("stack"));
-    }
-
-    #[test]
-    fn stored_replay_body_preserves_delete_json_metadata() {
-        let body = DeleteFileResponse::Tombstoned {
-            path: VaultPathDto::from("Notes/old.md"),
-            tombstone_id: TombstoneIdDto::from("tmb_01JDELETE"),
-            seq: 8,
-            retention_until: haze_sync_api::dto::primitives::TimestampDto::from(
-                "2026-08-01T00:00:00Z",
-            ),
-        };
-        let stored = StoredIdempotencyResponse::json(
-            StatusCode::OK.as_u16(),
-            serde_json::to_value(&body).unwrap(),
-        )
-        .unwrap();
-        let replayed: Value = stored.body().clone();
-
-        assert_eq!(stored.status_code(), StatusCode::OK.as_u16());
-        assert_eq!(replayed["status"], "tombstoned");
-        assert_eq!(replayed["path"], "Notes/old.md");
-        assert_eq!(replayed["tombstone_id"], "tmb_01JDELETE");
-        assert_eq!(replayed["seq"], 8);
-    }
-}
+mod tests;

@@ -81,13 +81,14 @@ pub enum ConflictStatusDto {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConflictResolutionDto {
-    /// Keep the current main file unchanged and resolve the conflict record.
+    /// Keep the current file unchanged and resolve the conflict record.
     AcceptCurrent,
-    /// Replace the main file with the conflict content through a new revision.
+    /// Reserve the action name for a future safe promotion of conflict content
+    /// into a new current revision.
     AcceptConflict,
-    /// Keep both current and materialized conflict copies, then resolve.
+    /// Keep both current and conflict copies, then resolve the record.
     KeepBoth,
-    /// Mark the record resolved after a manual merge or external action.
+    /// Mark the conflict resolved after a manual merge or external action.
     MarkResolved,
 }
 

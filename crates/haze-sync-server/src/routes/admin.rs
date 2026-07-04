@@ -12,11 +12,8 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use haze_sync_api::{
-    auth::{AdapterPrincipal, AdapterRole as ApiAdapterRole, BearerToken},
-    contracts::{
-        errors::{ErrorResponse, PublicErrorCode},
-        headers::AUTHORIZATION_HEADER,
-    },
+    auth::AdapterPrincipal,
+    contracts::errors::{ErrorResponse, PublicErrorCode},
     dto::primitives::TimestampDto,
     routes::admin::{
         AdapterCursorSummary, AdapterListResponse, AdapterSummary, DependencyReadinessState,
@@ -29,8 +26,15 @@ use std::str::FromStr;
 
 use crate::{
     readiness::{ReadinessComponentStatus, ReadinessReport},
-    state::{AuthState, ServerAppState},
+    routes::auth::{authenticate_principal, AuthFailure},
+    state::ServerAppState,
 };
+
+pub fn router() -> axum::Router {
+    axum::Router::new()
+        .route("/admin/status", axum::routing::get(status_route))
+        .route("/admin/adapters", axum::routing::get(adapters_route))
+}
 
 /// Handles GET /v1/admin/status.
 pub(super) async fn status_route(
@@ -190,52 +194,15 @@ async fn authenticate_admin(
     state: &ServerAppState,
     headers: &HeaderMap,
 ) -> Result<AdapterPrincipal, ApiError> {
-    let header = headers
-        .get(AUTHORIZATION_HEADER)
-        .ok_or_else(ApiError::missing_token)?
-        .to_str()
-        .map_err(|_error| ApiError::invalid_token())?;
-    let token = BearerToken::parse_authorization_header(header)
-        .map_err(|_error| ApiError::invalid_token())?;
-
-    let principal = match state.auth() {
-        AuthState::Disabled => return Err(ApiError::invalid_token()),
-        AuthState::StaticPrincipal { principal } => principal.clone(),
-        AuthState::Database { pool } => lookup_principal_by_token(pool, &token).await?,
-    };
+    let principal = authenticate_principal(state, headers)
+        .await
+        .map_err(ApiError::from_auth_failure)?;
 
     if !principal.role().can_admin() {
         return Err(ApiError::forbidden_role());
     }
 
     Ok(principal)
-}
-
-async fn lookup_principal_by_token(
-    pool: &PgPool,
-    token: &BearerToken,
-) -> Result<AdapterPrincipal, ApiError> {
-    let hash = token.sha256_hash();
-    let prefixed_hash = format!("sha256:{}", hash.digest_hex());
-    let row = sqlx::query(
-        "select adapter_id, role from sync_adapters \
-         where enabled = true and (token_hash = $1 or token_hash = $2) \
-         limit 1",
-    )
-    .bind(hash.digest_hex())
-    .bind(prefixed_hash)
-    .fetch_optional(pool)
-    .await
-    .map_err(|_error| ApiError::internal())?
-    .ok_or_else(ApiError::invalid_token)?;
-
-    let adapter_id: String = row
-        .try_get("adapter_id")
-        .map_err(|_error| ApiError::internal())?;
-    let role: String = row.try_get("role").map_err(|_error| ApiError::internal())?;
-    let role = ApiAdapterRole::from_str(&role).map_err(|_error| ApiError::invalid_token())?;
-
-    AdapterPrincipal::new(adapter_id, role).map_err(|_error| ApiError::invalid_token())
 }
 
 fn timestamp_dto(timestamp: DateTime<Utc>) -> TimestampDto {
@@ -287,6 +254,14 @@ impl ApiError {
             "Admin status request failed",
         )
     }
+
+    fn from_auth_failure(error: AuthFailure) -> Self {
+        match error {
+            AuthFailure::MissingToken => Self::missing_token(),
+            AuthFailure::InvalidToken => Self::invalid_token(),
+            AuthFailure::Internal => Self::internal(),
+        }
+    }
 }
 
 impl IntoResponse for ApiError {
@@ -294,56 +269,5 @@ impl IntoResponse for ApiError {
         (self.status, Json(self.body)).into_response()
     }
 }
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn dependency_free_status_payload_is_safe_placeholder() {
-        let payload = StatusSummaryResponse::placeholder();
-        let json = serde_json::to_string(&payload).expect("status should serialize");
-
-        assert!(json.contains("not_ready"));
-        assert_no_sensitive_leaks(&json);
-    }
-
-    #[test]
-    fn empty_adapter_list_payload_is_safe() {
-        let payload = AdapterListResponse::empty();
-        let json = serde_json::to_string(&payload).expect("adapter list should serialize");
-
-        assert_eq!(json, "{\"total_count\":0,\"adapters\":[]}");
-        assert_no_sensitive_leaks(&json);
-    }
-
-    #[test]
-    fn admin_errors_do_not_echo_token_material() {
-        let response = ApiError::invalid_token().into_response();
-
-        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-    }
-
-    fn assert_no_sensitive_leaks(json: &str) {
-        for forbidden in [
-            concat!("to", "ken"),
-            concat!("ha", "sh"),
-            concat!("oa", "uth"),
-            concat!("se", "cret"),
-            concat!("database", "_url"),
-            concat!("db", "_url"),
-            concat!("provider", "_payload"),
-            concat!("external_cursor", "_json"),
-            concat!("object_store", "_root"),
-            concat!("/", "srv", "/"),
-            concat!("post", "gres", "://"),
-            concat!("sta", "ck"),
-            concat!("back", "trace"),
-        ] {
-            assert!(
-                !json.contains(forbidden),
-                "admin output leaked forbidden marker {forbidden}: {json}"
-            );
-        }
-    }
-}
+mod tests;

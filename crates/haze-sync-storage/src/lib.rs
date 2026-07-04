@@ -1,12 +1,10 @@
-//! Storage schema, passive database models, local object store primitives, repository helpers, and test support for Haze Sync.
+//! Storage schema, passive database models, object store primitives,
+//! repository helpers, locks, and test support for Haze Sync.
 //!
-//! This crate exposes table metadata, row-shaped model structs,
+//! The crate exposes table metadata, row-shaped model structs,
 //! content-addressed object store primitives, passive SQLx repository helpers,
 //! and transaction-scoped PostgreSQL advisory-lock helpers. Test support is
-//! gated and intended only for tests/future integration harnesses. Production
-//! database pool initialization, migration running, Core apply policy,
-//! idempotency behavior, operation-log append behavior, conflict/delete policy,
-//! and API route wiring are implemented in later phases.
+//! gated and available only to tests and opt-in harnesses.
 
 pub mod locks;
 pub mod models;
@@ -22,7 +20,7 @@ pub use object_store::{
 };
 pub use repositories::{RepositoryError, RepositoryResult};
 
-/// Human-readable crate role used by skeleton smoke checks and documentation.
+/// Human-readable crate role used by smoke checks and documentation.
 pub const CRATE_ROLE: &str =
     "Storage schema metadata, passive database row models, object store primitives, repository helpers, locks, and test support.";
 

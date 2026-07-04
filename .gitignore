@@ -5,6 +5,8 @@
 node_modules/
 coverage/
 dist/
+
+# Generated plugin output
 apps/haze-obsidian-plugin/main.js
 apps/haze-obsidian-plugin/styles.css
 
@@ -12,14 +14,41 @@ apps/haze-obsidian-plugin/styles.css
 .env
 .env.*
 !.env.example
+*.local
+*.secret
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
 
 # Local OS/editor noise
 .DS_Store
 __MACOSX/
 *.swp
 *.swo
+.idea/
+.vscode/
 
 # Logs and temporary artifacts
 *.log
 *.tmp
 *.bak
+*.out
+*.pid
+*.seed
+*.stackdump
+
+# Local notes, prompts, archives, dumps, and handoff context
+notes/
+prompts/
+*.prompt
+*.prompt.md
+*.dump
+*.sql.gz
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+haze-sync-docs-v2/
+haze-sync-w3-handoff/

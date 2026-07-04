@@ -1,7 +1,7 @@
 use haze_sync_core::doctor::{
     adapter_token_sanity_check, db_connectivity_check, missing_blob_detection_check,
     object_store_exists_writable_check, AdapterTokenSanityInput, DbConnectivityCheckInput,
-    DoctorCheckId, DoctorReport, MissingBlobDetectionInput, ObjectStoreExistsWritableInput,
+    DoctorReport, MissingBlobDetectionInput, ObjectStoreExistsWritableInput,
 };
 use std::{error::Error, fmt};
 
@@ -25,6 +25,7 @@ impl Default for DoctorCommand {
 impl DoctorCommand {
     #[must_use]
     pub fn build_offline_report(self) -> DoctorReport {
+        debug_assert!(self.offline, "live doctor mode is intentionally deferred");
         DoctorReport::from_results(vec![
             db_connectivity_check(DbConnectivityCheckInput::offline(false)),
             object_store_exists_writable_check(ObjectStoreExistsWritableInput::offline(false)),
@@ -87,7 +88,7 @@ pub fn render_text_summary(report: &DoctorReport) -> String {
 
 #[must_use]
 pub const fn usage() -> &'static str {
-    "usage: haze-sync doctor [--offline]"
+    "usage: haze-sync doctor [--offline]\n\ncurrent mode: read-only offline summary only\nlive checks, repair, provider calls, and destructive actions are intentionally unavailable"
 }
 
 fn parse_doctor_args<S>(args: &[S]) -> Result<CliCommand, CliParseError>
@@ -98,6 +99,7 @@ where
 
     for argument in args {
         match argument.as_ref() {
+            "--help" | "-h" | "help" => return Ok(CliCommand::Help),
             "--offline" => command.offline = true,
             value if value.starts_with('-') => return Err(CliParseError::UnknownDoctorFlag),
             _value => return Err(CliParseError::UnexpectedDoctorArgument),
@@ -110,6 +112,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use haze_sync_core::doctor::DoctorCheckId;
 
     #[test]
     fn offline_doctor_report_is_reachable_and_sensitive_safe() {
@@ -157,6 +160,16 @@ mod tests {
             parse_cli_args(["doctor", "provider-call"]).unwrap_err(),
             CliParseError::UnexpectedDoctorArgument
         );
+    }
+
+    #[test]
+    fn doctor_help_is_supported_and_usage_stays_safe() {
+        assert_eq!(
+            parse_cli_args(["doctor", "--help"]).unwrap(),
+            CliCommand::Help
+        );
+        assert!(usage().contains("read-only offline summary"));
+        assert_no_sensitive_leaks(usage());
     }
 
     fn assert_no_sensitive_leaks(output: &str) {

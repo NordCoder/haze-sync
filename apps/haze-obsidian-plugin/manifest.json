@@ -3,7 +3,7 @@
   "name": "Haze Sync",
   "version": "0.1.0",
   "minAppVersion": "1.5.0",
-  "description": "Minimal Haze Sync plugin skeleton for the V1 custom sync architecture.",
+  "description": "Minimal Haze Sync plugin shell for Obsidian.",
   "author": "Haze Sync contributors",
   "isDesktopOnly": false
 }

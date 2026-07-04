@@ -7,7 +7,7 @@ use haze_sync_api::{
 };
 use haze_sync_common::{AdapterId, ContentHash, RevisionId, VaultPath};
 
-fn zero_hash() -> ContentHash {
+fn sha256_zero_hash() -> ContentHash {
     ContentHash::parse("sha256:0000000000000000000000000000000000000000000000000000000000000000")
         .expect("fixture hash should parse")
 }
@@ -18,7 +18,7 @@ fn api_dtos_interoperate_with_common_domain_primitives() {
     let adapter_id = AdapterId::parse("iphone-anna").expect("fixture adapter id should parse");
     let revision_id =
         RevisionId::parse("rev_01JFOUNDATION").expect("fixture revision should parse");
-    let hash = zero_hash();
+    let hash = sha256_zero_hash();
 
     let metadata = FileMetadataResponse {
         path: VaultPathDto::from(path.clone()),
@@ -51,7 +51,7 @@ fn write_metadata_preserves_explicit_unknown_base_contract() {
     let request = PutFileRequestMetadata {
         path: VaultPathDto::from(VaultPath::parse("Notes/new.md").unwrap()),
         base_revision_id: None,
-        content_sha256: ContentSha256Dto::from(zero_hash()),
+        content_sha256: ContentSha256Dto::from(sha256_zero_hash()),
         size_bytes: Some(0),
     };
 

@@ -14,12 +14,12 @@ use haze_sync_api::{
 };
 use haze_sync_common::{ConflictId, ContentHash, RevisionId, VaultPath};
 
-fn prefixed_hash(ch: char) -> String {
+fn sha256_hex(ch: char) -> String {
     let hex = ch.to_string().repeat(64);
     format!("sha256:{hex}")
 }
 
-fn valid_put_parts<'a>(base_revision_id: Option<&'a str>) -> PutFileRouteRequestParts<'a> {
+fn put_request_parts<'a>(base_revision_id: Option<&'a str>) -> PutFileRouteRequestParts<'a> {
     PutFileRouteRequestParts {
         route_path: "./Notes//plan.md",
         idempotency_key: Some("iphone-anna:op-001"),
@@ -34,7 +34,7 @@ fn valid_put_parts<'a>(base_revision_id: Option<&'a str>) -> PutFileRouteRequest
 
 #[test]
 fn valid_put_headers_parse() {
-    let request = parse_put_file_request(valid_put_parts(Some("rev_01JBASE")))
+    let request = parse_put_file_request(put_request_parts(Some("rev_01JBASE")))
         .expect("valid PUT contract should parse");
 
     assert_eq!(request.path().as_str(), "Notes/plan.md");
@@ -46,12 +46,12 @@ fn valid_put_headers_parse() {
             .as_str(),
         "rev_01JBASE"
     );
-    assert_eq!(request.content_sha256().to_string(), prefixed_hash('a'));
+    assert_eq!(request.content_sha256().to_string(), sha256_hex('a'));
     assert_eq!(request.body(), b"hello");
     assert_eq!(request.size_bytes(), 5);
 
     let metadata = request.to_metadata_dto();
-    let expected_hash = prefixed_hash('a');
+    let expected_hash = sha256_hex('a');
     assert_eq!(metadata.path.as_str(), "Notes/plan.md");
     assert_eq!(
         metadata
@@ -66,7 +66,7 @@ fn valid_put_headers_parse() {
 
 #[test]
 fn missing_idempotency_key_rejected() {
-    let mut parts = valid_put_parts(Some("rev_01JBASE"));
+    let mut parts = put_request_parts(Some("rev_01JBASE"));
     parts.idempotency_key = None;
 
     let error = parse_put_file_request(parts).expect_err("missing idempotency key should reject");
@@ -83,7 +83,7 @@ fn missing_idempotency_key_rejected() {
 
 #[test]
 fn invalid_content_sha256_rejected() {
-    let mut parts = valid_put_parts(Some("rev_01JBASE"));
+    let mut parts = put_request_parts(Some("rev_01JBASE"));
     parts.content_sha256 = Some("not-a-sha256");
 
     let error = parse_put_file_request(parts).expect_err("invalid hash should reject");
@@ -95,7 +95,7 @@ fn invalid_content_sha256_rejected() {
 
 #[test]
 fn explicit_null_base_revision_parses_as_none() {
-    let request = parse_put_file_request(valid_put_parts(Some("null")))
+    let request = parse_put_file_request(put_request_parts(Some("null")))
         .expect("explicit null base should parse");
 
     assert_eq!(request.base_revision_id(), None);
@@ -104,14 +104,14 @@ fn explicit_null_base_revision_parses_as_none() {
 
 #[test]
 fn invalid_base_revision_rejected() {
-    let error = parse_put_file_request(valid_put_parts(Some("not_rev_01J")))
+    let error = parse_put_file_request(put_request_parts(Some("not_rev_01J")))
         .expect_err("non-revision base should reject");
 
     assert_eq!(error, FileRouteError::InvalidBaseRevision);
     assert_eq!(error.http_status_code(), 400);
     assert_eq!(error.public_code(), PublicErrorCode::ValidationError);
 
-    let missing = valid_put_parts(None);
+    let missing = put_request_parts(None);
     assert_eq!(
         parse_put_file_request(missing).expect_err("missing base header should reject"),
         FileRouteError::MissingRequiredHeader {
@@ -169,7 +169,7 @@ fn invalid_get_revision_id_rejected() {
 #[test]
 fn response_headers_are_deterministic_and_safe() {
     let revision_id = RevisionId::parse("rev_01JDOWN").unwrap();
-    let expected_hash = prefixed_hash('b');
+    let expected_hash = sha256_hex('b');
     let content_sha256 = ContentHash::parse(&expected_hash).unwrap();
     let headers = FileDownloadRouteHeaders::new(revision_id, content_sha256, 1842);
 

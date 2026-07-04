@@ -40,23 +40,23 @@ use haze_sync_common::{AdapterId, ConflictId, ContentHash, RevisionId, VaultPath
 use haze_sync_core::revision_service::compute_content_hash;
 use serde_json::json;
 
-fn path(input: &str) -> VaultPath {
+fn vault_path(input: &str) -> VaultPath {
     VaultPath::parse(input).expect("fixture path should parse")
 }
 
-fn revision_id(input: &str) -> RevisionId {
+fn revision_id_value(input: &str) -> RevisionId {
     RevisionId::parse(input).expect("fixture revision id should parse")
 }
 
-fn conflict_id(input: &str) -> ConflictId {
+fn conflict_id_value(input: &str) -> ConflictId {
     ConflictId::parse(input).expect("fixture conflict id should parse")
 }
 
-fn adapter_id(input: &str) -> AdapterId {
+fn adapter_id_value(input: &str) -> AdapterId {
     AdapterId::parse(input).expect("fixture adapter id should parse")
 }
 
-fn content_hash(bytes: &[u8]) -> ContentHash {
+fn content_hash_for(bytes: &[u8]) -> ContentHash {
     compute_content_hash(bytes)
 }
 
@@ -129,15 +129,15 @@ fn get_conflicts_open_maps_to_safe_public_dto() {
     assert_eq!(request.status, Some(ConflictStatusDto::Open));
 
     let response = conflict_list_response_from_parts(vec![ConflictRouteSummaryParts {
-        conflict_id: conflict_id("conf_01JW3"),
-        original_path: path("Projects/Haze/plan.md"),
-        conflict_path: path(
+        conflict_id: conflict_id_value("conf_01JW3"),
+        original_path: vault_path("Projects/Haze/plan.md"),
+        conflict_path: vault_path(
             "_haze_conflicts/open/Projects/Haze/plan.conflict.iphone-anna.2026-07-01-120000.md",
         ),
-        current_revision_id: revision_id("rev_current"),
-        conflict_revision_id: Some(revision_id("rev_conflict")),
-        incoming_revision_id: Some(revision_id("rev_conflict")),
-        source_adapter_id: adapter_id("iphone-anna"),
+        current_revision_id: revision_id_value("rev_current"),
+        conflict_revision_id: Some(revision_id_value("rev_conflict")),
+        incoming_revision_id: Some(revision_id_value("rev_conflict")),
+        source_adapter_id: adapter_id_value("iphone-anna"),
         policy_applied: ConflictPolicyDto::PreserveBoth,
         status: ConflictStatusDto::Open,
         created_at: Some(TimestampDto::from("2026-07-01T12:00:00Z")),
@@ -167,10 +167,10 @@ fn conflict_resolution_actions_are_accepted_or_safely_deferred() {
             extra_fields: &[],
         })
         .expect("resolution action should parse safely");
-        assert_eq!(request.conflict_id, conflict_id("conf_01JW3"));
+        assert_eq!(request.conflict_id, conflict_id_value("conf_01JW3"));
         assert_eq!(request.resolution, expected.clone());
 
-        let response = resolved_conflict_response(conflict_id("conf_01JW3"), expected, 27);
+        let response = resolved_conflict_response(conflict_id_value("conf_01JW3"), expected, 27);
         assert_eq!(response.status, ConflictResolveStatusDto::Resolved);
         assert_eq!(response.seq, 27);
         let serialized = serde_json::to_string(&response).expect("response should serialize");
@@ -201,10 +201,10 @@ fn delete_route_requires_idempotency_key() {
 
 #[test]
 fn delete_route_public_errors_are_safe_for_stale_and_mass_delete_rejections() {
-    let stale = stale_base_delete_response(path("Projects/Haze/old.md"));
-    let unsafe_delete = unsafe_delete_response(path("Projects/Haze/old.md"));
+    let stale = stale_base_delete_response(vault_path("Projects/Haze/old.md"));
+    let unsafe_delete = unsafe_delete_response(vault_path("Projects/Haze/old.md"));
     let tombstoned = tombstoned_delete_response(
-        path("Projects/Haze/old.md"),
+        vault_path("Projects/Haze/old.md"),
         "tmb_01JW3DELETE",
         42,
         "2026-08-01T00:00:00Z",
@@ -241,7 +241,7 @@ fn w2_put_get_file_route_contracts_remain_intact() {
     let request = parse_put_file_request(PutFileRouteRequestParts {
         route_path: "Projects/Haze/plan.md",
         idempotency_key: Some("iphone-anna:put-001"),
-        content_sha256: Some(&content_hash(&body).to_string()),
+        content_sha256: Some(&content_hash_for(&body).to_string()),
         base_revision_id: Some("null"),
         body: body.clone(),
         max_upload_bytes: Some(1024),
@@ -255,11 +255,14 @@ fn w2_put_get_file_route_contracts_remain_intact() {
     assert!(!format!("{request:?}").contains("put-001"));
     assert!(!format!("{request:?}").contains("w2 file body"));
 
-    let accepted =
-        accepted_upload_response(path("Projects/Haze/plan.md"), revision_id("rev_w2"), 11);
+    let accepted = accepted_upload_response(
+        vault_path("Projects/Haze/plan.md"),
+        revision_id_value("rev_w2"),
+        11,
+    );
     assert!(matches!(accepted, PutFileResponse::Accepted { .. }));
 
-    let ignored = ignored_same_content_response(path("Projects/Haze/plan.md"));
+    let ignored = ignored_same_content_response(vault_path("Projects/Haze/plan.md"));
     assert_eq!(
         ignored,
         PutFileResponse::Ignored {
@@ -276,7 +279,8 @@ fn w2_put_get_file_route_contracts_remain_intact() {
     assert_eq!(get.path().as_str(), "Projects/Haze/plan.md");
     assert_eq!(get.revision_id().map(RevisionId::as_str), Some("rev_w2"));
 
-    let headers = FileDownloadRouteHeaders::new(revision_id("rev_w2"), content_hash(&body), 12);
+    let headers =
+        FileDownloadRouteHeaders::new(revision_id_value("rev_w2"), content_hash_for(&body), 12);
     let header_map = headers.to_header_map();
     assert_eq!(headers.content_type(), APPLICATION_OCTET_STREAM);
     assert_eq!(header_map["Content-Type"], APPLICATION_OCTET_STREAM);
@@ -299,7 +303,7 @@ fn w2_changes_route_semantics_remain_intact_and_include_w3_entries() {
                 kind: OperationKindDto::UpsertFile,
                 path: VaultPathDto::from("Projects/Haze/plan.md"),
                 revision_id: Some(RevisionIdDto::from("rev_w2")),
-                content_sha256: Some(ContentSha256Dto::from(content_hash(b"w2 file body"))),
+                content_sha256: Some(ContentSha256Dto::from(content_hash_for(b"w2 file body"))),
                 size_bytes: Some(12),
                 tombstone_id: None,
                 conflict_id: None,
