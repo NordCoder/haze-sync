@@ -11,7 +11,7 @@ use haze_sync_api::{
     },
 };
 
-fn sample_change(seq: i64) -> ChangeEntryDto {
+fn change_entry(seq: i64) -> ChangeEntryDto {
     ChangeEntryDto {
         seq,
         kind: OperationKindDto::UpsertFile,
@@ -85,7 +85,7 @@ fn too_large_limit_is_rejected_as_invalid_request() {
 #[test]
 fn response_serialization_matches_stable_safe_shape() {
     let response =
-        changes_response_from_parts(12_345, 12_380, false, vec![sample_change(12_380)]).unwrap();
+        changes_response_from_parts(12_345, 12_380, false, vec![change_entry(12_380)]).unwrap();
     let hash = format!("sha256:{}", "a".repeat(64));
     let expected = format!(
         "{{\"from_seq\":12345,\"to_seq\":12380,\"has_more\":false,\"changes\":[{{\"seq\":12380,\"kind\":\"upsert_file\",\"path\":\"Projects/Haze/plan.md\",\"revision_id\":\"rev_01JTEST\",\"content_sha256\":\"{hash}\",\"size_bytes\":1842,\"updated_by\":\"gdrive-adapter\",\"updated_at\":\"2026-07-01T22:00:00Z\"}}]}}"
@@ -97,7 +97,7 @@ fn response_serialization_matches_stable_safe_shape() {
 #[test]
 fn pagination_metadata_is_preserved() {
     let response =
-        changes_response_from_parts(10, 12, true, vec![sample_change(11), sample_change(12)])
+        changes_response_from_parts(10, 12, true, vec![change_entry(11), change_entry(12)])
             .unwrap();
 
     assert_eq!(response.from_seq, 10);

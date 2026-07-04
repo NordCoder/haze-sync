@@ -1,5 +1,3 @@
-#![allow(unused_imports)]
-
 use std::process::ExitCode;
 
 mod commands;
@@ -12,7 +10,7 @@ fn main() -> ExitCode {
         return run_doctor(args.iter().skip(1));
     }
 
-    run_foundation(args.iter())
+    run_cli(args.iter())
 }
 
 fn run_doctor<'a, I>(args: I) -> ExitCode
@@ -36,13 +34,17 @@ where
     }
 }
 
-fn run_foundation<'a, I>(args: I) -> ExitCode
+fn run_cli<'a, I>(args: I) -> ExitCode
 where
     I: IntoIterator<Item = &'a String>,
 {
     match commands::parse_cli(args) {
+        Ok(commands::CliCommand::Help) => {
+            println!("{}", commands::usage());
+            ExitCode::SUCCESS
+        }
         Ok(command) => {
-            println!("{}", command.foundation_message());
+            println!("{}", command.summary_message());
             ExitCode::SUCCESS
         }
         Err(error) => {

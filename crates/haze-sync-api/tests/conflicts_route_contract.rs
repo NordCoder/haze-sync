@@ -11,19 +11,19 @@ use haze_sync_api::{
 };
 use haze_sync_common::{AdapterId, ConflictId, RevisionId, VaultPath};
 
-fn parse_conflict_id(value: &str) -> ConflictId {
+fn conflict_id_value(value: &str) -> ConflictId {
     ConflictId::parse(value).unwrap()
 }
 
-fn parse_revision_id(value: &str) -> RevisionId {
+fn revision_id_value(value: &str) -> RevisionId {
     RevisionId::parse(value).unwrap()
 }
 
-fn parse_path(value: &str) -> VaultPath {
+fn vault_path(value: &str) -> VaultPath {
     VaultPath::parse(value).unwrap()
 }
 
-fn resolve_request(action: &str) -> ResolveConflictRequestParts<'_> {
+fn resolve_request_parts(action: &str) -> ResolveConflictRequestParts<'_> {
     ResolveConflictRequestParts {
         conflict_id: "conf_01JTEST",
         resolution: Some(action),
@@ -57,14 +57,14 @@ fn unsupported_status_rejected_safely() {
 #[test]
 fn conflict_list_serialization_stable() {
     let response = conflict_list_response_from_parts(vec![ConflictRouteSummaryParts {
-        conflict_id: parse_conflict_id("conf_01JTEST"),
-        original_path: parse_path("Projects/Haze/plan.md"),
-        conflict_path: parse_path(
+        conflict_id: conflict_id_value("conf_01JTEST"),
+        original_path: vault_path("Projects/Haze/plan.md"),
+        conflict_path: vault_path(
             "_haze_conflicts/open/Projects/Haze/plan.conflict.worktree.2026-07-01-2230.md",
         ),
-        current_revision_id: parse_revision_id("rev_01JCURRENT"),
-        conflict_revision_id: Some(parse_revision_id("rev_01JCONFLICT")),
-        incoming_revision_id: Some(parse_revision_id("rev_01JINCOMING")),
+        current_revision_id: revision_id_value("rev_01JCURRENT"),
+        conflict_revision_id: Some(revision_id_value("rev_01JCONFLICT")),
+        incoming_revision_id: Some(revision_id_value("rev_01JINCOMING")),
         source_adapter_id: AdapterId::parse("worktree-adapter").unwrap(),
         policy_applied: ConflictPolicyDto::PreserveBoth,
         status: ConflictStatusDto::Open,
@@ -97,7 +97,7 @@ fn conflict_list_serialization_stable() {
 
 #[test]
 fn resolve_accept_current_parses() {
-    let request = parse_resolve_conflict_request(resolve_request("accept_current")).unwrap();
+    let request = parse_resolve_conflict_request(resolve_request_parts("accept_current")).unwrap();
 
     assert_eq!(request.conflict_id.as_str(), "conf_01JTEST");
     assert_eq!(request.resolution, ConflictResolutionDto::AcceptCurrent);
@@ -109,21 +109,21 @@ fn resolve_accept_current_parses() {
 
 #[test]
 fn resolve_accept_conflict_parses() {
-    let request = parse_resolve_conflict_request(resolve_request("accept_conflict")).unwrap();
+    let request = parse_resolve_conflict_request(resolve_request_parts("accept_conflict")).unwrap();
 
     assert_eq!(request.resolution, ConflictResolutionDto::AcceptConflict);
 }
 
 #[test]
 fn resolve_keep_both_parses() {
-    let request = parse_resolve_conflict_request(resolve_request("keep_both")).unwrap();
+    let request = parse_resolve_conflict_request(resolve_request_parts("keep_both")).unwrap();
 
     assert_eq!(request.resolution, ConflictResolutionDto::KeepBoth);
 }
 
 #[test]
 fn resolve_mark_resolved_parses() {
-    let request = parse_resolve_conflict_request(resolve_request("mark_resolved")).unwrap();
+    let request = parse_resolve_conflict_request(resolve_request_parts("mark_resolved")).unwrap();
 
     assert_eq!(request.resolution, ConflictResolutionDto::MarkResolved);
 }

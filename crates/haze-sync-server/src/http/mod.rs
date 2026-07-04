@@ -1,4 +1,4 @@
-//! HTTP helpers for the Haze Sync server route shell.
+//! HTTP helpers for the Haze Sync server scaffold.
 //!
 //! These helpers define safe public response shapes for placeholder routes. They
 //! intentionally do not expose stack traces, secrets, provider payloads, local

@@ -8,11 +8,8 @@ use axum::{
     Extension, Json, Router,
 };
 use haze_sync_api::{
-    auth::{AdapterPrincipal, BearerToken},
-    contracts::{
-        errors::{ErrorResponse, PublicErrorCode},
-        headers::AUTHORIZATION_HEADER,
-    },
+    auth::AdapterPrincipal,
+    contracts::errors::{ErrorResponse, PublicErrorCode},
     dto::{
         common::{ConflictPolicyDto, ConflictResolutionDto, ConflictStatusDto},
         primitives::TimestampDto,
@@ -39,7 +36,8 @@ use std::{collections::HashMap, str::FromStr};
 
 use crate::{
     http::errors::not_implemented_response,
-    state::{AuthState, ServerAppState},
+    routes::auth::{authenticate_principal, AuthFailure},
+    state::ServerAppState,
 };
 
 pub fn router() -> Router {
@@ -251,13 +249,9 @@ async fn authenticate(
     headers: &HeaderMap,
     permission: ConflictPermission,
 ) -> Result<AdapterPrincipal, ApiError> {
-    let header = required_auth_header(headers)?;
-    BearerToken::parse_authorization_header(header).map_err(|_error| ApiError::invalid_token())?;
-    let principal = match state.auth() {
-        AuthState::Disabled => return Err(ApiError::invalid_token()),
-        AuthState::StaticPrincipal { principal } => principal.clone(),
-        AuthState::Database { .. } => return Err(ApiError::invalid_token()),
-    };
+    let principal = authenticate_principal(state, headers)
+        .await
+        .map_err(ApiError::from_auth_failure)?;
 
     match permission {
         ConflictPermission::Read if !principal.role().can_read_files() => {
@@ -269,13 +263,6 @@ async fn authenticate(
         _ => {}
     }
     Ok(principal)
-}
-
-fn required_auth_header(headers: &HeaderMap) -> Result<&str, ApiError> {
-    let value = headers
-        .get(AUTHORIZATION_HEADER)
-        .ok_or_else(ApiError::missing_token)?;
-    value.to_str().map_err(|_error| ApiError::invalid_token())
 }
 
 fn conflict_resolved_operation_id(
@@ -362,6 +349,14 @@ impl ApiError {
             "Core conflict operation failed",
         )
     }
+
+    fn from_auth_failure(error: AuthFailure) -> Self {
+        match error {
+            AuthFailure::MissingToken => Self::missing_token(),
+            AuthFailure::InvalidToken => Self::invalid_token(),
+            AuthFailure::Internal => Self::internal(),
+        }
+    }
 }
 
 impl From<ConflictsRouteError> for ApiError {
@@ -379,96 +374,5 @@ impl IntoResponse for ApiError {
         (self.status, Json(self.body)).into_response()
     }
 }
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use axum::{body::Body, http::Request};
-    use haze_sync_api::auth::AdapterRole;
-    use http_body_util::BodyExt as _;
-    use serde_json::json;
-    use tower::ServiceExt as _;
-
-    fn static_state() -> ServerAppState {
-        let principal =
-            AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap();
-        ServerAppState::with_static_principal(principal)
-    }
-
-    async fn request_json(method: &str, uri: &str, body: Body) -> (StatusCode, Value) {
-        let request = Request::builder()
-            .method(method)
-            .uri(uri)
-            .header(AUTHORIZATION_HEADER, "Bearer conflict_route_test_token")
-            .header("content-type", "application/json")
-            .body(body)
-            .expect("test request should build");
-        let response = router()
-            .layer(Extension(static_state()))
-            .oneshot(request)
-            .await
-            .expect("router should respond");
-        let status = response.status();
-        let body = response
-            .into_body()
-            .collect()
-            .await
-            .expect("response body should collect")
-            .to_bytes();
-        let json = serde_json::from_slice(&body).expect("response body should be JSON");
-        (status, json)
-    }
-
-    #[tokio::test]
-    async fn get_open_conflicts_without_storage_returns_safe_empty_dto() {
-        let (status, json) = request_json("GET", "/conflicts?status=open", Body::empty()).await;
-        assert_eq!(status, StatusCode::OK);
-        assert_eq!(json["conflicts"], json!([]));
-    }
-
-    #[tokio::test]
-    async fn unsupported_conflict_status_returns_safe_bad_request() {
-        let (status, json) = request_json("GET", "/conflicts?status=resolved", Body::empty()).await;
-        assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert_eq!(json["error"]["code"], "validation_error");
-    }
-
-    #[tokio::test]
-    async fn resolve_actions_without_storage_are_safe_and_deterministic() {
-        for action in [
-            "accept_current",
-            "accept_conflict",
-            "keep_both",
-            "mark_resolved",
-        ] {
-            let body = Body::from(format!(r#"{{"resolution":"{action}"}}"#));
-            let (status, json) = request_json("POST", "/conflicts/conf_01J/resolve", body).await;
-            assert_eq!(status, StatusCode::NOT_IMPLEMENTED, "action {action}");
-            assert_eq!(json["error"]["code"], "not_implemented");
-        }
-    }
-
-    #[test]
-    fn conflict_resolution_action_support_is_narrow_and_explicit() {
-        assert!(resolution_is_metadata_only(
-            &ConflictResolutionDto::AcceptCurrent
-        ));
-        assert!(resolution_is_metadata_only(
-            &ConflictResolutionDto::KeepBoth
-        ));
-        assert!(resolution_is_metadata_only(
-            &ConflictResolutionDto::MarkResolved
-        ));
-        assert!(!resolution_is_metadata_only(
-            &ConflictResolutionDto::AcceptConflict
-        ));
-    }
-
-    #[test]
-    fn deterministic_conflict_resolved_operation_id_is_safe() {
-        let conflict_id = ConflictId::parse("conf_01J").unwrap();
-        let adapter_id = AdapterId::parse("obsidian-plugin").unwrap();
-        let op_id = conflict_resolved_operation_id(&conflict_id, &adapter_id).unwrap();
-        assert!(op_id.as_str().starts_with("op_"));
-    }
-}
+mod tests;

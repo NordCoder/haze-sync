@@ -1,4 +1,4 @@
-//! Haze Sync server route shell binary.
+//! Haze Sync server scaffold binary.
 //!
 //! This phase exposes deterministic HTTP route boundaries and server-side
 //! database/readiness helpers. It does not start a production listener, auto-run
@@ -11,9 +11,9 @@ pub mod readiness;
 pub mod routes;
 pub mod state;
 
-/// Human-readable crate role used by skeleton smoke checks and documentation.
+/// Human-readable crate role used by smoke checks and documentation.
 pub const CRATE_ROLE: &str =
-    "Haze Sync HTTP route shell, configuration, DB readiness, migration foundation, and W2 Core file routes.";
+    "Haze Sync HTTP server scaffolding, configuration, DB readiness, migrations, and W2/W3 route wiring.";
 
 /// Returns the package name for this crate.
 #[must_use]
@@ -23,7 +23,7 @@ pub const fn package_name() -> &'static str {
 
 fn main() {
     let _app = routes::build_router();
-    println!("haze-sync-server route shell");
+    println!("haze-sync-server scaffold");
 }
 
 #[cfg(test)]

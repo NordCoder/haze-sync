@@ -5,6 +5,10 @@
 //! placeholder error mapping for future conflict routes. It does not register
 //! Axum handlers, authenticate adapter tokens, call storage repositories, execute
 //! Core conflict policy, resolve conflicts, write files, or contact providers.
+//!
+//! The current contract keeps `accept_current`, `keep_both`, and `mark_resolved`
+//! as metadata-only resolution actions. `accept_conflict` remains reserved for a
+//! future promotion flow.
 
 use std::{collections::BTreeMap, error::Error, fmt};
 

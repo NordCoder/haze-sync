@@ -1,6 +1,6 @@
 [package]
 name = "haze-sync-server"
-description = "Haze Sync HTTP route shell and configuration foundation."
+description = "Haze Sync HTTP server scaffolding and configuration."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -17,7 +17,7 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "serd
 haze-sync-api = { path = "../haze-sync-api" }
 haze-sync-common = { path = "../haze-sync-common" }
 haze-sync-core = { path = "../haze-sync-core" }
-haze-sync-storage = { path = "../haze-sync-storage" }
+haze-sync-storage = { path = "../haze-sync-storage", features = ["test-support"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.10"

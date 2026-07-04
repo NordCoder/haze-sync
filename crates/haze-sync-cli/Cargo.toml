@@ -1,6 +1,6 @@
 [package]
 name = "haze-sync-cli"
-description = "Haze Sync CLI foundation binary."
+description = "Haze Sync CLI scaffold binary."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

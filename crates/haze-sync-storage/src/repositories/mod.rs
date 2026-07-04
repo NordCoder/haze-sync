@@ -6,6 +6,7 @@
 
 pub mod adapter_cursors;
 pub mod conflicts;
+pub mod content_blobs;
 pub mod idempotency;
 pub mod objects;
 pub mod operation_log;

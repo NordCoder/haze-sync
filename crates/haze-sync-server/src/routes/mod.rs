@@ -1,35 +1,25 @@
-//! Haze Sync HTTP route shell and W2 Core file-operation fan-in.
+//! Haze Sync HTTP routing entrypoint with explicit W2/W3 route composition.
 //!
-//! Health remains dependency-free. Readiness and Core file/change routes use
-//! explicit caller-owned state when supplied; no hidden global runtime state is
-//! created by router construction.
+//! Health remains dependency-free. Readiness and file/change routes use explicit
+//! caller-owned state when supplied; no hidden global runtime state is created
+//! by router construction.
 
-use axum::{
-    body::{to_bytes, Body},
-    extract::{Extension, Path, Query},
-    http::{Method, Request, StatusCode},
-    middleware::{self, Next},
-    response::{IntoResponse, Response},
-    routing::get,
-    Json, Router,
-};
-use haze_sync_api::contracts::errors::{ErrorResponse, PublicErrorCode};
-use serde_json::Value;
-use std::collections::HashMap;
+use axum::{extract::Extension, routing::get, Router};
 
 use crate::{readiness::ReadinessState, state::ServerAppState};
 
 pub mod admin;
+mod auth;
 pub mod conflicts;
 pub mod delete;
 pub mod health;
-#[cfg_attr(not(test), allow(unused_imports))]
 pub mod v1;
 
-/// Builds the Haze Sync router with safe not-ready dependency defaults.
+/// Builds the Haze Sync router with safe dependency-free defaults.
 ///
-/// Protected W2 Core routes are registered, but without runtime state they
-/// return sanitized auth/storage errors rather than mutating anything.
+/// Route surfaces are registered even without runtime dependencies, but handlers
+/// fall back to sanitized auth/storage/not-implemented responses rather than
+/// mutating anything.
 pub fn build_router() -> Router {
     build_router_with_state(ServerAppState::dependency_free())
 }
@@ -53,151 +43,16 @@ fn build_router_with_state_and_readiness(
     Router::new()
         .route("/health", get(health::health))
         .route("/ready", get(health::ready))
-        .nest("/v1", v1::router())
-        .fallback(conflict_fallback)
-        .layer(middleware::from_fn(conflict_route_intercept))
+        .nest("/v1", build_v1_router())
         .layer(Extension(readiness))
         .layer(Extension(state))
 }
 
-async fn conflict_route_intercept(request: Request<Body>, next: Next) -> Response {
-    let Some(state) = request.extensions().get::<ServerAppState>().cloned() else {
-        return next.run(request).await;
-    };
-
-    if request.method() == Method::GET {
-        match request.uri().path() {
-            "/v1/admin/status" => {
-                let headers = request.headers().clone();
-                return admin_response(admin::status_route(Extension(state), headers).await);
-            }
-            "/v1/admin/adapters" => {
-                let headers = request.headers().clone();
-                return admin_response(admin::adapters_route(Extension(state), headers).await);
-            }
-            _ => {}
-        }
-    }
-
-    if request.method() == Method::DELETE {
-        if let Some(route_path) = delete_file_path(request.uri().path()) {
-            let headers = request.headers().clone();
-            return delete_response(
-                delete::delete_file_route(Extension(state), Path(route_path), headers).await,
-            );
-        }
-    }
-
-    if request.method() == Method::GET && request.uri().path() == "/v1/conflicts" {
-        let headers = request.headers().clone();
-        let query = query_map(request.uri().query());
-        return conflict_response(
-            conflicts::list_conflicts_route(Extension(state), Query(query), headers).await,
-        );
-    }
-
-    next.run(request).await
-}
-
-async fn conflict_fallback(request: Request<Body>) -> Response {
-    let Some(state) = request.extensions().get::<ServerAppState>().cloned() else {
-        return StatusCode::NOT_FOUND.into_response();
-    };
-
-    if request.method() != Method::POST {
-        return StatusCode::NOT_FOUND.into_response();
-    }
-
-    let Some(conflict_id) = conflict_resolve_id(request.uri().path()) else {
-        return StatusCode::NOT_FOUND.into_response();
-    };
-
-    let headers = request.headers().clone();
-    let body = request.into_body();
-    let bytes = match to_bytes(body, 16_384).await {
-        Ok(bytes) => bytes,
-        Err(_error) => return invalid_conflict_json_response(),
-    };
-    let value = match serde_json::from_slice::<Value>(&bytes) {
-        Ok(value) => value,
-        Err(_error) => Value::Null,
-    };
-
-    conflict_response(
-        conflicts::resolve_conflict_route(
-            Extension(state),
-            Path(conflict_id),
-            headers,
-            Json(value),
-        )
-        .await,
-    )
-}
-
-fn admin_response(result: Result<Response, admin::ApiError>) -> Response {
-    match result {
-        Ok(response) => response,
-        Err(error) => error.into_response(),
-    }
-}
-
-fn conflict_response(result: Result<Response, conflicts::ApiError>) -> Response {
-    match result {
-        Ok(response) => response,
-        Err(error) => error.into_response(),
-    }
-}
-
-fn delete_response(result: Result<Response, delete::ApiError>) -> Response {
-    match result {
-        Ok(response) => response,
-        Err(error) => error.into_response(),
-    }
-}
-
-fn invalid_conflict_json_response() -> Response {
-    (
-        StatusCode::BAD_REQUEST,
-        Json(ErrorResponse::new(
-            PublicErrorCode::ValidationError,
-            "Invalid conflict resolution request",
-        )),
-    )
-        .into_response()
-}
-
-fn query_map(query: Option<&str>) -> HashMap<String, String> {
-    let mut output = HashMap::new();
-    let Some(query) = query else {
-        return output;
-    };
-
-    for pair in query.split('&').filter(|pair| !pair.is_empty()) {
-        let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
-        output.insert(key.to_owned(), value.to_owned());
-    }
-
-    output
-}
-
-fn conflict_resolve_id(path: &str) -> Option<String> {
-    let value = path
-        .strip_prefix("/v1/conflicts/")?
-        .strip_suffix("/resolve")?;
-    if value.is_empty() || value.contains('/') {
-        return None;
-    }
-
-    Some(value.to_owned())
-}
-
-fn delete_file_path(path: &str) -> Option<String> {
-    let value = path.strip_prefix("/v1/files/")?;
-    if value.is_empty() {
-        return None;
-    }
-
-    Some(value.to_owned())
+fn build_v1_router() -> Router {
+    v1::router()
+        .merge(conflicts::router())
+        .merge(delete::router())
+        .merge(admin::router())
 }
 
 #[cfg(test)]
@@ -210,6 +65,8 @@ mod tests {
     use haze_sync_api::auth::{AdapterPrincipal, AdapterRole};
     use http_body_util::BodyExt as _;
     use serde_json::Value;
+    use sqlx::postgres::PgPoolOptions;
+    use std::time::Duration;
     use tower::ServiceExt as _;
 
     async fn request_json(method: &str, uri: &str, body: Body) -> (StatusCode, Value) {
@@ -293,6 +150,20 @@ mod tests {
         let principal = AdapterPrincipal::new("admin-cli", AdapterRole::Admin)
             .expect("fixture principal should be valid");
         ServerAppState::with_static_principal(principal)
+    }
+
+    fn non_resolver_state() -> ServerAppState {
+        let principal = AdapterPrincipal::new("gdrive-adapter", AdapterRole::GdriveAdapter)
+            .expect("fixture principal should be valid");
+        ServerAppState::with_static_principal(principal)
+    }
+
+    fn database_auth_state() -> ServerAppState {
+        let pool = PgPoolOptions::new()
+            .acquire_timeout(Duration::from_millis(50))
+            .connect_lazy("postgres://haze_sync:placeholder@127.0.0.1:1/haze_sync_test")
+            .expect("lazy pool should build");
+        ServerAppState::new(None, None, None, crate::state::AuthState::Database { pool })
     }
 
     #[test]
@@ -453,6 +324,43 @@ mod tests {
         assert!(!json.to_string().contains("postgres://"));
         assert!(!json.to_string().contains("secret"));
         assert!(!json.to_string().contains("/srv/"));
+    }
+
+    #[tokio::test]
+    async fn conflict_routes_require_auth_without_runtime_state() {
+        let (status, json) = request_json("GET", "/v1/conflicts?status=open", Body::empty()).await;
+
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(json["error"]["code"], "missing_token");
+    }
+
+    #[tokio::test]
+    async fn conflict_resolution_rejects_non_resolver_roles_safely() {
+        let state = non_resolver_state();
+        let body = serde_json::json!({ "resolution": "accept_current" }).to_string();
+        let (status, json) = request_json_with_state(
+            state,
+            "POST",
+            "/v1/conflicts/conf_01J/resolve",
+            Body::from(body),
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(json["error"]["code"], "forbidden_role");
+        assert!(!json.to_string().contains("route_test_token"));
+    }
+
+    #[tokio::test]
+    async fn conflict_routes_use_database_auth_lookup_path_when_configured() {
+        let state = database_auth_state();
+        let (status, json) =
+            request_json_with_state(state, "GET", "/v1/conflicts?status=open", Body::empty()).await;
+
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(json["error"]["code"], "internal_error");
+        assert!(!json.to_string().contains("route_test_token"));
+        assert!(!json.to_string().contains("postgres://"));
     }
 
     #[tokio::test]
