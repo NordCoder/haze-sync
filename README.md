@@ -66,9 +66,23 @@ apps/
 .github/workflows/       CI checks for Rust, plugin, and compose validation
 deploy/
   docker-compose.yml     local Postgres scaffold
+docs/                    system-level architecture, safety, and integration docs
 migrations/              initial storage schema migrations
 tests/e2e/               E2E test scaffold only
 ~~~
+
+## System documentation
+
+Repository-level system documentation lives in [`docs/`](docs/README.md).
+
+Start with:
+
+- [`docs/system-architecture.md`](docs/system-architecture.md) for the product/runtime architecture;
+- [`docs/component-boundaries.md`](docs/component-boundaries.md) for component ownership and dependency rules;
+- [`docs/safety-and-sync-semantics.md`](docs/safety-and-sync-semantics.md) for global sync safety semantics;
+- [`docs/integration-testing-rollout.md`](docs/integration-testing-rollout.md) for integration, testing, bootstrap, and rollout strategy.
+
+Component-local documentation lives inside each component directory and should describe that component's contract, implementation plan, dependency map, implementation log, and decisions.
 
 ## Development commands
 
