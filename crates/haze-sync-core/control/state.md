@@ -2,16 +2,16 @@
 
 component: core
 branch: component/core
-status: PROMPT_READY
+status: REPORT_READY
 
 active_prompt: crates/haze-sync-core/control/prompt.md
-active_report: none
+active_report: crates/haze-sync-core/control/report.md
 active_agent_role: implementation-worker
 
 wave: T0
 phase: T0-P1
 
-implementation_status: PROMPT_READY
+implementation_status: SELF_ACCEPT_PENDING_CI
 clean_review_status: NOT_STARTED
 ci_status: CI_UNKNOWN
 architect_status: NOT_REQUIRED
