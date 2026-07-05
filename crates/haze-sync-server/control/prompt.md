@@ -1,4 +1,4 @@
-# T0-P3 — Server component docs plus tiny route cleanup
+# T0-P3C — Server clean-code review
 
 Component: server
 Component path: crates/haze-sync-server
@@ -9,26 +9,28 @@ Target branch: main
 
 ## Role
 
-You are an Implementation Worker. Work only through the GitHub connector. Do not use SSH/local git. Do not open PR. Do not merge.
+You are a Clean-Code Reviewer. Work only through the GitHub connector. Do not use SSH/local git. Do not open PR. Do not merge.
 
 ## Read
 
 - implementation-manifest.md from ChatGPT Project Sources
 - report-template.md from ChatGPT Project Sources
-- implementation-worker-prompt.md from ChatGPT Project Sources
+- clean-code-reviewer-prompt.md from ChatGPT Project Sources
+- crates/haze-sync-server/control/prompt.md
+- crates/haze-sync-server/control/log/20260705-000000Z-T0-P3-implementation-report.md
 - crates/haze-sync-server/docs/component-contract.md
 - crates/haze-sync-server/docs/implementation-plan.md
 - crates/haze-sync-server/docs/implementation-log.md
 - crates/haze-sync-server/docs/dependency-map.md
 - crates/haze-sync-server/docs/decisions.md
-- crates/haze-sync-server/control/README.md
-- crates/haze-sync-server/control/state.md
-- current crates/haze-sync-server source code
-- relevant API/Core/Storage code only as dependency context
+- current diff of component/server against main
+- crates/haze-sync-server/src/routes/health.rs
 
-## Goal
+## Task
 
-Replace generic Server scaffold docs with useful current-state component documentation. Additionally perform one tiny safe server-local cleanup only if it is obvious. This is a process test, not a route refactor.
+Review the T0-P3 Server documentation implementation and the tiny route doc-comment cleanup. This is a docs/control process test, not a route refactor.
+
+Check that the Server docs are clear, accurate, simple, not overclaimed, and consistent with the current Server source. Verify the health route doc-comment cleanup is behavior-preserving. Look for stale claims, unclear runtime/API/Core/Storage boundaries, missing non-goals, missing dependency notes, duplicated wording, or claims that imply provider runtime ownership or unsafe delete behavior.
 
 ## Allowed files
 
@@ -39,29 +41,14 @@ Replace generic Server scaffold docs with useful current-state component documen
 - crates/haze-sync-server/docs/decisions.md
 - crates/haze-sync-server/control/state.md
 - crates/haze-sync-server/control/report.md
-- crates/haze-sync-server/src/**/*.rs only for one tiny behavior-preserving cleanup
-- crates/haze-sync-server/tests/**/*.rs if present and only for one tiny behavior-preserving cleanup
+- crates/haze-sync-server/src/routes/health.rs only if a tiny comment/doc-comment correction is needed
 
-Do not change files outside crates/haze-sync-server.
+Do not rewrite routes/mod.rs or routes/v1.rs. Do not change route behavior. Do not change files outside crates/haze-sync-server. Do not archive control files.
 
-## Required output
-
-Update Server docs to describe current post-W3 responsibilities: Axum runtime wiring, auth execution, route composition, runtime state, transaction boundaries, dependencies, non-goals, safety/secrecy rules, test obligations, risks, and deferred work.
-
-The contract must state that Server owns runtime wiring and safe internal-to-public error mapping, may call API/Core/Storage/Common, must not leak raw internal errors/secrets, must not implement provider runtime behavior, and must not introduce hard-delete behavior unless explicitly scoped.
-
-Add one T0-P3 entry to implementation-log.md. Add one decision explaining this is docs plus tiny-cleanup process testing, not broad route refactor. Update control/state.md to PROMPT_READY or REPORT_READY as appropriate.
-
-Optional cleanup: make at most one tiny behavior-preserving server-local cleanup if obvious, such as a private test helper rename, repeated assertion extraction, or comment/doc-comment improvement. Do not rewrite routes/mod.rs or routes/v1.rs. If no safe cleanup is obvious, do none.
+## Report
 
 Write the final report to crates/haze-sync-server/control/report.md using report-template.md.
 
-## Checks
+Set REPORT_TYPE: CLEAN_CODE_REVIEW.
 
-Run or honestly mark not run:
-
-- cargo fmt --check
-- cargo check -p haze-sync-server
-- cargo test -p haze-sync-server
-
-Expected final status: SELF_ACCEPT or SELF_ACCEPT_PENDING_CI.
+Expected final status: CLEAN_ACCEPT or CLEAN_ACCEPT_PENDING_CI.
