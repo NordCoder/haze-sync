@@ -2,9 +2,35 @@
 
 ## Entries
 
-No implementation entries yet.
+### 2026-07-05 — CLI-P1 component contract and planning normalization
 
-Use this format:
+Agent:
+Architect
+
+Branch:
+component/cli
+
+Prompt:
+User requested continuing component documentation and implementation-plan writing after GDrive adapter.
+
+Report:
+Conversation summary; no component control report was written because this is an Architect documentation/planning pass, not an implementation-worker execution.
+
+Commit(s):
+See branch history after this documentation pass.
+
+Summary:
+Replaced scaffold-level CLI docs with a real component contract, dependency map, phased implementation plan, component decisions, and this planning baseline log entry. The pass documented CLI as an operator-facing command surface, not Core policy owner, Server runtime owner, Storage persistence owner, provider adapter, Worktree runtime, or Obsidian plugin. Current behavior remains read-only placeholders and offline doctor summary only. Future phases cover parser/output hardening, config/secret handling, live status/adapters, live doctor, bootstrap/sync workflows, admin mutation commands, and output/packaging readiness.
+
+Status:
+ARCHITECT_ACCEPT_PENDING_REVIEW
+
+Follow-ups:
+Execute CLI-P2 through CLI-P8 through normal implementation -> clean-code -> CI -> fixer lifecycle when scheduled. Keep CLI output secret-safe, live behavior Server/API-backed, and admin/destructive commands explicitly scoped with confirmation and dry-run behavior where practical.
+
+---
+
+Use this format for future entries:
 
 ~~~text
 ### YYYY-MM-DD — <wave>/<phase>
