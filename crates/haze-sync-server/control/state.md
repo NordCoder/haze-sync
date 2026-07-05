@@ -2,16 +2,16 @@
 
 component: server
 branch: component/server
-status: IDLE
+status: PROMPT_READY
 
-active_prompt: none
+active_prompt: crates/haze-sync-server/control/prompt.md
 active_report: none
-active_agent_role: none
+active_agent_role: implementation-worker
 
-wave: none
-phase: none
+wave: T0
+phase: T0-P3
 
-implementation_status: NOT_STARTED
+implementation_status: PROMPT_READY
 clean_review_status: NOT_STARTED
 ci_status: CI_UNKNOWN
 architect_status: NOT_REQUIRED
