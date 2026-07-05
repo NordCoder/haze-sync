@@ -2,19 +2,19 @@
 
 component: server
 branch: component/server
-status: REPORT_READY
+status: PROMPT_READY
 
 active_prompt: crates/haze-sync-server/control/prompt.md
-active_report: crates/haze-sync-server/control/report.md
-active_agent_role: implementation-worker
+active_report: none
+active_agent_role: clean-code-reviewer
 
 wave: T0
-phase: T0-P3
+phase: T0-P3C
 
 implementation_status: SELF_ACCEPT_PENDING_CI
-clean_review_status: NOT_STARTED
+clean_review_status: PROMPT_READY
 ci_status: CI_UNKNOWN
 architect_status: NOT_REQUIRED
 
-last_archived_prompt: none
-last_archived_report: none
+last_archived_prompt: crates/haze-sync-server/control/log/20260705-000000Z-T0-P3-implementation-prompt.md
+last_archived_report: crates/haze-sync-server/control/log/20260705-000000Z-T0-P3-implementation-report.md
