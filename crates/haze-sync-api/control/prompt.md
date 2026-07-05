@@ -1,4 +1,4 @@
-# T0-P2 — API component contract audit
+# T0-P2C — API clean-code review
 
 Component: api
 Component path: crates/haze-sync-api
@@ -9,27 +9,27 @@ Target branch: main
 
 ## Role
 
-You are an Implementation Worker. Work only through the GitHub connector. Do not use SSH/local git. Do not open PR. Do not merge.
+You are a Clean-Code Reviewer. Work only through the GitHub connector. Do not use SSH/local git. Do not open PR. Do not merge.
 
 ## Read
 
 - implementation-manifest.md from ChatGPT Project Sources
 - report-template.md from ChatGPT Project Sources
-- implementation-worker-prompt.md from ChatGPT Project Sources
+- clean-code-reviewer-prompt.md from ChatGPT Project Sources
+- crates/haze-sync-api/control/prompt.md
+- crates/haze-sync-api/control/log/20260705-000000Z-T0-P2-implementation-report.md
 - crates/haze-sync-api/docs/component-contract.md
 - crates/haze-sync-api/docs/implementation-plan.md
 - crates/haze-sync-api/docs/implementation-log.md
 - crates/haze-sync-api/docs/dependency-map.md
 - crates/haze-sync-api/docs/decisions.md
-- crates/haze-sync-api/control/README.md
-- crates/haze-sync-api/control/state.md
-- current crates/haze-sync-api source code
-- crates/haze-sync-common source only as dependency context
-- relevant server route code only to understand API helper consumers
+- current diff of component/api against main
 
-## Goal
+## Task
 
-Replace generic API scaffold docs with useful current-state component documentation. This is a process test, not a feature task.
+Review the T0-P2 API documentation implementation. This is a docs/control process test, not a product-code task.
+
+Check that the API docs are clear, accurate, simple, not overclaimed, and consistent with the current API source. Look for stale claims, unclear passive/API boundaries, missing non-goals, missing dependency notes, duplicated wording, or claims that imply Axum runtime, DB, provider, or Core execution ownership.
 
 ## Allowed files
 
@@ -41,24 +41,12 @@ Replace generic API scaffold docs with useful current-state component documentat
 - crates/haze-sync-api/control/state.md
 - crates/haze-sync-api/control/report.md
 
-Do not change API source unless it is a tiny comment/doc typo fix. Do not change files outside crates/haze-sync-api.
+Do not edit API source. Do not change files outside crates/haze-sync-api. Do not archive control files.
 
-## Required output
-
-Update API docs to describe current post-W3 responsibilities: DTOs, route-contract helpers, auth/header contracts, safe public errors, non-goals, dependencies, safety/secrecy rules, test obligations, risks, and deferred work.
-
-The contract must state that API is passive: it does not own Axum runtime wiring, DB queries, provider calls, or broad Core execution. Server owns runtime wiring.
-
-Add one T0-P2 entry to implementation-log.md. Add one decision explaining that API remains passive and server owns runtime route wiring. Update control/state.md to PROMPT_READY or REPORT_READY as appropriate.
+## Report
 
 Write the final report to crates/haze-sync-api/control/report.md using report-template.md.
 
-## Checks
+Set REPORT_TYPE: CLEAN_CODE_REVIEW.
 
-Run or honestly mark not run:
-
-- cargo fmt --check
-- cargo check -p haze-sync-api
-- cargo test -p haze-sync-api
-
-Expected final status: SELF_ACCEPT or SELF_ACCEPT_PENDING_CI.
+Expected final status: CLEAN_ACCEPT or CLEAN_ACCEPT_PENDING_CI.
