@@ -2,17 +2,17 @@
 
 component: api
 branch: component/api
-status: PROMPT_READY
+status: REPORT_READY
 
 active_prompt: crates/haze-sync-api/control/prompt.md
-active_report: none
+active_report: crates/haze-sync-api/control/report.md
 active_agent_role: clean-code-reviewer
 
 wave: T0
 phase: T0-P2C
 
 implementation_status: SELF_ACCEPT_PENDING_CI
-clean_review_status: PROMPT_READY
+clean_review_status: CLEAN_ACCEPT_PENDING_CI
 ci_status: CI_UNKNOWN
 architect_status: NOT_REQUIRED
 
