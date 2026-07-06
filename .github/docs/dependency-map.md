@@ -4,167 +4,117 @@
 
 `.github` is the repository automation and validation layer.
 
-Conceptual position:
+GitHub CI owns workflow definitions, validation job structure, trigger policy, least-privilege workflow permissions, and repository-quality checks executed by GitHub Actions.
 
-```text
-repository source + workflow definitions
-  -> GitHub Actions checks
-  -> PR/main/process feedback and repository quality gates
-```
+GitHub CI does not own product runtime behavior, component implementation, Deployment automation, branch protection settings, PR/merge decisions, provider behavior, or local developer environments.
 
-CI validates source quality and repository scaffolds. It does not own runtime deployment or product behavior.
+## Independent development model
 
-## Upstream dependencies
+`github-ci` can be developed independently inside the `component/github-ci` branch.
 
-### Rust workspace
+The dependency map records workflow validation contracts and fan-in points. It does not impose a serial implementation order on Rust crates, plugin code, Deployment, docs-process, or product components.
 
-CI depends on Rust workspace structure and commands:
+Allowed independent work includes:
 
-```bash
-cargo fmt --check
-cargo check --workspace
-cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings
-```
+- workflow trigger normalization;
+- Rust fmt/check/test/clippy job definitions;
+- plugin Node/typecheck/build validation;
+- compose config validation as syntax/scaffold validation;
+- permissions/concurrency hardening;
+- docs validation hooks when coordinated;
+- workflow documentation.
 
-Rust components own their code, tests, features, and lints. CI wires accepted checks.
+If CI needs stable commands, fixtures, service containers, deployment artifacts, docs validation scripts, or component-specific test support not currently contracted, it reports a contract-change request or fan-in need instead of implementing another component's product behavior.
 
-### Obsidian plugin workspace
+## Upstream contracts consumed
 
-CI depends on npm workspace/plugin commands:
+GitHub CI may consume:
 
-```bash
-npm install --no-audit --no-fund
-npm run --workspace haze-obsidian-plugin typecheck
-npm run --workspace haze-obsidian-plugin build
-```
+- workspace Cargo commands and crate layout;
+- Obsidian plugin npm scripts;
+- Deployment compose file paths for syntax validation;
+- docs-process validation semantics when docs checks are scoped;
+- test-support contracts exposed by components;
+- GitHub Actions platform behavior.
 
-The Obsidian plugin component owns package scripts and TypeScript behavior.
+GitHub CI must not consume:
 
-### Deployment scaffold
+- real provider credentials;
+- deployment secrets;
+- component-private local notes;
+- production host paths;
+- runtime assumptions not expressed as tests/commands;
+- PR/merge authority.
 
-CI depends on Deployment for compose validation:
+## Downstream contracts exposed
 
-```bash
-docker compose -f deploy/docker-compose.yml config
-```
+Expected downstream consumers:
 
-Deployment owns compose content and production rollout docs. CI validates syntax only unless expanded by a future contract.
+- Orchestrator, for CI status interpretation;
+- workers, for check expectations;
+- component branches, for repository validation feedback;
+- Deployment/release planning when explicitly scoped;
+- docs-process, for future docs validation enforcement.
 
-### Branch/process policy
+Downstream consumers must not treat CI green as production readiness unless the workflow explicitly proves that readiness.
 
-CI depends on process decisions for:
+## Forbidden dependency directions
 
-- workflow triggers;
-- required status checks;
-- branch classes such as `main`, `process/**`, `component/**`, PRs, and manual dispatch;
-- release/deploy gating.
+GitHub CI must not:
 
-### GitHub Actions platform
-
-CI depends on:
-
-- hosted Ubuntu runners;
-- GitHub-provided tokens with configured permissions;
-- public package registries for Rust/npm dependencies;
-- Actions such as `actions/checkout`, `actions/setup-node`, and toolchain setup actions.
-
-## Downstream dependents
-
-Expected downstream dependents:
-
-- implementation workers and reviewers;
-- pull requests;
-- merger/orchestrator decisions;
-- local developer check expectations;
-- deployment validation runbooks;
-- future release/package workflows.
-
-Downstream users rely on CI to give safe, reproducible feedback without requiring production credentials.
+- change product behavior to satisfy workflow convenience;
+- run live provider calls by default;
+- print sensitive values in logs;
+- assume deployment/startup readiness from compose syntax alone;
+- decide PR/merge readiness by itself;
+- own branch protection settings unless explicitly scoped.
 
 ## Cross-component contracts
 
-### Rust components ↔ CI
+Important GitHub CI contracts:
 
-- Rust components own code/test/lint expectations.
-- CI runs workspace checks and may later partition by component.
-- Components must not require production secrets for default tests.
-
-### Obsidian plugin ↔ CI
-
-- Plugin owns npm scripts and generated artifact policy.
-- CI runs typecheck/build and may add fixture compatibility checks.
-- CI must not commit/upload generated bundles unless accepted.
-
-### Deployment ↔ CI
-
-- Deployment owns deployment artifacts and runbooks.
-- CI validates deployment scaffolds such as compose config.
-- CI must not deploy production services or require deployment secrets by default.
-
-### Server/Storage ↔ CI
-
-- Server/Storage own DB-backed test support and migration behavior.
-- CI may add local Postgres integration jobs only after test-support contracts are stable.
-- CI must not use production DB URLs.
-
-### GDrive adapter ↔ CI
-
-- GDrive adapter owns fake-provider and real-provider test strategy.
-- CI default jobs must use fake provider or no provider credentials.
-- Real Google credentials require a separate manual/secured contract and should not be default.
-
-### Process/docs ↔ CI
-
-- Process/docs own branch/control expectations.
-- CI should align triggers and required checks with process policy.
-- CI workflow changes that affect merge readiness require explicit process review.
+- workflow permissions are least-privilege;
+- checks are explicit and reproducible;
+- CI status is validation evidence, not production-readiness proof;
+- component-specific checks require component-owned commands/contracts;
+- docs/process checks require docs-process coordination;
+- deployment checks distinguish syntax from operational rollout.
 
 ## Integration/fan-in ownership
 
-The following work requires coordination outside CI-only leaf phases:
+Fan-in is required when:
 
-- changing required checks for PR merge readiness;
-- adding DB-backed integration tests using Storage/Server test support;
-- adding API fixture checks for Obsidian plugin;
-- adding deployment validation beyond syntax;
-- adding release/package/publish workflows;
-- adding secret scanning with repository policy changes;
-- adding real-provider/manual workflows.
+- component commands change CI expectations;
+- docs-process adds docs validation semantics;
+- Deployment adds service/artifact validation requirements;
+- plugin package scripts change;
+- Rust workspace layout changes;
+- release/deploy workflows are introduced.
+
+These are integration gates. They do not block independent GitHub CI work inside its component boundary.
 
 ## Dependency rules
 
-- Default CI jobs must be secret-free.
-- CI must not deploy or mutate remote hosts without explicit release/deploy contract.
-- CI must not use production Google OAuth, bearer tokens, DB URLs, TLS keys, or vault data.
-- Workflow permissions should be least-privilege.
-- CI logs/artifacts must not include sensitive data.
-- CI should document required vs optional/manual jobs.
-- Workflow changes that alter merge readiness should update docs and implementation log.
+- GitHub CI owns workflow validation, not product behavior.
+- Component tests/commands should be owned by the relevant component.
+- CI may run those commands but should not hide component contract gaps.
+- Secret-dependent checks must be opt-in/manual and safe.
+- Workflow changes that affect required checks require Orchestrator/github-ci coordination.
 
 ## Contract-change notes
 
 Current known contract questions:
 
-1. Trigger policy for component branches
-   - Current `ci.yml` runs on PRs and pushes to `main`/legacy `w01-ci-dev-tooling`.
-   - Current `component-ci.yml` runs on `main`, `process/**`, PRs to `main`, and manual dispatch.
-   - Whether `component/**` branches should trigger CI directly is a process decision.
+1. Canonical `component-ci.yml`
+   - Multiple component branches may carry similar workflow additions.
+   - github-ci should own the canonical workflow before broad fan-in.
 
-2. Required status checks
-   - Required checks are repository settings outside this file set.
-   - Workflow changes that rename/remove jobs can affect merge readiness.
+2. Docs validation
+   - docs-process may define semantics.
+   - github-ci owns workflow enforcement when explicitly scoped.
 
-3. Storage test-support in CI
-   - Storage has optional test-support feature.
-   - Whether it belongs in default CI or optional integration job needs component/test stability review.
+3. Deployment validation
+   - Deployment owns operational readiness.
+   - CI can validate syntax/commands but must not overclaim rollout safety.
 
-4. Integration/E2E jobs
-   - DB-backed and fake-provider E2E tests should be staged after supporting components stabilize.
-   - Real-provider tests should not be default.
-
-5. Release/package workflows
-   - No release workflow is currently accepted.
-   - Generated artifact and publishing policy must be decided first.
-
-No immediate blocking contract change is required for the current documentation/planning pass.
+No serial implementation dependency is implied by this map.
