@@ -14,6 +14,7 @@ docs-process/docs/dependency-map.md
 docs-process/docs/decisions.md
 docs-process/docs/implementation-log.md
 docs-process/docs/development-model.md
+docs-process/docs/dependency-map-semantics.md
 docs-process/docs/component-docs-guide.md
 docs-process/docs/control-slots-and-reports.md
 docs-process/docs/fan-in-and-merge-readiness.md
@@ -37,6 +38,7 @@ Docs-process remains behavior-neutral. It does not own product code, CI workflow
 Docs-process is V1-ready when:
 
 - the canonical development model is tracked and clear;
+- dependency maps are interpreted as contract-boundary maps, not serial roadmaps;
 - component docs conventions are tracked and reduce duplication;
 - active control-slot and report lifecycle is tracked;
 - fan-in and merge-readiness rules are tracked;
@@ -50,6 +52,10 @@ Docs-process is V1-ready when:
 docs-process/docs/development-model.md
   Current source of truth for roles, lifecycle, branch policy, source order,
   status vocabulary, check honesty, secrecy rules, and contract-change protocol.
+
+docs-process/docs/dependency-map-semantics.md
+  Current source of truth for dependency map interpretation: independent component
+  development, contract boundaries, fan-in points, and contract-change blockers.
 
 docs-process/docs/component-docs-guide.md
   Rules for component-local docs and how to avoid duplicating global process policy.
@@ -100,7 +106,25 @@ Resolved contradictions around:
 - tiny-task scope vs component scope;
 - process/scaffold branches changing product code by default.
 
-### DOC-P3 — Component docs guide
+### DOC-P3 — Dependency map semantics
+
+Status: completed in `process/docs-unification`.
+
+Delivered:
+
+```text
+docs-process/docs/dependency-map-semantics.md
+```
+
+Purpose:
+
+- define dependency maps as contract-boundary maps;
+- explicitly reject serial-roadmap interpretation;
+- preserve independent component development;
+- distinguish fan-in gates from local component work blockers;
+- define worker and Orchestrator behavior around missing contracts.
+
+### DOC-P4 — Component docs guide
 
 Status: completed in `process/docs-unification`.
 
@@ -115,9 +139,10 @@ Purpose:
 - define component doc file roles;
 - reduce repeated global process boilerplate;
 - preserve component-specific contracts and non-goals;
-- keep current-state and target-state claims distinct.
+- keep current-state and target-state claims distinct;
+- keep dependency-map wording aligned with independent component development.
 
-### DOC-P4 — Control slots and reports guide
+### DOC-P5 — Control slots and reports guide
 
 Status: completed in `process/docs-unification`.
 
@@ -134,7 +159,7 @@ Purpose:
 - define report field semantics;
 - define check/scope/contract honesty requirements.
 
-### DOC-P5 — Fan-in and merge-readiness guide
+### DOC-P6 — Fan-in and merge-readiness guide
 
 Status: completed in `process/docs-unification`.
 
@@ -152,7 +177,7 @@ Purpose:
 - distinguish docs-only, mixed, and product branches;
 - define when to invoke Architect manually.
 
-### DOC-P6 — Documentation unification audit
+### DOC-P7 — Documentation unification audit
 
 Status: completed in `process/docs-unification`.
 
@@ -171,7 +196,7 @@ Purpose:
 
 ## Remaining phases
 
-### DOC-P7 — System docs index alignment
+### DOC-P8 — System docs index alignment
 
 Goal:
 
@@ -200,7 +225,7 @@ Acceptance:
 - `docs-process/**` remains process docs;
 - README links do not imply unmerged branch docs are on `main`.
 
-### DOC-P8 — Docs validation and hygiene checks
+### DOC-P9 — Docs validation and hygiene checks
 
 Goal:
 
@@ -228,13 +253,14 @@ Acceptance:
 - docs hygiene is enforceable manually or by coordinated CI;
 - validation remains behavior-neutral.
 
-### DOC-P9 — Component docs drift audit after fan-in
+### DOC-P10 — Component docs drift audit after fan-in
 
 Goal:
 
 ```text
 After component docs branches are merged or staged, audit them against the canonical
-process model and remove duplicated generic process boilerplate where useful.
+process model and dependency-map semantics, then remove duplicated generic process
+boilerplate where useful.
 ```
 
 Allowed scope:
@@ -254,6 +280,7 @@ Acceptance:
 
 - component docs remain full enough for workers;
 - generic lifecycle duplication is reduced;
+- dependency maps do not imply global serial implementation order;
 - contradictions are reported or fixed with owner scope.
 
 ## Dependency gates
@@ -266,12 +293,15 @@ Docs-process depends on:
 - root README/system docs for repository-level index wording;
 - Orchestrator for fan-in and active control-slot decisions.
 
+These are integration/fan-in gates. They do not block independent docs-process work inside `docs-process/**`.
+
 Docs-process must not ingest local/private project-source files into the repository without explicit user scope.
 
 ## Known risks
 
 - Old archived prompts or reports may still contain superseded model wording.
 - Component docs may still repeat generic process rules until a component docs drift audit runs.
+- Component dependency maps may still use ambiguous dependency-gate wording until the drift audit normalizes them.
 - Active `control/prompt.md` and `control/report.md` files in component branches may be merged accidentally without fan-in cleanup.
 - Multiple branches may carry different copies of `component-ci.yml`.
 - Process docs can become product-architecture docs unless roots remain separated.
@@ -281,6 +311,7 @@ Docs-process must not ingest local/private project-source files into the reposit
 `docs-process` is V1-ready when:
 
 - canonical process model is tracked;
+- dependency map semantics are tracked;
 - component docs guide is tracked;
 - control/report guide is tracked;
 - fan-in guide is tracked;
