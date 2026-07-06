@@ -180,7 +180,7 @@ mod tests {
 
         assert_eq!(hash.as_bytes(), &bytes);
         assert_eq!(hash.into_bytes(), bytes);
-        assert_eq!(hash.as_hex(), repeated("ab"));
+        assert_eq!(hash.as_hex(), "ab".repeat(SHA256_BYTES));
     }
 
     #[test]
