@@ -1,4 +1,7 @@
 //! Identifier newtypes shared across Haze Sync components.
+//!
+//! This module validates and carries identifiers. It deliberately does not mint
+//! IDs, allocate sequences, or decide storage/runtime ownership.
 
 use crate::ValidationError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -8,6 +11,10 @@ use std::str::FromStr;
 const MAX_IDENTIFIER_LEN: usize = 128;
 
 /// Stable adapter identifier, for example `iphone-anna` or `worktree-adapter`.
+///
+/// Adapter IDs are configured names and therefore do not require a typed system
+/// prefix. They still reject empty, overly long, null-byte, and unsupported
+/// character input.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AdapterId(String);
 
@@ -45,6 +52,8 @@ impl AdapterId {
 
 impl RevisionId {
     /// Validate and construct a revision identifier.
+    ///
+    /// Revision IDs must use the `rev_` prefix and include a non-empty suffix.
     pub fn parse(input: &str) -> Result<Self, ValidationError> {
         validate_identifier(input, Some("rev_"))?;
         Ok(Self(input.to_owned()))
@@ -65,6 +74,8 @@ impl RevisionId {
 
 impl OperationId {
     /// Validate and construct an operation identifier.
+    ///
+    /// Operation IDs must use the `op_` prefix and include a non-empty suffix.
     pub fn parse(input: &str) -> Result<Self, ValidationError> {
         validate_identifier(input, Some("op_"))?;
         Ok(Self(input.to_owned()))
@@ -85,6 +96,8 @@ impl OperationId {
 
 impl ConflictId {
     /// Validate and construct a conflict identifier.
+    ///
+    /// Conflict IDs must use the `conf_` prefix and include a non-empty suffix.
     pub fn parse(input: &str) -> Result<Self, ValidationError> {
         validate_identifier(input, Some("conf_"))?;
         Ok(Self(input.to_owned()))
@@ -189,15 +202,24 @@ mod tests {
     fn adapter_id_parses_and_formats() {
         let adapter_id = AdapterId::parse("iphone-anna").unwrap();
         assert_eq!(adapter_id.as_str(), "iphone-anna");
+        assert_eq!(adapter_id.as_ref(), "iphone-anna");
         assert_eq!(adapter_id.to_string(), "iphone-anna");
+        assert_eq!(adapter_id.clone().into_string(), "iphone-anna");
+        assert_eq!(AdapterId::from_str("iphone-anna").unwrap(), adapter_id);
+        assert_eq!(AdapterId::try_from("iphone-anna").unwrap(), adapter_id);
     }
 
     #[test]
     fn revision_id_requires_prefix() {
         let revision_id = RevisionId::parse("rev_01JTEST").unwrap();
         assert_eq!(revision_id.to_string(), "rev_01JTEST");
+        assert_eq!(revision_id.clone().into_string(), "rev_01JTEST");
         assert_eq!(
             RevisionId::parse("01JTEST").unwrap_err(),
+            ValidationError::InvalidIdentifierPrefix
+        );
+        assert_eq!(
+            RevisionId::parse("rev_").unwrap_err(),
             ValidationError::InvalidIdentifierPrefix
         );
     }
@@ -206,6 +228,7 @@ mod tests {
     fn operation_id_requires_prefix() {
         let operation_id = OperationId::parse("op_01JTEST").unwrap();
         assert_eq!(operation_id.to_string(), "op_01JTEST");
+        assert_eq!(operation_id.clone().into_string(), "op_01JTEST");
         assert_eq!(
             OperationId::parse("op_").unwrap_err(),
             ValidationError::InvalidIdentifierPrefix
@@ -216,22 +239,46 @@ mod tests {
     fn conflict_id_requires_prefix() {
         let conflict_id = ConflictId::parse("conf_01JTEST").unwrap();
         assert_eq!(conflict_id.to_string(), "conf_01JTEST");
+        assert_eq!(conflict_id.clone().into_string(), "conf_01JTEST");
+        assert_eq!(
+            ConflictId::parse("conf_").unwrap_err(),
+            ValidationError::InvalidIdentifierPrefix
+        );
+    }
+
+    #[test]
+    fn identifiers_accept_documented_safe_characters() {
+        let adapter_id = AdapterId::parse("worktree-adapter_01.alpha").unwrap();
+        assert_eq!(adapter_id.as_str(), "worktree-adapter_01.alpha");
     }
 
     #[test]
     fn identifiers_reject_unsafe_values() {
+        let invalid_cases = ["", "bad/path", "bad id", "bad:id", "bad\0id", "ümlaut"];
+
+        for input in invalid_cases {
+            assert_eq!(
+                AdapterId::parse(input).unwrap_err(),
+                ValidationError::InvalidIdentifier,
+                "input={input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn identifiers_reject_values_over_maximum_length() {
+        let max_len = "a".repeat(MAX_IDENTIFIER_LEN);
+        let too_long = "a".repeat(MAX_IDENTIFIER_LEN + 1);
+
+        assert!(AdapterId::parse(&max_len).is_ok());
         assert_eq!(
-            AdapterId::parse("bad/path").unwrap_err(),
-            ValidationError::InvalidIdentifier
-        );
-        assert_eq!(
-            AdapterId::parse("bad\0id").unwrap_err(),
+            AdapterId::parse(&too_long).unwrap_err(),
             ValidationError::InvalidIdentifier
         );
     }
 
     #[test]
-    fn serde_roundtrips() {
+    fn serde_roundtrips_all_identifier_types() {
         let adapter_id = AdapterId::parse("worktree-adapter").unwrap();
         let adapter_json = serde_json::to_string(&adapter_id).unwrap();
         assert_eq!(adapter_json, "\"worktree-adapter\"");
@@ -247,5 +294,27 @@ mod tests {
             serde_json::from_str::<RevisionId>(&revision_json).unwrap(),
             revision_id
         );
+
+        let operation_id = OperationId::parse("op_01JTEST").unwrap();
+        let operation_json = serde_json::to_string(&operation_id).unwrap();
+        assert_eq!(operation_json, "\"op_01JTEST\"");
+        assert_eq!(
+            serde_json::from_str::<OperationId>(&operation_json).unwrap(),
+            operation_id
+        );
+
+        let conflict_id = ConflictId::parse("conf_01JTEST").unwrap();
+        let conflict_json = serde_json::to_string(&conflict_id).unwrap();
+        assert_eq!(conflict_json, "\"conf_01JTEST\"");
+        assert_eq!(
+            serde_json::from_str::<ConflictId>(&conflict_json).unwrap(),
+            conflict_id
+        );
+    }
+
+    #[test]
+    fn serde_rejects_invalid_identifier_values() {
+        assert!(serde_json::from_str::<AdapterId>("\"bad/path\"").is_err());
+        assert!(serde_json::from_str::<RevisionId>("\"01JTEST\"").is_err());
     }
 }
