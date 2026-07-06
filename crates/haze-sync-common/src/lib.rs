@@ -1,8 +1,9 @@
 //! Shared domain and value primitives for Haze Sync.
 //!
-//! This crate contains deterministic, JSON-serializable value types only.
-//! Runtime behavior, persistence, provider calls, HTTP routing, and sync policy
-//! belong to higher-level Haze Sync components.
+//! This crate contains deterministic value types, stable JSON wire primitives,
+//! and redacting in-memory secret wrappers. Runtime behavior, persistence,
+//! provider calls, HTTP routing, and sync policy belong to higher-level Haze
+//! Sync components.
 
 pub mod adapter;
 pub mod error;
