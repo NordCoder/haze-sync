@@ -6,7 +6,7 @@ use haze_sync_core::doctor::{
 use std::{error::Error, fmt};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum CliCommand {
+pub enum DoctorCliCommand {
     Doctor(DoctorCommand),
     Help,
 }
@@ -36,16 +36,14 @@ impl DoctorCommand {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum CliParseError {
-    UnknownCommand,
+pub enum DoctorParseError {
     UnknownDoctorFlag,
     UnexpectedDoctorArgument,
 }
 
-impl fmt::Display for CliParseError {
+impl fmt::Display for DoctorParseError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let message = match self {
-            Self::UnknownCommand => "unknown command",
             Self::UnknownDoctorFlag => "unknown doctor flag",
             Self::UnexpectedDoctorArgument => "unexpected doctor argument",
         };
@@ -53,23 +51,29 @@ impl fmt::Display for CliParseError {
     }
 }
 
-impl Error for CliParseError {}
+impl Error for DoctorParseError {}
 
-pub fn parse_cli_args<I, S>(args: I) -> Result<CliCommand, CliParseError>
+pub fn parse_doctor_args<I, S>(args: I) -> Result<DoctorCliCommand, DoctorParseError>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
-    let collected = args.into_iter().collect::<Vec<_>>();
-    let Some(first) = collected.first() else {
-        return Ok(CliCommand::Help);
-    };
+    let mut args = args.into_iter();
+    let mut command = DoctorCommand::default();
 
-    match first.as_ref() {
-        "--help" | "-h" | "help" => Ok(CliCommand::Help),
-        "doctor" => parse_doctor_args(&collected[1..]),
-        _command => Err(CliParseError::UnknownCommand),
+    while let Some(argument) = next_argument(&mut args) {
+        match argument.as_str() {
+            "--help" | "-h" | "help" => {
+                reject_trailing(args)?;
+                return Ok(DoctorCliCommand::Help);
+            }
+            "--offline" => command.offline = true,
+            value if value.starts_with('-') => return Err(DoctorParseError::UnknownDoctorFlag),
+            _value => return Err(DoctorParseError::UnexpectedDoctorArgument),
+        }
     }
+
+    Ok(DoctorCliCommand::Doctor(command))
 }
 
 #[must_use]
@@ -91,22 +95,24 @@ pub const fn usage() -> &'static str {
     "usage: haze-sync doctor [--offline]\n\ncurrent mode: read-only offline summary only\nlive checks, repair, provider calls, and destructive actions are intentionally unavailable"
 }
 
-fn parse_doctor_args<S>(args: &[S]) -> Result<CliCommand, CliParseError>
+fn next_argument<I, S>(args: &mut I) -> Option<String>
 where
+    I: Iterator<Item = S>,
     S: AsRef<str>,
 {
-    let mut command = DoctorCommand::default();
+    args.next().map(|argument| argument.as_ref().to_owned())
+}
 
-    for argument in args {
-        match argument.as_ref() {
-            "--help" | "-h" | "help" => return Ok(CliCommand::Help),
-            "--offline" => command.offline = true,
-            value if value.starts_with('-') => return Err(CliParseError::UnknownDoctorFlag),
-            _value => return Err(CliParseError::UnexpectedDoctorArgument),
-        }
+fn reject_trailing<I, S>(mut args: I) -> Result<(), DoctorParseError>
+where
+    I: Iterator<Item = S>,
+    S: AsRef<str>,
+{
+    if args.next().is_some() {
+        return Err(DoctorParseError::UnexpectedDoctorArgument);
     }
 
-    Ok(CliCommand::Doctor(command))
+    Ok(())
 }
 
 #[cfg(test)]
@@ -153,23 +159,29 @@ mod tests {
     #[test]
     fn unsupported_live_or_repair_args_are_rejected_safely() {
         assert_eq!(
-            parse_cli_args(["doctor", "--repair"]).unwrap_err(),
-            CliParseError::UnknownDoctorFlag
+            parse_doctor_args(["--repair"]).unwrap_err(),
+            DoctorParseError::UnknownDoctorFlag
         );
         assert_eq!(
-            parse_cli_args(["doctor", "provider-call"]).unwrap_err(),
-            CliParseError::UnexpectedDoctorArgument
+            parse_doctor_args(["provider-call"]).unwrap_err(),
+            DoctorParseError::UnexpectedDoctorArgument
         );
     }
 
     #[test]
     fn doctor_help_is_supported_and_usage_stays_safe() {
-        assert_eq!(
-            parse_cli_args(["doctor", "--help"]).unwrap(),
-            CliCommand::Help
-        );
+        assert_eq!(parse_doctor_args(["--help"]).unwrap(), DoctorCliCommand::Help);
         assert!(usage().contains("read-only offline summary"));
         assert_no_sensitive_leaks(usage());
+    }
+
+    #[test]
+    fn doctor_help_rejects_trailing_arguments_safely() {
+        let error = parse_doctor_args(["--help", "oauth-token"]).unwrap_err();
+
+        assert_eq!(error, DoctorParseError::UnexpectedDoctorArgument);
+        assert_no_sensitive_leaks(&error.to_string());
+        assert!(!error.to_string().contains("oauth-token"));
     }
 
     fn assert_no_sensitive_leaks(output: &str) {
