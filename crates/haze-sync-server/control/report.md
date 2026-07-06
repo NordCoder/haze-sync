@@ -1,12 +1,12 @@
 REPORT_TYPE:
-IMPLEMENTATION
+CLEAN_CODE_REVIEW
 
 STATUS:
-SELF_ACCEPT_PENDING_CI
+CLEAN_ACCEPT_PENDING_CI
 
 AGENT:
-role: implementation-worker
-agent_execution_id: W1-SRV-P2-server-implementation
+role: clean-code-reviewer
+agent_execution_id: W1-SRV-P2C-server-clean-code-review
 chat_name: W1 persistent — server
 
 COMPONENT:
@@ -21,35 +21,32 @@ control_report_path: crates/haze-sync-server/control/report.md
 
 WAVE:
 id: W1
-phase_id: SRV-P2
-dependency_status: active prompt state was PROMPT_READY; active_prompt matched crates/haze-sync-server/control/prompt.md
+phase_id: SRV-P2C
+dependency_status: active prompt state was PROMPT_READY; active_prompt matched crates/haze-sync-server/control/prompt.md; implementation report was read before overwriting
 
 SUMMARY:
-Implemented the SRV-P2 router/state/auth/safe-error audit as a server-scope hardening pass. The existing router construction remained explicit and dependency-free by default; no hidden globals, provider runtime, production listener, Core policy changes, Storage schema changes, or sibling component edits were introduced. Hardened route-shell tests for public error sanitization after successful static authentication and after database-auth lookup failure. Documented intentionally partial route behavior, including dependency-free shell routes, read-only admin/status routes, and deferred `accept_conflict` conflict-resolution behavior.
+Reviewed the W1 SRV-P2 implementation for router/test/docs hardening, safe error output, lack of runtime behavior expansion, no Core/Storage policy changes, and report honesty. No code or docs changes were required during clean-code review. The implementation is accepted pending shell/CI verification.
 
 CHANGED_FILES:
-- crates/haze-sync-server/src/routes/mod.rs
-- crates/haze-sync-server/docs/decisions.md
-- crates/haze-sync-server/docs/implementation-log.md
 - crates/haze-sync-server/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/server
 base_branch: main
 base_sha: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
-head_sha: 29678e07312f8eb4dd473990595a860ce94bbb69 before writing this report; report write creates an additional commit on component/server
- default_branch_modified: no
+head_sha: eb111e5c88bd02f0c08fe1009957c88826a1e210 before writing this clean-code report; report write creates an additional commit on component/server
+default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
 
 SCOPE:
-allowed_files_only: yes; this run changed only server allowed scope plus the required server control report
+allowed_files_only: yes for this clean-code review pass; only crates/haze-sync-server/control/report.md was changed
 scope_expansion_used: no
 scope_expansion_rationale: none
 cross_component_changes: no
-forbidden_files_touched: no
+forbidden_files_touched: no by this clean-code reviewer
 
 CONTRACT:
 contract_read: yes
@@ -60,24 +57,23 @@ affected_components: server only
 
 IMPLEMENTATION_OR_REVIEW:
 completed:
-- Re-read the active server control state and active prompt from component/server.
-- Read required project/source guidance and server component docs.
-- Audited current router construction, explicit ServerAppState, auth states, readiness, safe error mapping, and route-shell behavior.
-- Added a reusable route-shell response redaction assertion helper for sensitive markers.
-- Added a test proving authenticated PUT with valid request hash/body but missing runtime dependencies returns a sanitized storage-unavailable error and does not echo bearer token, idempotency key value, token-hash marker, database URL marker, object-store-root/local-path marker, SQLx/stack marker, base revision, or request body content.
-- Added a test proving database-auth lookup failure on a protected file route returns a sanitized internal error without leaking the bearer token or lazy database URL details.
-- Documented partial/placeholder route surfaces in server decisions.
-- Logged SRV-P2 implementation in the server implementation log.
+- Re-read current control state and active clean-code prompt from component/server.
+- Read the SRV-P2 implementation report before overwriting it.
+- Read the server component contract and SRV-P2 implementation-plan section.
+- Compared component/server against main through the GitHub connector.
+- Reviewed the SRV-P2 test changes in crates/haze-sync-server/src/routes/mod.rs.
+- Reviewed the SRV-P2 docs/log changes described in the implementation report.
+- Verified the new tests are test-only and do not alter route runtime behavior.
+- Verified the new tests exercise sanitized responses for authenticated-but-unconfigured PUT behavior and database-auth lookup failure.
+- Verified no hidden globals, production listener, provider runtime, background jobs, hard delete behavior, Core policy changes, or Storage schema changes were introduced by the reviewed SRV-P2 code.
 main_changes:
-- Test-only hardening in crates/haze-sync-server/src/routes/mod.rs.
-- Documentation-only updates in server docs.
-behavior_changes: none intended for runtime behavior; route code paths are unchanged except test helpers/tests.
+- No source/docs changes made by this clean-code review pass.
+behavior_changes: none
 bugs_found:
-- No production behavior bug requiring code change was found inside SRV-P2 scope.
-- Existing partial route behavior needed clearer documentation to avoid overstating route-shell readiness.
-bugs_fixed: none; this was an audit/test/docs hardening pass.
-cleanups_made:
-- Reused a custom request helper in route tests to avoid duplicating response collection logic for custom-header requests.
+- No correctness bug found in SRV-P2 changes within clean-code review scope.
+- No report-honesty bug requiring correction found; the implementation report correctly marked shell checks as not run and CI as unknown.
+bugs_fixed: none
+cleanups_made: none; no small safe code cleanup was necessary
 non_goals_preserved:
 - No production listener.
 - No provider runtime.
@@ -85,17 +81,17 @@ non_goals_preserved:
 - No Core policy changes.
 - No Storage schema changes.
 - No sibling component edits.
-- No active control file archiving.
+- No workflow edits by this reviewer.
 deferred_work:
-- Run shell/CI checks.
-- Runtime-backed DB/object-store integration coverage remains for later SRV-P4/SRV-P5/SRV-P9 phases where scoped.
-- `accept_conflict` resolution remains intentionally not implemented until a scoped conflict-apply route phase.
+- Shell/CI verification remains required.
+- Runtime-backed integration/failure-injection coverage remains deferred to later scoped server phases.
+- `accept_conflict` conflict resolution remains intentionally deferred until a scoped conflict-apply phase.
 - Admin mutations remain out of scope.
 
 TESTS_AND_CHECKS:
 checks_run:
-- GitHub connector reads of state, prompt, required server docs, current route/state/readiness/http code, and branch compare metadata.
-- Manual static audit of edited server-scope files through GitHub connector fetch/compare responses.
+- GitHub connector reads of current server control state, active clean-code prompt, prior implementation report, server component contract, SRV-P2 implementation-plan section, changed route file, and branch compare metadata.
+- Manual static review of SRV-P2 source/docs/report changes through GitHub connector responses.
 checks_not_run:
 - cargo fmt --check — not run because this worker is restricted to GitHub connector only and has no shell execution through the connector.
 - cargo check -p haze-sync-server — not run because this worker is restricted to GitHub connector only and has no shell execution through the connector.
@@ -114,20 +110,20 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- Dependency-free router construction is safe for shell tests but is not production readiness; documented explicitly.
-- `accept_conflict` remains not implemented by design because applying the conflict copy would require mutation semantics outside SRV-P2.
+- component/server is currently diverged from live main: GitHub compare reported head ahead of main and behind live main, with merge base equal to the prompt baseline. This was not changed by the reviewer and should be handled by Orchestrator/CI flow.
+- The full branch diff against live main includes an inherited `.github/workflows/component-ci.yml` modification outside this clean-code review's allowed edit set. This reviewer did not edit workflow files.
 - GitHub connector-only execution prevents local Rust formatting/check/test/clippy execution.
 
 BLOCKERS:
 - No contract blocker.
-- No dependency blocker.
-- Verification blocker: shell checks and CI status were not available through the GitHub connector in this run.
+- No scope blocker for SRV-P2C changes.
+- Verification blocker remains: shell checks and CI status were not available through the GitHub connector in this run.
 
 NEXT_RECOMMENDED_AGENT:
-clean-code-reviewer
+orchestrator
 
 FINAL_VERDICT:
-SELF_ACCEPT_PENDING_CI. SRV-P2 server-scope audit/test/docs hardening is complete, with no runtime behavior expansion and no cross-component changes. Proceed to clean-code review, then run/observe CI or shell checks before merge readiness decisions.
+CLEAN_ACCEPT_PENDING_CI. SRV-P2 implementation is clean-code accepted pending CI/shell verification. Orchestrator should run or observe the required checks and account for branch divergence from live main before any merge-readiness decision.
 
 PUSHED:
 yes
