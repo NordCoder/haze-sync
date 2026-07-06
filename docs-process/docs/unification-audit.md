@@ -16,6 +16,7 @@ separate self-review phase: disabled
 architect gate: optional/manual
 required lifecycle: implementation -> clean-code-review -> CI -> fixer loop if needed
 process/scaffold product-code changes: forbidden unless explicitly scoped
+dependency maps: contract-boundary maps, not serial roadmaps
 ```
 
 ## Superseded model fragments
@@ -30,8 +31,10 @@ The following older fragments are no longer canonical:
 6. Treating compose syntax validation as production deployment readiness.
 7. Treating CI as live provider or production sync validation.
 8. Allowing process/scaffold migrations to change product code by default.
+9. Treating dependency maps as a global component implementation order.
+10. Treating fan-in gates as blockers for all local component work.
 
-These fragments may still exist in old local notes, old prompts, archived reports, or historical branch text. When encountered, use `docs-process/docs/development-model.md` as the current tracked model.
+These fragments may still exist in old local notes, old prompts, archived reports, or historical branch text. When encountered, use `docs-process/docs/development-model.md` and `docs-process/docs/dependency-map-semantics.md` as the current tracked model.
 
 ## Sources reviewed
 
@@ -108,7 +111,20 @@ Resolution:
 - Move generic development model into `docs-process/docs/development-model.md`.
 - Use `docs-process/docs/component-docs-guide.md` to prevent future duplication.
 
-### 3. Active control slots need fan-in policy
+### 3. Dependency map wording needs canonical interpretation
+
+Dependency maps must support independent component development.
+
+They are not serial roadmaps and do not mean that every mentioned upstream component must be fully implemented before local component work can continue.
+
+Resolution:
+
+- Use `docs-process/docs/dependency-map-semantics.md` as the canonical interpretation.
+- Treat dependency edges as contract boundaries.
+- Treat unresolved cross-component needs as fan-in or contract-change points.
+- During the next component docs drift audit, replace ambiguous `dependency gate` wording with explicit `integration gate`, `fan-in gate`, `contract gate`, or `merge-readiness gate` wording.
+
+### 4. Active control slots need fan-in policy
 
 Some component branches contain active control slots from completed worker tasks:
 
@@ -123,7 +139,7 @@ Resolution:
 - Use `docs-process/docs/control-slots-and-reports.md` for the canonical lifecycle.
 - Use `docs-process/docs/fan-in-and-merge-readiness.md` before merging those branches.
 
-### 4. `component-ci.yml` exists in multiple branches
+### 5. `component-ci.yml` exists in multiple branches
 
 Multiple component branches add or modify:
 
@@ -137,7 +153,7 @@ Resolution:
 - Choose one canonical workflow before broad fan-in.
 - Do not let component docs merges accidentally overwrite workflow semantics.
 
-### 5. Docs-only and mixed branches must be distinguished
+### 6. Docs-only and mixed branches must be distinguished
 
 Most component documentation branches are docs-only plus pre-existing `component-ci.yml`.
 
@@ -152,7 +168,7 @@ Resolution:
 - Classify branches as docs-only, mixed, or product before fan-in.
 - Mixed branches require explicit review.
 
-### 6. System docs and process docs need separate roots
+### 7. System docs and process docs need separate roots
 
 `docs/**` is suitable for product/system docs.
 
@@ -171,6 +187,7 @@ This pass added:
 ```text
 docs-process/README.md
 docs-process/docs/development-model.md
+docs-process/docs/dependency-map-semantics.md
 docs-process/docs/component-docs-guide.md
 docs-process/docs/control-slots-and-reports.md
 docs-process/docs/fan-in-and-merge-readiness.md
@@ -198,6 +215,10 @@ This pass updates docs-process planning/log files to point future work at the ca
 5. Whether report/status vocabulary should be enforced by CI later
    - Owner: docs-process + github-ci.
 
+6. Whether to run a component docs drift pass before or after branch fan-in
+   - Owner: Orchestrator.
+   - Goal: normalize dependency map wording without changing component ownership.
+
 ## Final rule
 
 When documents conflict, use this precedence:
@@ -205,10 +226,11 @@ When documents conflict, use this precedence:
 ```text
 1. active user instruction for the current task
 2. docs-process/docs/development-model.md for tracked process rules
-3. component-local contract for component-specific ownership
-4. component-local implementation plan for phase ordering
-5. dependency map for cross-component boundaries
-6. implementation log and archived reports for historical context
+3. docs-process/docs/dependency-map-semantics.md for dependency map interpretation
+4. component-local contract for component-specific ownership
+5. component-local implementation plan for phase ordering
+6. dependency map for component-specific cross-component boundaries
+7. implementation log and archived reports for historical context
 ```
 
 Old prompts, old reports, local project-source files, and historical branch notes do not override the tracked canonical model unless the current prompt explicitly says so.
