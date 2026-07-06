@@ -1,12 +1,20 @@
-//! Placeholder crate for the built-in VPS worktree adapter.
+//! Built-in VPS worktree adapter foundations.
 //!
-//! Wave 0 intentionally exposes only a tiny placeholder API. Real V1 behavior is
-//! implemented by later phases.
+//! The worktree is a local filesystem materialization of Core state. It is not
+//! the sync source of truth; later phases add scanning, importing, writing, and
+//! runtime behavior on top of these safe path-mapping primitives.
+
+mod path_mapping;
+
+pub use path_mapping::{
+    WorktreeConfig, WorktreePathError, ECHO_DIR_NAME, METADATA_DIR_NAME, TEMP_DIR_NAME,
+    TRASH_DIR_NAME, WORKTREE_RUNTIME_DIR_NAME,
+};
 
 /// Human-readable crate role used by skeleton smoke checks and documentation.
-pub const CRATE_ROLE: &str = "Placeholder crate for the built-in VPS worktree adapter.";
+pub const CRATE_ROLE: &str = "Built-in VPS worktree adapter foundations.";
 
-/// Returns the package name for this placeholder crate.
+/// Returns the package name for this crate.
 #[must_use]
 pub const fn package_name() -> &'static str {
     "haze-sync-worktree"
