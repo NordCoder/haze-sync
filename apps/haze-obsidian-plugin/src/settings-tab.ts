@@ -79,6 +79,7 @@ export class HazeSyncSettingsTab extends PluginSettingTab {
 
             this.controller.settings.authToken = value;
             await this.saveAndRefreshStatus();
+            text.setValue("");
           });
       })
       .addButton((button) => {
