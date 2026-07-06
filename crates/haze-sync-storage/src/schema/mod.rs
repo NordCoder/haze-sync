@@ -129,18 +129,25 @@ mod tests {
     }
 
     #[test]
-    fn table_name_metadata_covers_initial_storage_schema() {
-        assert_eq!(table_names::ALL.len(), 12);
+    fn table_name_metadata_exactly_matches_initial_storage_schema() {
+        let actual_tables = actual_created_tables();
 
-        for table_name in table_names::ALL {
-            let create_table = format!("create table {table_name}");
-            assert!(
-                MIGRATION_CONTENTS
-                    .iter()
-                    .any(|(_, contents)| contents.contains(&create_table)),
-                "table metadata missing matching migration create statement for {table_name}",
-            );
-        }
+        assert_eq!(table_names::ALL, actual_tables.as_slice());
+    }
+
+    fn actual_created_tables() -> Vec<&'static str> {
+        MIGRATION_CONTENTS
+            .iter()
+            .flat_map(|(_, contents)| create_table_names(contents))
+            .collect()
+    }
+
+    fn create_table_names(contents: &'static str) -> impl Iterator<Item = &'static str> {
+        contents.lines().filter_map(|line| {
+            line.trim()
+                .strip_prefix("create table ")
+                .and_then(|rest| rest.split_whitespace().next())
+        })
     }
 
     fn migration_prefix(filename: &str) -> u32 {
