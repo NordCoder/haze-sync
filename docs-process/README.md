@@ -1,1 +1,0 @@
-# Haze Sync Development Process
