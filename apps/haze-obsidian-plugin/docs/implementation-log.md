@@ -30,6 +30,34 @@ Execute OBS-P2 through OBS-P9 through normal implementation -> clean-code -> CI 
 
 ---
 
+### 2026-07-06 — W1/OBS-P2
+
+Agent:
+Implementation Worker
+
+Branch:
+component/obsidian-plugin
+
+Prompt:
+apps/haze-obsidian-plugin/control/prompt.md — W1-OBS-P2 settings, secret handling, and lifecycle foundation.
+
+Report:
+apps/haze-obsidian-plugin/control/report.md
+
+Commit(s):
+aca6ddb5a58e808d921e0b07362e3bc9e635d951, d94ea3e021fbfd3092ad877e55db6bd8da3f8e42, cbb8b093fe36a5b7c46c48b918bdf51ad4fee024, 23ba6241ca4c328a6b60f89ac7b72cd477d77171, plus this log/report update.
+
+Summary:
+Implemented plugin-local settings, validation, token redaction/masked entry behavior, safe status reporting, settings tab wiring, and explicit unload cleanup for phase OBS-P2. No server sync calls, vault scanner, conflict UI, Google Drive integration, token rotation endpoint, or API contract changes were added.
+
+Status:
+SELF_ACCEPT_PENDING_CI
+
+Follow-ups:
+Run npm install/typecheck/build in CI or an environment with shell access. Then proceed to clean-code review if checks are acceptable.
+
+---
+
 Use this format for future entries:
 
 ~~~text
