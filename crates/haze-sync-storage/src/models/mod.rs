@@ -4,10 +4,78 @@
 //! connection pools, transactions, or Core policy behavior. Future phases will
 //! implement apply, conflict, delete, cursor, and idempotency logic on top of the
 //! schema represented here.
+//!
+//! Row models mirror persisted database fields and are internal storage/service
+//! values, not public API DTOs. Some fields intentionally contain token hashes,
+//! provider metadata, cursor snapshots, idempotency material, or object-store
+//! metadata; public API, admin, status, and CLI surfaces must sanitize or map
+//! rows before rendering them.
 
+use crate::schema::table_names;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+/// Internal row field that must not be rendered directly in public output.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SensitiveRowField {
+    pub table_name: &'static str,
+    pub field_name: &'static str,
+    pub reason: &'static str,
+}
+
+/// Persisted row fields that require explicit API/Server/CLI sanitization before
+/// any public rendering.
+///
+/// This list is audit metadata for storage consumers. It does not remove fields
+/// from row models because repositories still need to persist and load them.
+pub const SENSITIVE_ROW_FIELDS: &[SensitiveRowField] = &[
+    SensitiveRowField {
+        table_name: table_names::SYNC_ADAPTERS,
+        field_name: "token_hash",
+        reason: "server-side token hash; never expose in public output",
+    },
+    SensitiveRowField {
+        table_name: table_names::CONTENT_BLOBS,
+        field_name: "object_store_path",
+        reason: "internal object-store metadata; do not expose storage layout or local paths",
+    },
+    SensitiveRowField {
+        table_name: table_names::ADAPTER_CURSORS,
+        field_name: "external_cursor_json",
+        reason: "raw adapter/provider cursor metadata; expose only sanitized summaries",
+    },
+    SensitiveRowField {
+        table_name: table_names::IDEMPOTENCY_RECORDS,
+        field_name: "idempotency_key",
+        reason: "raw retry key material; do not return or log publicly",
+    },
+    SensitiveRowField {
+        table_name: table_names::IDEMPOTENCY_RECORDS,
+        field_name: "request_hash",
+        reason: "request fingerprint used for replay checks; not a public contract field",
+    },
+    SensitiveRowField {
+        table_name: table_names::IDEMPOTENCY_RECORDS,
+        field_name: "response_json",
+        reason: "stored response snapshot; expose only through API-owned sanitized DTOs",
+    },
+    SensitiveRowField {
+        table_name: table_names::GDRIVE_MAPPING,
+        field_name: "drive_file_id",
+        reason: "provider object identifier; expose only through adapter/API-approved views",
+    },
+    SensitiveRowField {
+        table_name: table_names::GDRIVE_MAPPING,
+        field_name: "drive_parent_id",
+        reason: "provider parent identifier; expose only through adapter/API-approved views",
+    },
+    SensitiveRowField {
+        table_name: table_names::AUDIT_EVENTS,
+        field_name: "metadata",
+        reason: "structured operational metadata; public output requires redaction discipline",
+    },
+];
 
 /// Row from `sync_adapters`.
 ///
@@ -197,4 +265,111 @@ pub struct AuditEventRow {
     pub revision_id: Option<String>,
     pub metadata: Value,
     pub created_at: DateTime<Utc>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sensitive_field_metadata_covers_high_risk_persisted_values() {
+        for (table_name, field_name) in [
+            (table_names::SYNC_ADAPTERS, "token_hash"),
+            (table_names::CONTENT_BLOBS, "object_store_path"),
+            (table_names::ADAPTER_CURSORS, "external_cursor_json"),
+            (table_names::IDEMPOTENCY_RECORDS, "idempotency_key"),
+            (table_names::IDEMPOTENCY_RECORDS, "request_hash"),
+            (table_names::IDEMPOTENCY_RECORDS, "response_json"),
+            (table_names::GDRIVE_MAPPING, "drive_file_id"),
+            (table_names::GDRIVE_MAPPING, "drive_parent_id"),
+            (table_names::AUDIT_EVENTS, "metadata"),
+        ] {
+            assert!(
+                SENSITIVE_ROW_FIELDS
+                    .iter()
+                    .any(|field| field.table_name == table_name && field.field_name == field_name),
+                "missing sensitivity metadata for {table_name}.{field_name}",
+            );
+        }
+    }
+
+    #[test]
+    fn sync_adapter_row_serializes_database_field_names() {
+        let row = SyncAdapterRow {
+            adapter_id: "adapter-1".to_owned(),
+            display_name: "Test Adapter".to_owned(),
+            role: "worktree_adapter".to_owned(),
+            token_hash: "token-hash".to_owned(),
+            enabled: true,
+            created_at: fixed_time(),
+            last_seen_at: None,
+        };
+
+        let serialized = serde_json::to_value(&row).expect("row should serialize");
+
+        assert_eq!(serialized["adapter_id"], "adapter-1");
+        assert_eq!(serialized["display_name"], "Test Adapter");
+        assert_eq!(serialized["role"], "worktree_adapter");
+        assert_eq!(serialized["token_hash"], "token-hash");
+        assert_eq!(serialized["enabled"], true);
+        assert!(serialized["last_seen_at"].is_null());
+
+        let roundtrip: SyncAdapterRow =
+            serde_json::from_value(serialized).expect("row should deserialize");
+        assert_eq!(roundtrip, row);
+    }
+
+    #[test]
+    fn adapter_cursor_row_preserves_json_cursor_and_optional_timestamp() {
+        let row = AdapterCursorRow {
+            adapter_id: "gdrive".to_owned(),
+            last_core_seq: 42,
+            external_cursor_json: serde_json::json!({ "page_token": "opaque-test-token" }),
+            last_success_at: None,
+            updated_at: fixed_time(),
+        };
+
+        let serialized = serde_json::to_value(&row).expect("row should serialize");
+
+        assert_eq!(serialized["adapter_id"], "gdrive");
+        assert_eq!(serialized["last_core_seq"], 42);
+        assert_eq!(serialized["external_cursor_json"]["page_token"], "opaque-test-token");
+        assert!(serialized["last_success_at"].is_null());
+
+        let roundtrip: AdapterCursorRow =
+            serde_json::from_value(serialized).expect("row should deserialize");
+        assert_eq!(roundtrip, row);
+    }
+
+    #[test]
+    fn audit_event_row_preserves_structured_metadata() {
+        let row = AuditEventRow {
+            audit_id: "audit-1".to_owned(),
+            actor_adapter_id: Some("adapter-1".to_owned()),
+            event_type: "file.put".to_owned(),
+            path: Some("Notes/a.md".to_owned()),
+            revision_id: Some("rev-1".to_owned()),
+            metadata: serde_json::json!({ "status": "accepted" }),
+            created_at: fixed_time(),
+        };
+
+        let serialized = serde_json::to_value(&row).expect("row should serialize");
+
+        assert_eq!(serialized["audit_id"], "audit-1");
+        assert_eq!(serialized["actor_adapter_id"], "adapter-1");
+        assert_eq!(serialized["event_type"], "file.put");
+        assert_eq!(serialized["path"], "Notes/a.md");
+        assert_eq!(serialized["revision_id"], "rev-1");
+        assert_eq!(serialized["metadata"]["status"], "accepted");
+
+        let roundtrip: AuditEventRow =
+            serde_json::from_value(serialized).expect("row should deserialize");
+        assert_eq!(roundtrip, row);
+    }
+
+    fn fixed_time() -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339("2026-07-06T00:00:00Z")
+            .expect("test timestamp should parse")
+            .with_timezone(&Utc)
+    }
 }
