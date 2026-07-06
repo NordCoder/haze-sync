@@ -2,414 +2,320 @@
 
 ## Current state
 
-`docs-process` is a new component-local documentation root for repository process and documentation conventions.
+`docs-process` is the repository process and documentation-convention component.
 
-Before this pass:
+Current tracked surface:
 
-- branch `component/docs-process` contained only the pre-existing `component-ci.yml` branch addition;
-- no dedicated `docs-process/docs/**` files existed;
-- process conventions existed in project-source context and across component-local docs;
-- root README described product architecture, repository layout, checks, limitations, and configuration at a high level;
-- component branches use `docs/**` and `control/**` conventions, but repository-tracked docs-process guidance was not established.
+```text
+docs-process/README.md
+docs-process/docs/component-contract.md
+docs-process/docs/implementation-plan.md
+docs-process/docs/dependency-map.md
+docs-process/docs/decisions.md
+docs-process/docs/implementation-log.md
+docs-process/docs/development-model.md
+docs-process/docs/dependency-map-semantics.md
+docs-process/docs/component-docs-guide.md
+docs-process/docs/control-slots-and-reports.md
+docs-process/docs/fan-in-and-merge-readiness.md
+docs-process/docs/unification-audit.md
+```
 
-This pass creates the baseline documentation component.
+This process branch unifies the documentation model around protocol v2:
+
+```text
+component-centric development
+worker scope = component
+separate self-review phase disabled
+Architect review optional/manual
+implementation -> clean-code-review -> CI -> fixer loop if needed
+```
+
+Docs-process remains behavior-neutral. It does not own product code, CI workflow behavior, deployment automation, active prompt/report execution, PR creation, or merge decisions.
 
 ## Target state
 
-The target state for docs-process is a clear, tracked process/documentation guidance layer for Haze Sync.
+Docs-process is V1-ready when:
 
-The component is V1-ready when:
+- the canonical development model is tracked and clear;
+- dependency maps are interpreted as contract-boundary maps, not serial roadmaps;
+- component docs conventions are tracked and reduce duplication;
+- active control-slot and report lifecycle is tracked;
+- fan-in and merge-readiness rules are tracked;
+- outdated model fragments are explicitly superseded;
+- process docs are safe, repository-relative, and sufficient for future workers;
+- future docs/process changes can proceed without re-reading local project-source prompts.
 
-- component documentation structure and expected files are documented;
-- control prompt/report/log lifecycle is documented without pre-creating active slots;
-- branch lifecycle and component work boundaries are documented;
-- report/status vocabulary is documented and aligned with implementation reports;
-- system docs organization is clear and separated from component-local docs;
-- docs review/check expectations are defined;
-- process docs remain behavior-neutral and secret-safe;
-- docs-process does not become an implementation, CI, deployment, or product-architecture owner.
+## Canonical documents
 
-## Implementation phases
+```text
+docs-process/docs/development-model.md
+  Current source of truth for roles, lifecycle, branch policy, source order,
+  status vocabulary, check honesty, secrecy rules, and contract-change protocol.
+
+docs-process/docs/dependency-map-semantics.md
+  Current source of truth for dependency map interpretation: independent component
+  development, contract boundaries, fan-in points, and contract-change blockers.
+
+docs-process/docs/component-docs-guide.md
+  Rules for component-local docs and how to avoid duplicating global process policy.
+
+docs-process/docs/control-slots-and-reports.md
+  Active prompt/report slot lifecycle and report field semantics.
+
+docs-process/docs/fan-in-and-merge-readiness.md
+  Rules for branch fan-in, control-slot hygiene, workflow duplicates, CI evidence,
+  and merge-readiness classification.
+
+docs-process/docs/unification-audit.md
+  Records the contradictions and duplicated model fragments superseded by this pass.
+```
+
+## Completed phases
 
 ### DOC-P1 — Component contract and planning normalization
 
-Status: completed by this Architect planning pass.
+Status: completed.
+
+Delivered baseline docs-process component docs:
+
+```text
+component-contract.md
+implementation-plan.md
+dependency-map.md
+decisions.md
+implementation-log.md
+```
+
+### DOC-P2 — Canonical development model
+
+Status: completed in `process/docs-unification`.
+
+Delivered:
+
+```text
+docs-process/README.md
+docs-process/docs/development-model.md
+```
+
+Resolved contradictions around:
+
+- old wave model vs component-centric model;
+- mandatory Architect review vs optional/manual Architect review;
+- separate self-review vs implementation worker internal verification;
+- tiny-task scope vs component scope;
+- process/scaffold branches changing product code by default.
+
+### DOC-P3 — Dependency map semantics
+
+Status: completed in `process/docs-unification`.
+
+Delivered:
+
+```text
+docs-process/docs/dependency-map-semantics.md
+```
+
+Purpose:
+
+- define dependency maps as contract-boundary maps;
+- explicitly reject serial-roadmap interpretation;
+- preserve independent component development;
+- distinguish fan-in gates from local component work blockers;
+- define worker and Orchestrator behavior around missing contracts.
+
+### DOC-P4 — Component docs guide
+
+Status: completed in `process/docs-unification`.
+
+Delivered:
+
+```text
+docs-process/docs/component-docs-guide.md
+```
+
+Purpose:
+
+- define component doc file roles;
+- reduce repeated global process boilerplate;
+- preserve component-specific contracts and non-goals;
+- keep current-state and target-state claims distinct;
+- keep dependency-map wording aligned with independent component development.
+
+### DOC-P5 — Control slots and reports guide
+
+Status: completed in `process/docs-unification`.
+
+Delivered:
+
+```text
+docs-process/docs/control-slots-and-reports.md
+```
+
+Purpose:
+
+- define active prompt/report ownership;
+- prevent idle active slot pre-creation;
+- define report field semantics;
+- define check/scope/contract honesty requirements.
+
+### DOC-P6 — Fan-in and merge-readiness guide
+
+Status: completed in `process/docs-unification`.
+
+Delivered:
+
+```text
+docs-process/docs/fan-in-and-merge-readiness.md
+```
+
+Purpose:
+
+- define fan-in evidence;
+- handle active control files;
+- handle duplicate `component-ci.yml` workflow additions;
+- distinguish docs-only, mixed, and product branches;
+- define when to invoke Architect manually.
+
+### DOC-P7 — Documentation unification audit
+
+Status: completed in `process/docs-unification`.
+
+Delivered:
+
+```text
+docs-process/docs/unification-audit.md
+```
+
+Purpose:
+
+- record what was unified;
+- list superseded model fragments;
+- record unresolved fan-in decisions;
+- define precedence when docs conflict.
+
+## Remaining phases
+
+### DOC-P8 — System docs index alignment
 
 Goal:
 
 ```text
-Create the docs-process component-local documentation baseline and define its
-scope as process/docs conventions, not product behavior.
+Align root/system docs with the canonical process model without mixing process docs
+and product architecture docs.
 ```
 
 Allowed scope:
 
 ```text
 docs-process/docs/**
+docs/** only if explicitly scoped
+README.md only if explicitly scoped
 ```
-
-Completed deliverables:
-
-- create `component-contract.md`;
-- create `dependency-map.md`;
-- create `implementation-plan.md`;
-- create `decisions.md`;
-- create `implementation-log.md`.
 
 Non-goals:
 
-- no product code changes;
-- no component prompt/report creation;
-- no CI workflow behavior changes;
-- no deployment automation;
-- no root/system docs rewrite unless explicitly scoped.
+- no product architecture change;
+- no component contract rewrite;
+- no local archive ingestion.
 
 Acceptance:
 
-- docs-process ownership is explicit;
-- current scaffold state is documented honestly;
-- future docs/process phases are implementable without product behavior changes.
+- `docs/**` remains system/product docs;
+- `docs-process/**` remains process docs;
+- README links do not imply unmerged branch docs are on `main`.
 
-### DOC-P2 — Component docs structure guide
+### DOC-P9 — Docs validation and hygiene checks
 
 Goal:
 
 ```text
-Document the standard component documentation structure and expectations for
-contract, plan, dependency map, decisions, and implementation log files.
+Define or add lightweight validation for docs structure, links, forbidden files, and
+sensitive examples.
 ```
 
 Allowed scope:
 
 ```text
 docs-process/docs/**
-component docs only if explicitly scoped as consistency updates
+scripts/** only if explicitly scoped
+.github/** only with github-ci coordination
 ```
-
-Likely work:
-
-- define purpose of:
-  - `docs/component-contract.md`;
-  - `docs/implementation-plan.md`;
-  - `docs/dependency-map.md`;
-  - `docs/decisions.md`;
-  - `docs/implementation-log.md`.
-- define current-state vs target-state wording expectations;
-- define component-local ownership and non-goal sections;
-- document when to request contract changes;
-- add examples using sanitized placeholders.
 
 Non-goals:
 
-- no product behavior changes;
-- no bulk edits across all components unless explicitly scoped;
-- no active control prompt/report changes.
-
-Contract-change triggers:
-
-- changing required component doc file set;
-- changing component ownership model;
-- making docs-process responsible for product architecture decisions.
+- no workflow behavior change without github-ci scope;
+- no automatic deletion;
+- no printing sensitive matches in logs.
 
 Acceptance:
 
-- future workers can understand what each component doc file is for;
-- examples are sanitized;
-- guidance matches existing component docs.
+- docs hygiene is enforceable manually or by coordinated CI;
+- validation remains behavior-neutral.
 
-### DOC-P3 — Control-slot lifecycle guide
+### DOC-P10 — Component docs drift audit after fan-in
 
 Goal:
 
 ```text
-Document active control slot semantics for `control/prompt.md`, `control/report.md`,
-and `control/log/**` without changing active control files.
+After component docs branches are merged or staged, audit them against the canonical
+process model and dependency-map semantics, then remove duplicated generic process
+boilerplate where useful.
 ```
 
 Allowed scope:
 
 ```text
 docs-process/docs/**
+component docs only when explicitly scoped
 ```
-
-Likely work:
-
-- describe Orchestrator ownership of active prompts;
-- describe Worker ownership of reports;
-- describe archive ownership and timing;
-- define what docs-process must not pre-create;
-- document how control files differ from component docs;
-- document safe report/log references.
 
 Non-goals:
 
-- no prompt/report creation;
-- no archiving live control files;
-- no workflow automation;
-- no worker assignment generation.
-
-Contract-change triggers:
-
-- changing prompt/report ownership;
-- allowing workers to archive active prompts/reports;
-- committing local prompt templates as active files.
+- no silent component ownership changes;
+- no active control prompt/report edits by docs-process;
+- no product-code changes.
 
 Acceptance:
 
-- control lifecycle is unambiguous;
-- docs do not mutate process state;
-- active slot safety is preserved.
-
-### DOC-P4 — Report/status vocabulary and lifecycle guide
-
-Goal:
-
-```text
-Document report fields, status vocabulary, and implementation/review/fixer
-lifecycle in a repository-safe form.
-```
-
-Allowed scope:
-
-```text
-docs-process/docs/**
-```
-
-Likely work:
-
-- document report fields and intended meaning;
-- document statuses such as `SELF_ACCEPT_PENDING_CI`, `BLOCKED_BY_CONTRACT`, `CONTRACT_CHANGE_REQUESTED`, clean-code/fixer statuses, and architect statuses;
-- document allowed next-agent recommendations;
-- document when to report blockers vs partial success;
-- document safety/secrecy section expectations.
-
-Non-goals:
-
-- no changes to external project-source templates unless explicitly asked;
-- no automated report generation;
-- no PR/merge decision ownership.
-
-Contract-change triggers:
-
-- changing report template fields;
-- changing lifecycle status semantics;
-- changing who decides merge readiness.
-
-Acceptance:
-
-- reports can be interpreted consistently;
-- status semantics do not conflict with component lifecycle;
-- docs are safe to publish.
-
-### DOC-P5 — Branch/process lifecycle guide
-
-Goal:
-
-```text
-Document branch classes, component work boundaries, and allowed/forbidden branch
-operations for this repository.
-```
-
-Allowed scope:
-
-```text
-docs-process/docs/**
-```
-
-Likely work:
-
-- describe `main`, `component/*`, `process/*`, and future fan-in/review/fixer branches if accepted;
-- document no-direct-main behavior;
-- document no-PR/no-merge worker constraints where relevant;
-- document base SHA and branch drift reporting expectations;
-- document when component scope may broaden internally and when cross-component change is blocked.
-
-Non-goals:
-
-- no GitHub branch protection settings;
-- no CI trigger changes unless coordinated with github-ci;
-- no automated branch creation/deletion.
-
-Contract-change triggers:
-
-- changing branch policy;
-- changing merge authority;
-- changing CI required checks.
-
-Acceptance:
-
-- branch/process guidance matches current workflow;
-- no runtime/product behavior changes occur.
-
-### DOC-P6 — System docs organization and index guide
-
-Goal:
-
-```text
-Define how repository-level system docs should be organized and how they relate
-to component-local docs.
-```
-
-Allowed scope:
-
-```text
-docs-process/docs/**
-docs/** only if explicitly scoped for system docs work
-README.md only if explicitly scoped for docs index updates
-```
-
-Likely work:
-
-- distinguish system docs from component docs;
-- define index conventions for `docs/README.md`;
-- define ownership for architecture, boundaries, safety semantics, integration rollout, operations docs;
-- define how accepted component decisions flow into system docs;
-- prevent stale local archive docs from being tracked accidentally.
-
-Non-goals:
-
-- no product architecture changes;
-- no system docs rewrite unless explicitly scoped;
-- no local archive ingestion by default.
-
-Contract-change triggers:
-
-- changing product architecture;
-- making local handoff archives tracked source;
-- duplicating conflicting component contracts in system docs.
-
-Acceptance:
-
-- docs layers are clear;
-- system docs can be expanded without conflicting with component-local docs.
-
-### DOC-P7 — Documentation validation and hygiene checks
-
-Goal:
-
-```text
-Define or add lightweight documentation hygiene checks that reduce broken links,
-secret leaks, and process drift.
-```
-
-Allowed scope:
-
-```text
-docs-process/docs/**
-scripts/** or .github/** only if coordinated with github-ci and explicitly scoped
-```
-
-Likely work:
-
-- define markdown link check expectations;
-- define forbidden-file/path checks for prompts, reports, archives, logs, dumps, `.env`, tokens, and local scratch;
-- define secret-safe example conventions;
-- optionally add CI validation hooks through github-ci coordination;
-- document manual review checklist.
-
-Non-goals:
-
-- no broad CI workflow changes without github-ci scope;
-- no automatic deletion of files;
-- no secret value printing in validation logs.
-
-Contract-change triggers:
-
-- adding CI required checks;
-- printing suspected secret values;
-- changing artifact policy;
-- blocking accepted generated docs without policy update.
-
-Acceptance:
-
-- docs hygiene expectations are clear;
-- any automated check is secret-safe and coordinated.
-
-### DOC-P8 — Process docs consolidation and drift audit
-
-Goal:
-
-```text
-Audit component docs and process docs for consistency after implementation waves
-and record accepted process changes in tracked docs.
-```
-
-Allowed scope:
-
-```text
-docs-process/docs/**
-component docs only if explicitly scoped for consistency corrections
-```
-
-Likely work:
-
-- check that component docs use consistent status/lifecycle terminology;
-- check that dependency boundaries do not contradict system docs;
-- identify stale process wording;
-- record accepted changes in decisions and implementation log;
-- request contract changes for contradictions rather than silently rewriting ownership.
-
-Non-goals:
-
-- no product behavior changes;
-- no component-wide rewrites without owner coordination;
-- no active prompt/report edits.
-
-Contract-change triggers:
-
-- conflicting component contracts;
-- process changes affecting workers/orchestrators/reviewers;
-- merge readiness or CI policy changes.
-
-Acceptance:
-
-- docs-process remains aligned with current repository state;
-- contradictions are reported explicitly.
+- component docs remain full enough for workers;
+- generic lifecycle duplication is reduced;
+- dependency maps do not imply global serial implementation order;
+- contradictions are reported or fixed with owner scope.
 
 ## Dependency gates
 
 Docs-process depends on:
 
-- current component contracts and plans;
-- implementation manifest/process rules when explicitly referenced;
-- report template/status vocabulary when explicitly referenced;
-- GitHub CI policy for any automated docs checks;
-- Deployment docs for runbook boundaries;
-- root README/system docs for repository-level docs index.
+- component contracts for component-specific ownership;
+- github-ci for automated docs checks;
+- deployment for runbook boundaries;
+- root README/system docs for repository-level index wording;
+- Orchestrator for fan-in and active control-slot decisions.
 
-Docs-process must not consume private/local project-source files into the repository without explicit user scope.
+These are integration/fan-in gates. They do not block independent docs-process work inside `docs-process/**`.
+
+Docs-process must not ingest local/private project-source files into the repository without explicit user scope.
 
 ## Known risks
 
-- Process docs can drift from actual component lifecycle.
-- Copying local project instructions into repository docs can accidentally expose private context or overconstrain future work.
-- Docs-process can become a dumping ground for product architecture decisions unless ownership is kept narrow.
-- Active prompt/report control slots can be confused with static docs.
-- Bulk docs consistency edits can accidentally change component contracts without owner review.
-- Documentation examples can leak secrets if copied from real logs/config.
+- Old archived prompts or reports may still contain superseded model wording.
+- Component docs may still repeat generic process rules until a component docs drift audit runs.
+- Component dependency maps may still use ambiguous dependency-gate wording until the drift audit normalizes them.
+- Active `control/prompt.md` and `control/report.md` files in component branches may be merged accidentally without fan-in cleanup.
+- Multiple branches may carry different copies of `component-ci.yml`.
+- Process docs can become product-architecture docs unless roots remain separated.
 
-## Deferred work
-
-Deferred outside this Architect documentation/planning pass:
-
-- create detailed component-docs guide;
-- create control-slot lifecycle guide;
-- create report/status vocabulary guide;
-- create branch/process lifecycle guide;
-- create system docs organization guide;
-- add docs validation tooling;
-- reconcile component docs after future implementation waves;
-- update root README or system docs.
-
-## Completion criteria for the component
+## Completion criteria
 
 `docs-process` is V1-ready when:
 
-- component docs structure is documented;
-- control-slot lifecycle is documented;
-- report/status vocabulary is documented;
-- branch/process lifecycle is documented;
-- system docs organization is documented;
-- docs hygiene checks or manual review checklist exist;
-- process docs are secret-safe and behavior-neutral;
-- docs-process does not own product code, CI workflow behavior, deployment automation, or runtime sync semantics.
+- canonical process model is tracked;
+- dependency map semantics are tracked;
+- component docs guide is tracked;
+- control/report guide is tracked;
+- fan-in guide is tracked;
+- unification audit is tracked;
+- system docs/index alignment is complete when scoped;
+- docs hygiene checks or manual checklist are defined;
+- docs-process remains behavior-neutral and does not own product code, CI workflows, deployment automation, or runtime sync semantics.
