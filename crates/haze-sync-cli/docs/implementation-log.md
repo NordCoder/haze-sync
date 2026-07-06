@@ -20,13 +20,41 @@ Commit(s):
 See branch history after this documentation pass.
 
 Summary:
-Replaced scaffold-level CLI docs with a real component contract, dependency map, phased implementation plan, component decisions, and this planning baseline log entry. The pass documented CLI as an operator-facing command surface, not Core policy owner, Server runtime owner, Storage persistence owner, provider adapter, Worktree runtime, or Obsidian plugin. Current behavior remains read-only placeholders and offline doctor summary only. Future phases cover parser/output hardening, config/secret handling, live status/adapters, live doctor, bootstrap/sync workflows, admin mutation commands, and output/packaging readiness.
+Replaced scaffold-level CLI docs with a real component contract, dependency map, implementation plan, decisions, and this planning baseline log entry. The pass documented CLI as an operator-facing command surface, not Core policy owner, Server runtime owner, Storage persistence owner, provider adapter, Worktree runtime, or Obsidian plugin. Current behavior remains read-only placeholders and offline doctor summary only. Future phases cover parser/output hardening, config/secret handling, live status/adapters, live doctor, bootstrap/sync workflows, admin mutation commands, and output/packaging readiness.
 
 Status:
 ARCHITECT_ACCEPT_PENDING_REVIEW
 
 Follow-ups:
 Execute CLI-P2 through CLI-P8 through normal implementation -> clean-code -> CI -> fixer lifecycle when scheduled. Keep CLI output secret-safe, live behavior Server/API-backed, and admin/destructive commands explicitly scoped with confirmation and dry-run behavior where practical.
+
+---
+
+### 2026-07-06 — W1/CLI-P2 parser and output contract hardening
+
+Agent:
+Implementation Worker
+
+Branch:
+component/cli
+
+Prompt:
+`crates/haze-sync-cli/control/prompt.md`
+
+Report:
+`crates/haze-sync-cli/control/report.md`
+
+Commit(s):
+See branch history for this implementation pass.
+
+Summary:
+Unified current CLI parsing under the top-level command model, routed `doctor` through that model, added explicit stdout/stderr/exit-code output helpers, hardened parse errors so they do not echo raw argument values, and documented the current read-only command categories and decision to keep the dependency-free manual parser for CLI-P2.
+
+Status:
+SELF_ACCEPT_PENDING_CI
+
+Follow-ups:
+Run clean-code review and CI/shell checks. Future phases still own config/secret-source handling, live Server/API calls, live doctor behavior, bootstrap/admin commands, and stable machine-readable output.
 
 ---
 
