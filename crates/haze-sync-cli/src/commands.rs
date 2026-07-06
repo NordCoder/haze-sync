@@ -22,21 +22,6 @@ pub enum CliCommand {
     Doctor(DoctorCommand),
 }
 
-impl CliCommand {
-    /// Human-readable summary printed by the current scaffold binary for
-    /// placeholder commands.
-    #[must_use]
-    pub const fn placeholder_summary(&self) -> Option<&'static str> {
-        match self {
-            Self::Status => Some("status command parsed; live server calls remain unavailable"),
-            Self::Adapters(AdaptersCommand::List) => {
-                Some("adapters list command parsed; live server calls remain unavailable")
-            }
-            Self::Help(_) | Self::Doctor(_) => None,
-        }
-    }
-}
-
 /// Help topic requested by the operator.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HelpTopic {
@@ -174,10 +159,6 @@ mod tests {
         let command = parse_cli(["haze-sync", "status"]).unwrap();
 
         assert_eq!(command, CliCommand::Status);
-        assert_eq!(
-            command.placeholder_summary(),
-            Some("status command parsed; live server calls remain unavailable")
-        );
     }
 
     #[test]
@@ -185,10 +166,6 @@ mod tests {
         let command = parse_cli(["haze-sync", "adapters", "list"]).unwrap();
 
         assert_eq!(command, CliCommand::Adapters(AdaptersCommand::List));
-        assert_eq!(
-            command.placeholder_summary(),
-            Some("adapters list command parsed; live server calls remain unavailable")
-        );
     }
 
     #[test]
