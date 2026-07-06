@@ -81,7 +81,7 @@ Recommended top-level structure:
 Current state
 Target state
 Implementation phases
-Dependency gates
+Integration/fan-in gates
 Known risks
 Deferred work
 Completion criteria
@@ -109,21 +109,33 @@ GDA-P4
 DOC-P2
 ```
 
-Implementation phases are scoped to the component. If a phase needs another component, defer it to fan-in or mark the dependency explicitly.
+Implementation phases are scoped to the component. If a phase needs another component, local component work can still proceed against the current contract, but the cross-component connection must be marked as a fan-in or contract-change point.
 
 ## `dependency-map.md`
 
 The dependency map explains what the component consumes and what consumes it.
 
+It is not a serial implementation roadmap.
+
+Canonical interpretation:
+
+```text
+components develop independently inside their component boundaries
+dependency maps record contract boundaries
+dependency maps record fan-in points
+dependency maps do not impose global implementation order
+```
+
 Recommended sections:
 
 ```text
 Component role in dependency graph
-Upstream dependencies
-Downstream dependents
+Independent development model
+Upstream contracts consumed
+Downstream contracts exposed
+Forbidden dependency directions
 Cross-component contracts
 Integration/fan-in ownership
-Dependency rules
 Contract-change notes
 ```
 
@@ -133,7 +145,12 @@ It should distinguish:
 - conceptual/API dependencies;
 - provider/platform dependencies;
 - forbidden dependency directions;
-- unresolved contract questions.
+- unresolved contract questions;
+- fan-in gates that matter for integration or merge readiness.
+
+It should not say that a component cannot be developed until another component is fully complete unless the active prompt explicitly creates that constraint.
+
+Use `docs-process/docs/dependency-map-semantics.md` as the canonical interpretation when dependency wording is ambiguous.
 
 ## `decisions.md`
 
@@ -190,7 +207,8 @@ Prefer references to canonical docs for:
 - global status vocabulary;
 - control-slot ownership;
 - report template fields;
-- global safety rules.
+- global safety rules;
+- dependency map semantics.
 
 Component docs should include component-specific safety rules when the component has special risk, such as provider credentials, database connection strings, local filesystem paths, raw provider responses, or generated artifacts.
 
@@ -260,7 +278,8 @@ Move or reference:
 - generic status lists;
 - global role definitions;
 - report-template explanations;
-- branch policy.
+- branch policy;
+- generic dependency map semantics.
 
 ## Component baseline checklist
 
@@ -269,7 +288,7 @@ A component docs baseline is acceptable when:
 ```text
 component-contract.md defines ownership and non-goals
 implementation-plan.md has current/target state and phases
-dependency-map.md shows upstream/downstream/cross-component rules
+dependency-map.md shows upstream/downstream/cross-component rules without serializing all development
 decisions.md records local design/process decisions
 implementation-log.md records the planning baseline
 current-state claims match repository code/docs
