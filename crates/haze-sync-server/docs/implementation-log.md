@@ -24,6 +24,17 @@ Summary: Expanded Server component planning from a T0 documentation/future fan-i
 Status: ARCHITECT_ACCEPT_PENDING_REVIEW
 Follow-ups: Execute SRV-P2 through SRV-P9 through normal implementation -> clean-code -> CI -> fixer lifecycle when scheduled. Keep Server aligned with API/Core/Storage contracts and do not embed provider runtimes, hard-delete behavior, or route-local sync policy without explicit contract changes.
 
+### 2026-07-06 — W1/SRV-P2
+
+Agent: implementation-worker
+Branch: component/server
+Prompt: crates/haze-sync-server/control/prompt.md
+Report: crates/haze-sync-server/control/report.md
+Commit(s): component/server SRV-P2 route-shell audit commits
+Summary: Audited the existing explicit router/state/auth/error boundary and hardened route-shell tests around sanitized public failures. Added request-level coverage for authenticated-but-unconfigured PUT behavior and database-auth lookup failure redaction, including headers, request body, token/hash markers, database URL markers, object-store-root markers, local path markers, SQLx/stack markers, and idempotency-key values. Documented partial route surfaces, including dependency-free shell behavior, read-only admin/status routes, and intentionally deferred `accept_conflict` conflict-resolution behavior.
+Status: SELF_ACCEPT_PENDING_CI
+Follow-ups: Run `cargo fmt --check`, `cargo check -p haze-sync-server`, `cargo test -p haze-sync-server`, and `cargo clippy -p haze-sync-server --all-targets -- -D warnings` in CI or a shell-capable environment.
+
 ---
 
 Use this format for future entries:
