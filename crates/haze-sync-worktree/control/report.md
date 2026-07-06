@@ -1,12 +1,12 @@
 REPORT_TYPE:
-IMPLEMENTATION
+CLEAN_CODE_REVIEW
 
 STATUS:
-SELF_ACCEPT_PENDING_CI
+CLEAN_ACCEPT_PENDING_CI
 
 AGENT:
-role: implementation-worker
-agent_execution_id: W1-WT-P2-worktree-implementation-20260706
+role: clean-code-reviewer
+agent_execution_id: W1-WT-P2C-worktree-clean-review-20260706
 chat_name: W1 persistent — worktree
 
 COMPONENT:
@@ -21,34 +21,30 @@ control_report_path: crates/haze-sync-worktree/control/report.md
 
 WAVE:
 id: W1
-phase_id: WT-P2
-dependency_status: prompt state was PROMPT_READY; active prompt matched crates/haze-sync-worktree/control/prompt.md; dependency map permits independent Worktree path-safety work while Common owns VaultPath validation.
+phase_id: WT-P2C
+dependency_status: prompt state was PROMPT_READY; active prompt matched crates/haze-sync-worktree/control/prompt.md; implementation report was read before this overwrite.
 
 SUMMARY:
-Implemented the WT-P2 Worktree config and path-mapping foundation. Added a safe WorktreeConfig rooted at one configured absolute local root, deterministic VaultPath-to-local mapping, local-to-VaultPath mapping with component containment checks, reserved runtime path handling, safe path-redacted WorktreePathError values, and unit tests for root validation, containment, traversal, backslash escape, reserved paths, conflict-path preservation, and error redaction. Documented the reserved path policy in Worktree docs.
+Reviewed WT-P2 implementation for path-mapping correctness, root containment, error redaction, reserved path policy, same-component Cargo scope expansion, non-goal preservation, and report honesty. The implementation is clean enough to accept pending CI. No required code fix was applied.
 
 CHANGED_FILES:
-- crates/haze-sync-worktree/Cargo.toml
-- crates/haze-sync-worktree/src/lib.rs
-- crates/haze-sync-worktree/src/path_mapping.rs
-- crates/haze-sync-worktree/docs/path-mapping.md
 - crates/haze-sync-worktree/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/worktree
 base_branch: main
-base_sha: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
-head_sha: 7aaa91540053867eeaeb4b61cb3fab77bf64d203 before writing this control report; the report write creates a later control-only commit.
+base_sha: current main comparison observed merge base 1a82bea5c87953db378e5e03429326df38320ee8; implementation prompt baseline recorded 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2.
+head_sha: b6776b7267d5b0cc1b43c64ac03e5b9c833cdc5a before this clean-review report write; this report write creates a later control-only commit.
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes; crates/haze-sync-worktree/control/prompt.md on component/worktree
-control_report_written: yes; crates/haze-sync-worktree/control/report.md
+control_report_written: yes; crates/haze-sync-worktree/control/report.md replaced with this CLEAN_CODE_REVIEW report
 control_files_archived_by_worker: no
 
 SCOPE:
-allowed_files_only: no; one internal component-scope expansion was used for crates/haze-sync-worktree/Cargo.toml
-scope_expansion_used: yes
-scope_expansion_rationale: WT-P2 requires mapping with shared Common VaultPath semantics. The worktree crate could not use haze-sync-common::VaultPath without declaring the crate dependency in its own Cargo.toml. This stayed inside the assigned Worktree component and did not change sibling code or contracts.
+allowed_files_only: yes for this clean-review run; only control/report.md was changed
+scope_expansion_used: no
+scope_expansion_rationale: none
 cross_component_changes: no
 forbidden_files_touched: no
 
@@ -57,37 +53,36 @@ contract_read: yes
 contract_satisfied: yes
 contract_changes_requested: no
 contract_change_rationale: none
-affected_components: worktree; consumes existing haze-sync-common VaultPath validation through a normal crate dependency.
+affected_components: worktree only; existing same-component Cargo dependency on haze-sync-common is justified because Worktree must consume shared VaultPath semantics rather than duplicate them.
 
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- Added WorktreeConfig with absolute-root validation and no public root exposure through errors.
-- Added VaultPath-to-local mapping below the configured root.
-- Added local path back-mapping to VaultPath only when the path is under the configured root.
-- Added rejection for empty/relative/root-only roots, outside-root paths, sibling-prefix escapes, traversal components, backslash escapes, non-UTF-8 local segments, and reserved runtime paths.
-- Added reserved runtime directories: _haze_runtime/tmp, _haze_runtime/trash, _haze_runtime/metadata, and _haze_runtime/echo.
-- Preserved _haze_conflicts/** as syncable for Core conflict materialization.
-- Added safe WorktreePathError codes/messages that do not include local absolute roots.
-- Added unit tests for path normalization, root containment, reserved paths, and redacted error output.
-- Added docs/path-mapping.md documenting the Worktree path-mapping and reserved-path policy.
-behavior_changes:
-- haze-sync-worktree is no longer placeholder-only; it now exposes path-mapping primitives while keeping scanner/writer/runtime behavior deferred.
-bugs_found: none
+- Verified WorktreeConfig root validation rejects empty and relative roots.
+- Verified VaultPath-to-local mapping appends validated VaultPath segments under the configured root.
+- Verified local-to-VaultPath mapping uses component containment rather than plain string prefix checks.
+- Verified traversal, outside-root, root-only, backslash, non-UTF-8 local path, reserved runtime path, and temp suffix handling are represented by safe error categories.
+- Verified WorktreePathError codes/messages do not carry configured absolute roots or raw filesystem errors.
+- Verified _haze_runtime temp/trash/metadata/echo reserved paths are documented and _haze_conflicts remains available for Core conflict materialization.
+- Verified no scanner loop, watcher, API calls, provider behavior, Core policy, hard delete, or background runtime was added.
+behavior_changes: no clean-review behavior changes were committed
+bugs_found: none requiring a fix
 bugs_fixed: none
-cleanups_made: replaced placeholder crate docs/exports with Worktree path-mapping exports; kept implementation direct and local to one module.
-non_goals_preserved: no scanner loop, no Server config loading, no API calls, no Core policy, no filesystem watcher, no provider/GDrive/Obsidian behavior, no hard delete, no background jobs.
+cleanups_made: none committed; an optional root-validation hardening cleanup was considered, but the current implementation already satisfies the WT-P2 contract and the attempted nonessential file rewrite was blocked by connector safety tooling.
+non_goals_preserved: yes; scanner loop, Server config loading, API calls, Core policy, filesystem watcher, provider/GDrive/Obsidian behavior, hard delete, and background jobs remain absent.
 deferred_work:
-- scanner loop and symlink/special-file metadata rejection belong to later scanner phases.
-- atomic writer/materializer behavior belongs to later writer/materializer phases.
-- persisted worktree_state, importer planning, echo guard persistence, trash execution, Server runtime hosting, and E2E integration remain deferred.
+- symlink and special-file metadata rejection remains correctly deferred to scanner/writer phases.
+- atomic materialization, echo persistence, importer planning, trash execution, and Server runtime hosting remain deferred.
+- optional future cleanup: make configured-root segment validation as conservative as local-path segment validation.
 
 TESTS_AND_CHECKS:
 checks_run:
-- GitHub connector read of control state and prompt.
-- GitHub connector read of required Worktree docs and current source.
-- GitHub connector compare_commits from base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2 to component/worktree.
-- Static implementation self-review through fetched GitHub file contents.
+- GitHub connector read of control state and active clean-code prompt.
+- GitHub connector read of the WT-P2 implementation report before overwriting it.
+- GitHub connector read of component contract and WT-P2 implementation-plan section.
+- GitHub connector compare_commits from main to component/worktree.
+- GitHub connector read of current path_mapping.rs for static review.
+- GitHub connector get_commit_combined_status for b6776b7267d5b0cc1b43c64ac03e5b9c833cdc5a; no statuses were returned.
 checks_not_run:
 - cargo fmt --check: not run; GitHub connector does not provide shell execution.
 - cargo check -p haze-sync-worktree: not run; GitHub connector does not provide shell execution.
@@ -95,7 +90,7 @@ checks_not_run:
 - cargo clippy -p haze-sync-worktree --all-targets -- -D warnings: not run; GitHub connector does not provide shell execution.
 ci_status: CI_UNKNOWN
 workflow_urls: none observed
-known_failures: none observed; shell checks and CI were not executed or observed.
+known_failures: none observed
 
 SAFETY_AND_SECRECY:
 secrets_committed: no
@@ -106,18 +101,19 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- The active prompt's file list omitted crates/haze-sync-worktree/Cargo.toml, but a same-component dependency declaration was required to use shared VaultPath semantics cleanly. This was handled as a documented internal component-scope expansion.
-- Branch comparison against the current main baseline shows pre-existing non-worktree workflow changes on component/worktree. They were not modified during this run.
+- No blocking correctness or contract issue found.
+- Branch comparison against main includes component control/docs history and Worktree implementation files. Workflow files are not in the current main comparison and were not edited by this clean-review run.
+- Optional non-blocking cleanup: configured-root validation could reject backslash/non-UTF-8 normal segments for symmetry with local path mapping, but this does not break WT-P2 acceptance because the configured root is operator-controlled and syncable path inputs are already validated/redacted.
 
 BLOCKERS:
-- No implementation blocker.
+- No clean-code blocker.
 - CI/shell verification remains pending because only GitHub connector access is available in this worker run.
 
 NEXT_RECOMMENDED_AGENT:
-clean-code-reviewer
+orchestrator
 
 FINAL_VERDICT:
-WT-P2 implementation is complete and self-accepted pending CI/check execution by an environment that can run shell commands or observe GitHub Actions.
+CLEAN_ACCEPT_PENDING_CI. WT-P2 path mapping is acceptable pending real cargo fmt/check/test/clippy or CI observation.
 
 PUSHED:
 yes
