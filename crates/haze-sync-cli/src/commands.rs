@@ -3,32 +3,47 @@
 //! The parser is intentionally dependency-free and side-effect-free. It builds a
 //! command model for future operational wiring without opening network
 //! connections, reading credentials, contacting providers, or mutating state.
+//! Parse errors intentionally avoid echoing raw arguments because CLI output is
+//! commonly copied into logs, tickets, and chat.
 
+use crate::doctor::{self, DoctorCliCommand, DoctorCommand, DoctorParseError};
 use std::fmt;
 
 /// Parsed top-level CLI command.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CliCommand {
-    /// `haze-sync --help` / `haze-sync help`.
-    Help,
+    /// `haze-sync --help` / `haze-sync help` or command-specific help.
+    Help(HelpTopic),
     /// `haze-sync status` scaffold command.
     Status,
     /// `haze-sync adapters ...` scaffold command group.
     Adapters(AdaptersCommand),
+    /// `haze-sync doctor [--offline]` offline diagnostic command.
+    Doctor(DoctorCommand),
 }
 
 impl CliCommand {
-    /// Human-readable summary printed by the current scaffold binary.
+    /// Human-readable summary printed by the current scaffold binary for
+    /// placeholder commands.
     #[must_use]
-    pub const fn summary_message(&self) -> &'static str {
+    pub const fn placeholder_summary(&self) -> Option<&'static str> {
         match self {
-            Self::Help => usage(),
-            Self::Status => "status command parsed; live server calls remain unavailable",
+            Self::Status => Some("status command parsed; live server calls remain unavailable"),
             Self::Adapters(AdaptersCommand::List) => {
-                "adapters list command parsed; live server calls remain unavailable"
+                Some("adapters list command parsed; live server calls remain unavailable")
             }
+            Self::Help(_) | Self::Doctor(_) => None,
         }
     }
+}
+
+/// Help topic requested by the operator.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HelpTopic {
+    /// Root CLI usage.
+    Root,
+    /// Doctor command usage.
+    Doctor,
 }
 
 /// Parsed adapters subcommand.
@@ -42,28 +57,27 @@ pub enum AdaptersCommand {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CliParseError {
     /// Unknown top-level command.
-    UnknownCommand(String),
+    UnknownCommand,
     /// No adapters subcommand was provided.
     MissingAdaptersCommand,
     /// Unknown adapters subcommand.
-    UnknownAdaptersCommand(String),
+    UnknownAdaptersCommand,
     /// Extra argument was provided after a complete command.
-    UnexpectedArgument(String),
+    UnexpectedArgument,
+    /// Doctor command parse failure.
+    Doctor(DoctorParseError),
 }
 
 impl fmt::Display for CliParseError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::UnknownCommand(command) => write!(formatter, "unknown command: {command}"),
+            Self::UnknownCommand => formatter.write_str("unknown command"),
             Self::MissingAdaptersCommand => {
                 formatter.write_str("missing adapters command: expected list")
             }
-            Self::UnknownAdaptersCommand(command) => {
-                write!(formatter, "unknown adapters command: {command}")
-            }
-            Self::UnexpectedArgument(argument) => {
-                write!(formatter, "unexpected argument: {argument}")
-            }
+            Self::UnknownAdaptersCommand => formatter.write_str("unknown adapters command"),
+            Self::UnexpectedArgument => formatter.write_str("unexpected argument"),
+            Self::Doctor(error) => write!(formatter, "{error}"),
         }
     }
 }
@@ -86,20 +100,21 @@ where
     let mut args = args.into_iter();
     let _program_name = args.next();
     let Some(command) = next_argument(&mut args) else {
-        return Ok(CliCommand::Help);
+        return Ok(CliCommand::Help(HelpTopic::Root));
     };
 
     match command.as_str() {
         "--help" | "-h" | "help" => {
             reject_trailing(args)?;
-            Ok(CliCommand::Help)
+            Ok(CliCommand::Help(HelpTopic::Root))
         }
         "status" => {
             reject_trailing(args)?;
             Ok(CliCommand::Status)
         }
         "adapters" => parse_adapters_command(args),
-        _ => Err(CliParseError::UnknownCommand(command)),
+        "doctor" => parse_doctor_command(args),
+        _ => Err(CliParseError::UnknownCommand),
     }
 }
 
@@ -115,7 +130,18 @@ where
             reject_trailing(args)?;
             Ok(CliCommand::Adapters(AdaptersCommand::List))
         }
-        _ => Err(CliParseError::UnknownAdaptersCommand(command)),
+        _ => Err(CliParseError::UnknownAdaptersCommand),
+    }
+}
+
+fn parse_doctor_command<I, S>(args: I) -> Result<CliCommand, CliParseError>
+where
+    I: Iterator<Item = S>,
+    S: AsRef<str>,
+{
+    match doctor::parse_doctor_args(args).map_err(CliParseError::Doctor)? {
+        DoctorCliCommand::Doctor(command) => Ok(CliCommand::Doctor(command)),
+        DoctorCliCommand::Help => Ok(CliCommand::Help(HelpTopic::Doctor)),
     }
 }
 
@@ -132,10 +158,8 @@ where
     I: Iterator<Item = S>,
     S: AsRef<str>,
 {
-    if let Some(argument) = args.next() {
-        return Err(CliParseError::UnexpectedArgument(
-            argument.as_ref().to_owned(),
-        ));
+    if args.next().is_some() {
+        return Err(CliParseError::UnexpectedArgument);
     }
 
     Ok(())
@@ -151,8 +175,8 @@ mod tests {
 
         assert_eq!(command, CliCommand::Status);
         assert_eq!(
-            command.summary_message(),
-            "status command parsed; live server calls remain unavailable"
+            command.placeholder_summary(),
+            Some("status command parsed; live server calls remain unavailable")
         );
     }
 
@@ -162,17 +186,34 @@ mod tests {
 
         assert_eq!(command, CliCommand::Adapters(AdaptersCommand::List));
         assert_eq!(
-            command.summary_message(),
-            "adapters list command parsed; live server calls remain unavailable"
+            command.placeholder_summary(),
+            Some("adapters list command parsed; live server calls remain unavailable")
+        );
+    }
+
+    #[test]
+    fn doctor_command_parses_through_top_level_model() {
+        let command = parse_cli(["haze-sync", "doctor", "--offline"]).unwrap();
+
+        assert_eq!(
+            command,
+            CliCommand::Doctor(DoctorCommand { offline: true })
         );
     }
 
     #[test]
     fn help_and_empty_invocation_render_usage() {
-        assert_eq!(parse_cli(["haze-sync"]).unwrap(), CliCommand::Help);
+        assert_eq!(
+            parse_cli(["haze-sync"]).unwrap(),
+            CliCommand::Help(HelpTopic::Root)
+        );
         assert_eq!(
             parse_cli(["haze-sync", "--help"]).unwrap(),
-            CliCommand::Help
+            CliCommand::Help(HelpTopic::Root)
+        );
+        assert_eq!(
+            parse_cli(["haze-sync", "doctor", "--help"]).unwrap(),
+            CliCommand::Help(HelpTopic::Doctor)
         );
         assert!(usage().contains("doctor [--offline]"));
         assert!(usage().contains("read-only"));
@@ -180,28 +221,49 @@ mod tests {
 
     #[test]
     fn parser_rejects_unscoped_network_arguments() {
-        let error =
-            parse_cli(["haze-sync", "status", "--server", "https://example.test"]).unwrap_err();
+        let error = parse_cli(["haze-sync", "status", "--server", "https://example.test"])
+            .unwrap_err();
 
-        assert_eq!(
-            error,
-            CliParseError::UnexpectedArgument("--server".to_owned())
-        );
+        assert_eq!(error, CliParseError::UnexpectedArgument);
     }
 
     #[test]
-    fn parser_errors_are_safe() {
-        let error = parse_cli(["haze-sync", "tokens"]).unwrap_err().to_string();
+    fn parser_errors_do_not_echo_arguments() {
+        let examples = [
+            parse_cli(["haze-sync", "tokens"]).unwrap_err().to_string(),
+            parse_cli(["haze-sync", "status", "--token=supersecret"])
+                .unwrap_err()
+                .to_string(),
+            parse_cli(["haze-sync", "adapters", "oauth-token"])
+                .unwrap_err()
+                .to_string(),
+            parse_cli(["haze-sync", "doctor", "--database-url=postgres://example"])
+                .unwrap_err()
+                .to_string(),
+        ];
 
+        for error in examples {
+            assert_no_sensitive_leaks(&error);
+            assert!(!error.contains("tokens"));
+            assert!(!error.contains("supersecret"));
+            assert!(!error.contains("postgres://example"));
+        }
+    }
+
+    fn assert_no_sensitive_leaks(output: &str) {
         for forbidden in [
-            "token_hash",
-            "oauth",
-            "secret",
-            "database_url",
-            "/srv/",
-            "backtrace",
+            concat!("token", "_hash"),
+            concat!("oa", "uth"),
+            concat!("se", "cret"),
+            concat!("database", "_url"),
+            concat!("post", "gres", "://"),
+            concat!("/", "srv", "/"),
+            concat!("back", "trace"),
         ] {
-            assert!(!error.contains(forbidden));
+            assert!(
+                !output.contains(forbidden),
+                "CLI output leaked forbidden marker {forbidden}: {output}"
+            );
         }
     }
 }
