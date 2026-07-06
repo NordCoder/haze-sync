@@ -4,178 +4,118 @@
 
 `haze-gdrive-adapter` is the Google Drive external replica adapter.
 
-Conceptual position:
+GDrive adapter owns Google Drive API interaction, OAuth/token loading boundary, Drive scan/change-feed/export planning, Drive-to-Core normalization, provider echo suppression, and Drive-specific safety guardrails.
 
-```text
-Google Drive folder subtree
-  -> GDrive adapter scan/change-feed/import planner
-  -> Haze Sync Server public API / Core outcomes
-  -> GDrive adapter export planner
-  -> Google Drive provider mutations
-```
+GDrive adapter does not own Core sync policy, API DTO definitions, Server runtime internals, Storage schema, Worktree behavior, Obsidian plugin behavior, Deployment automation, or CI workflow policy.
 
-The adapter is an external replica client. It is not Core, Server, Storage, Worktree, or Obsidian plugin.
+## Independent development model
 
-## Upstream dependencies
+`haze-gdrive-adapter` can be developed independently inside the `component/gdrive-adapter` branch.
 
-### Project contract dependencies
+The dependency map records provider adapter contracts and fan-in points. It does not impose a serial implementation order on Core, API, Server, Storage, Deployment, or CI.
 
-- `haze-sync-common`
-  - conceptual path/hash/adapter/mode primitives;
-  - validation vocabulary for normalized values.
-- `haze-sync-api`
-  - public HTTP DTOs;
-  - headers for auth, content hash, base revision, idempotency;
-  - public errors and route contracts.
-- `haze-sync-core`
-  - authoritative semantics observed through API outcomes:
-    - base revision;
-    - conflict-saved;
-    - tombstone/delete;
-    - idempotency;
-    - operation changes.
-- `haze-sync-server`
-  - HTTP runtime endpoint for adapter requests;
-  - status/admin behavior if consumed by adapter.
-- `haze-sync-storage`
-  - possible mapping/cursor persistence shape through `gdrive_mapping` and adapter cursor rows, but direct access is not assumed.
+Allowed independent work includes:
 
-### Provider/platform dependencies
+- adapter config/runtime skeleton;
+- OAuth token loading boundary without committing credentials;
+- Google Drive client abstraction;
+- provider DTO normalization;
+- mapping/cursor/echo-state design;
+- full scan/change-feed/export planners;
+- delete-candidate guardrails;
+- dry-run/status/doctor foundations;
+- provider-safe tests using mocks/fixtures.
 
-Future implementation may depend on:
+If GDrive adapter needs Core/API/Server endpoints, Storage-backed mapping persistence, Deployment secret layout, or CI provider-test support not currently contracted, it reports a contract-change request or fan-in need instead of implementing another component's responsibility.
 
-- Google OAuth/token libraries or direct HTTP client support;
-- Google Drive API client or REST client;
-- async runtime/network libraries;
-- retry/backoff/time libraries;
-- serialization for provider-safe internal DTOs;
-- test fake-provider utilities.
+## Upstream contracts consumed
 
-Any provider dependency must be introduced in a scoped implementation phase and reflected here.
+GDrive adapter may consume:
 
-### Current direct dependencies
+- Server/API HTTP contracts for submitting normalized changes and reading Core state;
+- Core semantics through public Server/API results;
+- Common shared identifiers/types where accepted;
+- Deployment secret/config paths as operational configuration;
+- Google Drive API as an external provider contract.
 
-Current code is a placeholder binary and has no direct dependencies beyond workspace/lints.
+GDrive adapter must not consume:
 
-## Disallowed direct dependencies
+- Core internals directly for policy decisions;
+- Storage internals or direct DB writes;
+- Server private handler state;
+- Worktree local filesystem behavior;
+- Obsidian plugin internals;
+- CI workflow internals.
 
-GDrive adapter must not directly depend on:
+## Downstream contracts exposed
 
-```text
-apps/haze-obsidian-plugin
-haze-sync-worktree
-Obsidian plugin internals
-Worktree filesystem runtime
-SQLx/direct database access unless explicitly accepted
-Axum server route registration
-CLI parser/command UX as adapter logic
-```
+Expected downstream consumers:
 
-Direct `haze-sync-storage` repository use is not assumed by default. If adapter direct DB access is chosen, it requires explicit architecture decision and documentation update.
+- Server/API/Core indirectly, through normalized incoming changes and external replica status;
+- Deployment, for service configuration, OAuth token placement, and runbook needs;
+- GitHub CI/tests, for mockable provider boundaries where scoped;
+- operators, through safe status/doctor output.
 
-## Downstream dependents
+Downstream consumers must not treat Drive as source of truth over Core.
 
-Expected downstream dependents:
+## Forbidden dependency directions
 
-- deployment/runbooks that launch the adapter process;
-- Server/admin/status surfaces that summarize adapter state, if integration is scoped;
-- E2E tests using fake or real provider setup;
-- operational doctor checks.
+GDrive adapter must not:
 
-No Core correctness should depend on GDrive adapter internals.
+- decide final conflict/delete outcomes outside Core;
+- directly write database rows;
+- call Obsidian plugin internals;
+- use Worktree as hidden metadata source;
+- expose OAuth tokens or provider payloads in public output;
+- hard-delete Drive files without accepted Core/API policy and guardrails;
+- require live Google credentials for ordinary unit tests.
 
 ## Cross-component contracts
 
-### API/Server ↔ GDrive adapter
+Important GDrive adapter contracts:
 
-- API owns route/header/DTO/error vocabulary.
-- Server exposes the HTTP runtime and auth execution.
-- GDrive adapter sends authenticated requests to configured Server URL.
-- Adapter must preserve idempotency, content hash, and base/null-base semantics.
-- Adapter must not rely on private Server internals.
-
-### Core ↔ GDrive adapter
-
-- Core owns sync policy.
-- Adapter submits Drive facts and obeys outcomes.
-- Adapter must not implement alternative conflict/delete/idempotency policy.
-
-### Common ↔ GDrive adapter
-
-- Common owns canonical Rust primitive validation.
-- Adapter should reuse Common directly if it is a Rust client or mirror semantics through API validation.
-- Path normalization drift can cause wrong-file updates and must be tested.
-
-### Storage ↔ GDrive adapter
-
-- Storage owns `gdrive_mapping` and cursor table shapes if those are used.
-- Runtime persistence boundary is unresolved by default:
-  - preferred clean boundary: adapter uses Server/API-mediated mapping/cursor operations if available;
-  - direct Storage repository use requires explicit architecture decision.
-- Adapter must not write DB tables opportunistically without contract.
-
-### Worktree ↔ GDrive adapter
-
-No direct dependency is allowed.
-
-Both are replicas coordinated through Core/API, not through direct file/provider synchronization.
-
-### Obsidian plugin ↔ GDrive adapter
-
-No direct dependency is allowed.
-
-Obsidian plugin must not talk to GDrive adapter directly for sync correctness. Coordination happens through Server/Core/API.
-
-### Deployment ↔ GDrive adapter
-
-Deployment owns service installation, secret placement, environment files, permissions, and process supervision.
-
-GDrive adapter owns runtime behavior once launched with explicit config.
+- Drive state is an external replica, not the source of truth;
+- Drive changes are normalized before Core submission;
+- full scan provides correctness; change feed/webhooks provide latency;
+- disappearance becomes delete candidate until guardrails confirm intent;
+- provider writes require echo suppression to avoid loops;
+- status/doctor output is safe and summarized.
 
 ## Integration/fan-in ownership
 
-The following work belongs outside GDrive-only leaf phases unless explicitly scoped:
+Fan-in is required when:
 
-- Storage schema/repository changes for `gdrive_mapping`;
-- Server API additions for adapter mapping/cursor persistence;
-- deployment service units or secret provisioning;
-- Core policy changes;
-- API DTO/header changes;
-- end-to-end tests requiring live server and provider credentials.
+- Server/API exposes adapter-facing endpoints;
+- Core apply/result semantics change;
+- persistent mapping/cursor storage ownership is accepted;
+- Deployment provisions OAuth secrets/service runtime;
+- CI adds provider-mock validation;
+- delete/export behavior needs end-to-end verification.
+
+These are integration gates. They do not block independent GDrive adapter work inside its component boundary.
 
 ## Dependency rules
 
-- Consume Haze Sync through public Server/API unless direct internal integration is explicitly accepted.
-- Do not call Obsidian or Worktree internals.
-- Do not write database/storage directly by default.
-- Do not decide conflict/delete policy locally.
-- Keep OAuth tokens and provider payloads redacted.
-- Treat Drive change feed as latency, full scan as correctness.
-- Any dependency addition must be justified by a GDrive phase and reflected here.
+- GDrive adapter owns provider mechanics, not sync authority.
+- GDrive adapter uses public Core/API/Server contracts, not direct DB or Core internals.
+- Provider-specific details stay inside the adapter unless safely summarized.
+- OAuth/token handling stays operationally isolated and never tracked as real credentials.
+- Tests should default to mocks/fixtures, not live provider calls.
 
 ## Contract-change notes
 
 Current known contract questions:
 
-1. Mapping/cursor persistence boundary
-   - Storage has `gdrive_mapping`/cursor shapes.
-   - Adapter needs persistent mapping/cursor state.
-   - Whether access is Server/API-mediated or direct Storage repository use is unresolved.
+1. Adapter-facing API surface
+   - GDrive may need endpoints for submitting changes, reading state, and reporting status.
+   - Missing endpoints are API/Server/Core fan-in points.
 
-2. Google Docs/Sheets/Slides support
-   - V1 system docs exclude Docs/Sheets/Slides conversion.
-   - Supporting those requires new product contract.
+2. Mapping/cursor persistence
+   - Adapter needs durable mapping/cursor state.
+   - Ownership may be adapter-local storage or Storage-backed contracts; decide explicitly.
 
-3. Shared drives and shortcuts
-   - V1 should stay conservative.
-   - Supporting shared drives/shortcuts requires mapping/path semantics review.
+3. Delete guardrails
+   - Adapter can detect provider disappearance.
+   - Core/API owns final delete/tombstone semantics.
 
-4. Delete behavior
-   - Drive disappearance is delete candidate, not immediate tombstone.
-   - Mass delete guard and manual unlock policy need Core/API/Server coordination.
-
-5. Deployment/secret layout
-   - OAuth token storage path and permissions belong to deployment/runbook decisions.
-   - Adapter config must match those decisions.
-
-No immediate blocking contract change is required for the current documentation/planning pass.
+No serial implementation dependency is implied by this map.
