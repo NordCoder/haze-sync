@@ -1,12 +1,12 @@
 REPORT_TYPE:
-IMPLEMENTATION
+CLEAN_CODE_REVIEW
 
 STATUS:
-SELF_ACCEPT_PENDING_CI
+CLEAN_ACCEPT_PENDING_CI
 
 AGENT:
-role: implementation-worker
-agent_execution_id: W1-CMM-P2-common-public-primitive-audit
+role: clean-code-reviewer
+agent_execution_id: W1-CMM-P2C-common-clean-code-review
 chat_name: W1 persistent — common
 
 COMPONENT:
@@ -21,27 +21,20 @@ control_report_path: crates/haze-sync-common/control/report.md
 
 WAVE:
 id: W1
-phase_id: CMM-P2
-dependency_status: component-local prompt ready; no sibling dependency required
+phase_id: CMM-P2C
+dependency_status: implementation report present with SELF_ACCEPT_PENDING_CI; clean review prompt ready
 
 SUMMARY:
-Audited current common public primitives against the component contract and closed small rustdoc/test coverage gaps without changing intended runtime behavior. Clarified public documentation around representation vs policy ownership for adapter role/mode, IDs, hashes, paths, crate-level surface, and secret wrappers. Added unit coverage for public re-exports, stable role/mode wire values, declarative adapter mode helpers, identifier validation and serde, SHA-256 canonical representation and byte access, VaultPath edge cases and serde rejection, ValidationError safe codes/messages, and SecretString redaction/accessors.
+Reviewed the W1 CMM-P2 common implementation for scope, simplicity, public primitive stability, rustdoc quality, test intent, and report honesty. No code changes were required during this clean-code review. The implementation remains behavior-preserving: it adds rustdoc clarification and unit-test coverage around existing common primitives without introducing runtime behavior, sibling dependencies, provider behavior, token lifecycle behavior, ID generation, Core policy, or changed public wire formats.
 
 CHANGED_FILES:
-- crates/haze-sync-common/src/adapter.rs
-- crates/haze-sync-common/src/error.rs
-- crates/haze-sync-common/src/hash.rs
-- crates/haze-sync-common/src/ids.rs
-- crates/haze-sync-common/src/lib.rs
-- crates/haze-sync-common/src/path.rs
-- crates/haze-sync-common/src/security/mod.rs
 - crates/haze-sync-common/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/common
 base_branch: main
-base_sha: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
-head_sha: 01c9f5cd8cc17325440a9471d6755536e83e7ee5 before report write; final head is the report commit returned by GitHub contents API
+base_sha: main currently resolves to 1a82bea5c87953db378e5e03429326df38320ee8; merge base with component/common is 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
+head_sha: not directly exposed before report write by the GitHub contents API in this run; final head is the report update commit returned by GitHub contents API
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
@@ -49,7 +42,7 @@ control_report_written: yes
 control_files_archived_by_worker: no
 
 SCOPE:
-allowed_files_only: yes for this worker run
+allowed_files_only: yes for this clean-code-review worker pass
 scope_expansion_used: no
 scope_expansion_rationale: none
 cross_component_changes: none
@@ -65,27 +58,27 @@ affected_components: none
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- verified public re-exports and expanded crate-level export smoke coverage for AdapterId, RevisionId, OperationId, ConflictId, VaultPath, ContentHash/Sha256, AdapterRole, AdapterMode, ValidationError, and module-path security access
-- clarified rustdoc that common owns stable primitive representation, validation, and safe formatting, not runtime policy, provider behavior, storage behavior, ID minting, or secret lifecycle
-- expanded AdapterRole and AdapterMode tests for all scoped wire values, serde stability, unknown value rejection, and declarative capability helper boundaries
-- expanded ID tests for FromStr/TryFrom/into_string, prefix enforcement, allowed characters, invalid character/null/non-ASCII rejection, maximum length, and serde for all current ID types
-- expanded hash tests for canonical prefixed output, case normalization, FromStr/TryFrom, byte access, ContentHash alias representation, invalid length/character rejection, and serde rejection
-- expanded VaultPath tests for AsRef/FromStr/TryFrom/segments/into_string, empty normalization cases, home/decoded absolute paths, decoded Windows separators, invalid percent encodings, reserved runtime paths, safe _haze_conflicts/_haze_agent_outbox paths, and serde rejection
-- expanded ValidationError tests for all stable codes/messages, Display output, deserialize roundtrips, unknown code rejection, and absence of obvious sensitive/raw context fragments
-- expanded SecretString tests for exact Debug/Display redaction, explicit sensitive accessors, and empty-secret redaction
-behavior_changes: none intended; code changes are rustdoc and unit-test coverage only
-bugs_found: no contract mismatch found in current public primitive behavior
-bugs_fixed: corrected test-only assertions during implementation before final report
-cleanups_made: clarified docs and consolidated test matrices for adapter/error/path/id/hash primitives
-non_goals_preserved: no runtime behavior, no sibling crate edits, no new dependency on Core/API/Storage/Server, no provider/server/storage/adapter/CLI behavior, no token hashing/loading/verification, no ID generation, no Core policy
-deferred_work: shell/CI validation; deeper path contract hardening remains planned for CMM-P3 and ID/hash hardening remains planned for CMM-P4
+- reviewed active control state and active clean-code prompt
+- reviewed the previous CMM-P2 implementation report before overwriting it
+- reviewed common component contract, implementation plan, and dependency map
+- inspected component/common diff against main through GitHub connector
+- reviewed current common source changes in adapter, error, hash, ids, lib, path, and security modules
+behavior_changes: none by clean-code reviewer
+bugs_found: none requiring code changes
+bugs_fixed: none
+cleanups_made: none; implementation code was already sufficiently direct for this phase
+non_goals_preserved: no runtime behavior, no sibling edits, no workflow edits by reviewer, no new dependency on Core/API/Storage/Server, no provider/server/storage/adapter/CLI behavior, no token hashing/loading/verification, no ID generation, no Core policy
+deferred_work: shell/CI validation; deeper VaultPath hardening remains scheduled for CMM-P3, ID/hash hardening remains scheduled for CMM-P4, and role/mode/security hardening remains scheduled for CMM-P5
 
 TESTS_AND_CHECKS:
 checks_run:
-- GitHub connector read of required control state and active prompt
-- GitHub connector read of required component docs and relevant common source files
-- GitHub connector compare_commits inspection against base SHA 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
-- manual review of modified Rust source for scope, contract preservation, and obvious test assertion issues
+- GitHub connector read of crates/haze-sync-common/control/state.md
+- GitHub connector read of crates/haze-sync-common/control/prompt.md
+- GitHub connector read of docs-process/docs/development-model.md
+- GitHub connector read of previous crates/haze-sync-common/control/report.md implementation report
+- GitHub connector read of common component contract, implementation plan, and dependency map
+- GitHub connector compare_commits for main...component/common
+- manual clean-code review of changed common Rust source visible through the connector
 checks_not_run:
 - cargo fmt --check: not run because GitHub connector does not provide shell execution
 - cargo check -p haze-sync-common: not run because GitHub connector does not provide shell execution
@@ -93,7 +86,7 @@ checks_not_run:
 - cargo clippy -p haze-sync-common --all-targets -- -D warnings: not run because GitHub connector does not provide shell execution
 ci_status: CI_UNKNOWN
 workflow_urls: none observed
-known_failures: none observed; checks are pending external CI or a shell-capable runner
+known_failures: none observed; branch is pending CI or shell-capable validation
 
 SAFETY_AND_SECRECY:
 secrets_committed: no
@@ -104,17 +97,18 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- GitHub connector cannot run local shell checks, so formatting, compilation, tests, and clippy remain unverified in this worker run.
-- Branch diff against base includes pre-existing non-worker changes outside this prompt's allowed implementation scope, including .github/workflows/component-ci.yml and control/doc planning files. This worker did not edit those files in this run.
+- GitHub connector cannot run shell checks, so formatting, compile, test, and clippy status remain unverified by this worker.
+- component/common is currently diverged from main: compare_commits reported ahead_by=33 and behind_by=5 with merge base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2. Clean-code reviewer did not merge, rebase, reset, or otherwise rewrite history.
+- Diff against main includes pre-existing non-review changes outside this prompt's edit scope, including .github/workflows/component-ci.yml and component control/docs files. This reviewer did not edit workflow files or sibling components.
 
 BLOCKERS:
-none for implementation; validation is pending CI or shell-capable runner
+none for clean-code acceptance; CI/shell validation and branch divergence handling remain orchestrator responsibilities
 
 NEXT_RECOMMENDED_AGENT:
-clean-code-reviewer
+orchestrator
 
 FINAL_VERDICT:
-SELF_ACCEPT_PENDING_CI — CMM-P2 implementation is complete within common component scope, with behavior-preserving rustdoc/test alignment and no contract-change request. CI/shell checks were not run due GitHub connector tooling limits.
+CLEAN_ACCEPT_PENDING_CI — W1 CMM-P2 common implementation is accepted by clean-code review, pending CI or shell-capable validation.
 
 PUSHED:
 yes
