@@ -177,11 +177,12 @@ mod tests {
 
     #[test]
     fn doctor_help_rejects_trailing_arguments_safely() {
-        let error = parse_doctor_args(["--help", "oauth-token"]).unwrap_err();
+        let private_arg = "private-command";
+        let error = parse_doctor_args(["--help", private_arg]).unwrap_err();
 
         assert_eq!(error, DoctorParseError::UnexpectedDoctorArgument);
         assert_no_sensitive_leaks(&error.to_string());
-        assert!(!error.to_string().contains("oauth-token"));
+        assert!(!error.to_string().contains(private_arg));
     }
 
     fn assert_no_sensitive_leaks(output: &str) {
