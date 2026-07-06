@@ -1,4 +1,8 @@
 //! Vault-relative path primitives.
+//!
+//! `VaultPath` owns the final synchronized vault path representation. Provider
+//! path reconstruction, local filesystem traversal, and HTTP extraction happen
+//! in their owning components before constructing this validated value.
 
 use crate::ValidationError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -8,9 +12,10 @@ use std::str::FromStr;
 
 /// A normalized relative path inside the synchronized vault view.
 ///
-/// `VaultPath` rejects empty paths, absolute paths, path traversal, Windows
-/// drive prefixes, backslash separators, null bytes, and runtime/state paths
-/// that are reserved by the V1 contract.
+/// `VaultPath` percent-decodes input before validation, normalizes duplicate
+/// separators and `.` segments, and rejects empty paths, absolute paths, path
+/// traversal, Windows drive prefixes, backslash separators, null bytes, and
+/// runtime/state paths that are reserved by the V1 contract.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct VaultPath(String);
 
@@ -193,19 +198,36 @@ mod tests {
     fn accepts_safe_subdirectory_path() {
         let path = VaultPath::parse("Notes/a.md").unwrap();
         assert_eq!(path.as_str(), "Notes/a.md");
+        assert_eq!(path.as_ref(), "Notes/a.md");
         assert_eq!(path.to_string(), "Notes/a.md");
+        assert_eq!(path.clone().into_string(), "Notes/a.md");
+        assert_eq!(VaultPath::from_str("Notes/a.md").unwrap(), path);
+        assert_eq!(VaultPath::try_from("Notes/a.md").unwrap(), path);
     }
 
     #[test]
     fn normalizes_dot_and_duplicate_separators() {
         let path = VaultPath::parse("./Notes//./a.md").unwrap();
         assert_eq!(path.as_str(), "Notes/a.md");
+        assert_eq!(path.segments().collect::<Vec<_>>(), vec!["Notes", "a.md"]);
     }
 
     #[test]
     fn normalizes_safely_decoded_url_path() {
         let path = VaultPath::parse("Notes%2Fa.md").unwrap();
         assert_eq!(path.as_str(), "Notes/a.md");
+    }
+
+    #[test]
+    fn rejects_empty_paths_after_normalization() {
+        for input in ["", ".", "./", "//", "/"] {
+            let expected = if input == "/" {
+                ValidationError::AbsolutePath
+            } else {
+                ValidationError::EmptyPath
+            };
+            assert_eq!(VaultPath::parse(input).unwrap_err(), expected, "input={input:?}");
+        }
     }
 
     #[test]
@@ -230,6 +252,18 @@ mod tests {
             VaultPath::parse("/etc/passwd").unwrap_err(),
             ValidationError::AbsolutePath
         );
+        assert_eq!(
+            VaultPath::parse("~/vault.md").unwrap_err(),
+            ValidationError::AbsolutePath
+        );
+        assert_eq!(
+            VaultPath::parse("~").unwrap_err(),
+            ValidationError::AbsolutePath
+        );
+        assert_eq!(
+            VaultPath::parse("%2Fetc%2Fpasswd").unwrap_err(),
+            ValidationError::AbsolutePath
+        );
     }
 
     #[test]
@@ -241,6 +275,18 @@ mod tests {
         assert_eq!(
             VaultPath::parse("C:/secret").unwrap_err(),
             ValidationError::WindowsDrivePrefix
+        );
+    }
+
+    #[test]
+    fn rejects_windows_separator() {
+        assert_eq!(
+            VaultPath::parse("Notes\\secret.md").unwrap_err(),
+            ValidationError::WindowsSeparator
+        );
+        assert_eq!(
+            VaultPath::parse("Notes%5Csecret.md").unwrap_err(),
+            ValidationError::WindowsSeparator
         );
     }
 
@@ -258,35 +304,41 @@ mod tests {
 
     #[test]
     fn rejects_invalid_percent_encoding() {
-        assert_eq!(
-            VaultPath::parse("Notes/%GG.md").unwrap_err(),
-            ValidationError::InvalidPercentEncoding
-        );
+        for input in ["Notes/%GG.md", "Notes/%", "Notes/%F0%28%8C%28"] {
+            assert_eq!(
+                VaultPath::parse(input).unwrap_err(),
+                ValidationError::InvalidPercentEncoding,
+                "input={input:?}"
+            );
+        }
     }
 
     #[test]
     fn rejects_runtime_state_paths() {
-        assert_eq!(
-            VaultPath::parse("_haze_runtime/cache.json").unwrap_err(),
-            ValidationError::RuntimePath
-        );
-        assert_eq!(
-            VaultPath::parse("state/db.json").unwrap_err(),
-            ValidationError::RuntimePath
-        );
-        assert_eq!(
-            VaultPath::parse("Notes/upload.part").unwrap_err(),
-            ValidationError::RuntimePath
-        );
+        for input in [
+            "_haze_runtime/cache.json",
+            "_haze_tmp/upload",
+            "state/db.json",
+            "logs/server.log",
+            "trash/deleted.md",
+            "Notes/upload.tmp",
+            "Notes/upload.part",
+            "Notes/.draft.swp",
+        ] {
+            let error = VaultPath::parse(input).unwrap_err();
+            assert_eq!(error, ValidationError::RuntimePath, "input={input:?}");
+        }
     }
 
     #[test]
     fn preserves_contract_safe_haze_paths() {
         let path = VaultPath::parse("_haze_conflicts/open/Projects/Haze/plan.md").unwrap();
         assert_eq!(path.as_str(), "_haze_conflicts/open/Projects/Haze/plan.md");
+        assert!(!path.is_reserved_runtime_path());
 
         let outbox = VaultPath::parse("_haze_agent_outbox/draft.md").unwrap();
         assert_eq!(outbox.as_str(), "_haze_agent_outbox/draft.md");
+        assert!(!outbox.is_reserved_runtime_path());
     }
 
     #[test]
@@ -296,5 +348,11 @@ mod tests {
         assert_eq!(json, "\"Notes/a.md\"");
         let decoded: VaultPath = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded, path);
+    }
+
+    #[test]
+    fn serde_rejects_invalid_paths() {
+        assert!(serde_json::from_str::<VaultPath>("\"../a.md\"").is_err());
+        assert!(serde_json::from_str::<VaultPath>("\"/etc/passwd\"").is_err());
     }
 }
