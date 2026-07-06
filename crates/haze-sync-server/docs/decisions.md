@@ -196,3 +196,41 @@ Affected contracts:
 - CLI status/doctor/admin commands;
 - Core delete unlock/repair semantics;
 - operational runbook.
+
+## 2026-07-06 — SRV-P2 partial route surfaces remain explicit
+
+Decision:
+
+The current Server router continues to register the W2/W3 route surface, but partial behavior stays explicit and passive-safe:
+
+- `/health`, `/ready`, and `/v1/server-info` are dependency-free shell/status routes.
+- Authenticated file, changes, delete, conflict, and admin routes require explicit `ServerAppState` dependencies for runtime-backed behavior.
+- Dependency-free protected routes fail through safe authentication, validation, storage-unavailable, or not-implemented responses and must not perform mock mutations.
+- `POST /v1/conflicts/{id}/resolve` supports only metadata-only resolution persistence for `accept_current`, `keep_both`, and `mark_resolved` when storage is configured. `accept_conflict` intentionally remains `not_implemented` until a scoped conflict-apply phase wires the required revision mutation semantics.
+- Unsupported admin mutations such as pause/resume are not registered; admin/status routes remain read-only.
+
+Rationale:
+
+SRV-P2 is an audit and hardening phase, not a route expansion phase. Keeping partial surfaces explicit prevents route-shell tests from being mistaken for production readiness and avoids route-local Core policy decisions.
+
+Alternatives:
+
+- Implement `accept_conflict` in this audit phase; rejected because it requires current-revision mutation semantics outside SRV-P2.
+- Add placeholder admin mutation routes; rejected because admin mutation behavior requires future contracts.
+- Hide dependency-free behavior behind successful mock responses; rejected because that would overstate runtime readiness.
+
+Consequences:
+
+- Route-shell tests can safely exercise public error mapping without DB/object-store dependencies.
+- Runtime-backed integration behavior remains covered only where current Core/API/Storage contracts already support it.
+- Future phases must keep not-implemented or placeholder behavior documented until they wire real, policy-aligned behavior.
+
+Affected contracts:
+
+- routes;
+- state;
+- auth;
+- readiness;
+- conflict routes;
+- admin routes;
+- future SRV-P4/SRV-P5/SRV-P6 work.
