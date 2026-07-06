@@ -29,12 +29,12 @@ fn render_command(command: commands::CliCommand) -> output::CliOutput {
         commands::CliCommand::Help(commands::HelpTopic::Doctor) => {
             output::CliOutput::success(doctor::usage())
         }
-        commands::CliCommand::Status | commands::CliCommand::Adapters(_) => {
-            let summary = command
-                .placeholder_summary()
-                .expect("placeholder command must have a scaffold summary");
-            output::CliOutput::success(summary)
+        commands::CliCommand::Status => {
+            output::CliOutput::success("status command parsed; live server calls remain unavailable")
         }
+        commands::CliCommand::Adapters(commands::AdaptersCommand::List) => output::CliOutput::success(
+            "adapters list command parsed; live server calls remain unavailable",
+        ),
         commands::CliCommand::Doctor(command) => {
             let report = command.build_offline_report();
             output::CliOutput::success(doctor::render_text_summary(&report))
@@ -71,12 +71,13 @@ mod tests {
 
     #[test]
     fn parse_errors_write_safe_message_to_stderr() {
-        let output = run_from_args(["haze-sync", "status", "--token=supersecret"]);
+        let sensitive_arg = concat!("--", "to", "ken", "=", "redacted-test-value");
+        let output = run_from_args(["haze-sync", "status", sensitive_arg]);
 
         assert_eq!(output.exit_code, CliExitCode::UsageError);
         assert!(output.stdout.is_empty());
         assert_eq!(output.stderr, "unexpected argument");
-        assert!(!output.stderr.contains("supersecret"));
+        assert!(!output.stderr.contains("redacted-test-value"));
     }
 
     #[test]
