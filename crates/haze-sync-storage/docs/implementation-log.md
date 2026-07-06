@@ -2,6 +2,34 @@
 
 ## Entries
 
+### 2026-07-06 — W1/STOR-P2 schema and row-model audit
+
+Agent:
+Implementation Worker
+
+Branch:
+component/storage
+
+Prompt:
+crates/haze-sync-storage/control/prompt.md
+
+Report:
+crates/haze-sync-storage/control/report.md
+
+Commit(s):
+See component/storage branch history for the implementation commits.
+
+Summary:
+Audited schema table-name metadata, initial migration filename ordering, and passive row models against migrations 0001 through 0009. Added schema tests that bind INITIAL_MIGRATIONS to the actual migration files and verify table metadata coverage. Added explicit sensitive/internal-only row-field metadata for token hashes, object-store path metadata, adapter cursors, idempotency material, provider identifiers, and audit metadata. Added row serialization roundtrip tests for representative rows with sensitive fields, optional timestamps, JSON cursor fields, and JSON audit metadata. No migration schema changes were required.
+
+Status:
+SELF_ACCEPT_PENDING_CI
+
+Follow-ups:
+Run cargo fmt/check/test/clippy through CI or an environment with shell execution. Next storage phase should proceed through clean-code review before CI merge readiness.
+
+---
+
 ### 2026-07-05 — STOR-P1 component contract and planning normalization
 
 Agent:
