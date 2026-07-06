@@ -4,197 +4,117 @@
 
 `deploy` is the operations and runtime placement layer.
 
-Conceptual position:
+Deployment owns Docker Compose scaffolds, service placement documentation, host directory layout, runtime configuration examples, secret-file placement guidance, backup/restore/runbook planning, and production-readiness checklists.
 
-```text
-built artifacts + configuration + host paths + secrets
-  -> deployment scaffolds/runbooks
-  -> running Server / PostgreSQL / object store / Worktree / GDrive adapter
-  -> operators and smoke checks
-```
+Deployment does not own product runtime behavior, Core policy, API DTOs, Server route behavior, Storage schema contents, adapter/provider implementation, GitHub workflow policy, or client UI behavior.
 
-Deployment composes already-defined components into local or production-like runtime topology. It does not define product semantics.
+## Independent development model
 
-## Upstream dependencies
+`deploy` can be developed independently inside the `component/deployment` branch.
 
-### `haze-sync-server`
+The dependency map records operational contracts and fan-in points. It does not impose a serial implementation order on Server, Storage, GDrive adapter, Worktree, API, Core, CI, or clients.
 
-Deployment depends on Server for:
+Allowed independent work includes:
 
-- binary/container startup behavior;
-- environment/config variable names;
-- listen address and readiness/health endpoints;
-- database connection configuration;
-- object-store path configuration;
-- migration policy if Server owns migration execution;
-- Worktree hosting behavior if Server hosts Worktree runtime.
+- local compose scaffolding;
+- service/runbook documentation;
+- host path and permission planning;
+- backup/restore procedure documentation;
+- configuration examples using placeholders;
+- production-readiness checklists;
+- operational docs for known runtime surfaces.
 
-### `haze-sync-storage`
+If Deployment needs service config, binary names, migrations, health endpoints, adapter token layout, or CI release artifacts not currently contracted, it reports a contract-change request or fan-in need instead of implementing another component's responsibility.
 
-Deployment depends on Storage for:
+## Upstream contracts consumed
 
-- PostgreSQL schema and migration files;
-- database versioning expectations;
-- backup/restore consistency expectations;
-- object-store persistence layout expectations.
+Deployment may consume:
 
-### `haze-gdrive-adapter`
+- Server binary/config/health contracts;
+- Storage migration/object-store requirements;
+- Worktree host path requirements;
+- GDrive adapter service/config/token-placement requirements;
+- API/CLI status surfaces used in runbooks;
+- GitHub CI artifact/check policy when release/deploy automation is explicitly scoped.
 
-Deployment depends on GDrive adapter for:
+Deployment must not consume:
 
-- adapter binary/container startup behavior;
-- OAuth token file path expectations;
-- server URL/auth configuration;
-- adapter mode variables;
-- scan/poll/backoff behavior;
-- status/doctor/smoke behavior when implemented.
+- raw product internals as operational contract;
+- provider credentials as tracked files;
+- CI workflow internals as deployment truth;
+- component-private test fixtures;
+- local user paths or machine-specific notes.
 
-### `haze-sync-worktree`
+## Downstream contracts exposed
 
-Deployment depends on Worktree for:
+Expected downstream users/consumers:
 
-- configured worktree root expectations;
-- filesystem permissions;
-- runtime hosting boundary;
-- trash/temp/runtime directory expectations when implemented.
+- operators deploying Haze Sync;
+- Server/GDrive adapter runtime processes through documented config layout;
+- Storage migration/backup operators;
+- Worktree host directory provisioning;
+- CI/release checks when coordinated;
+- docs and support workflows.
 
-### `apps/haze-obsidian-plugin`
+Product components should not depend on Deployment for runtime business semantics.
 
-Deployment depends on Obsidian plugin docs for:
+## Forbidden dependency directions
 
-- server URL setup;
-- adapter identity/token setup;
-- client rollout caveats.
+Deployment must not:
 
-### `github-ci`
-
-Deployment depends on CI only for validation hooks such as compose syntax checks. CI owns workflow policy; Deployment owns deploy artifacts/runbooks.
-
-## Current direct runtime surfaces
-
-Current tracked deployment surface:
-
-```text
-deploy/docker-compose.yml
-.env.example
-```
-
-Current compose surface provides local PostgreSQL only.
-
-## Disallowed dependency directions
-
-Deployment must not directly own or implement:
-
-```text
-Core sync policy
-API DTO/header/error vocabulary
-Storage schema semantics
-Server route behavior
-GDrive provider logic
-Worktree scanner/materializer behavior
-Obsidian plugin behavior
-GitHub Actions workflow policy except coordinated validation hooks
-```
-
-Deployment files must not import, embed, or vendor production secrets.
-
-## Downstream dependents
-
-Expected dependents:
-
-- local developers;
-- operators;
-- runbooks;
-- production VPS setup;
-- smoke tests;
-- incident response procedures;
-- backup/restore workflows.
-
-Downstream dependents rely on Deployment to distinguish local scaffolding from production deployment.
+- change Core/API/Server product behavior as part of docs/process work;
+- define Storage schema content;
+- call provider APIs;
+- own GitHub workflow policy unless explicitly coordinated with github-ci;
+- commit real secrets or production env files;
+- claim production readiness from syntax-only validation.
 
 ## Cross-component contracts
 
-### Server ↔ Deployment
+Important Deployment contracts:
 
-- Server owns runtime behavior and config parsing.
-- Deployment supplies environment variables, service definitions, host paths, healthcheck wiring, and startup order.
-- Deployment must not invent config keys without Server coordination.
-
-### Storage ↔ Deployment
-
-- Storage owns migrations/schema/object-store behavior.
-- Deployment owns how PostgreSQL volumes, backup, restore, and object-store directories are provisioned.
-- Backup/restore runbooks must treat DB and object store as consistency-linked.
-
-### GDrive adapter ↔ Deployment
-
-- GDrive adapter owns provider runtime behavior.
-- Deployment owns process/service configuration, OAuth token file placement, permissions, and restart policy.
-- Deployment must not commit OAuth tokens or provider payloads.
-
-### Worktree ↔ Deployment
-
-- Worktree owns filesystem adapter logic.
-- Deployment owns host path provisioning and permissions for the worktree root.
-- Deployment must not implement Worktree scanner/materializer behavior.
-
-### Obsidian plugin ↔ Deployment
-
-- Plugin owns client behavior.
-- Deployment/runbooks may document server URL and token setup expectations.
-- Deployment must not manage local user vault contents.
-
-### CI ↔ Deployment
-
-- CI may validate compose syntax and secret-free examples.
-- Deployment owns deploy artifacts and runbooks.
-- CI must not deploy production services or require production credentials unless a future explicit release/deploy workflow is accepted.
+- tracked examples use placeholders only;
+- operational paths are documented and configurable;
+- migration execution policy is explicit;
+- backup/restore runbooks do not imply unimplemented tooling exists;
+- compose syntax validation is not service startup or production readiness;
+- deployment docs reflect current runtime capabilities honestly.
 
 ## Integration/fan-in ownership
 
-The following work requires cross-component coordination:
+Fan-in is required when:
 
-- adding Server service to compose/systemd;
-- adding GDrive adapter service;
-- deciding migration execution policy;
-- defining backup/restore consistency procedure;
-- wiring Worktree runtime into Server deployment;
-- adding reverse proxy/TLS examples;
-- adding deployment validation to CI;
-- documenting bootstrap/rollback across adapters.
+- Server exposes new config/health/runtime behavior;
+- Storage migrations or backup/restore requirements change;
+- Worktree object paths/permissions are accepted;
+- GDrive adapter service/token layout is implemented;
+- CI/release workflows start producing deployment artifacts;
+- system docs index operational runbooks.
+
+These are integration gates. They do not block independent Deployment work inside its component boundary.
 
 ## Dependency rules
 
-- Do not commit real secrets or production `.env` files.
-- Do not add production deployment automation without explicit scope.
-- Do not make local scaffolds appear production-ready.
-- Keep config keys aligned with owning components.
-- Keep provider credentials outside the repo.
-- Keep backup/log/dump artifacts outside the repo.
-- Any deploy artifact addition must update this dependency map when it changes component boundaries.
+- Deployment owns operational packaging/runbooks, not product semantics.
+- Deployment should document current behavior and mark future behavior explicitly.
+- Deployment changes to CI workflows require github-ci coordination.
+- Deployment examples must remain safe and placeholder-based.
+- Production-readiness claims require explicit evidence beyond compose syntax.
 
 ## Contract-change notes
 
 Current known contract questions:
 
-1. Server production startup
-   - Server currently has scaffold startup behavior and route/runtime wiring.
-   - Deployment cannot finalize server service until Server production listener/config/migration policy is accepted.
+1. Service set and topology
+   - Current compose is local scaffold-oriented.
+   - Adding server/gdrive/worktree production services requires component contracts.
 
-2. Migration execution owner
-   - Could be Server startup, CLI/manual command, or deployment script.
-   - This requires Server/Storage/Deployment decision before production use.
+2. Migration execution
+   - Storage owns migration content.
+   - Deployment owns when/how operators run it.
 
-3. GDrive token placement
-   - Expected to be host-local secret file with restrictive permissions.
-   - Exact path and service user need deployment decision.
+3. Secret layout
+   - Deployment can document paths/permissions.
+   - Adapter/server components own how secrets are loaded and validated.
 
-4. Worktree runtime hosting
-   - V1 may host Worktree in Server.
-   - Deployment should not assume service topology until Server/Worktree fan-in is accepted.
-
-5. Reverse proxy and TLS
-   - Public access boundary must be documented before production exposure.
-   - TLS/private keys must never be committed.
-
-No immediate blocking contract change is required for the current documentation/planning pass.
+No serial implementation dependency is implied by this map.
