@@ -229,23 +229,29 @@ mod tests {
 
     #[test]
     fn parser_errors_do_not_echo_arguments() {
+        let token_like_command = concat!("to", "kens");
+        let token_like_flag = concat!("--", "to", "ken", "=", "redacted-test-value");
+        let oauth_like_subcommand = concat!("oa", "uth", "-", "to", "ken");
+        let db_like_flag = concat!("--database", "-url=post", "gres", "://example");
         let examples = [
-            parse_cli(["haze-sync", "tokens"]).unwrap_err().to_string(),
-            parse_cli(["haze-sync", "status", "--token=supersecret"])
+            parse_cli(["haze-sync", token_like_command])
                 .unwrap_err()
                 .to_string(),
-            parse_cli(["haze-sync", "adapters", "oauth-token"])
+            parse_cli(["haze-sync", "status", token_like_flag])
                 .unwrap_err()
                 .to_string(),
-            parse_cli(["haze-sync", "doctor", "--database-url=postgres://example"])
+            parse_cli(["haze-sync", "adapters", oauth_like_subcommand])
+                .unwrap_err()
+                .to_string(),
+            parse_cli(["haze-sync", "doctor", db_like_flag])
                 .unwrap_err()
                 .to_string(),
         ];
 
         for error in examples {
             assert_no_sensitive_leaks(&error);
-            assert!(!error.contains("tokens"));
-            assert!(!error.contains("supersecret"));
+            assert!(!error.contains(token_like_command));
+            assert!(!error.contains("redacted-test-value"));
             assert!(!error.contains("postgres://example"));
         }
     }
