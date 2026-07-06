@@ -1,3 +1,8 @@
+//! SHA-256 content hash representation primitives.
+//!
+//! This module validates, parses, and formats SHA-256 values. It deliberately
+//! does not hash file bytes, read content, or own object-store behavior.
+
 use crate::ValidationError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
@@ -7,17 +12,25 @@ const SHA256_BYTES: usize = 32;
 const SHA256_HEX_LEN: usize = SHA256_BYTES * 2;
 const SHA256_PREFIX: &str = concat!("sha", "256:");
 
+/// Validated SHA-256 digest bytes.
+///
+/// `Sha256` accepts either plain 64-character hexadecimal input or canonical
+/// `sha256:<hex>` input. Formatting and serialization always emit the canonical
+/// lowercase prefixed form.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Sha256([u8; SHA256_BYTES]);
 
+/// Shared content hash representation used by components that exchange blob identity.
 pub type ContentHash = Sha256;
 
 impl Sha256 {
+    /// Construct a digest from already validated raw SHA-256 bytes.
     #[must_use]
     pub const fn from_bytes(bytes: [u8; SHA256_BYTES]) -> Self {
         Self(bytes)
     }
 
+    /// Parse plain 64-character hex or canonical `sha256:<hex>` input.
     pub fn parse(input: &str) -> Result<Self, ValidationError> {
         let hex = input.strip_prefix(SHA256_PREFIX).unwrap_or(input);
         if hex.len() != SHA256_HEX_LEN {
@@ -34,16 +47,19 @@ impl Sha256 {
         Ok(Self(bytes))
     }
 
+    /// Borrow the raw digest bytes.
     #[must_use]
     pub const fn as_bytes(&self) -> &[u8; SHA256_BYTES] {
         &self.0
     }
 
+    /// Consume the digest and return the raw bytes.
     #[must_use]
     pub const fn into_bytes(self) -> [u8; SHA256_BYTES] {
         self.0
     }
 
+    /// Return the lowercase 64-character hex digest without the `sha256:` prefix.
     #[must_use]
     pub fn as_hex(&self) -> String {
         let mut output = String::with_capacity(SHA256_HEX_LEN);
@@ -54,6 +70,7 @@ impl Sha256 {
         output
     }
 
+    /// Return the canonical `sha256:<lowercase-hex>` wire representation.
     #[must_use]
     pub fn to_prefixed_string(&self) -> String {
         let mut output = String::with_capacity(SHA256_PREFIX.len() + SHA256_HEX_LEN);
@@ -148,9 +165,42 @@ mod tests {
     }
 
     #[test]
+    fn from_str_and_try_from_share_parse_contract() {
+        let hex = repeated("1");
+        let from_str = Sha256::from_str(&hex).unwrap();
+        let try_from = Sha256::try_from(hex.as_str()).unwrap();
+        assert_eq!(from_str, try_from);
+        assert_eq!(from_str.to_string(), format!("{SHA256_PREFIX}{hex}"));
+    }
+
+    #[test]
+    fn byte_access_preserves_digest_bytes() {
+        let bytes = [0xab; SHA256_BYTES];
+        let hash = Sha256::from_bytes(bytes);
+
+        assert_eq!(hash.as_bytes(), &bytes);
+        assert_eq!(hash.into_bytes(), bytes);
+        assert_eq!(hash.as_hex(), repeated("ab"));
+    }
+
+    #[test]
+    fn content_hash_alias_uses_same_wire_representation() {
+        let hash: ContentHash = Sha256::from_bytes([0; SHA256_BYTES]);
+
+        assert_eq!(
+            serde_json::to_string(&hash).unwrap(),
+            format!("\"{}{}\"", SHA256_PREFIX, repeated("0"))
+        );
+    }
+
+    #[test]
     fn rejects_invalid_hash_length() {
         assert_eq!(
             Sha256::parse("abc").unwrap_err(),
+            ValidationError::InvalidHashLength
+        );
+        assert_eq!(
+            Sha256::parse(&format!("{SHA256_PREFIX}{}", repeated("0") + "0")).unwrap_err(),
             ValidationError::InvalidHashLength
         );
     }
@@ -172,5 +222,10 @@ mod tests {
         assert_eq!(json, format!("\"{}{}\"", SHA256_PREFIX, zero_hex));
         let decoded: Sha256 = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded, hash);
+    }
+
+    #[test]
+    fn serde_rejects_non_canonical_values_safely() {
+        assert!(serde_json::from_str::<Sha256>("\"not-a-hash\"").is_err());
     }
 }
