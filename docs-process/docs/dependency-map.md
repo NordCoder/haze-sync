@@ -4,160 +4,120 @@
 
 `docs-process` is the process and documentation convention layer.
 
-Conceptual position:
+Docs-process owns tracked process guidance, component documentation conventions, dependency-map semantics, control-slot/report guidance, fan-in guidance, and documentation unification audits.
 
-```text
-component docs + process rules + reports + branch lifecycle
-  -> docs-process guidance
-  -> future workers/reviewers/orchestrators/architects
-```
+Docs-process does not own product runtime behavior, component implementation, GitHub workflow behavior, Deployment automation, active prompt/report execution, PR creation, or merge decisions.
 
-Docs-process documents how work is organized. It does not execute product behavior, CI, deployment, or sync policy.
+## Independent development model
 
-## Upstream dependencies
+`docs-process` can be developed independently inside `docs-process/**` on process/docs branches.
 
-### Component documentation
+The dependency map records process/documentation contracts and fan-in points. It does not impose a serial implementation order on product components, CI, Deployment, adapters, or clients.
 
-Docs-process depends on component-local docs for current ownership boundaries:
+Allowed independent work includes:
 
-```text
-crates/*/docs/**
-apps/haze-obsidian-plugin/docs/**
-deploy/docs/**
-.github/docs/**
-```
+- canonical process model documentation;
+- dependency-map semantics documentation;
+- component docs guidance;
+- control/report lifecycle guidance;
+- fan-in and merge-readiness guidance;
+- documentation unification audits;
+- docs hygiene/check definitions when not changing CI behavior.
 
-Each component owns its own contract and implementation plan. Docs-process may document conventions across those files but must not silently change component ownership.
+If docs-process needs to change component ownership, CI workflow behavior, deployment automation, product architecture, active control files, or merge policy, it reports a contract-change request or fan-in need instead of silently changing another component's responsibility.
 
-### Process sources
+## Upstream contracts consumed
 
-Docs-process may depend on process rules supplied by project source context when prompts explicitly scope that work.
+Docs-process may consume:
 
-Relevant concepts include:
+- component-local contracts/plans/maps/decisions/logs as current ownership context;
+- root README/system docs as repository-level documentation context;
+- github-ci contracts for automated docs validation only when scoped;
+- deployment docs for runbook/process boundary alignment;
+- project-source process rules only when explicitly referenced and rewritten safely.
 
-- component-centric development;
-- component contract;
-- implementation plan;
-- dependency map;
-- implementation log;
-- decisions log;
-- control prompt/report slots;
-- report template/status vocabulary;
-- implementation/review/fixer lifecycle;
-- branch policy.
+Docs-process must not consume:
 
-Local project-source files are not automatically repository artifacts.
+- local project-source prompts as tracked repo docs by default;
+- active prompt/report files as static documentation;
+- private/local scratch;
+- raw logs or unredacted operational output;
+- product internals as process authority.
 
-### Root README and system docs
+## Downstream contracts exposed
 
-Docs-process may coordinate repository-level documentation indexes and system docs when explicitly scoped.
-
-Root README owns high-level repository introduction and current state.
-
-System docs, when tracked, should summarize accepted architecture and integration boundaries without replacing component contracts.
-
-### GitHub CI
-
-Docs-process depends on github-ci only for automated docs validation hooks.
-
-CI owns workflow behavior. Docs-process owns what documentation checks should mean.
-
-### Deployment
-
-Docs-process depends on deployment docs only for runbook/process boundary alignment.
-
-Deployment owns operational artifacts; docs-process owns documentation conventions.
-
-## Downstream dependents
-
-Expected dependents:
+Expected downstream users/consumers:
 
 - Orchestrator prompts and planning;
 - implementation workers;
 - clean-code reviewers;
-- fixers;
+- fixer workers;
 - architects;
 - component owners;
-- human maintainers reviewing docs and reports;
+- human maintainers;
 - future docs validation checks.
 
-Downstream users rely on docs-process to explain how to read and update repository process docs safely.
+Downstream users rely on docs-process for process interpretation, not product component ownership.
+
+## Forbidden dependency directions
+
+Docs-process must not:
+
+- rewrite component ownership silently;
+- pre-create active `control/prompt.md` or `control/report.md` slots;
+- archive active prompt/report files unless explicitly acting as Orchestrator;
+- change CI workflows without github-ci coordination;
+- change deployment automation without deployment coordination;
+- change product code;
+- treat dependency maps as serial roadmaps.
 
 ## Cross-component contracts
 
-### Component docs ↔ Docs-process
+Important docs-process contracts:
 
-- Components own their contracts/plans/maps/decisions/logs.
-- Docs-process owns conventions for those file types.
-- Docs-process must not rewrite component ownership without explicit scope.
-
-### Control folders ↔ Docs-process
-
-- Control folders contain active prompts/reports and archived logs.
-- Docs-process may document control lifecycle.
-- Docs-process must not pre-create or archive active prompts/reports unless explicitly assigned by process role.
-
-### GitHub CI ↔ Docs-process
-
-- GitHub CI owns workflows.
-- Docs-process may define documentation validation expectations.
-- Automated docs checks require github-ci coordination.
-
-### Deployment ↔ Docs-process
-
-- Deployment owns runbooks and operational topology.
-- Docs-process may define style/organization conventions.
-- Operational behavior changes stay in deployment.
-
-### Product components ↔ Docs-process
-
-- Product components own runtime behavior and product contracts.
-- Docs-process may document how product docs should be structured.
-- Docs-process must not introduce product behavior, API changes, storage changes, or adapter semantics.
+- process docs define workflow conventions, not product behavior;
+- dependency maps are contract-boundary maps, not global implementation order;
+- component docs remain component-local source of truth for component-specific ownership;
+- active control files are process state, not static docs;
+- fan-in guidance distinguishes implementation acceptance from merge readiness;
+- project-source context is not copied verbatim into tracked docs by default.
 
 ## Integration/fan-in ownership
 
-The following work requires coordination outside docs-process-only phases:
+Fan-in is required when:
 
-- changing component docs file requirements;
-- changing control prompt/report lifecycle;
-- adding docs checks to GitHub workflows;
-- changing root README/system docs architecture claims;
-- changing branch policy or required checks;
-- changing report/status vocabulary;
-- bulk-editing component contracts.
+- component docs need bulk drift cleanup;
+- dependency-map wording is normalized across component branches;
+- docs validation becomes a CI workflow;
+- root/system docs index process docs;
+- active control-slot policy affects branch fan-in;
+- status/report vocabulary becomes enforced.
+
+These are integration gates. They do not block independent docs-process work inside its component boundary.
 
 ## Dependency rules
 
-- Keep docs-process changes behavior-neutral by default.
-- Use repository-relative paths in public docs.
-- Do not ingest local/private project source files into repo without explicit scope.
-- Do not add active prompts/reports as docs artifacts.
-- Do not edit CI workflows without github-ci coordination.
-- Do not edit deployment automation without deployment coordination.
-- Do not alter product component contracts without explicit owner/fan-in scope.
+- Docs-process owns conventions, not component-specific implementation.
+- Component docs own component-specific contracts.
+- github-ci owns workflow enforcement.
+- deployment owns operational automation/runbooks.
+- Orchestrator owns active control-slot scheduling and fan-in decisions.
+- Architect is optional/manual for boundary or contract disputes.
 
 ## Contract-change notes
 
 Current known contract questions:
 
-1. Component root for docs-process
-   - This pass uses `docs-process/docs/**` as the isolated process component root.
-   - This avoids conflict with future product/system docs in `docs/**`.
+1. Component docs drift pass
+   - Component maps may need wording cleanup after dependency-map semantics were clarified.
+   - This requires component-branch scope or an accepted fan-in branch.
 
-2. Tracked process source of truth
-   - Project-source manifest/report templates currently live outside the repository context.
-   - Deciding how much to mirror into repo docs requires explicit scope.
+2. Docs validation enforcement
+   - Docs-process can define expectations.
+   - github-ci must own workflow enforcement.
 
-3. System docs ownership
-   - System docs under `docs/**`, if added, may be coordinated by docs-process or a separate docs task.
-   - Product architecture claims must reflect accepted component contracts.
+3. Control slot cleanup
+   - Docs-process defines policy.
+   - Orchestrator owns execution decisions.
 
-4. Automated docs checks
-   - Markdown/link/secret hygiene checks would affect CI.
-   - They require github-ci coordination.
-
-5. Report/status vocabulary stability
-   - Once tracked in repo, changing status vocabulary affects worker/report interpretation.
-
-No immediate blocking contract change is required for the current documentation/planning pass.
+No serial implementation dependency is implied by this map.
