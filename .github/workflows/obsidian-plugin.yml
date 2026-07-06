@@ -1,11 +1,10 @@
 name: Obsidian Plugin
 
 on:
-  push:
-    branches:
-      - main
-      - w00-repo-foundation-clean
-  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   obsidian-plugin:
@@ -14,17 +13,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-
       - name: Install dependencies
-        run: npm install
-
+        run: npm install --no-audit --no-fund
       - name: Typecheck plugin
         run: npm run --workspace haze-obsidian-plugin typecheck
-
       - name: Build plugin
         run: npm run --workspace haze-obsidian-plugin build
