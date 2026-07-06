@@ -37,8 +37,8 @@ BRANCH_AND_CONTROL:
 current_branch: component/api
 base_branch: main
 base_sha: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
-head_sha: ecaa2cf68bfad2e52424a7be7921ccb56754c885 before report write; final report write creates an additional connector commit
- default_branch_modified: no
+head_sha: b09856a5eb629931577d4cce7c847f38e563fcd3 after initial report write; final report normalization creates an additional connector commit
+default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes, crates/haze-sync-api/control/prompt.md
 control_report_written: yes, crates/haze-sync-api/control/report.md
