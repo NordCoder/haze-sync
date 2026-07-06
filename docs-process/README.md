@@ -23,6 +23,10 @@ docs/development-model.md
   Canonical roles, lifecycle, branch policy, source order, status vocabulary,
   check honesty, secrecy rules, and contract-change protocol.
 
+docs/dependency-map-semantics.md
+  Canonical interpretation of dependency maps: independent component development,
+  contract boundaries, fan-in points, and contract-change blockers.
+
 docs/component-docs-guide.md
   How to write component-local contracts, implementation plans, dependency maps,
   decisions, and implementation logs without duplicating generic process rules.
@@ -44,6 +48,8 @@ docs/unification-audit.md
 Component docs remain local to component roots and remain the source of truth for component-specific responsibilities.
 
 Process docs define conventions. They do not override component ownership, change product behavior, create active prompts, write reports, open PRs, merge branches, or deploy services.
+
+Dependency maps are contract-boundary maps. They are not global serial implementation plans.
 
 ## Relationship to project-source files
 
