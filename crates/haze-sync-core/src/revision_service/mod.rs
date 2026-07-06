@@ -463,3 +463,69 @@ impl fmt::Display for RevisionServiceError {
 }
 
 impl Error for RevisionServiceError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn adapter_id() -> AdapterId {
+        AdapterId::parse("gdrive-adapter").expect("fixture adapter id should parse")
+    }
+
+    fn revision_id(value: &str) -> RevisionId {
+        RevisionId::parse(value).expect("fixture revision id should parse")
+    }
+
+    fn vault_path() -> VaultPath {
+        VaultPath::parse("Notes/a.md").expect("fixture path should parse")
+    }
+
+    fn current_revision() -> StoredRevision {
+        StoredRevision {
+            revision_id: revision_id("rev_01JCURRENT"),
+            path: vault_path(),
+            parent_revision_id: None,
+            content_hash: compute_content_hash(b"current content"),
+            size_bytes: 15,
+            created_by: adapter_id(),
+        }
+    }
+
+    #[test]
+    fn conflict_saved_serialization_skips_incoming_content_bytes() {
+        let current_revision = current_revision();
+        let incoming_bytes = b"secret provider bytes never public".to_vec();
+        let incoming_hash = compute_content_hash(&incoming_bytes);
+        let outcome = UpsertOutcome::RejectedStaleOrUnknownBase {
+            current_revision: Some(current_revision.clone()),
+            provided_base_revision_id: Some(revision_id("rev_01JOLD")),
+            conflict_saved: Some(Box::new(ConflictSavedOutcome {
+                current_revision,
+                provided_base_revision_id: Some(revision_id("rev_01JOLD")),
+                incoming_content: IncomingConflictContent {
+                    path: vault_path(),
+                    adapter_id: adapter_id(),
+                    content_hash: incoming_hash,
+                    size_bytes: incoming_bytes.len() as u64,
+                    content: incoming_bytes,
+                },
+                policy_hint: ConflictPolicyHint::PreserveBoth,
+            })),
+        };
+
+        assert_eq!(outcome.public_status(), "conflict_saved");
+
+        let serialized = serde_json::to_string(&outcome).expect("upsert outcome should serialize");
+        assert!(serialized.contains("conflict_saved"));
+        assert!(!serialized.contains("secret provider bytes"));
+        assert!(!serialized.contains("\"content\":"));
+
+        let decoded: UpsertOutcome =
+            serde_json::from_str(&serialized).expect("upsert outcome should deserialize");
+        let decoded_conflict = decoded
+            .conflict_saved()
+            .expect("conflict_saved should survive serde roundtrip");
+        assert_eq!(decoded_conflict.incoming_content.content_hash, incoming_hash);
+        assert!(decoded_conflict.incoming_content.content.is_empty());
+    }
+}
