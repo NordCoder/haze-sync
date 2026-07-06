@@ -1,54 +1,97 @@
-# T0-P3C — Server clean-code review
+# W1-SRV-P2 — Server router, state, auth, and safe error audit
 
 Component: server
 Component path: crates/haze-sync-server
 Branch: component/server
 Base branch: main
-Verified base SHA: aabf74486d4d06a89136007bd17713f3c35478de
+Current main baseline SHA: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
 Target branch: main
 
 ## Role
 
-You are a Clean-Code Reviewer. Work only through the GitHub connector. Do not use SSH/local git. Do not open PR. Do not merge.
+You are an Implementation Worker for NordCoder/haze-sync.
 
-## Read
+Work only through the GitHub connector. Do not use SSH/local git. Do not open PR. Do not merge.
+
+## Read before editing
 
 - implementation-manifest.md from ChatGPT Project Sources
 - report-template.md from ChatGPT Project Sources
-- clean-code-reviewer-prompt.md from ChatGPT Project Sources
-- crates/haze-sync-server/control/prompt.md
-- crates/haze-sync-server/control/log/20260705-000000Z-T0-P3-implementation-report.md
+- implementation-worker-prompt.md from ChatGPT Project Sources
+- docs-process/docs/development-model.md
 - crates/haze-sync-server/docs/component-contract.md
 - crates/haze-sync-server/docs/implementation-plan.md
 - crates/haze-sync-server/docs/implementation-log.md
 - crates/haze-sync-server/docs/dependency-map.md
 - crates/haze-sync-server/docs/decisions.md
-- current diff of component/server against main
-- crates/haze-sync-server/src/routes/health.rs
+- crates/haze-sync-server/control/prompt.md
+- relevant current code under crates/haze-sync-server/src/**
 
 ## Task
 
-Review the T0-P3 Server documentation implementation and the tiny route doc-comment cleanup. This is a docs/control process test, not a route refactor.
+Implement phase SRV-P2 from the Server implementation plan: Router, state, auth, and safe error audit.
 
-Check that the Server docs are clear, accurate, simple, not overclaimed, and consistent with the current Server source. Verify the health route doc-comment cleanup is behavior-preserving. Look for stale claims, unclear runtime/API/Core/Storage boundaries, missing non-goals, missing dependency notes, duplicated wording, or claims that imply provider runtime ownership or unsafe delete behavior.
+Goal:
 
-## Allowed files
+```text
+Audit current Server runtime shell and route behavior against component contracts, then harden tests/docs around passive-safe dependency-free behavior and public error sanitization.
+```
 
-- crates/haze-sync-server/docs/component-contract.md
-- crates/haze-sync-server/docs/implementation-plan.md
-- crates/haze-sync-server/docs/implementation-log.md
-- crates/haze-sync-server/docs/dependency-map.md
-- crates/haze-sync-server/docs/decisions.md
-- crates/haze-sync-server/control/state.md
-- crates/haze-sync-server/control/report.md
-- crates/haze-sync-server/src/routes/health.rs only if a tiny comment/doc-comment correction is needed
+## Allowed component scope
 
-Do not rewrite routes/mod.rs or routes/v1.rs. Do not change route behavior. Do not change files outside crates/haze-sync-server. Do not archive control files.
+```text
+crates/haze-sync-server/src/routes/**
+crates/haze-sync-server/src/state.rs
+crates/haze-sync-server/src/http/**
+crates/haze-sync-server/src/config/**
+crates/haze-sync-server/src/readiness/**
+crates/haze-sync-server/docs/**
+crates/haze-sync-server/control/report.md
+```
+
+## Expected work
+
+- Verify router construction remains explicit and free of hidden globals.
+- Verify dependency-free router routes fail safely without mutation.
+- Test auth states: disabled, static principal, database lookup failure, and role checks where current coverage is missing.
+- Audit debug/display behavior for redaction.
+- Test public error bodies for absence of tokens, token hashes, idempotency keys, DB URLs, object-store roots, local paths, stack traces, raw SQLx errors, and request bodies.
+- Document any route that is intentionally placeholder or partial.
+
+## Explicit non-goals
+
+- No production listener.
+- No provider runtime.
+- No broad route decomposition unless required for SRV-P2 clarity.
+- No Core policy changes.
+- No Storage schema changes.
+- No sibling component edits.
+
+## Contract-change triggers
+
+Report BLOCKED_BY_CONTRACT or request a contract change if this work requires hidden global runtime state, changing API public error shapes inside Server, token creation/rotation in Server routes, or exposing raw runtime internals.
+
+## Checks
+
+Run applicable checks if available:
+
+```text
+cargo fmt --check
+cargo check -p haze-sync-server
+cargo test -p haze-sync-server
+cargo clippy -p haze-sync-server --all-targets -- -D warnings
+```
+
+If working through GitHub connector only and shell checks cannot run, report that honestly.
 
 ## Report
 
-Write the final report to crates/haze-sync-server/control/report.md using report-template.md.
+Write the final report to:
 
-Set REPORT_TYPE: CLEAN_CODE_REVIEW.
+```text
+crates/haze-sync-server/control/report.md
+```
 
-Expected final status: CLEAN_ACCEPT or CLEAN_ACCEPT_PENDING_CI.
+Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION.
+
+Expected final status: SELF_ACCEPT_PENDING_CI, SELF_NEEDS_FIX, or BLOCKED_BY_CONTRACT.
