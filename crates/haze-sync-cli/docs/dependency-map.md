@@ -4,159 +4,112 @@
 
 `haze-sync-cli` is the operator command surface.
 
-Conceptual position:
+CLI owns command parsing, operator-facing output, exit-code behavior, offline/live command boundaries, and future safe administrative command UX.
 
-```text
-operator shell
-  -> CLI parser/output/HTTP client/doctor renderer
-  -> Server public API and Core doctor summaries
-  -> Core/API/Storage/adapter behavior through accepted boundaries
-```
+CLI does not own Core sync policy, API DTO definitions, Server route execution, Storage persistence, provider behavior, Deployment automation, GitHub workflow policy, or Obsidian UI behavior.
 
-CLI is not the source of truth and not a runtime owner. It should call or render existing contracts rather than bypass them.
+## Independent development model
 
-## Upstream dependencies
+`haze-sync-cli` can be developed independently inside the `component/cli` branch.
 
-### Current direct dependencies
+The dependency map records operator-surface contracts and fan-in points. It does not impose a serial implementation order on Core, API, Server, Storage, Deployment, adapters, or CI.
 
-- `haze-sync-core`
-  - passive doctor models and offline doctor check constructors used by `doctor [--offline]`.
+Allowed independent work includes:
 
-### Future project dependencies
+- parser/command model hardening;
+- help/status/adapters command UX;
+- offline doctor rendering where scoped;
+- output formatting and exit-code contracts;
+- config/source-loading boundaries;
+- tests for parser/output safety.
 
-Expected future dependencies, only when scoped:
+If CLI needs live Server/API endpoints, Core doctor checks, Deployment config layout, or CI packaging behavior not currently contracted, it reports a contract-change request or fan-in need instead of implementing another component's responsibility.
 
-- `haze-sync-api`
-  - DTOs, public error vocabulary, and header semantics for HTTP client commands.
-- `haze-sync-common`
-  - adapter IDs, modes, paths, hashes, and validation helpers for command inputs.
-- `haze-sync-server`
-  - public HTTP runtime endpoints, not private internals.
+## Upstream contracts consumed
 
-### External dependency categories
+CLI may consume:
 
-Potential future dependencies, subject to phase review:
+- Core doctor/safety primitives when intentionally exposed;
+- Server/API HTTP contracts for live commands when implemented;
+- Common shared types where accepted;
+- Deployment config guidance for operator defaults;
+- CI packaging/build validation as workflow-owned validation.
 
-- CLI parser library such as `clap`, if manual parsing becomes too costly;
-- HTTP client library for server-backed commands;
-- serialization for JSON output;
-- terminal formatting only if it does not hide safety status;
-- config parsing libraries;
-- secret-source helpers if accepted.
+CLI must not consume:
 
-Current implementation intentionally has no external CLI parser/network dependencies.
+- Storage internals or direct DB access by default;
+- Server private handler state;
+- provider APIs directly;
+- Obsidian plugin internals;
+- deployment secrets;
+- GitHub workflow internals.
 
-## Disallowed direct dependencies
+## Downstream contracts exposed
 
-CLI must not directly depend on:
-
-```text
-haze-sync-storage repositories/SQLx access by default
-haze-gdrive-adapter provider internals
-haze-sync-worktree scanner/materializer internals
-apps/haze-obsidian-plugin internals
-Google Drive provider SDKs
-Obsidian plugin APIs
-Server private route modules as command implementation
-```
-
-Direct database/provider/local-repair access requires explicit future contract and must not be added opportunistically.
-
-## Downstream dependents
-
-Expected dependents:
+Expected downstream users/consumers:
 
 - human operators;
-- deployment/runbooks;
-- E2E scripts;
-- CI smoke checks;
-- future local admin workflows.
+- scripts consuming stable output/exit codes once those formats are accepted;
+- Deployment docs/runbooks;
+- CI/package validation;
+- future support/debug workflows.
 
-Downstream scripts may eventually depend on stable JSON output and exit codes. Those should be treated as compatibility surfaces once introduced.
+Downstream consumers must not treat placeholder CLI output as proof of implemented runtime behavior.
+
+## Forbidden dependency directions
+
+CLI must not:
+
+- decide final sync/conflict/delete policy outside Core;
+- directly mutate database/provider state unless an explicit admin contract allows it;
+- expose raw internal errors;
+- print sensitive config values;
+- assume production service layout without Deployment contract;
+- implement Server/API behavior locally as a workaround.
 
 ## Cross-component contracts
 
-### Core ↔ CLI
+Important CLI contracts:
 
-- Core owns doctor models and sync semantics.
-- CLI may render Core doctor reports and request Core-derived summaries through Server/API.
-- CLI must not implement conflict/delete/revision/idempotency policy.
-
-### API ↔ CLI
-
-- API owns public DTO/header/error vocabulary.
-- CLI may consume API DTOs and map safe public errors into CLI output.
-- CLI must not invent public response shapes for server-backed commands.
-
-### Server ↔ CLI
-
-- Server owns runtime HTTP behavior.
-- CLI is a client of Server public API for live status/doctor/admin/bootstrap commands.
-- CLI must not reach into Server private modules for production behavior.
-
-### Storage ↔ CLI
-
-- Storage owns persistence.
-- CLI should not access Storage directly by default.
-- Any future local DB diagnostic command requires explicit local-admin contract and strict redaction rules.
-
-### GDrive/Worktree/Obsidian ↔ CLI
-
-- Adapter/plugin components own runtime behavior.
-- CLI may ask Server/API for status/control surfaces if those contracts exist.
-- CLI must not import adapter/provider/plugin internals for normal commands.
-
-### Deployment ↔ CLI
-
-- Deployment owns installed service files, secrets placement, and runbooks.
-- CLI may support operator workflows documented by deployment, but must not silently mutate deployment state unless a deployment/admin contract accepts it.
+- command output must be safe for humans and scripts;
+- exit codes must be stable once documented;
+- live commands call public Server/API contracts;
+- offline diagnostics must clearly state they are offline;
+- administrative mutation commands require explicit confirmation/audit semantics when implemented.
 
 ## Integration/fan-in ownership
 
-The following work belongs outside CLI-only leaf phases unless explicitly scoped:
+Fan-in is required when:
 
-- Server route additions;
-- API DTO/header/error changes;
-- Core doctor/policy changes;
-- Storage repository/schema changes;
-- GDrive/Worktree runtime behavior;
-- deployment service installation;
-- real provider diagnostics;
-- destructive repair operations.
+- Server/API live endpoints are consumed by CLI;
+- Core doctor checks are exposed through CLI;
+- Deployment uses CLI in runbooks;
+- CI/package validation changes CLI build expectations;
+- output formats become scripting contracts.
 
-CLI phases may add command parsing/rendering and HTTP clients within `crates/haze-sync-cli` only when upstream contracts exist.
+These are integration gates. They do not block independent CLI work inside its component boundary.
 
 ## Dependency rules
 
-- Prefer Server/API calls for live behavior.
-- Keep CLI read-only by default.
-- Do not bypass Core policy through direct DB or provider operations.
-- Do not print secrets or raw internals.
-- Treat offline doctor as offline only.
-- Require explicit confirmation for future admin/destructive commands.
-- Any new dependency must be justified in the implementation report and reflected here.
+- CLI owns operator UX, not runtime authority.
+- CLI should call Server/API for live behavior rather than direct DB/provider access.
+- CLI output must distinguish placeholders, offline diagnostics, and live results.
+- CLI tests should verify parsing/output without requiring production services by default.
+- Any destructive/admin command requires explicit upstream contracts.
 
 ## Contract-change notes
 
 Current known contract questions:
 
-1. CLI parser dependency
-   - Current parser is manual and dependency-free.
-   - A parser library may be useful before many commands are added.
-   - This is not blocking now.
+1. Live command API surface
+   - CLI may need Server/API endpoints for status, adapters, sync, bootstrap, and admin operations.
+   - Missing endpoints are API/Server/Core fan-in points.
 
-2. Secret source policy
-   - Future live commands need server token handling.
-   - The accepted source mechanism and redaction expectations need design before implementation.
+2. Doctor integration
+   - CLI can render checks independently.
+   - Core/Server own check semantics and live runtime access.
 
-3. Live doctor source
-   - CLI should prefer Server/API diagnostic endpoints.
-   - Direct DB/provider checks would require explicit local-admin contract.
+3. Scripting output
+   - JSON/stable output formats should be treated as compatibility contracts once introduced.
 
-4. Admin/destructive commands
-   - Pause/resume, mode changes, token rotation, repair, delete unlocks, and cleanup require API/Core/Server/Storage contracts before CLI implementation.
-
-5. Stable JSON output
-   - Once added, JSON output becomes scripting API and must be tested/versioned.
-
-No immediate blocking contract change is required for the current documentation/planning pass.
+No serial implementation dependency is implied by this map.
