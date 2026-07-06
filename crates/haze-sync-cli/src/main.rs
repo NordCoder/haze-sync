@@ -29,9 +29,9 @@ fn render_command(command: commands::CliCommand) -> output::CliOutput {
         commands::CliCommand::Help(commands::HelpTopic::Doctor) => {
             output::CliOutput::success(doctor::usage())
         }
-        commands::CliCommand::Status => {
-            output::CliOutput::success("status command parsed; live server calls remain unavailable")
-        }
+        commands::CliCommand::Status => output::CliOutput::success(
+            "status command parsed; live server calls remain unavailable",
+        ),
         commands::CliCommand::Adapters(commands::AdaptersCommand::List) => output::CliOutput::success(
             "adapters list command parsed; live server calls remain unavailable",
         ),
