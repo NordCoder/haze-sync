@@ -2,33 +2,35 @@
 
 ## Current state
 
-`.github` is an active CI scaffold with two workflow files.
+`.github` is an active CI scaffold with four workflow files.
 
 Implemented current-state surface:
 
-- `.github/workflows/ci.yml`
-  - runs on pull requests;
-  - runs on pushes to `main` and `w01-ci-dev-tooling`;
-  - uses read-only contents permission;
-  - cancels in-progress runs for the same workflow/ref;
-  - Rust workspace job:
-    - install stable Rust with rustfmt and clippy;
-    - `cargo fmt --check`;
-    - `cargo check --workspace`;
-    - `cargo test --workspace`;
-    - `cargo clippy --workspace --all-targets -- -D warnings`;
-  - Obsidian plugin job:
-    - setup Node.js 20;
-    - `npm install --no-audit --no-fund`;
-    - `npm run --workspace haze-obsidian-plugin typecheck`;
-    - `npm run --workspace haze-obsidian-plugin build`;
-  - Docker Compose job:
-    - `docker compose -f deploy/docker-compose.yml config`.
 - `.github/workflows/component-ci.yml`
-  - Rust-only workspace fmt/check/test/clippy;
-  - runs on pushes to `main` and `process/**`;
-  - runs on pull requests to `main`;
-  - supports manual dispatch.
+  - Rust workspace fmt/check/test/clippy.
+  - Runs automatically on pushes to `component/**` and `process/**`.
+  - Supports manual dispatch.
+  - Does not run on pull requests, avoiding duplicate component-branch PR runs.
+- `.github/workflows/ci.yml`
+  - Full repository validation: Rust workspace, Obsidian plugin typecheck/build, and Docker Compose config validation.
+  - Runs automatically on pushes to `main`.
+  - Supports manual dispatch.
+  - Does not run automatically on component branch pushes.
+- `.github/workflows/rust.yml`
+  - Legacy standalone Rust workspace validation.
+  - Manual dispatch only.
+- `.github/workflows/obsidian-plugin.yml`
+  - Legacy standalone Obsidian plugin typecheck/build validation.
+  - Manual dispatch only.
+
+Current automatic trigger policy:
+
+```text
+component/** push -> Component CI only
+process/** push   -> Component CI only
+main push         -> full CI
+manual dispatch   -> available for targeted workflows
+```
 
 Current behavior intentionally does not:
 
@@ -40,15 +42,13 @@ Current behavior intentionally does not:
 - publish releases;
 - mutate remote hosts.
 
-The component docs were scaffold-level before this planning pass.
-
 ## Target state
 
 The target state for GitHub CI is a safe, fast-enough, secret-free validation layer for the repository and its component lifecycle.
 
 The component is V1-ready when:
 
-- required PR checks cover Rust workspace quality, plugin typecheck/build, and deployment scaffold syntax;
+- required checks cover Rust workspace quality, plugin typecheck/build, and deployment scaffold syntax at the appropriate lifecycle point;
 - component/process branches get appropriate validation without requiring production credentials;
 - workflow triggers are explicit and not surprising;
 - permissions are least-privilege;
@@ -100,11 +100,23 @@ Acceptance:
 
 ### CI-P2 — Workflow trigger and branch policy normalization
 
+Status: completed by Orchestrator CI alignment pass.
+
 Goal:
 
 ```text
 Align workflow triggers with current branch/process policy while preserving safe
-PR validation and avoiding unexpected deployment behavior.
+validation and avoiding unexpected deployment behavior.
+```
+
+Completed trigger policy:
+
+```text
+component/** push -> Component CI only
+process/** push   -> Component CI only
+main push         -> full CI
+Rust standalone   -> manual only
+Obsidian standalone -> manual only
 ```
 
 Allowed scope:
@@ -114,33 +126,33 @@ Allowed scope:
 .github/docs/**
 ```
 
-Likely work:
+Completed work:
 
-- review `ci.yml` push branches and remove legacy branch names if appropriate;
-- decide whether component branches should run full CI, Component CI, or PR-only checks;
-- document trigger matrix for `main`, `process/**`, `component/**`, PRs, and manual dispatch;
-- preserve concurrency cancellation where useful;
-- keep permissions minimal.
+- removed legacy push branch names from automatic full CI paths;
+- made `Component CI` the only automatic workflow for component/process branch pushes;
+- kept full CI automatic on `main` pushes;
+- kept legacy standalone Rust and Obsidian workflows manual-only;
+- documented the trigger matrix.
 
 Non-goals:
 
 - no production deployment;
 - no live provider tests;
 - no secret use;
-- no code changes outside `.github/**` unless explicitly scoped.
+- no product code changes outside `.github/**`.
 
 Contract-change triggers:
 
 - changing required status checks;
 - expanding triggers to secret-using deployment jobs;
-- disabling PR validation;
-- making component branches unvalidated without process decision.
+- disabling all validation for component/process branches;
+- making CI mutate remote infrastructure.
 
 Acceptance:
 
 - trigger policy is documented and matches process policy;
 - CI does not run surprising production actions;
-- PR checks remain effective.
+- component/process branch pushes run Component CI only.
 
 ### CI-P3 — Rust workspace check hardening
 
@@ -318,142 +330,5 @@ Contract-change triggers:
 Acceptance:
 
 - accidental artifacts/secrets are harder to commit;
-- logs remain safe;
-- policy is documented.
-
-### CI-P7 — Integration and E2E check staging
-
-Goal:
-
-```text
-Stage heavier local integration/E2E checks only when components expose safe,
-secret-free test support.
-```
-
-Allowed scope:
-
-```text
-.github/workflows/**
-.github/docs/**
-tests/e2e/** only if E2E component/fan-in scopes it
-```
-
-Likely work:
-
-- define separate optional jobs for DB-backed integration tests using local Postgres service;
-- run storage `test-support` checks when stable;
-- add server route E2E tests with local object store/temp dirs;
-- keep GDrive/provider tests fake-provider only unless manually gated;
-- label slow/flaky/manual jobs clearly.
-
-Non-goals:
-
-- no real Google credentials in CI;
-- no production DB;
-- no real user vault;
-- no deployment automation.
-
-Contract-change triggers:
-
-- requiring real provider credentials;
-- making slow/flaky jobs required without process decision;
-- uploading sensitive artifacts;
-- mutating external services.
-
-Acceptance:
-
-- integration checks are staged and secret-free;
-- required vs optional jobs are explicit;
-- failures are actionable.
-
-### CI-P8 — Release/package validation and manual workflows
-
-Goal:
-
-```text
-Prepare release/package validation only after artifact and deployment policies are
-accepted.
-```
-
-Allowed scope:
-
-```text
-.github/workflows/**
-.github/docs/**
-```
-
-Likely work:
-
-- add manual workflow for packaging binaries/plugins if accepted;
-- validate package contents exclude secrets and local data;
-- generate artifacts only from clean source and documented commands;
-- keep publishing/deploying disabled unless future release contract accepts it;
-- document manual approval requirements.
-
-Non-goals:
-
-- no automatic publish from main;
-- no production deploy;
-- no signing/secrets unless release policy exists;
-- no generated artifact commits unless accepted.
-
-Contract-change triggers:
-
-- publishing releases;
-- using signing/deploy secrets;
-- uploading artifacts with embedded config/secrets;
-- changing release branch/tag policy.
-
-Acceptance:
-
-- package validation is safe and manual;
-- release automation remains opt-in;
-- artifact contents are checked.
-
-## Dependency gates
-
-CI implementation depends on component contracts and process decisions:
-
-- Rust components define workspace checks and feature/test-support policy.
-- Obsidian plugin defines npm scripts and artifact policy.
-- Deployment defines compose/reverse-proxy validation scope.
-- Server/Storage define DB-backed integration readiness.
-- GDrive adapter defines fake-provider vs real-provider CI scope.
-- Process/docs define branch and required-check policy.
-
-CI should not expand into release/deploy behavior until Deployment and process contracts accept it.
-
-## Known risks
-
-- CI can accidentally become deployment automation if secret-using jobs are added too early.
-- Workflow logs can leak environment values or suspected secrets if checks are careless.
-- Required checks can become too slow/flaky and block development.
-- Missing component-branch triggers can delay feedback.
-- Duplicate workflows can waste CI time or create inconsistent required checks.
-- Compose validation can be mistaken for production readiness.
-- Real provider tests are high-risk and should remain outside default CI.
-
-## Deferred work
-
-Deferred outside this Architect documentation/planning pass:
-
-- run or observe GitHub Actions checks;
-- execute CI-P2 through CI-P8 implementation/clean-code/CI/fixer phases;
-- change workflow triggers;
-- add caching or matrix partitioning;
-- add secret/artifact scans;
-- add DB-backed integration jobs;
-- add release/package workflows;
-- add deployment automation.
-
-## Completion criteria for the component
-
-`github-ci` is V1-ready when:
-
-- workflow trigger policy matches branch/process policy;
-- required checks cover Rust, plugin, and deployment scaffold validation;
-- heavier integration/E2E jobs are staged and secret-free;
-- CI logs/artifacts do not leak secrets or local data;
-- workflow permissions are least-privilege;
-- release/package/deployment workflows, if any, are manually gated and contract-backed;
-- CI documentation explains what each check proves and does not prove.
+- allowed exceptions are documented;
+- checks remain safe and low-noise.
