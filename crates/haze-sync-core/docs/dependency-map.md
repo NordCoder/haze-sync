@@ -4,200 +4,116 @@
 
 `haze-sync-core` is the safety and decision layer of Haze Sync.
 
-It sits above `haze-sync-common` primitives and below runtime/integration components. Core should expose semantic outcomes and pure policy decisions that downstream components can persist, map, render, or execute without reimplementing overwrite/conflict/delete safety rules.
+Core owns file-level sync policy, revision semantics, conflict/tombstone decision rules, incoming-change evaluation, apply-result semantics, and safety invariants that must be shared by all adapters and runtime surfaces.
 
-## Upstream dependencies
+Core is the source of sync truth. It is not an HTTP server, provider adapter, filesystem watcher, deployment layer, or UI/client component.
 
-### Internal workspace dependencies
+## Independent development model
 
-- `crates/haze-sync-common`
-  - `VaultPath`
-  - `AdapterId`
-  - `RevisionId`
-  - `OperationId`
-  - `ConflictId`
-  - `ContentHash`
-  - `Sha256`
-  - `ValidationError`
-  - adapter role/mode primitives where downstream callers need consistent semantics
+`haze-sync-core` can be developed independently inside the `component/core` branch.
 
-Core relies on `haze-sync-common` for shared value validation and public DTO-safe primitives. Core should not duplicate path, ID, hash, or adapter-role parsing rules that already belong to Common.
+The dependency map records contracts consumed/exposed by Core and the fan-in points needed for integration. It does not impose a serial implementation order on API, Storage, Server, adapters, CLI, Deployment, or CI.
 
-### External crate dependencies
+Allowed independent work includes:
 
-Allowed current external dependencies:
+- Core domain types and service contracts;
+- revision/base-revision validation;
+- conflict policy evaluation;
+- tombstone/delete policy evaluation;
+- doctor/safety primitives owned by Core;
+- unit tests for Core invariants;
+- public-safe Core results consumed by Server/API wiring.
 
-- `chrono`
-  - UTC timestamps for revisions, conflicts, tombstones, doctor summaries, and operation-log metadata.
-- `serde`
-  - public serialization/deserialization for safe Core DTO/value models.
-- `serde_json`
-  - safe JSON metadata and stored idempotency response/fingerprint support.
-- `sha2`
-  - SHA-256 request/content fingerprinting where the pure Core algorithm computes hashes.
+If Core needs persistence, route, provider, plugin, deployment, or CI behavior that is not covered by a current contract, it reports a contract-change request instead of implementing another component's responsibilities.
 
-Additional external dependencies require contract review when they affect public behavior, determinism, runtime ownership, or safety semantics.
+## Upstream contracts consumed
 
-### Caller-provided runtime dependencies
+Core may consume:
 
-Core defines traits and value models for dependencies that are implemented outside this component:
+- `haze-sync-common` shared IDs/value types where accepted;
+- `haze-sync-storage` repository contracts for durable metadata/object operations;
+- standard Rust libraries and approved domain-only dependencies.
 
-- revision repository lookups and inserts;
-- content-store writes/metadata;
-- operation-log append;
-- storage transactions and locks;
-- durable idempotency storage;
-- conflict/tombstone repository persistence;
-- doctor live checks;
-- route extraction and HTTP response mapping;
-- adapter/provider execution.
+Core must not consume:
 
-These are not direct Core dependencies and must not be silently introduced as concrete dependencies without a contract change.
+- Server route handlers;
+- API DTO serialization logic as decision authority;
+- Google Drive provider clients;
+- Obsidian plugin internals;
+- CLI parsing/output code;
+- deployment scripts;
+- GitHub workflow logic.
 
-## Disallowed direct dependencies
+## Downstream contracts exposed
 
-Core must not directly depend on:
+Expected downstream consumers:
 
-```text
-haze-sync-api
-haze-sync-storage
-haze-sync-server
-haze-sync-worktree
-haze-gdrive-adapter
-haze-sync-cli
-apps/haze-obsidian-plugin
-axum
-sqlx
-tokio runtime ownership
-reqwest/google provider SDKs
-filesystem watcher crates
-CLI parser crates
-deployment/config loading as runtime behavior
-```
+- Server, for runtime request handling and route execution;
+- API, for mapping Core concepts into public-safe DTO contracts;
+- Storage, for persistence needs discovered through Core contracts;
+- Worktree, GDrive adapter, Obsidian plugin, and CLI indirectly through Server/API contracts;
+- tests and future integration harnesses.
 
-Rationale:
+Downstream consumers must treat Core decisions as authoritative and must not silently bypass conflict/tombstone/base-revision rules.
 
-```text
-Core decisions must stay deterministic and side-effect-free. Runtime effects are
-owned by Server, Storage, CLI, Worktree, GDrive, Obsidian, and deployment layers.
-```
+## Forbidden dependency directions
 
-## Downstream dependents
+Core must not depend on:
 
-Expected downstream components:
+- adapters for policy decisions;
+- provider-specific metadata as authoritative identity;
+- HTTP request state;
+- filesystem paths as hidden source-of-truth state;
+- deployment environment layout;
+- CI workflow assumptions.
 
-- `crates/haze-sync-api`
-  - maps Core decisions into route DTOs and safe HTTP errors;
-  - must not reimplement conflict/delete policy.
-- `crates/haze-sync-server`
-  - wires runtime state, config, auth, DB pools, routes, readiness, and service composition;
-  - owns server lifecycle and background runtime behavior, not Core.
-- `crates/haze-sync-storage`
-  - implements SQLx repositories, schema-backed persistence, transactions, locks, idempotency records, operation-log storage, tombstone rows, and conflict rows;
-  - must preserve Core safety outcomes transactionally.
-- `crates/haze-sync-cli`
-  - may render Core doctor/status summaries and invoke server/storage operations;
-  - must not expose secrets, token hashes, raw SQLx errors, or local absolute paths.
-- `crates/haze-sync-worktree`
-  - submits local filesystem facts to Core/API and obeys Core decisions;
-  - owns scanning, materialization, trash, watcher, and echo-guard behavior outside Core.
-- `crates/haze-gdrive-adapter`
-  - submits Drive facts to Core/API and obeys Core decisions;
-  - owns Drive API calls, OAuth/token loading, mapping, echo guard, import/export, and delete reconciliation outside Core.
-- `apps/haze-obsidian-plugin`
-  - uses Core API outcomes through the API client;
-  - owns local vault scanning, UI, pending queue, and conflict center rendering outside Core.
-- E2E and integration tests
-  - may use Core public modules to assert safety behavior;
-  - must avoid assuming side effects that Core does not own.
+Adapters must not bypass Core by directly choosing overwrite/delete/conflict outcomes.
 
 ## Cross-component contracts
 
-### Common → Core
+Important Core contracts:
 
-- Common owns validation for shared paths, IDs, hashes, roles, modes, and validation errors.
-- Core accepts common value types as trusted parsed inputs but may still validate Core-specific constraints such as conflict-area recursion, delete-run scope, or request fingerprint rules.
-- Common must not implement Core overwrite/conflict/delete policy.
+- every write has a known base revision or explicit null base;
+- stale or unknown base cannot silently overwrite newer different content;
+- conflicts preserve both sides unless an accepted policy says otherwise;
+- deletes produce tombstones/trash/retention behavior rather than immediate hard-delete;
+- adapters normalize external changes into Core input rather than deciding final state;
+- public outputs are safe and do not expose internal/raw persistence/provider details.
 
-### Core → API
+## Integration/fan-in ownership
 
-- Core returns semantic outcomes and safe errors.
-- API owns request extraction, auth/role checks, HTTP status mapping, route registration, and response DTO shaping.
-- API must preserve Core semantics, especially no silent overwrite, conflict preservation, tombstone/delete safety, idempotency replay/conflict behavior, and safe public errors.
-- API must not expose raw incoming conflict bytes, idempotency keys, raw file content, or storage/provider errors through Core mappings.
+Fan-in is required when:
 
-### Core → Storage
+- Server exposes new Core decisions through HTTP routes;
+- API adds/changes DTOs that represent Core results;
+- Storage changes repository behavior Core depends on;
+- adapters need a Core contract not currently available;
+- Deployment/CLI/doctor flows surface Core health/safety checks.
 
-- Core defines decision metadata and trait boundaries.
-- Storage owns SQLx models/repositories, migrations, connection pools, transactions, advisory locks, persisted idempotency records, operation-log rows, tombstone rows, and conflict rows.
-- Storage must preserve Core safety outcomes transactionally.
-- Storage must not expose raw SQLx errors through Core-facing or public outputs.
+These are integration gates. They do not block independent Core work inside its component boundary.
 
-### Core → Server
+## Dependency rules
 
-- Server owns runtime wiring and lifecycle.
-- Server may compose Core services with Storage/API/auth/config, but Core must not open pools, run migrations, spawn tasks, or start HTTP routes.
-- Server must provide transaction/per-path-lock/idempotency boundaries when mapping live requests to Core decisions.
-
-### Core → Worktree
-
-- Worktree submits local file facts through API/Core-facing contracts.
-- Worktree owns filesystem scan/materialization/trash/watcher/echo behavior.
-- Worktree must not decide stale overwrite or mass-delete policy locally.
-
-### Core → GDrive adapter
-
-- GDrive adapter submits provider facts through API/Core-facing contracts.
-- GDrive owns provider calls, OAuth/token loading, mapping semantics, echo guard, change feed, import/export, delete candidate detection, and reconciliation.
-- GDrive must not silently overwrite or tombstone data based only on provider state.
-
-### Core → Obsidian plugin
-
-- Obsidian plugin observes Core outcomes through API responses.
-- Plugin owns UI, local state, pending queue, sync planner, local scanner, and conflict UI.
-- Plugin must not claim conflict/delete resolution that Core/API did not confirm.
-
-### Core → CLI/doctor
-
-- Core doctor helpers produce passive, redacted result models.
-- CLI/server components that perform live checks must supply already-redacted facts and must honestly mark checks as skipped when live checks were not performed.
-- CLI must not use Core models as permission to perform destructive operations without Server/Storage/delete-guard support.
-
-## Integration/fan-in dependencies
-
-The following work belongs to fan-in or downstream component phases, not Core leaf phases:
-
-- route registration and HTTP status mapping;
-- durable idempotency repository wiring;
-- DB transaction/per-path lock enforcement;
-- object-store temp write/fsync/rename behavior;
-- conflict row and conflict-copy persistence;
-- tombstone row persistence and adapter trash behavior;
-- retention cleanup execution;
-- provider import/export loops;
-- Worktree runtime loop;
-- Obsidian UI and pending queue;
-- production E2E tests.
+- Core owns sync decisions, not transport or provider execution.
+- Core consumes Storage through contracts, not by embedding database-specific behavior.
+- Core exposes stable service-level results for Server/API mapping.
+- Core must keep safety invariants independent of adapter implementation details.
+- Core tests should prove policy invariants without requiring live provider or deployment state.
 
 ## Contract-change notes
 
 Current known contract questions:
 
-1. Conflict path and `VaultPath` compatibility
-   - Core generates conflict materialization paths under `_haze_conflicts/open/**`.
-   - Common currently determines which reserved runtime paths are rejected.
-   - If `_haze_conflicts/**` policy changes, Core conflict path generation and adapter scan rules must be reviewed together.
+1. Storage repository surface
+   - Core may require additional durable operations as phases progress.
+   - Missing operations should be reported as Storage contract-change requests.
 
-2. Full `accept_conflict` semantics
-   - Current system has partial conflict resolution behavior outside Core.
-   - If Core owns pure resolution plans, API/Storage/Server must consume those plans instead of implementing divergent resolution policy.
+2. API/Server representation
+   - Core may define decision outputs before API/Server expose them.
+   - HTTP/DTO mapping remains an API/Server fan-in concern.
 
-3. Tombstone ID consistency
-   - Tombstone identifiers appear in tombstone and operation-log contexts.
-   - Future Storage/API fan-in should keep naming and conversion explicit.
+3. Adapter integration
+   - Adapters may need additional Core apply/result semantics.
+   - They should request Core contracts rather than duplicate decision logic.
 
-4. Idempotency stored response shape
-   - Core owns safe fingerprint/replay classification.
-   - Server/API/Storage must agree on what exact response snapshot is persisted and replayed.
-
-Any future proposal to add concrete SQLx, Axum, provider SDK, object-store filesystem, background job, or adapter runtime dependencies to `haze-sync-core` requires an explicit contract-change request and Orchestrator/Architect review.
+No serial implementation dependency is implied by this map.
