@@ -1,52 +1,92 @@
-# T0-P1C — Core clean-code review
+# W1-CORE-P2 — Core public module audit
 
 Component: core
 Component path: crates/haze-sync-core
 Branch: component/core
 Base branch: main
-Verified base SHA: aabf74486d4d06a89136007bd17713f3c35478de
+Current main baseline SHA: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
 Target branch: main
 
 ## Role
 
-You are a Clean-Code Reviewer. Work only through the GitHub connector. Do not use SSH/local git. Do not open PR. Do not merge.
+You are an Implementation Worker for NordCoder/haze-sync.
 
-## Read
+Work only through the GitHub connector. Do not use SSH/local git. Do not open PR. Do not merge.
+
+## Read before editing
 
 - implementation-manifest.md from ChatGPT Project Sources
 - report-template.md from ChatGPT Project Sources
-- clean-code-reviewer-prompt.md from ChatGPT Project Sources
-- crates/haze-sync-core/control/prompt.md
-- crates/haze-sync-core/control/log/20260705-000000Z-T0-P1-implementation-report.md
+- implementation-worker-prompt.md from ChatGPT Project Sources
+- docs-process/docs/development-model.md
 - crates/haze-sync-core/docs/component-contract.md
 - crates/haze-sync-core/docs/implementation-plan.md
 - crates/haze-sync-core/docs/implementation-log.md
 - crates/haze-sync-core/docs/dependency-map.md
 - crates/haze-sync-core/docs/decisions.md
-- current diff of component/core against main
+- crates/haze-sync-core/control/prompt.md
+- relevant current code under crates/haze-sync-core/src/**
 
 ## Task
 
-Review the T0-P1 Core documentation implementation. This is a docs/control process test, not a product-code task.
+Implement phase CORE-P2 from the Core implementation plan: Public module audit and behavior/test alignment.
 
-Check that the Core docs are clear, accurate, simple, not overclaimed, and consistent with the current Core source. Look for stale claims, unclear boundaries, missing non-goals, missing dependency notes, duplicated wording, or claims that imply runtime/API/storage/provider ownership.
+Goal:
 
-## Allowed files
+```text
+Audit every public Core module against the component contract, then add small rustdoc/test hardening where current behavior is underdocumented or undertested.
+```
 
-- crates/haze-sync-core/docs/component-contract.md
-- crates/haze-sync-core/docs/implementation-plan.md
-- crates/haze-sync-core/docs/implementation-log.md
-- crates/haze-sync-core/docs/dependency-map.md
-- crates/haze-sync-core/docs/decisions.md
-- crates/haze-sync-core/control/state.md
-- crates/haze-sync-core/control/report.md
+## Allowed component scope
 
-Do not edit Core source. Do not change files outside crates/haze-sync-core. Do not archive control files.
+```text
+crates/haze-sync-core/src/**
+crates/haze-sync-core/tests/** if present or added inside the component
+crates/haze-sync-core/docs/**
+crates/haze-sync-core/control/report.md
+```
+
+## Expected work
+
+- Verify `src/lib.rs` exports only intended Core modules.
+- Audit public types/functions for safe serialization and public output.
+- Add missing tests for current behavior without changing semantics.
+- Improve rustdoc where a type may be mistaken for persistence/runtime ownership.
+- Mark any discovered public API mismatch as a contract-change request.
+
+## Explicit non-goals
+
+- No new sync behavior.
+- No downstream wiring.
+- No sibling crate edits.
+- No SQLx, Axum, provider, filesystem, or runtime dependencies.
+- No route/storage/server/adapters implementation.
+
+## Contract-change triggers
+
+Report BLOCKED_BY_CONTRACT or request a contract change if this work requires changing Core public semantics, moving transaction/runtime ownership into Core, or editing another component.
+
+## Checks
+
+Run applicable checks if available:
+
+```text
+cargo fmt --check
+cargo check -p haze-sync-core
+cargo test -p haze-sync-core
+cargo clippy -p haze-sync-core --all-targets -- -D warnings
+```
+
+If working through GitHub connector only and shell checks cannot run, report that honestly.
 
 ## Report
 
-Write the final report to crates/haze-sync-core/control/report.md using report-template.md.
+Write the final report to:
 
-Set REPORT_TYPE: CLEAN_CODE_REVIEW.
+```text
+crates/haze-sync-core/control/report.md
+```
 
-Expected final status: CLEAN_ACCEPT or CLEAN_ACCEPT_PENDING_CI.
+Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION.
+
+Expected final status: SELF_ACCEPT_PENDING_CI, SELF_NEEDS_FIX, or BLOCKED_BY_CONTRACT.
