@@ -15,6 +15,9 @@ const MIN_STATUS_CODE: u16 = 100;
 const MAX_STATUS_CODE: u16 = 599;
 
 /// Safe, validated idempotency key from the `Idempotency-Key` header.
+///
+/// The key may be needed for durable retry comparison, but it must not be
+/// rendered in public API responses, operator reports, or error messages.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct IdempotencyKey(String);
 
@@ -239,6 +242,10 @@ impl StoredIdempotencyResponse {
 }
 
 /// Stored idempotency record used to evaluate request replay behavior.
+///
+/// This record is serializable for storage/fan-in persistence only. Because it
+/// contains the validated idempotency key, API and report layers must not expose
+/// a serialized `StoredIdempotencyRecord` as public output.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct StoredIdempotencyRecord {
     scope: IdempotencyScope,
@@ -541,6 +548,17 @@ mod tests {
             IdempotencyKey::parse(&"a".repeat(MAX_IDEMPOTENCY_KEY_LEN + 1)).unwrap_err(),
             IdempotencyError::InvalidKey
         );
+    }
+
+    #[test]
+    fn invalid_key_errors_do_not_echo_key_material() {
+        let error = IdempotencyKey::parse("bad\0secret-key-material").unwrap_err();
+
+        assert_eq!(error.code(), "invalid_idempotency_key");
+        assert_eq!(error.message(), "idempotency key is invalid");
+        assert_eq!(error.to_string(), "idempotency key is invalid");
+        assert_eq!(serde_json::to_string(&error).unwrap(), r#""invalid_key""#);
+        assert!(!error.to_string().contains("secret-key-material"));
     }
 
     #[test]
