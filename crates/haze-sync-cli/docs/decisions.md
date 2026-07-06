@@ -173,3 +173,42 @@ Affected contracts:
 - E2E/runbook scripts;
 - API DTO mapping;
 - CI/snapshot tests.
+
+## 2026-07-06 — CLI-P2 keeps the manual parser and classifies errors without raw argument echo
+
+Decision:
+
+CLI-P2 keeps the dependency-free manual parser. The top-level parser owns the complete current command model, including `doctor`, and parse errors are rendered as safe error classes rather than echoing raw unknown or trailing argument values.
+
+Rationale:
+
+Current command syntax is small enough that adding a parser dependency would broaden the dependency and review surface without clear value. Raw argument echo is unsafe because operators may accidentally paste token-like, URL-like, database-like, or provider-like values into unsupported commands.
+
+Current command categories:
+
+| Command | Category | Backing mode | Mutation/destructive behavior |
+| --- | --- | --- | --- |
+| `haze-sync --help` / `haze-sync help` | read-only | local help text | none |
+| `haze-sync status` | read-only | local placeholder; no network | none |
+| `haze-sync adapters list` | read-only | local placeholder; no network | none |
+| `haze-sync doctor [--offline]` | read-only local-diagnostic | offline Core doctor model rendering; no live checks | none |
+
+Network-backed, admin mutation, destructive/repair, provider-backed, and live diagnostic behavior remains absent until explicitly scoped by later contracts.
+
+Alternatives:
+
+- Add `clap` or another parser dependency now.
+- Keep separate top-level and doctor parser entry points.
+- Preserve raw argument echo with ad-hoc redaction.
+
+Consequences:
+
+- Parser tests cover command model behavior directly without shell execution.
+- Output tests can assert stdout/stderr/exit-code channels without invoking a subprocess.
+- Future parser dependency or richer command syntax remains a contract-review decision.
+
+Affected contracts:
+
+- parser command model;
+- output and error contracts;
+- future config/live/admin CLI phases.
