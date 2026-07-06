@@ -44,7 +44,10 @@ impl WorktreeConfig {
     }
 
     /// Map a validated `VaultPath` to a local path under the configured root.
-    pub fn vault_path_to_local(&self, vault_path: &VaultPath) -> Result<PathBuf, WorktreePathError> {
+    pub fn vault_path_to_local(
+        &self,
+        vault_path: &VaultPath,
+    ) -> Result<PathBuf, WorktreePathError> {
         if vault_path.is_reserved_runtime_path() {
             return Err(WorktreePathError::ReservedRuntimePath);
         }
@@ -65,7 +68,10 @@ impl WorktreeConfig {
     }
 
     /// Map a local path back to a `VaultPath` only when it is under the configured root.
-    pub fn local_path_to_vault(&self, local_path: impl AsRef<Path>) -> Result<VaultPath, WorktreePathError> {
+    pub fn local_path_to_vault(
+        &self,
+        local_path: impl AsRef<Path>,
+    ) -> Result<VaultPath, WorktreePathError> {
         let relative = self.relative_path_under_root(local_path.as_ref())?;
         let segments = relative_segments(relative)?;
 
@@ -117,7 +123,10 @@ impl WorktreeConfig {
         self.runtime_dir().join(ECHO_DIR_NAME)
     }
 
-    fn relative_path_under_root<'a>(&self, local_path: &'a Path) -> Result<&'a Path, WorktreePathError> {
+    fn relative_path_under_root<'a>(
+        &self,
+        local_path: &'a Path,
+    ) -> Result<&'a Path, WorktreePathError> {
         local_path
             .strip_prefix(&self.root)
             .map_err(|_| WorktreePathError::LocalPathOutsideRoot)
@@ -237,13 +246,18 @@ fn relative_segments(relative: &Path) -> Result<Vec<String>, WorktreePathError> 
     for component in relative.components() {
         match component {
             Component::Normal(segment) => {
-                let segment = segment.to_str().ok_or(WorktreePathError::NonUtf8LocalPath)?;
+                let segment = segment
+                    .to_str()
+                    .ok_or(WorktreePathError::NonUtf8LocalPath)?;
                 if segment.contains('\\') {
                     return Err(WorktreePathError::BackslashEscape);
                 }
                 segments.push(segment.to_owned());
             }
-            Component::CurDir | Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
+            Component::CurDir
+            | Component::ParentDir
+            | Component::RootDir
+            | Component::Prefix(_) => {
                 return Err(WorktreePathError::UnsafeLocalComponent);
             }
         }
@@ -415,7 +429,9 @@ mod tests {
     fn recognizes_reserved_local_paths() {
         let config = config();
 
-        assert!(config.is_reserved_local_path("/srv/haze-vault/worktree/_haze_runtime/echo/marker"));
+        assert!(config.is_reserved_local_path(
+            "/srv/haze-vault/worktree/_haze_runtime/echo/marker"
+        ));
         assert!(config.is_reserved_local_path("/srv/haze-vault/worktree/Notes/draft.swp"));
         assert!(!config.is_reserved_local_path("/srv/haze-vault/worktree/Notes/a.md"));
         assert!(!config.is_reserved_local_path("/srv/haze-vault/other/Notes/a.md"));
