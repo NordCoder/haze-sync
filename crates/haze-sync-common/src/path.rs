@@ -221,7 +221,7 @@ mod tests {
     #[test]
     fn rejects_empty_paths_after_normalization() {
         for input in ["", ".", "./", "//", "/"] {
-            let expected = if input == "/" {
+            let expected = if input.starts_with('/') {
                 ValidationError::AbsolutePath
             } else {
                 ValidationError::EmptyPath
