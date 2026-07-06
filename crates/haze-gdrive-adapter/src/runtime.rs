@@ -65,18 +65,18 @@ impl AdapterRuntime {
         Ok(Self::new(config))
     }
 
-    pub const fn new(config: AdapterConfig) -> Self {
+    pub fn new(config: AdapterConfig) -> Self {
         Self {
             config,
             state: RuntimeState::Created,
         }
     }
 
-    pub const fn config(&self) -> &AdapterConfig {
+    pub fn config(&self) -> &AdapterConfig {
         &self.config
     }
 
-    pub const fn state(&self) -> RuntimeState {
+    pub fn state(&self) -> RuntimeState {
         self.state
     }
 
