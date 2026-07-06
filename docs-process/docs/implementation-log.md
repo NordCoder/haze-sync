@@ -54,6 +54,32 @@ ARCHITECT_ACCEPT_PENDING_REVIEW
 Follow-ups:
 Use the new canonical docs before scheduling further workers. Next recommended work is Orchestrator fan-in planning for canonical `component-ci.yml`, active control-slot cleanup in component branches, and system docs index alignment.
 
+### 2026-07-06 — DOC-P3 dependency map semantics clarification
+
+Agent:
+Architect
+
+Branch:
+process/docs-unification
+
+Prompt:
+User clarified that development happens inside components and dependency maps must not turn independent component development into a serial model.
+
+Report:
+Final chat response for this pass; no component control report was written because this is a process documentation branch, not an implementation-worker execution.
+
+Commit(s):
+See branch history after this documentation pass.
+
+Summary:
+Added `docs-process/docs/dependency-map-semantics.md` and updated process README, component-docs guide, implementation plan, and unification audit. The pass makes dependency-map interpretation explicit: dependency maps are contract-boundary maps for independent component development, fan-in points, and contract-change blockers. They are not global serial implementation roadmaps and do not block local component work merely because another component is mentioned.
+
+Status:
+ARCHITECT_ACCEPT_PENDING_REVIEW
+
+Follow-ups:
+During the next component docs drift audit, normalize ambiguous component-local dependency-map wording so `dependency gate` means integration/fan-in/merge-readiness gate, not a blocker for independent local component work.
+
 ---
 
 Use this format for future entries:
