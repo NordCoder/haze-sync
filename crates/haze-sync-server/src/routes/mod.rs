@@ -63,6 +63,7 @@ mod tests {
         http::{Request, StatusCode},
     };
     use haze_sync_api::auth::{AdapterPrincipal, AdapterRole};
+    use haze_sync_core::revision_service::compute_content_hash;
     use http_body_util::BodyExt as _;
     use serde_json::Value;
     use sqlx::postgres::PgPoolOptions;
@@ -104,6 +105,13 @@ mod tests {
             .header("content-type", "application/json")
             .body(body)
             .expect("test request should build");
+        request_json_with_custom_request(state, request).await
+    }
+
+    async fn request_json_with_custom_request(
+        state: ServerAppState,
+        request: Request<Body>,
+    ) -> (StatusCode, Value) {
         let response = build_router_with_state(state)
             .oneshot(request)
             .await
@@ -166,6 +174,37 @@ mod tests {
         ServerAppState::new(None, None, None, crate::state::AuthState::Database { pool })
     }
 
+    fn assert_no_sensitive_route_output(json: &Value, extra_markers: &[&str]) {
+        let rendered = json.to_string();
+        for marker in [
+            "route_test_token",
+            "put-key-sensitive",
+            "delete-key-sensitive",
+            "sha256:test-token-hash",
+            "token_hash",
+            "oauth",
+            "postgres://",
+            "DATABASE_URL",
+            "database_url",
+            "object_store_root",
+            "/srv/haze-sync",
+            "/Users/",
+            "C:\\",
+            "sqlx::Error",
+            "stack backtrace",
+            "request-body-secret",
+            "raw request body",
+        ]
+        .into_iter()
+        .chain(extra_markers.iter().copied())
+        {
+            assert!(
+                !rendered.contains(marker),
+                "route output leaked forbidden marker {marker}: {rendered}"
+            );
+        }
+    }
+
     #[test]
     fn router_builds_without_runtime_dependencies() {
         let _router = build_router();
@@ -221,6 +260,47 @@ mod tests {
         assert_eq!(json["error"]["code"], "missing_token");
         assert!(!json.to_string().contains("Idempotency-Key"));
         assert!(!json.to_string().contains("not persisted"));
+    }
+
+    #[tokio::test]
+    async fn static_principal_put_error_redacts_headers_body_and_runtime_details() {
+        let body = b"raw request body request-body-secret postgres://db.example/app \
+            /srv/haze-sync/objects token_hash sha256:test-token-hash \
+            sqlx::Error stack backtrace";
+        let hash = compute_content_hash(body).to_string();
+        let request = Request::builder()
+            .method("PUT")
+            .uri("/v1/files/Notes/a.md")
+            .header("authorization", "Bearer route_test_token")
+            .header("content-type", "application/octet-stream")
+            .header("Idempotency-Key", "put-key-sensitive")
+            .header("X-Content-SHA256", hash)
+            .header("X-Base-Revision-Id", "rev_current")
+            .body(Body::from(body.to_vec()))
+            .expect("test request should build");
+
+        let (status, json) =
+            request_json_with_custom_request(static_principal_state(), request).await;
+
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(json["error"]["code"], "internal_error");
+        assert_no_sensitive_route_output(&json, &["rev_current"]);
+    }
+
+    #[tokio::test]
+    async fn database_auth_failure_is_sanitized_for_protected_file_route() {
+        let request = Request::builder()
+            .method("GET")
+            .uri("/v1/files/Notes/a.md")
+            .header("authorization", "Bearer route_test_token")
+            .body(Body::empty())
+            .expect("test request should build");
+
+        let (status, json) = request_json_with_custom_request(database_auth_state(), request).await;
+
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(json["error"]["code"], "internal_error");
+        assert_no_sensitive_route_output(&json, &["127.0.0.1", "placeholder", "haze_sync_test"]);
     }
 
     #[tokio::test]
