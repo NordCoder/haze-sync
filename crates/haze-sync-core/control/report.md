@@ -37,7 +37,7 @@ BRANCH_AND_CONTROL:
 current_branch: component/core
 base_branch: main
 base_sha: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2 from active prompt; GitHub compare observed current main head/merge-base 1a82bea5c87953db378e5e03429326df38320ee8 at report time
-head_sha: 997a6204d1f7c1d2f22f5f1e507353af8e2be559
+head_sha: product-code head before report write was 141461a69ac171b285354b52692bb30e53ff1b6a; report write commit was 6c45e6d64a49a09547957e8c0cc729bfb2e715fe
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
