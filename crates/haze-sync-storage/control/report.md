@@ -1,12 +1,12 @@
 REPORT_TYPE:
-IMPLEMENTATION
+CLEAN_CODE_REVIEW
 
 STATUS:
-SELF_ACCEPT_PENDING_CI
+CLEAN_ACCEPT_PENDING_CI
 
 AGENT:
-role: implementation-worker
-agent_execution_id: W1-STOR-P2-storage-implementation
+role: clean-code-reviewer
+agent_execution_id: W1-STOR-P2C-storage-clean-code-review
 chat_name: W1 persistent — storage
 
 COMPONENT:
@@ -21,23 +21,21 @@ control_report_path: crates/haze-sync-storage/control/report.md
 
 WAVE:
 id: W1
-phase_id: STOR-P2
-dependency_status: active prompt state was PROMPT_READY; active_prompt matched crates/haze-sync-storage/control/prompt.md
+phase_id: STOR-P2C
+dependency_status: active prompt state was PROMPT_READY; active_prompt matched crates/haze-sync-storage/control/prompt.md; implementation report status was SELF_ACCEPT_PENDING_CI
 
 SUMMARY:
-Implemented the Storage schema and row-model audit phase. Verified the accepted initial storage schema represented by migrations 0001 through 0009 against schema table metadata and passive row structs. Added schema tests that bind INITIAL_MIGRATIONS to the actual migration files via include_str!, verify strict numeric migration ordering, and assert every table_name constant maps to a create table statement. Added explicit sensitive/internal-only row-field metadata for token_hash, object_store_path, external_cursor_json, idempotency key/hash/response material, Google Drive provider IDs, and audit metadata. Added representative serde roundtrip tests for row models with sensitive fields, optional timestamps, and JSON fields. No migration schema change was required.
+Reviewed W1 STOR-P2 implementation for scope, contract compliance, schema metadata coverage, row model audit quality, sensitive-field handling, non-goal preservation, and report honesty. The implementation stayed within storage scope and did not change migrations, Core policy, API DTOs, Server wiring, workflow files, or sibling components. I made one small review improvement inside allowed storage source scope: tightened the schema metadata test so table_names::ALL must exactly match the create table order discovered from the actual initial migration files, rather than only checking one-way coverage. No contract blocker was found.
 
 CHANGED_FILES:
 - crates/haze-sync-storage/src/schema/mod.rs
-- crates/haze-sync-storage/src/models/mod.rs
-- crates/haze-sync-storage/docs/implementation-log.md
 - crates/haze-sync-storage/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/storage
 base_branch: main
 base_sha: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
-head_sha: 42111abadc9363dae3747da75406edaf7326a05a before report write; report write creates the next branch head
+head_sha: 6ef413a29c85ebc7509e2479656ca9460db51f4a before report write; report write creates the next branch head
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: crates/haze-sync-storage/control/prompt.md
@@ -45,7 +43,7 @@ control_report_written: crates/haze-sync-storage/control/report.md
 control_files_archived_by_worker: no
 
 SCOPE:
-allowed_files_only: yes for this run; all modified files are within allowed STOR-P2 scope
+allowed_files_only: yes for this clean-code review run; source edit was limited to crates/haze-sync-storage/src/schema/mod.rs and report edit to crates/haze-sync-storage/control/report.md
 scope_expansion_used: no
 scope_expansion_rationale: none
 cross_component_changes: none
@@ -61,24 +59,24 @@ affected_components: storage only
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- Added schema::table_names::ALL as an ordered accepted initial table list.
-- Added schema unit tests that verify migration metadata against actual migration files and table create statements.
-- Added models::SensitiveRowField and SENSITIVE_ROW_FIELDS audit metadata for persisted fields that must not be returned directly in public output.
-- Added model module documentation clarifying that row structs are internal/service-layer values, not public API DTOs.
-- Added serde roundtrip tests for SyncAdapterRow, AdapterCursorRow, and AuditEventRow.
-- Updated the storage implementation log with the STOR-P2 entry.
-behavior_changes: no runtime storage behavior changed; changes are schema/model metadata and tests only
-bugs_found: no schema drift or missing row model found against current migrations
+- Reviewed schema metadata tests, row model tests, sensitive-field metadata, implementation log, and implementation report.
+- Strengthened schema test coverage to compare table_names::ALL exactly against table names parsed from actual migration file create table statements.
+- Verified row models remain passive database rows and are documented as internal/service-layer values, not public API DTOs.
+- Verified SENSITIVE_ROW_FIELDS identifies high-risk persisted values requiring API/Server/CLI sanitization.
+behavior_changes: no runtime behavior changed; one test was tightened
+bugs_found: no functional bug or contract violation found
 bugs_fixed: none
-cleanups_made: clarified sensitive row-field handling and added test coverage for schema/model audit surfaces
-non_goals_preserved: no migration runner, no Core policy, no API DTO mapping, no Server route wiring, no SQL query fan-in
-deferred_work: repository helper audits, object-store hardening, DB-backed repository tests, and fan-in wiring remain for later storage phases
+cleanups_made: tightened one schema audit test to prevent extra migration-created tables from going unnoticed
+non_goals_preserved: no migration runner, no Core policy, no API DTO mapping, no Server route wiring, no SQL query fan-in, no workflow edits
+deferred_work: cargo/CI verification remains pending; later storage phases still own repository helper audits, object-store hardening, DB-backed storage tests, and fan-in support
 
 TESTS_AND_CHECKS:
 checks_run:
-- GitHub connector read/audit of control state, active prompt, component docs, schema metadata, row models, and migrations 0001 through 0009
-- GitHub connector compare main..component/storage before report write
-- GitHub connector combined status lookup for head 42111abadc9363dae3747da75406edaf7326a05a; no statuses returned
+- GitHub connector read of control state and active prompt
+- GitHub connector read of prior implementation report before overwrite
+- GitHub connector read of storage component contract and STOR-P2 implementation plan section
+- GitHub connector compare main..component/storage after clean-code source edit
+- GitHub connector combined status lookup for 6ef413a29c85ebc7509e2479656ca9460db51f4a; no statuses returned
 checks_not_run:
 - cargo fmt --check
 - cargo check -p haze-sync-storage
@@ -97,17 +95,17 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- The branch is currently diverged from main: compare reported merge base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2, main head 1a82bea5c87953db378e5e03429326df38320ee8, and component/storage behind main by 5 commits before report write.
-- Existing branch diff includes pre-existing non-STOR-P2 files from earlier/orchestrator work, including .github/workflows/component-ci.yml and control state/prompt changes. This run did not modify those files.
+- Branch remains diverged from main: compare reported merge base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2, main head 1a82bea5c87953db378e5e03429326df38320ee8, and component/storage behind main by 5 commits before report write.
+- Branch diff includes pre-existing orchestrator/process files outside this clean-code run scope, including .github/workflows/component-ci.yml, control state, and active prompt. This clean-code run did not edit those files.
 
 BLOCKERS:
-none for implementation; CI/shell verification is pending because connector-only execution cannot run cargo commands
+none for clean-code review; CI/shell verification is pending because connector-only execution cannot run cargo commands
 
 NEXT_RECOMMENDED_AGENT:
-clean-code-reviewer
+orchestrator
 
 FINAL_VERDICT:
-SELF_ACCEPT_PENDING_CI. STOR-P2 is implemented within Storage scope, no contract change or migration schema change is required, and cargo/CI verification should be run by CI or a shell-capable environment.
+CLEAN_ACCEPT_PENDING_CI. STOR-P2 implementation is clean enough for CI verification, with one small test-strengthening review fix applied and no contract or scope blocker found.
 
 PUSHED:
 yes
