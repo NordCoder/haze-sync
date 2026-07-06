@@ -4,192 +4,112 @@
 
 `haze-sync-worktree` is the built-in filesystem adapter for the VPS worktree.
 
-Conceptual position:
+Worktree owns materialized filesystem replica behavior, path-to-file operations, scan/watch planning, export/import mechanics for the local worktree, and filesystem-safe error handling.
 
-```text
-Core/API authoritative state
-  -> Worktree materializer
-  -> local filesystem worktree
-  -> Worktree scanner/import planner
-  -> Core/API write/delete facts
-```
+Worktree does not own Core sync policy, API DTOs, Server route definitions, Storage schema, Google Drive behavior, Obsidian plugin behavior, Deployment automation, or CI workflow policy.
 
-The worktree is a materialized replica, not source of truth.
+## Independent development model
 
-## Upstream dependencies
+`haze-sync-worktree` can be developed independently inside the `component/worktree` branch.
 
-### Required conceptual dependencies
+The dependency map records filesystem adapter contracts and fan-in points. It does not impose a serial implementation order on Core, Server, Storage, adapters, Deployment, or CI.
 
-- `haze-sync-common`
-  - `VaultPath`;
-  - content hash values;
-  - adapter id/mode primitives;
-  - validation vocabulary.
-- `haze-sync-api`
-  - public write/delete/change/conflict/status DTOs;
-  - headers such as idempotency key, content hash, base revision;
-  - safe public error vocabulary.
-- `haze-sync-core`
-  - authoritative safety semantics observed through API outcomes;
-  - no-silent-overwrite and conflict/delete behavior.
-- `haze-sync-storage`
-  - persisted `worktree_state` shape/repositories if integration chooses Storage-backed state.
-- `haze-sync-server`
-  - runtime hosting/composition if Worktree runs inside Server in V1;
-  - API endpoint provider if Worktree communicates over HTTP/internal client boundary.
+Allowed independent work includes:
 
-### Current direct dependencies
+- worktree path normalization and safety checks;
+- scan/watch/materialization planning;
+- filesystem apply/export helpers;
+- local trash/staging mechanics where scoped;
+- worktree status/doctor primitives;
+- tests using temporary directories and safe fixtures.
 
-Current code is placeholder-only and has no crate dependencies beyond workspace/lints.
+If Worktree needs Core apply semantics, Server runtime mounting, Storage metadata, Deployment paths, or CI test support not currently contracted, it reports a contract-change request or fan-in need instead of implementing another component's responsibility.
 
-Future direct dependencies should be added only inside scoped Worktree implementation phases and reflected in this map.
+## Upstream contracts consumed
 
-### External dependency categories that may be needed later
+Worktree may consume:
 
-Potential future dependencies, subject to implementation review:
+- Core input/result contracts for local file changes;
+- Common shared IDs/types where accepted;
+- Server runtime contracts when Worktree is mounted inside server;
+- Deployment path/permission docs as operational configuration, not source-of-truth behavior.
 
-- filesystem walking;
-- temporary directory/test filesystem support;
-- file watching as latency hint;
-- async runtime traits if runtime service is implemented;
-- hashing/IO helpers;
-- HTTP client only if Worktree communicates with Server over public API rather than internal service traits.
+Worktree must not consume:
 
-These must not introduce provider SDKs, direct DB ownership, or hidden background lifecycle.
+- Google Drive provider APIs;
+- Obsidian plugin internals;
+- API DTOs as filesystem policy;
+- Storage internals unless explicitly contracted through Core/Server integration;
+- CI workflow logic.
 
-## Disallowed direct dependencies
+## Downstream contracts exposed
 
-Worktree must not directly depend on:
+Expected downstream consumers:
 
-```text
-haze-gdrive-adapter
-apps/haze-obsidian-plugin
-Google Drive provider SDKs
-Obsidian plugin internals
-SQLx/Storage DB access unless explicitly accepted
-Axum route registration/server startup unless explicitly accepted
-CLI parser/command execution as Worktree logic
-```
+- Server, for built-in Worktree runtime composition;
+- Core, through normalized local incoming changes and apply-result handling;
+- Deployment, for host path and permission requirements;
+- CLI/doctor, indirectly through Server/Core status surfaces;
+- tests and future integration harnesses.
 
-Worktree may use filesystem APIs because local filesystem behavior is the component's core responsibility. Those APIs must be root-contained and path-safe.
+Downstream consumers must not treat Worktree files as hidden source-of-truth metadata.
 
-## Downstream dependents
+## Forbidden dependency directions
 
-Expected downstream dependents:
+Worktree must not:
 
-### `haze-sync-server`
-
-Server may host Worktree runtime in V1.
-
-Server owns:
-
-- startup/shutdown composition;
-- config loading;
-- app lifecycle;
-- status/readiness routing;
-- integration with Storage/API/Core runtime dependencies.
-
-Worktree owns:
-
-- scanner;
-- importer/planner;
-- materializer/writer;
-- echo guard;
-- local trash/repair behavior;
-- worktree-specific status/doctor facts.
-
-### `haze-sync-cli`
-
-CLI may eventually trigger or inspect worktree status, doctor, repair plans, or one-shot scan/materialize operations through Server or direct component APIs when scoped.
-
-CLI owns command UX and confirmation flows.
-
-### E2E tests and deployment/runbooks
-
-E2E tests and runbooks depend on Worktree to materialize one local filesystem view of the vault under the configured VPS path.
+- decide final conflict/delete outcomes outside Core;
+- write hidden metadata that becomes authoritative over Core;
+- call Google Drive or Obsidian APIs;
+- expose raw local paths publicly without safe formatting;
+- hard-delete files outside accepted retention/trash policy;
+- own deployment service layout.
 
 ## Cross-component contracts
 
-### Common ↔ Worktree
+Important Worktree contracts:
 
-- Common owns `VaultPath`, hash, adapter id/mode, and validation semantics.
-- Worktree maps filesystem paths to/from `VaultPath` and must not fork Common validation.
-- Worktree should represent public/internal paths as vault-relative values whenever possible.
-
-### API ↔ Worktree
-
-- API owns request/response/header vocabulary for file writes, deletes, changes, conflicts, and status.
-- Worktree submits facts through API-compatible contracts or internal client traits modeled on API contracts.
-- Worktree must preserve idempotency key, content hash, and base/null-base semantics.
-
-### Core ↔ Worktree
-
-- Core owns conflict/delete/revision policy.
-- Worktree submits local facts and obeys Core/API outcomes.
-- Worktree must not decide overwrite/conflict/delete policy locally.
-
-### Storage ↔ Worktree
-
-- Storage may own persisted `worktree_state` row/repository support.
-- Worktree owns the meaning and use of scan/materialization/dirty/echo state.
-- Direct DB writes from Worktree require explicit architecture approval; Server-mediated access is preferred unless a later decision changes this.
-
-### Server ↔ Worktree
-
-- Server may host Worktree runtime through explicit fan-in.
-- Server owns process lifecycle, config loading, and route/status exposure.
-- Worktree owns runtime behavior internals.
-- Server must not reimplement Worktree scanner/materializer logic.
-
-### GDrive/Obsidian ↔ Worktree
-
-- Worktree must not depend on Google Drive or Obsidian internals.
-- Worktree and those adapters meet through Core/API authoritative state, not direct peer synchronization.
+- Worktree is a materialized view, not the source of truth;
+- path handling must be safe and repository/vault-bound;
+- local file changes are normalized before Core submission;
+- Core apply results determine final local materialization behavior;
+- scans provide correctness; watchers provide latency;
+- filesystem errors are safe to report publicly.
 
 ## Integration/fan-in ownership
 
-The following work belongs to Server or cross-component fan-in phases, not Worktree leaf phases alone:
+Fan-in is required when:
 
-- hosting Worktree runtime inside Server;
-- wiring Worktree status into `/ready` or admin/status routes;
-- persisting worktree state through Storage repositories;
-- E2E tests across Server/Core/API/Storage/Worktree;
-- deployment path provisioning and permissions;
-- operational runbook updates for worktree repair or rollback.
+- Core input/apply-result contracts change;
+- Server mounts Worktree runtime services;
+- Deployment provisions worktree directories/permissions;
+- Storage/Core need durable mapping or cursor behavior;
+- CLI/doctor exposes Worktree health.
+
+These are integration gates. They do not block independent Worktree work inside its component boundary.
 
 ## Dependency rules
 
-- Worktree may own filesystem logic only inside the configured root.
-- Worktree must not write directly to Core database tables unless explicitly accepted.
-- Worktree must not call Google Drive or Obsidian APIs.
-- Worktree must not decide conflict/delete policy locally.
-- Watchers may improve latency but scans remain the correctness mechanism.
-- Any dependency addition must be justified by the implementation phase and reflected here.
+- Worktree owns filesystem mechanics, not sync authority.
+- Worktree submits normalized changes to Core rather than deciding overwrites.
+- Worktree path safety must be local and strict.
+- Worktree tests should not require GDrive, Obsidian, or production deployment state.
+- Operational paths are configured by Deployment; Worktree validates and uses them safely.
 
 ## Contract-change notes
 
 Current known contract questions:
 
-1. Worktree state persistence boundary
-   - Storage has `worktree_state` row shape.
-   - Worktree may need repository access through Server or direct internal traits.
-   - Direct DB ownership is not assumed by default.
+1. Runtime mounting
+   - Server owns composition; Worktree owns filesystem behavior.
+   - Missing mounting contracts are Server/Worktree fan-in points.
 
-2. Server-hosted runtime boundary
-   - V1 architecture allows Worktree runtime inside Server.
-   - Worktree logic must remain in Worktree crate.
-   - Server integration requires a dedicated fan-in phase.
+2. Local delete/trash behavior
+   - Worktree can implement mechanics.
+   - Core owns delete/tombstone policy.
 
-3. Reserved path policy
-   - Worktree needs reserved directories for temp/trash/echo/runtime metadata.
-   - Core conflict materialization uses `_haze_conflicts/**` and should not be accidentally ignored if it must be materialized.
+3. Scan/watch guarantees
+   - Worktree can independently implement foundations.
+   - Integration tests later verify end-to-end behavior with Core/Server.
 
-4. Symlink policy
-   - Default should be conservative: do not follow symlinks unless explicitly accepted.
-   - This affects scanner and path escape safety.
-
-5. Local trash/retention semantics
-   - Worktree delete behavior must align with Core tombstones and system retention policy.
-   - Immediate hard delete is out of scope without future contract.
-
-No immediate blocking contract change is required for the current documentation/planning pass.
+No serial implementation dependency is implied by this map.
