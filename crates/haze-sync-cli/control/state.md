@@ -2,7 +2,7 @@
 
 component: cli
 branch: component/cli
-status: PROMPT_READY
+status: REPORT_READY
 
 active_prompt: crates/haze-sync-cli/control/prompt.md
 active_report: crates/haze-sync-cli/control/report.md
@@ -12,7 +12,7 @@ wave: W1
 phase: CLI-P2C
 
 implementation_status: SELF_ACCEPT_PENDING_CI
-clean_review_status: NOT_STARTED
+clean_review_status: CLEAN_ACCEPT_PENDING_CI
 ci_status: CI_UNKNOWN
 architect_status: ARCHITECT_ACCEPT
 
