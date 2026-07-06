@@ -2,19 +2,19 @@
 
 component: api
 branch: component/api
-status: REPORT_READY
+status: PROMPT_READY
 
 active_prompt: crates/haze-sync-api/control/prompt.md
 active_report: crates/haze-sync-api/control/report.md
-active_agent_role: clean-code-reviewer
+active_agent_role: implementation-worker
 
-wave: T0
-phase: T0-P2C
+wave: W1
+phase: API-P2
 
-implementation_status: SELF_ACCEPT_PENDING_CI
-clean_review_status: CLEAN_ACCEPT_PENDING_CI
+implementation_status: NOT_STARTED
+clean_review_status: NOT_STARTED
 ci_status: CI_UNKNOWN
-architect_status: NOT_REQUIRED
+architect_status: ARCHITECT_ACCEPT
 
-last_archived_prompt: crates/haze-sync-api/control/log/20260705-000000Z-T0-P2-implementation-prompt.md
-last_archived_report: crates/haze-sync-api/control/log/20260705-000000Z-T0-P2-implementation-report.md
+last_archived_prompt: archived
+last_archived_report: archived
