@@ -13,6 +13,8 @@ pub const REDACTED: &str = "[REDACTED]";
 ///
 /// The wrapped value is intentionally accessible only through explicitly named
 /// sensitive accessors. Formatting this type never prints the wrapped value.
+/// The type intentionally does not implement serialization or secret lifecycle
+/// behavior such as hashing, verification, loading, persistence, or rotation.
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub struct SecretString(String);
 
@@ -80,7 +82,7 @@ mod tests {
 
         let formatted = format!("{secret:?}");
 
-        assert!(formatted.contains(REDACTED));
+        assert_eq!(formatted, format!("SecretString(\"{REDACTED}\")"));
         assert!(!formatted.contains(raw_value));
     }
 
@@ -93,5 +95,24 @@ mod tests {
 
         assert_eq!(formatted, REDACTED);
         assert!(!formatted.contains(raw_value));
+    }
+
+    #[test]
+    fn sensitive_accessors_are_explicit() {
+        let raw_value = "fixture_secret_value";
+        let secret = SecretString::from(raw_value);
+
+        assert_eq!(secret.as_sensitive_str(), raw_value);
+        assert!(!secret.is_empty());
+        assert_eq!(secret.into_sensitive_string(), raw_value);
+    }
+
+    #[test]
+    fn empty_secret_still_redacts_when_formatted() {
+        let secret = SecretString::from(String::new());
+
+        assert!(secret.is_empty());
+        assert_eq!(secret.to_string(), REDACTED);
+        assert_eq!(format!("{secret:?}"), format!("SecretString(\"{REDACTED}\")"));
     }
 }
