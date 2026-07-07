@@ -20,13 +20,78 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-      - name: Check formatting
-        run: cargo fmt --check
-      - name: Check workspace
-        run: cargo check --workspace
-      - name: Run tests
-        run: cargo test --workspace
-      - name: Run clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Rust diagnostics
+        shell: bash
+        run: |
+          set +e
+          mkdir -p ci-diagnostics
+
+          {
+            echo "workflow=${GITHUB_WORKFLOW}"
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "run_attempt=${GITHUB_RUN_ATTEMPT}"
+            echo "sha=${GITHUB_SHA}"
+            echo "ref=${GITHUB_REF}"
+            echo "event=${GITHUB_EVENT_NAME}"
+          } > ci-diagnostics/metadata.txt
+
+          {
+            echo '$ cargo fmt --all --check'
+            cargo fmt --all --check
+            fmt_status=$?
+            echo "fmt_status=${fmt_status}"
+            echo '$ cargo fmt --all'
+            cargo fmt --all
+            fmt_apply_status=$?
+            echo "fmt_apply_status=${fmt_apply_status}"
+          } > ci-diagnostics/fmt.log 2>&1
+
+          git diff -- . > ci-diagnostics/rustfmt.patch || true
+          git checkout -- . || true
+
+          {
+            echo '$ cargo check --workspace'
+            cargo check --workspace
+            check_status=$?
+            echo "check_status=${check_status}"
+          } > ci-diagnostics/check.log 2>&1
+
+          {
+            echo '$ cargo test --workspace'
+            cargo test --workspace
+            test_status=$?
+            echo "test_status=${test_status}"
+          } > ci-diagnostics/test.log 2>&1
+
+          {
+            echo '$ cargo clippy --workspace --all-targets -- -D warnings'
+            cargo clippy --workspace --all-targets -- -D warnings
+            clippy_status=$?
+            echo "clippy_status=${clippy_status}"
+          } > ci-diagnostics/clippy.log 2>&1
+
+          {
+            echo "fmt_status=${fmt_status}"
+            echo "fmt_apply_status=${fmt_apply_status}"
+            echo "check_status=${check_status}"
+            echo "test_status=${test_status}"
+            echo "clippy_status=${clippy_status}"
+          } >> ci-diagnostics/metadata.txt
+
+          if [ "${fmt_status}" -ne 0 ] || [ "${fmt_apply_status}" -ne 0 ] || [ "${check_status}" -ne 0 ] || [ "${test_status}" -ne 0 ] || [ "${clippy_status}" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Upload CI diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: component-ci-diagnostics
+          path: ci-diagnostics/
+          retention-days: 3
+          compression-level: 9
+          if-no-files-found: error
