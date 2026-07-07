@@ -35,6 +35,17 @@ Summary: Audited the existing explicit router/state/auth/error boundary and hard
 Status: SELF_ACCEPT_PENDING_CI
 Follow-ups: Run `cargo fmt --check`, `cargo check -p haze-sync-server`, `cargo test -p haze-sync-server`, and `cargo clippy -p haze-sync-server --all-targets -- -D warnings` in CI or a shell-capable environment.
 
+### 2026-07-07 — W1/SRV-P3
+
+Agent: implementation-worker
+Branch: component/server
+Prompt: crates/haze-sync-server/control/prompt.md
+Report: crates/haze-sync-server/control/report.md
+Commit(s): component/server SRV-P3 startup commits
+Summary: Replaced the scaffold-only server binary with explicit production-like startup. The binary now loads the existing env config contract, prepares the object-store root, connects a PostgreSQL pool through the DB helper, builds `ServerAppState`, binds an Axum listener, serves the existing router, and shuts down on Ctrl-C. Startup errors remain sanitized, route semantics are unchanged, and repository migrations are explicitly not auto-run during startup. Added `tokio` as a normal server runtime dependency because listener/shutdown code cannot compile with `tokio` only in dev-dependencies.
+Status: SELF_ACCEPT_PENDING_CI
+Follow-ups: Run `cargo fmt --check`, `cargo check -p haze-sync-server`, `cargo test -p haze-sync-server`, and `cargo clippy -p haze-sync-server --all-targets -- -D warnings` in CI or a shell-capable environment. Review the Cargo dependency scope expansion during clean-code review.
+
 ---
 
 Use this format for future entries:
