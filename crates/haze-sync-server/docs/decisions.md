@@ -234,3 +234,41 @@ Affected contracts:
 - conflict routes;
 - admin routes;
 - future SRV-P4/SRV-P5/SRV-P6 work.
+
+## 2026-07-07 — SRV-P3 startup is explicit and does not auto-run migrations
+
+Decision:
+
+The server binary may start a production-like Axum listener from environment configuration, but startup remains explicit and limited:
+
+- load `ServerConfig` from the existing environment variable contract;
+- prepare the configured local object-store root;
+- connect a PostgreSQL pool through the existing DB helper;
+- build `ServerAppState` directly from the loaded config and pool;
+- serve the existing router with graceful Ctrl-C shutdown;
+- do not auto-run repository migrations during startup.
+
+Rationale:
+
+A real listener is required for local/prod-like operation, but hidden migration execution can change persistent state at process boot. Migration policy remains an operator/future-contract decision rather than implicit server startup behavior.
+
+Alternatives:
+
+- Keep the binary as a scaffold-only router constructor; rejected because SRV-P3 requires production startup.
+- Auto-run migrations at startup; rejected because the current plan lists automatic migration behavior as a contract-change trigger unless accepted by policy.
+- Start adapter loops or provider runtimes with the listener; rejected as out of scope for SRV-P3.
+
+Consequences:
+
+- Startup failures use sanitized `StartupError` messages.
+- Route semantics remain unchanged because the existing router is mounted with explicit state.
+- Operators must still run migrations through an explicit migration entry point until a later accepted policy changes that behavior.
+
+Affected contracts:
+
+- main binary startup;
+- config;
+- db;
+- state;
+- routes;
+- future deployment/runbook work.
