@@ -1,0 +1,146 @@
+import { sanitizeStatusMessage } from "../status";
+
+import { ErrorResponseDto } from "./types";
+
+export type ApiErrorCategory =
+  | "offline"
+  | "unauthorized"
+  | "forbidden"
+  | "not_found"
+  | "conflict"
+  | "rejected"
+  | "rate_limited"
+  | "server_unavailable"
+  | "invalid_response"
+  | "internal";
+
+export interface SafeApiErrorSummary {
+  category: ApiErrorCategory;
+  message: string;
+  status?: number;
+  endpoint?: string;
+}
+
+export class ApiClientError extends Error {
+  readonly category: ApiErrorCategory;
+  readonly status?: number;
+  readonly endpoint?: string;
+
+  constructor(summary: SafeApiErrorSummary) {
+    super(summary.message);
+    this.name = "ApiClientError";
+    this.category = summary.category;
+    this.status = summary.status;
+    this.endpoint = summary.endpoint;
+  }
+
+  toSafeSummary(): SafeApiErrorSummary {
+    return {
+      category: this.category,
+      message: this.message,
+      status: this.status,
+      endpoint: this.endpoint,
+    };
+  }
+}
+
+export function mapHttpStatusToCategory(status: number): ApiErrorCategory {
+  if (status === 401) {
+    return "unauthorized";
+  }
+  if (status === 403) {
+    return "forbidden";
+  }
+  if (status === 404) {
+    return "not_found";
+  }
+  if (status === 409) {
+    return "conflict";
+  }
+  if (status === 422) {
+    return "rejected";
+  }
+  if (status === 429) {
+    return "rate_limited";
+  }
+  if (status >= 500) {
+    return "server_unavailable";
+  }
+
+  return "internal";
+}
+
+export function createHttpError(status: number, endpoint: string, payload: unknown): ApiClientError {
+  return new ApiClientError({
+    category: mapHttpStatusToCategory(status),
+    status,
+    endpoint,
+    message: safeErrorMessage(status, payload),
+  });
+}
+
+export function createInvalidResponseError(endpoint: string): ApiClientError {
+  return new ApiClientError({
+    category: "invalid_response",
+    endpoint,
+    message: "Server returned an invalid response.",
+  });
+}
+
+export function createOfflineError(endpoint: string): ApiClientError {
+  return new ApiClientError({
+    category: "offline",
+    endpoint,
+    message: "Could not reach Haze Sync Server.",
+  });
+}
+
+function safeErrorMessage(status: number, payload: unknown): string {
+  const responseMessage = readErrorResponseMessage(payload);
+  if (responseMessage !== undefined) {
+    return sanitizeStatusMessage(responseMessage);
+  }
+
+  switch (mapHttpStatusToCategory(status)) {
+    case "unauthorized":
+      return "Authentication failed. Check the adapter token.";
+    case "forbidden":
+      return "This adapter is not allowed to perform the requested operation.";
+    case "not_found":
+      return "The requested file or resource was not found.";
+    case "conflict":
+      return "The server rejected the request because it conflicts with current state.";
+    case "rejected":
+      return "The server rejected the request.";
+    case "rate_limited":
+      return "The server asked the plugin to slow down.";
+    case "server_unavailable":
+      return "Haze Sync Server is unavailable.";
+    case "offline":
+    case "invalid_response":
+    case "internal":
+      return "Haze Sync request failed.";
+  }
+}
+
+function readErrorResponseMessage(payload: unknown): string | undefined {
+  if (!isErrorResponse(payload)) {
+    return undefined;
+  }
+
+  return payload.error.message;
+}
+
+function isErrorResponse(payload: unknown): payload is ErrorResponseDto {
+  if (typeof payload !== "object" || payload === null || !("error" in payload)) {
+    return false;
+  }
+
+  const error = (payload as { error: unknown }).error;
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof (error as { message: unknown }).message === "string"
+  );
+}
