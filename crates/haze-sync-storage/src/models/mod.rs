@@ -311,9 +311,11 @@ mod tests {
         assert_eq!(serialized["display_name"], "Test Adapter");
         assert_eq!(serialized["role"], "worktree_adapter");
         assert_eq!(serialized["token_hash"], "token-hash");
-        assert!(serialized["enabled"]
-            .as_bool()
-            .expect("enabled should serialize as bool"));
+        assert!(
+            serialized["enabled"]
+                .as_bool()
+                .expect("enabled should serialize as bool")
+        );
         assert!(serialized["last_seen_at"].is_null());
 
         let roundtrip: SyncAdapterRow =
