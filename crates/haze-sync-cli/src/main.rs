@@ -32,9 +32,11 @@ fn render_command(command: commands::CliCommand) -> output::CliOutput {
         commands::CliCommand::Status => output::CliOutput::success(
             "status command parsed; live server calls remain unavailable",
         ),
-        commands::CliCommand::Adapters(commands::AdaptersCommand::List) => output::CliOutput::success(
-            "adapters list command parsed; live server calls remain unavailable",
-        ),
+        commands::CliCommand::Adapters(commands::AdaptersCommand::List) => {
+            output::CliOutput::success(
+                "adapters list command parsed; live server calls remain unavailable",
+            )
+        }
         commands::CliCommand::Doctor(command) => {
             let report = command.build_offline_report();
             output::CliOutput::success(doctor::render_text_summary(&report))
