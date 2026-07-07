@@ -2,12 +2,9 @@ name: Component CI
 
 on:
   push:
-    branches:
-      - 'component/**'
-      - 'process/**'
+    branches: ['component/**', 'process/**']
   pull_request:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -22,11 +19,27 @@ jobs:
         uses: actions/checkout@v4
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-      - name: Check formatting
-        run: cargo fmt --check
-      - name: Check workspace
-        run: cargo check --workspace
-      - name: Run tests
-        run: cargo test --workspace
-      - name: Run clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Rust diagnostics
+        shell: bash
+        run: |
+          set +e
+          mkdir -p ci-diagnostics
+          printf 'workflow=%s\nrun_id=%s\nrun_attempt=%s\nsha=%s\nref=%s\nevent=%s\n' "$GITHUB_WORKFLOW" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_SHA" "$GITHUB_REF" "$GITHUB_EVENT_NAME" > ci-diagnostics/metadata.txt
+          cargo fmt --all --check > ci-diagnostics/fmt.log 2>&1; fmt_status=$?
+          cargo fmt --all >> ci-diagnostics/fmt.log 2>&1; fmt_apply_status=$?
+          git diff -- . > ci-diagnostics/rustfmt.patch || true
+          git checkout -- . || true
+          cargo check --workspace > ci-diagnostics/check.log 2>&1; check_status=$?
+          cargo test --workspace > ci-diagnostics/test.log 2>&1; test_status=$?
+          cargo clippy --workspace --all-targets -- -D warnings > ci-diagnostics/clippy.log 2>&1; clippy_status=$?
+          printf 'fmt_status=%s\nfmt_apply_status=%s\ncheck_status=%s\ntest_status=%s\nclippy_status=%s\n' "$fmt_status" "$fmt_apply_status" "$check_status" "$test_status" "$clippy_status" >> ci-diagnostics/metadata.txt
+          if [ "$fmt_status" -ne 0 ] || [ "$fmt_apply_status" -ne 0 ] || [ "$check_status" -ne 0 ] || [ "$test_status" -ne 0 ] || [ "$clippy_status" -ne 0 ]; then exit 1; fi
+      - name: Upload CI diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: component-ci-diagnostics
+          path: ci-diagnostics/
+          retention-days: 3
+          compression-level: 9
+          if-no-files-found: error
