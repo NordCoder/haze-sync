@@ -1,12 +1,12 @@
 REPORT_TYPE:
-CLEAN_CODE_REVIEW
+IMPLEMENTATION
 
 STATUS:
-CLEAN_ACCEPT_PENDING_CI
+SELF_ACCEPT_PENDING_CI
 
 AGENT:
-role: clean-code-reviewer
-agent_execution_id: W1-persistent-cli-CLI-P2C
+role: implementation-worker
+agent_execution_id: W1-persistent-cli-CLI-FMT
 chat_name: W1 persistent — cli
 
 COMPONENT:
@@ -21,31 +21,21 @@ control_report_path: crates/haze-sync-cli/control/report.md
 
 WAVE:
 id: W1
-phase_id: CLI-P2C
-dependency_status: implementation report was SELF_ACCEPT_PENDING_CI; clean-code review did not find a contract or code blocker
+phase_id: CLI-FMT
+dependency_status: active prompt requested Rust source formatting only
 
 SUMMARY:
-Reviewed the W1 CLI-P2 parser/output implementation. The current code keeps CLI behavior dependency-free and side-effect-free, routes current commands through an explicit top-level command model, separates stdout/stderr/exit-code rendering through CliOutput, avoids raw argument echo in parse errors, and preserves the no-live-call/no-mutation/non-provider non-goals. No small review fix was required in this pass. Final status remains pending shell/CI verification because this GitHub connector cannot run cargo commands.
+Executed the CLI-FMT prompt. Reviewed CLI Rust source files and applied a small formatting-only change to crates/haze-sync-cli/src/main.rs so the long adapters match arm is formatted as a block-style arm. No docs, workflows, sibling components, prompt/state files, or non-Rust files were edited. Shell rustfmt could not be run through the GitHub connector, so the result remains pending CI/shell verification.
 
 CHANGED_FILES:
-This clean-code review changed:
-- crates/haze-sync-cli/control/report.md
-
-Reviewed implementation files:
-- crates/haze-sync-cli/src/commands.rs
-- crates/haze-sync-cli/src/doctor.rs
 - crates/haze-sync-cli/src/main.rs
-- crates/haze-sync-cli/src/output.rs
-- crates/haze-sync-cli/docs/decisions.md
-- crates/haze-sync-cli/docs/implementation-log.md
-
-Branch diff against current main also includes earlier component planning/control files and a workflow file. This clean-code pass did not edit workflow files or sibling components.
+- crates/haze-sync-cli/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/cli
 base_branch: main
-base_sha: main currently resolved by compare_commits to 1a82bea5c87953db378e5e03429326df38320ee8
-head_sha: not directly exposed before report overwrite by the available compare response; this report write creates the final review commit
+base_sha: current main resolved by compare_commits to c51af7baba0c5869c7837b7ce2f0825a03d02374 during this run
+head_sha: c2a8195077ab9d57d01d935771f84c23ea9d78c4 before report write; report write creates the final head commit
 merge_base: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2 observed through GitHub compare
 default_branch_modified: no
 sibling_branch_modified: no
@@ -54,55 +44,50 @@ control_report_written: yes
 control_files_archived_by_worker: no
 
 SCOPE:
-allowed_files_only: yes for this clean-code review pass
+allowed_files_only: yes
 scope_expansion_used: no
 scope_expansion_rationale: none
 cross_component_changes: none
 forbidden_files_touched: none
 
 CONTRACT:
-contract_read: yes
-contract_satisfied: yes
+contract_read: not required by the short active prompt; no contract-relevant behavior was changed
+contract_satisfied: no product behavior changed
 contract_changes_requested: none
 contract_change_rationale: none
 affected_components: cli only
 
 IMPLEMENTATION_OR_REVIEW:
 completed:
-- Reviewed parser command model for current root/status/adapters/doctor behavior.
-- Reviewed output model for stdout/stderr/exit-code separation.
-- Reviewed parse error rendering for raw argument echo risk.
-- Reviewed non-goals: no live server calls, no config loading, no provider calls, no repair/mutation behavior, no Server/API/Core/Storage edits.
-- Reviewed implementation report honesty against code and connector limitations.
+- Read current control state and active prompt.
+- Reviewed CLI Rust source formatting.
+- Reflowed the long adapters match arm in main.rs into a block-style arm.
 main_changes:
-- No product code changes made by this clean-code review.
+- Formatting-only change in crates/haze-sync-cli/src/main.rs.
 behavior_changes:
-- None in this clean-code review.
+- none
 bugs_found:
-- None requiring a code fix in CLI-P2 implementation.
+- none
 bugs_fixed:
-- None.
+- none
 cleanups_made:
-- None; code was accepted as-is for this review pass.
+- rustfmt-style formatting cleanup in main.rs
 non_goals_preserved:
-- No live server calls.
-- No config loading.
-- No provider calls.
-- No repair or mutation behavior.
-- No Server/API/Core/Storage edits.
+- no docs edits
+- no workflow edits
+- no prompt/state edits
+- no sibling component edits
+- no product behavior changes
 deferred_work:
-- Run cargo fmt/check/test/clippy in CI or an environment with shell access.
-- Orchestrator should account for branch divergence from current main before merge readiness.
-- Future phases still own config/source handling, live status/adapters, live doctor, bootstrap/admin/destructive workflows, and stable machine-readable output.
+- Run cargo fmt --check in an environment with shell access.
+- Run normal CLI cargo check/test/clippy or CI.
 
 TESTS_AND_CHECKS:
 checks_run:
-- Read active control state and prompt from component/cli.
-- Read previous W1 CLI-P2 implementation report before overwriting it.
-- Read CLI component contract and CLI-P2 implementation-plan section.
-- Read and reviewed modified CLI source files through GitHub connector.
+- Read crates/haze-sync-cli/control/state.md.
+- Read crates/haze-sync-cli/control/prompt.md.
+- Read CLI Rust source files under crates/haze-sync-cli/src/.
 - Compared component/cli against current main through GitHub compare_commits.
-- Searched repository for stale parse_cli_args references.
 checks_not_run:
 - cargo fmt --check: not run; GitHub connector does not provide shell execution.
 - cargo check -p haze-sync-cli: not run; GitHub connector does not provide shell execution.
@@ -121,17 +106,17 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- Branch is diverged from current main: compare_commits reported ahead_by 27, behind_by 5, and merge_base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2. This worker did not merge, rebase, reset, cherry-pick, force-push, or update refs.
-- Shell checks and CI were not available/observed in this connector-only worker environment.
+- Shell formatting could not be executed through the GitHub connector.
+- Branch is still diverged from current main; this worker did not merge/rebase/reset/cherry-pick/force-push/update refs.
 
 BLOCKERS:
-none for clean-code acceptance; CI/shell verification and branch divergence handling remain orchestrator/CI follow-up items
+none for formatting-only implementation; shell/CI verification remains pending
 
 NEXT_RECOMMENDED_AGENT:
 orchestrator
 
 FINAL_VERDICT:
-CLEAN_ACCEPT_PENDING_CI. The CLI-P2 implementation is clean-code accepted within component scope, contract boundaries are preserved, no code blocker or contract-change request was found, and the next step is orchestrator verification plus CI/shell checks.
+SELF_ACCEPT_PENDING_CI. CLI-FMT formatting-only prompt was completed within scope, with no behavior changes and no contract change request.
 
 PUSHED:
 yes
