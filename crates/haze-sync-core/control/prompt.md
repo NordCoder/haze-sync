@@ -1,43 +1,27 @@
-# W1-CORE-P2C — Core clean-code review
+# W1-FIX-CORE-FMT
 
 Component: core
-Component path: crates/haze-sync-core
+Path: crates/haze-sync-core
 Branch: component/core
-Base branch: main
-Target branch: main
+Role: fixer-worker
 
-## Role
+Use only the GitHub connector. Do not use SSH/local git. Do not open PR. Do not merge.
 
-You are a Clean-Code Reviewer for NordCoder/haze-sync.
+Context: PR #43 Component CI failed at `cargo fmt --check`. `cargo check`, `cargo test`, and `cargo clippy` were skipped.
 
-Work only through the GitHub connector. Do not use SSH/local git. Do not open PR. Do not merge.
+Task: fix only formatting issues in core-owned Rust files. Make the smallest rustfmt-equivalent edits. Do not change behavior, public API, docs semantics, workflow files, or sibling components.
 
-## Read
-
-- report-template.md from ChatGPT Project Sources
-- clean-code-reviewer-prompt.md from ChatGPT Project Sources
-- docs-process/docs/development-model.md
+Read:
 - crates/haze-sync-core/control/state.md
-- crates/haze-sync-core/control/report.md as the W1 CORE-P2 implementation report before overwriting it
-- crates/haze-sync-core/docs/component-contract.md
-- crates/haze-sync-core/docs/implementation-plan.md
-- crates/haze-sync-core/docs/dependency-map.md
-- changed files in component/core against main
+- crates/haze-sync-core/control/report.md
+- PR #43 changed files / compare main...component/core
+- failed Component CI job steps/logs if available
 
-## Task
-
-Review W1 CORE-P2 implementation. Verify public Core module surface, rustdoc/test quality, serialization safety, no runtime/dependency creep, and report honesty.
-
-## Allowed files
-
-- crates/haze-sync-core/src/** only for small review fixes
-- crates/haze-sync-core/docs/** only for small review fixes
+Allowed files:
+- crates/haze-sync-core/src/**/*.rs
 - crates/haze-sync-core/control/report.md
 
-Do not edit sibling components. Do not edit workflow files.
+If exact formatting cannot be determined safely through connector-only work, write BLOCKED_BY_TOOLING in the report.
 
-## Report
-
-Replace crates/haze-sync-core/control/report.md with CLEAN_CODE_REVIEW report.
-
-Expected status: CLEAN_ACCEPT_PENDING_CI, CLEAN_NEEDS_FIX, or BLOCKED_BY_CONTRACT.
+Replace control/report.md with a FIXER report.
+Expected status: SELF_ACCEPT_PENDING_CI or BLOCKED_BY_TOOLING.
