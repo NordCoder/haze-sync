@@ -155,7 +155,10 @@ pub struct RuntimeIntervals {
 }
 
 impl RuntimeIntervals {
-    pub fn new(poll_interval: Duration, full_scan_interval: Duration) -> Result<Self, ConfigError> {
+    pub fn new(
+        poll_interval: Duration,
+        full_scan_interval: Duration,
+    ) -> Result<Self, ConfigError> {
         if poll_interval.is_zero() {
             return Err(ConfigError::invalid(
                 ENV_POLL_INTERVAL_SECONDS,
@@ -197,7 +200,10 @@ pub struct DeleteSafetyConfig {
 }
 
 impl DeleteSafetyConfig {
-    pub fn new(max_deletes_per_run: u32, max_delete_ratio_percent: u8) -> Result<Self, ConfigError> {
+    pub fn new(
+        max_deletes_per_run: u32,
+        max_delete_ratio_percent: u8,
+    ) -> Result<Self, ConfigError> {
         if max_delete_ratio_percent > 100 {
             return Err(ConfigError::invalid(
                 ENV_MAX_DELETE_RATIO_PERCENT,
@@ -371,7 +377,8 @@ fn validate_server_url(server_url: &str) -> Result<(), ConfigError> {
 }
 
 fn validate_drive_root_folder_id(drive_root_folder_id: &str) -> Result<(), ConfigError> {
-    let has_path_separator = drive_root_folder_id.contains('/') || drive_root_folder_id.contains('\\');
+    let has_path_separator =
+        drive_root_folder_id.contains('/') || drive_root_folder_id.contains('\\');
     if has_path_separator || drive_root_folder_id.chars().any(char::is_whitespace) {
         return Err(ConfigError::invalid(
             ENV_DRIVE_ROOT_FOLDER_ID,
@@ -451,7 +458,9 @@ mod tests {
             source.insert(ENV_ADAPTER_TOKEN, "adapter-token");
             source.insert(ENV_DRIVE_ROOT_FOLDER_ID, "driveRoot123");
             source.insert(ENV_OAUTH_TOKEN_FILE, "/run/secrets/gdrive-oauth-token.json");
-            source.existing_files.insert("/run/secrets/gdrive-oauth-token.json".to_owned());
+            source
+                .existing_files
+                .insert("/run/secrets/gdrive-oauth-token.json".to_owned());
             source
         }
 
