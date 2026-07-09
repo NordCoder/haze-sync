@@ -1,88 +1,76 @@
-# W1-FIX-COMMON-CI — Common CI fix
+# W1-CMM-P3 — VaultPath contract hardening
 
 Component: common
 Path: crates/haze-sync-common
 Branch: component/common
 PR: #46
-Role: fixer-worker
+Role: implementation-worker
 
-Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review.
+Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-Component CI completed with failure for the current PR head.
+CMM-P2 and its CI fixer loop are complete. Current Component CI is green for the current PR head.
 
 - workflow: Component CI
-- workflow_run_id: 29003617374
-- run_number: 407
-- run_attempt: 1
-- artifact_id: 8192610322
-- artifact_name: ci-diag__component-common__wf-component-ci__run-29003617374__attempt-1
-- known failed check: rust-fmt
+- workflow_run_id: 29006921208
+- run_number: 459
+- conclusion: success
+
+The next implementation phase is CMM-P3 from crates/haze-sync-common/docs/implementation-plan.md.
 
 ## Read
 
-Read all required sources before editing:
+Read before editing:
 
 - implementation-manifest.md from ChatGPT Project Sources
 - report-template.md from ChatGPT Project Sources
+- implementation-worker-prompt.md from ChatGPT Project Sources
+- chatgpt-gh-connector.md from ChatGPT Project Sources
 - crates/haze-sync-common/docs/component-contract.md
 - crates/haze-sync-common/docs/implementation-plan.md
+- crates/haze-sync-common/docs/implementation-log.md
 - crates/haze-sync-common/docs/dependency-map.md
 - crates/haze-sync-common/control/prompt.md
 - crates/haze-sync-common/control/report.md
-- current PR diff and relevant current repository code
+- relevant current repository code and PR diff
 
-Use the GitHub connector to download and read the diagnostics artifact listed above.
-
-Read inside the artifact:
-
-- ci-diagnostics/summary.md
-- ci-diagnostics/manifest.json
-- every log listed in failed_checks
-
-Do not ask Orchestrator to paste raw logs. If the artifact is missing, expired, or malformed, report FIX_BLOCKED_BY_LOGS.
+Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
 
 ## Task
 
-Fix the minimum cause of the CI failure.
+Implement CMM-P3: VaultPath contract hardening.
 
-Expected scope is rustfmt-equivalent formatting only in common-owned Rust files.
+Follow the implementation plan:
+
+- expand reserved path and invalid path test matrix;
+- verify encoded/traversal/null-byte-like inputs cannot bypass validation;
+- verify Windows and Unix escape forms are rejected;
+- decide whether reserved conflict materialization paths are syncable or reserved;
+- document the decision if clarified;
+- avoid filesystem-specific behavior beyond string/path validation.
 
 ## Allowed files
 
-- crates/haze-sync-common/**/*.rs
+- crates/haze-sync-common/src/path.rs
+- crates/haze-sync-common/src/error.rs
+- crates/haze-sync-common/docs/**
 - crates/haze-sync-common/control/report.md
 
-## Forbidden changes
+## Non-goals
 
-- Do not change behavior.
-- Do not change public API semantics.
-- Do not change component docs or contracts.
-- Do not change workflow files.
-- Do not change sibling components.
-- Do not delete tests.
+- No runtime behavior.
+- No sibling crate edits.
+- No provider-specific path exceptions.
+- No Core/API/Storage/Server behavior.
+- No workflow changes.
 
-If the diagnostics reveal a non-formatting issue, fix it only if it is inside common scope and required for CI. Otherwise report the appropriate blocker.
+## CI trigger policy
 
-## Checks
-
-Run or observe the failing check again if possible through available tooling.
-
-If you cannot run shell commands, say so in the report. Do not claim checks passed unless you actually ran them or observed CI metadata.
+Follow the CI skip policy in implementation-manifest.md and the relevant Project Source worker prompt. Product, test, dependency, contract, workflow, and implementation commits must not skip CI.
 
 ## Report
 
 Write only the report to crates/haze-sync-common/control/report.md.
 
-Use report-template.md.
-
-Set REPORT_TYPE to FIX.
-
-Use one of:
-
-- FIX_COMPLETE
-- FIX_NEEDS_MORE
-- FIX_BLOCKED_BY_LOGS
-- FIX_BLOCKED_BY_CONTRACT
-- FIX_BLOCKED_BY_TOOLING
+Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION.
