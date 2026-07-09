@@ -346,10 +346,18 @@ fn request_fingerprint(
             .map(RevisionId::as_str)
             .unwrap_or("null"),
         "content_sha256": request.content_sha256().to_string(),
+        "body_sha256": body_content_hash(request.body()).to_string(),
         "adapter_id": principal.adapter_id(),
         "scope": "adapter",
     });
     RequestFingerprint::from_safe_json_metadata(&metadata)
+}
+
+fn body_content_hash(bytes: &[u8]) -> ContentHash {
+    let digest = Sha256Digest::digest(bytes);
+    let mut hash_bytes = [0_u8; 32];
+    hash_bytes.copy_from_slice(&digest);
+    ContentHash::from_bytes(hash_bytes)
 }
 
 async fn read_existing_idempotency(
