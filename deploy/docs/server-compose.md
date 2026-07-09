@@ -22,6 +22,10 @@ Rationale:
 - container health checks can use the accepted `/health` route;
 - production binary/systemd and reverse-proxy/TLS examples remain separate future deployment phases.
 
+The Docker build uses the repository `Cargo.lock` through `cargo build --release --locked -p haze-sync-server` so dependency resolution cannot silently change during image builds.
+
+`deploy/server.Dockerfile.dockerignore` keeps local secrets, `.env` files, `.git`, build outputs, dependency caches, logs, dumps, backups, archives, and OS/editor noise out of the server image build context while preserving tracked placeholder examples such as `.env.example`.
+
 ## Service topology
 
 Current local topology:
