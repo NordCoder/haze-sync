@@ -275,7 +275,11 @@ impl ProviderError {
     }
 
     pub const fn not_found(operation: &'static str) -> Self {
-        Self::new(operation, ProviderErrorCategory::NotFound, "provider item not found")
+        Self::new(
+            operation,
+            ProviderErrorCategory::NotFound,
+            "provider item not found",
+        )
     }
 
     pub const fn unsupported(operation: &'static str) -> Self {
@@ -447,14 +451,12 @@ impl DriveProvider for FakeDriveProvider {
 
         self.next_upload_number += 1;
         let provider_id = format!("fake-upload-{}", self.next_upload_number);
-        let metadata = DriveMetadata::new_file(
-            provider_id.clone(),
-            request.name,
-            request.mime_type,
-        )
-        .with_parent(request.parent_id);
+        let metadata =
+            DriveMetadata::new_file(provider_id.clone(), request.name, request.mime_type)
+                .with_parent(request.parent_id);
         self.metadata_by_id.insert(provider_id.clone(), metadata);
-        self.content_by_id.insert(provider_id.clone(), request.content);
+        self.content_by_id
+            .insert(provider_id.clone(), request.content);
         Ok(DriveMutationOutcome {
             provider_id,
             revision_token: None,
@@ -578,8 +580,8 @@ mod tests {
 
     #[test]
     fn fake_provider_lists_metadata_and_downloads_content() {
-        let metadata = DriveMetadata::new_file("file-1", "note.md", MIME_TEXT_MARKDOWN)
-            .with_parent("root");
+        let metadata =
+            DriveMetadata::new_file("file-1", "note.md", MIME_TEXT_MARKDOWN).with_parent("root");
         let provider = FakeDriveProvider::new()
             .with_child("root", metadata)
             .with_content("file-1", b"hello".to_vec());
@@ -614,7 +616,9 @@ mod tests {
 
         assert_eq!(update.provider_id, upload.provider_id);
         assert_eq!(
-            provider.download_file(&upload.provider_id).expect("content"),
+            provider
+                .download_file(&upload.provider_id)
+                .expect("content"),
             b"updated".to_vec()
         );
     }
