@@ -5,7 +5,7 @@ use haze_sync_common::{ContentHash, VaultPath};
 use std::fmt;
 use std::fs::{self, File, Metadata};
 use std::io::{self, Read};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::SystemTime;
 
 const READ_BUFFER_SIZE: usize = 8 * 1024;
@@ -19,14 +19,15 @@ pub struct WorktreeScanner {
 impl WorktreeScanner {
     /// Create a scanner for the configured worktree root.
     #[must_use]
-    pub const fn new(config: WorktreeConfig) -> Self {
+    pub fn new(config: WorktreeConfig) -> Self {
         Self { config }
     }
 
     /// Scan the configured root for stable, safe local files.
     pub fn scan(&self) -> Result<WorktreeScanResult, WorktreeScanError> {
         let root = self.config.root_path();
-        let root_metadata = fs::symlink_metadata(root).map_err(|_| WorktreeScanError::RootUnavailable)?;
+        let root_metadata =
+            fs::symlink_metadata(root).map_err(|_| WorktreeScanError::RootUnavailable)?;
         if !root_metadata.file_type().is_dir() {
             return Err(WorktreeScanError::RootNotDirectory);
         }
@@ -47,9 +48,10 @@ impl WorktreeScanner {
             Ok(entries) => entries,
             Err(_) if is_root => return Err(WorktreeScanError::RootUnreadable),
             Err(_) => {
-                result
-                    .skipped
-                    .push(self.skipped_for_local_path(directory, WorktreeScanSkipReason::FilesystemError));
+                result.skipped.push(self.skipped_for_local_path(
+                    directory,
+                    WorktreeScanSkipReason::FilesystemError,
+                ));
                 return Ok(());
             }
         };
@@ -58,9 +60,9 @@ impl WorktreeScanner {
             let path = match entry {
                 Ok(entry) => entry.path(),
                 Err(_) => {
-                    result
-                        .skipped
-                        .push(WorktreeScanSkipped::without_vault_path(WorktreeScanSkipReason::FilesystemError));
+                    result.skipped.push(WorktreeScanSkipped::without_vault_path(
+                        WorktreeScanSkipReason::FilesystemError,
+                    ));
                     continue;
                 }
             };
@@ -71,21 +73,25 @@ impl WorktreeScanner {
         Ok(())
     }
 
-    fn scan_entry(&self, path: &Path, result: &mut WorktreeScanResult) -> Result<(), WorktreeScanError> {
+    fn scan_entry(
+        &self,
+        path: &Path,
+        result: &mut WorktreeScanResult,
+    ) -> Result<(), WorktreeScanError> {
         let metadata = match fs::symlink_metadata(path) {
             Ok(metadata) => metadata,
             Err(_) => {
-                result
-                    .skipped
-                    .push(self.skipped_for_local_path(path, WorktreeScanSkipReason::FilesystemError));
+                result.skipped.push(
+                    self.skipped_for_local_path(path, WorktreeScanSkipReason::FilesystemError),
+                );
                 return Ok(());
             }
         };
 
         if self.config.is_reserved_local_path(path) {
-            result
-                .skipped
-                .push(self.skipped_for_local_path(path, WorktreeScanSkipReason::ReservedPath));
+            result.skipped.push(
+                self.skipped_for_local_path(path, WorktreeScanSkipReason::ReservedPath),
+            );
             return Ok(());
         }
 
@@ -238,7 +244,7 @@ impl WorktreeScanSkipped {
         }
     }
 
-    const fn without_vault_path(reason: WorktreeScanSkipReason) -> Self {
+    fn without_vault_path(reason: WorktreeScanSkipReason) -> Self {
         Self {
             vault_path: None,
             reason,
@@ -413,31 +419,12 @@ pub struct StableFileDetector;
 impl StableFileDetector {
     /// Classify stability from metadata observed before and after hashing.
     #[must_use]
-    pub const fn classify(
-        before: StableFileObservation,
-        after: StableFileObservation,
-    ) -> StableFileState {
-        if before.size == after.size && option_system_time_eq(before.modified, after.modified) {
+    pub fn classify(before: StableFileObservation, after: StableFileObservation) -> StableFileState {
+        if before == after {
             StableFileState::stable()
         } else {
             StableFileState::unstable()
         }
-    }
-}
-
-const fn option_system_time_eq(left: Option<SystemTime>, right: Option<SystemTime>) -> bool {
-    match (left, right) {
-        (Some(left), Some(right)) => system_time_eq(left, right),
-        (None, None) => true,
-        (Some(_), None) | (None, Some(_)) => false,
-    }
-}
-
-const fn system_time_eq(left: SystemTime, right: SystemTime) -> bool {
-    match (left.duration_since(SystemTime::UNIX_EPOCH), right.duration_since(SystemTime::UNIX_EPOCH)) {
-        (Ok(left), Ok(right)) => left.as_secs() == right.as_secs() && left.subsec_nanos() == right.subsec_nanos(),
-        (Err(_), Err(_)) => true,
-        (Ok(_), Err(_)) | (Err(_), Ok(_)) => false,
     }
 }
 
@@ -456,6 +443,7 @@ fn content_hash_for_path(path: &Path) -> io::Result<ContentHash> {
     }
 }
 
+#[cfg(test)]
 fn content_hash_for_bytes(bytes: &[u8]) -> ContentHash {
     let mut hasher = Sha256State::new();
     hasher.update(bytes);
@@ -690,6 +678,7 @@ mod tests {
     use super::*;
     use std::fs;
     use std::io::ErrorKind;
+    use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static NEXT_TEMP_ROOT_ID: AtomicU64 = AtomicU64::new(0);
@@ -799,14 +788,13 @@ mod tests {
 
         let result = scanner(&root).scan().unwrap();
 
-        assert!(result
-            .skipped
-            .iter()
-            .any(|skipped| skipped.reason == WorktreeScanSkipReason::Symlink
+        assert!(result.skipped.iter().any(|skipped| {
+            skipped.reason == WorktreeScanSkipReason::Symlink
                 && skipped
                     .vault_path
                     .as_ref()
-                    .is_some_and(|path| path.as_str() == "link.md")));
+                    .is_some_and(|path| path.as_str() == "link.md")
+        }));
     }
 
     #[test]
