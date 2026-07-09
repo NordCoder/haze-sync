@@ -1,13 +1,13 @@
 REPORT_TYPE:
-CLEAN_CODE_REVIEW
+IMPLEMENTATION
 
 STATUS:
-CLEAN_ACCEPT
+SELF_ACCEPT_PENDING_CI
 
 AGENT:
-role: clean-code-reviewer
-agent_execution_id: W1-CMM-P4C-common-identifier-hash-clean-code-review
-chat_name: common — W1 CMM-P4C Clean-Code Review
+role: implementation-worker
+agent_execution_id: W1-CMM-P5-common-adapter-security-hardening
+chat_name: common — W1 CMM-P5 Implementation
 
 COMPONENT:
 name: common
@@ -21,27 +21,31 @@ control_report_path: crates/haze-sync-common/control/report.md
 
 WAVE:
 id: W1
-phase_id: CMM-P4C
-dependency_status: CMM-P4 implementation and CI fixer complete; active state reports post-fix Component CI GREEN for run 29028045014 attempt 1
+phase_id: CMM-P5
+dependency_status: CMM-P4 implementation, CI fixer, and clean-code review accepted; active state reported Component CI GREEN for prior accepted source state
 
 SUMMARY:
-Reviewed CMM-P4 identifier/hash contract hardening plus the CI formatter fix. The implementation remains scoped to common-owned identifier/hash tests and docs, with no production behavior change. Identifier coverage now exercises max length including typed prefixes, allowed ASCII character set, missing/wrong/case-mismatched typed prefixes, adapter IDs that resemble typed IDs, invalid identifier inputs, and serde rejection. Hash coverage now exercises canonical lowercase `sha256:<hex>` output, digest case normalization, invalid length/character rejection, byte access, `ContentHash` alias serialization, and serde accepted/rejected inputs. Docs clearly avoid speculative Blob/Cursor/Tombstone IDs and hash computation helpers in common. No source or docs changes were required during clean-code review.
+Implemented CMM-P5 Adapter mode, role, and security primitive hardening inside common scope. Expanded adapter role/mode tests for exact stable wire values, case/hyphen/camelCase/non-exact rejection, serde roundtrips, serde rejection, and declarative mode capability helpers. Expanded `SecretString` tests for redaction in Display, Debug, alternate Debug, formatting contexts, cloned values, explicit sensitive accessors, and empty values. Documented that `readonly_agent` remains a V1 role, that mode helpers are declarative and policy-free, that `SecretString` remains non-serializing and non-runtime, and that additional redaction wrappers are not added without a future contract. No permission enforcement, runtime/provider behavior, token hashing/verification/loading/persistence/generation, workflow changes, or sibling component changes were made.
 
 CHANGED_FILES:
+- crates/haze-sync-common/src/adapter.rs
+- crates/haze-sync-common/src/security/mod.rs
+- crates/haze-sync-common/docs/component-contract.md
+- crates/haze-sync-common/docs/decisions.md
 - crates/haze-sync-common/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/common
 base_branch: main
 base_sha: PR metadata reports base_sha 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2; compare_commits currently reports main at c1e69a664388b0cba028170e8398b9088218957d with merge base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
-head_sha: bf8b737564ec014f5988c770443fa4564b042a32 before this report-only commit; final head is the report update commit returned by GitHub contents API
+head_sha: b09833e2129cdb1c756a66c6da150a051d1dc6e2 before this report-only commit; final head is the report update commit returned by GitHub contents API
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
 ci_skip_used: yes
-ci_skip_reason: final commit updates only crates/haze-sync-common/control/report.md and no source/docs/product changes were made by clean-code reviewer; skipped report-only workflow is not CI evidence
+ci_skip_reason: final commit updates only crates/haze-sync-common/control/report.md after source/docs changes were already committed without CI skip; skipped report-only workflow is not CI evidence
 
 SCOPE:
 allowed_files_only: yes
@@ -60,49 +64,53 @@ affected_components: none
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- read Project Sources for implementation manifest, report template, clean-code-reviewer prompt, GitHub connector guide, and wave-plan background as applicable
-- read active common control state and active CMM-P4C prompt from component/common
-- read previous FIX-CMM-P4-CI report, component contract, implementation plan, implementation log, dependency map, decisions, and relevant ids/hash source
+- read Project Sources for implementation manifest, report template, implementation-worker prompt, GitHub connector guide, and wave-plan background as applicable
+- read active common control state and active CMM-P5 prompt from component/common
+- read previous CMM-P4C clean-code report, component contract, implementation plan, implementation log, dependency map, decisions, and relevant adapter/security source
 - inspected PR #46 metadata and compare_commits for current branch context
-- reviewed identifier validation code and confirmed CMM-P4/FIX-CMM-P4-CI did not change production identifier validation behavior
-- reviewed identifier tests for max length, allowed character set, wrong/missing/case-mismatched typed prefixes, adapter IDs resembling typed IDs, invalid inputs, null-byte rejection, and serde rejection
-- reviewed hash representation code and confirmed CMM-P4/FIX-CMM-P4-CI did not change production SHA-256 parsing/formatting behavior
-- reviewed hash tests for canonical lowercase prefixed output, mixed-case digest normalization, byte access, ContentHash alias serialization, invalid length/character rejection, and serde accepted/rejected inputs
-- reviewed component contract clarification for ID max length, allowed characters, exact typed prefixes, current ID ownership, exact lowercase sha256 prefix, digest case normalization, serde behavior, and byte access
-- reviewed decisions documenting no speculative BlobId/CursorId/TombstoneId additions and no hash computation helpers in common
-- observed Component CI run 29028045014 completed successfully for the CMM-P4 fixer source commit 914751f361e159cab25c326c405445743a425972
-behavior_changes: none by clean-code reviewer; CMM-P4 production behavior remained unchanged
-bugs_found: none during clean-code review
-bugs_fixed: none during clean-code review
-cleanups_made: none; existing CMM-P4 hardening plus formatter fix was clear and contract-aligned
-non_goals_preserved: no storage behavior, no Core behavior, no runtime/provider behavior, no sibling component edits, no workflow changes, no test coverage removal, no CI diagnostics artifact reads by clean-code reviewer
-deferred_work: next phase selection remains orchestrator responsibility
+- expanded AdapterRole tests to verify all scoped roles parse, format, expose `as_str`, and use stable serde wire values
+- expanded AdapterRole negative tests for unknown, hyphenated, case-mismatched, and non-exact role wire values
+- expanded AdapterMode tests to verify all scoped modes parse, format, expose `as_str`, and use stable serde wire values
+- expanded AdapterMode negative tests for unknown, hyphenated, camelCase, case-mismatched, and non-exact mode wire values
+- preserved declarative mode capability helpers and verified rollout boundaries for `allows_core_reads` and `allows_core_writes`
+- expanded SecretString tests for redaction in formatting contexts, alternate Debug, cloned values, explicit sensitive accessors, and empty values
+- clarified AdapterRole contract that `readonly_agent` remains a V1 role unless a future contract change renames or removes it
+- clarified AdapterMode contract around exact wire values and declarative Core read/write helper behavior
+- clarified SecretString contract around Debug/alternate Debug/Display redaction, clone redaction, no serialization, no lifecycle behavior, and no additional common-owned redaction wrappers for now
+- documented decisions for keeping `readonly_agent` in V1 and not adding token-hash/public-label redaction wrappers during CMM-P5
+behavior_changes: none intended; adapter/security production behavior was not changed
+bugs_found: none; CMM-P5 was contract/test/doc hardening only
+bugs_fixed: none
+cleanups_made: none beyond hardening tests/docs in allowed files
+non_goals_preserved: no storage behavior, no Core behavior, no runtime/provider behavior, no sibling component edits, no workflow changes, no permission enforcement in common, no token verification/hashing/loading/persistence/generation
+deferred_work: clean-code review for CMM-P5 and CI completion/observation for the source/docs commit
 
 TESTS_AND_CHECKS:
 checks_run:
 - GitHub connector read of crates/haze-sync-common/control/state.md
 - GitHub connector read of crates/haze-sync-common/control/prompt.md
 - GitHub connector read of previous crates/haze-sync-common/control/report.md
-- GitHub connector read of component contract, implementation plan, implementation log, dependency map, decisions, ids source, and hash source
-- GitHub connector get_pr_info for PR #46; observed open draft PR with mergeable true at head bf8b737564ec014f5988c770443fa4564b042a32 before report write
+- GitHub connector read of common component contract, implementation plan, implementation log, dependency map, decisions, and relevant adapter/security source
+- GitHub connector post-edit read of adapter.rs and security/mod.rs snippets for source/rustfmt sanity
+- GitHub connector get_pr_info for PR #46 after CMM-P5 source/docs commits; observed mergeable true at head b09833e2129cdb1c756a66c6da150a051d1dc6e2
 - GitHub connector compare_commits for main...component/common
-- GitHub connector fetch_commit_workflow_runs for source fixer commit 914751f361e159cab25c326c405445743a425972; observed Component CI run 29028045014 completed with conclusion success
+- GitHub connector fetch_commit_workflow_runs for source/docs commit b09833e2129cdb1c756a66c6da150a051d1dc6e2; observed Component CI run 29038641448 in_progress before report write
 checks_not_run:
 - cargo fmt --check: not run locally because work is restricted to GitHub connector and no shell-capable repository checkout is available
 - cargo check -p haze-sync-common: not run locally because work is restricted to GitHub connector and no shell-capable repository checkout is available
 - cargo test -p haze-sync-common: not run locally because work is restricted to GitHub connector and no shell-capable repository checkout is available
 - cargo clippy -p haze-sync-common --all-targets -- -D warnings: not run locally because work is restricted to GitHub connector and no shell-capable repository checkout is available
-ci_status: CI_GREEN
-workflow_urls: Component CI run 29028045014 completed successfully for source fixer commit 914751f361e159cab25c326c405445743a425972
-known_failures: none observed after the CMM-P4 CI formatter fix
+ci_status: CI_PENDING
+workflow_urls: Component CI run 29038641448 in_progress for source/docs commit b09833e2129cdb1c756a66c6da150a051d1dc6e2 before this report-only commit
+known_failures: none observed for CMM-P5 before report write
 
 CI_DIAGNOSTICS:
 artifact_based_logs: no
 artifact_name: not applicable
 artifact_id: not applicable
-workflow_run_id: not applicable for clean-code review pass
+workflow_run_id: not applicable for this implementation pass
 workflow_run_attempt: not applicable
-artifact_status: not read; clean-code prompt did not instruct reading CI diagnostics artifacts
+artifact_status: not read; implementation prompt explicitly prohibited CI diagnostics artifact reads unless future prompt instructs it
 summary_read: no
 manifest_read: no
 logs_read: none
@@ -119,17 +127,18 @@ background_jobs_added: no
 
 ISSUES_FOUND:
 - Local shell checks could not be run through the GitHub connector.
-- This final report-only commit uses `[skip ci]`; the skipped report commit is not CI evidence. The CI evidence is Component CI run 29028045014 for the CMM-P4 source/fixer commit.
+- Component CI for the CMM-P5 source/docs commit was observed in progress, not completed, before report write.
+- The final report-only commit uses `[skip ci]`; that skipped commit is not CI evidence and must not be treated as CI green.
 - component/common remains diverged from current main by normal commit graph, but PR metadata reports mergeable true; no merge/rebase/reset was performed.
 
 BLOCKERS:
-none
+none for implementation; CMM-P5 validation is pending CI completion and clean-code review
 
 NEXT_RECOMMENDED_AGENT:
-orchestrator
+clean-code-reviewer
 
 FINAL_VERDICT:
-CLEAN_ACCEPT — CMM-P4 identifier/hash contract hardening and its formatter fix are accepted by clean-code review. No source/docs fixes were needed during clean-code review, production behavior remains unchanged, and post-fix Component CI was observed green for the CMM-P4 source/fixer commit. The final report-only commit intentionally uses CI skip and is not CI evidence.
+SELF_ACCEPT_PENDING_CI — CMM-P5 implementation is complete inside common scope with adapter role/mode and SecretString contract test/docs hardening and no production behavior change. CI for the source/docs commit is pending/in progress, and the final report-only commit intentionally uses CI skip.
 
 PUSHED:
 yes
