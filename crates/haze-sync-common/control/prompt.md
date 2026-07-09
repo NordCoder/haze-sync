@@ -1,23 +1,26 @@
-# W1-CMM-P4 — Identifier and hash contract hardening
+# W1-FIX-CMM-P4-CI — Common CMM-P4 CI fix
 
 Component: common
 Path: crates/haze-sync-common
 Branch: component/common
 PR: #46
-Role: implementation-worker
+Role: fixer-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-CMM-P3 implementation and clean-code review are accepted. Component CI is green for the accepted code/docs state.
+CMM-P4 implementation completed with SELF_ACCEPT_PENDING_CI. The code/docs commit failed Component CI.
 
 - workflow: Component CI
-- workflow_run_id: 29009442790
-- run_number: 492
-- conclusion: success
+- workflow_run_id: 29024044709
+- run_number: 586
+- run_attempt: 1
+- artifact_id: 8200732256
+- artifact_name: ci-diag__component-common__wf-component-ci__run-29024044709__attempt-1
+- artifact_expires_at: 2026-07-10T14:08:44Z
 
-The next implementation phase is CMM-P4 from crates/haze-sync-common/docs/implementation-plan.md.
+The workflow step summary shows the check wrapper steps completed and the diagnostics finalizer failed. Read the diagnostics artifact; do not infer the failed underlying check only from step conclusions.
 
 ## Read
 
@@ -25,7 +28,7 @@ Read before editing:
 
 - implementation-manifest.md from ChatGPT Project Sources
 - report-template.md from ChatGPT Project Sources
-- implementation-worker-prompt.md from ChatGPT Project Sources
+- fixer-worker-prompt.md from ChatGPT Project Sources
 - chatgpt-gh-connector.md from ChatGPT Project Sources
 - crates/haze-sync-common/docs/component-contract.md
 - crates/haze-sync-common/docs/implementation-plan.md
@@ -35,43 +38,40 @@ Read before editing:
 - crates/haze-sync-common/control/report.md
 - relevant current repository code and PR diff
 
-Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
+Use the GitHub connector to download and read the diagnostics artifact listed above.
+
+Read summary.md, manifest.json, and every log listed in failed_checks.
+
+If the artifact is missing, expired, malformed, or unreadable, report FIX_BLOCKED_BY_LOGS.
 
 ## Task
 
-Implement CMM-P4: Identifier and hash contract hardening.
+Fix the minimum cause of the CMM-P4 CI failure inside common scope.
 
-Follow the implementation plan:
-
-- verify ID max length and allowed character set across current shared identifiers;
-- ensure typed IDs reject missing or wrong prefixes;
-- ensure canonical hash output is always sha256 plus lowercase hex in the accepted wire form;
-- decide whether additional IDs belong in common, such as BlobId, CursorId, or TombstoneId;
-- keep ID generation outside common unless explicitly scoped by accepted contract.
+Expected recent changed areas: identifier/hash tests and docs. Use the diagnostics artifact as source of truth.
 
 ## Allowed files
 
 - crates/haze-sync-common/src/ids.rs
 - crates/haze-sync-common/src/hash.rs
-- crates/haze-sync-common/src/error.rs
 - crates/haze-sync-common/docs/**
 - crates/haze-sync-common/control/report.md
 
-## Non-goals
+## Forbidden changes
 
-- No storage behavior.
-- No Core behavior.
-- No runtime behavior.
-- No provider-specific behavior.
-- No sibling component changes.
-- No workflow changes.
+- Do not change storage behavior.
+- Do not change Core behavior.
+- Do not add runtime/provider behavior.
+- Do not add sibling component changes.
+- Do not change workflow files.
+- Do not remove test coverage unless the artifact proves the test is invalid and replacement coverage is added.
 
 ## CI trigger policy
 
-Follow the CI skip policy in implementation-manifest.md and implementation-worker-prompt.md. Product, test, dependency, contract, workflow, and implementation commits must not skip CI. A final report-only commit may skip CI.
+Follow the CI skip policy in implementation-manifest.md and fixer-worker-prompt.md. Product/source/docs fixer commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
 Write only the report to crates/haze-sync-common/control/report.md.
 
-Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION.
+Use report-template.md. Set REPORT_TYPE to FIX.
