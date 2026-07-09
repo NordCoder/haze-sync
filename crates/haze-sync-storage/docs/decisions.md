@@ -207,3 +207,43 @@ Affected contracts:
 - deployment/runbook planning;
 - backup/restore planning;
 - future doctor checks.
+
+## 2026-07-09 — Repository helpers stay passive and transaction-sensitive
+
+Decision:
+
+Repository helpers remain caller-owned-executor primitives. Helpers that mutate more than one logical part of a future Server/Core flow are transaction-sensitive: callers must compose them inside the transaction that owns the corresponding Core decision, idempotency check, operation-log append, path advisory lock, or cursor advancement. Storage validates only narrow storage constraints such as sequence bounds, list limits, representable byte sizes, operation-kind vocabulary, conflict-status vocabulary, and cursor monotonicity.
+
+Rationale:
+
+Server and Core fan-in need to combine content blobs, file revisions, sync objects, operation-log entries, idempotency records, tombstones, conflicts, and adapter cursors atomically. If repositories open hidden transactions or make policy decisions, callers lose control over cross-table consistency. If repositories leak SQLx errors, public layers could accidentally expose database URLs, SQL, credentials, or local paths.
+
+Alternatives:
+
+- Let each repository helper create its own pool or transaction.
+- Let Storage infer Core outcomes such as accepted write, conflict, tombstone, replay, or cursor policy.
+- Return raw SQLx errors and rely on API/Server to redact them.
+- Allow unbounded repository list pages.
+
+Consequences:
+
+- Server/Core integration must explicitly manage transaction boundaries and path locks.
+- Repository errors use stable safe codes/messages instead of raw SQLx formatting.
+- Repository list helpers must share bounded page validation.
+- Repository row outputs remain internal values that public surfaces must sanitize.
+
+Transaction-sensitive helper groups:
+
+- content blob + file revision + sync object current-revision updates;
+- operation-log append and changes-feed reads around Server fan-in;
+- idempotency check/store helpers around request replay handling;
+- conflict and tombstone metadata updates around Core conflict/delete decisions;
+- adapter cursor initialization/update around adapter changes-feed progress.
+
+Affected contracts:
+
+- repositories;
+- component contract;
+- Server transaction fan-in;
+- Core persistence boundary;
+- API/CLI error sanitization.
