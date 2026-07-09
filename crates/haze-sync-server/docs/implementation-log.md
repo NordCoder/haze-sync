@@ -46,6 +46,17 @@ Summary: Replaced the scaffold-only server binary with explicit production-like 
 Status: SELF_ACCEPT_PENDING_CI
 Follow-ups: Run `cargo fmt --check`, `cargo check -p haze-sync-server`, `cargo test -p haze-sync-server`, and `cargo clippy -p haze-sync-server --all-targets -- -D warnings` in CI or a shell-capable environment. Review the Cargo dependency scope expansion during clean-code review.
 
+### 2026-07-09 — W1/SRV-P4
+
+Agent: implementation-worker
+Branch: component/server
+Prompt: crates/haze-sync-server/control/prompt.md
+Report: crates/haze-sync-server/control/report.md
+Commit(s): component/server SRV-P4 file-flow hardening commits
+Summary: Reviewed the existing SRV-P4 file PUT/GET/changes fan-in and hardened PUT idempotency fingerprints to include the actual request body SHA-256 in addition to the declared content hash and safe metadata. This prevents replay of a stored success for a reused idempotency key when the declared content hash/header metadata is unchanged but the raw upload bytes differ and would otherwise fail Core hash verification. Added route-unit coverage for the body-hash helper and body-aware fingerprint behavior. No API/Core/Storage schema or semantic changes were introduced.
+Status: SELF_ACCEPT_PENDING_CI
+Follow-ups: Run `cargo fmt --check`, `cargo check -p haze-sync-server`, `cargo test -p haze-sync-server`, and `cargo clippy -p haze-sync-server --all-targets -- -D warnings` in CI or a shell-capable environment. Clean-code review should verify the idempotency fingerprint compatibility and body-hash hardening.
+
 ---
 
 Use this format for future entries:
