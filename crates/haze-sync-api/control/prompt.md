@@ -1,23 +1,26 @@
-# W1-API-P4 — File and changes route-helper contract hardening
+# W1-FIX-API-P4-CI — API API-P4 CI fix
 
 Component: api
 Path: crates/haze-sync-api
 Branch: component/api
 PR: #44
-Role: implementation-worker
+Role: fixer-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-API-P3 implementation, CI fixer, and clean-code review are accepted. Component CI evidence for the accepted source state is green.
+API-P4 implementation completed, but Component CI for the code-bearing commit failed.
 
 - workflow: Component CI
-- workflow_run_id: 29011290632
-- run_number: 532
-- conclusion: success
+- workflow_run_id: 29028332903
+- run_number: unknown
+- run_attempt: 1
+- artifact_id: 8202653799
+- artifact_name: ci-diag__component-api__wf-component-ci__run-29028332903__attempt-1
+- artifact_expires_at: 2026-07-10T15:11:11Z
 
-The next implementation phase is API-P4 from crates/haze-sync-api/docs/implementation-plan.md.
+Use the diagnostics artifact as source of truth. Do not infer the root cause only from workflow step summaries.
 
 ## Read
 
@@ -25,7 +28,7 @@ Read before editing:
 
 - implementation-manifest.md from ChatGPT Project Sources
 - report-template.md from ChatGPT Project Sources
-- implementation-worker-prompt.md from ChatGPT Project Sources
+- fixer-worker-prompt.md from ChatGPT Project Sources
 - chatgpt-gh-connector.md from ChatGPT Project Sources
 - crates/haze-sync-api/docs/component-contract.md
 - crates/haze-sync-api/docs/implementation-plan.md
@@ -35,19 +38,15 @@ Read before editing:
 - crates/haze-sync-api/control/report.md
 - relevant current repository code and PR diff
 
-Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
+Download and read diagnostics artifact 8202653799. Read summary.md, manifest.json, and every failed-check log.
+
+If the artifact is missing, expired, malformed, or unreadable, report FIX_BLOCKED_BY_LOGS.
 
 ## Task
 
-Implement API-P4: File and changes route-helper contract hardening.
+Fix the minimum cause of the API-P4 CI failure inside api scope.
 
-Follow the implementation plan:
-
-- test path parsing through VaultPath;
-- test upload metadata extraction for path, base revision, content hash, idempotency key, adapter principal requirement, and body length metadata if represented;
-- test mapping of accepted, same-content, conflict-saved, hash-mismatch, and stale outcomes into public response metadata;
-- test changes query since/limit bounds and response page metadata;
-- ensure helpers remain passive and do not call Core or Storage.
+Expected recent changed area: file and changes route-helper contract hardening. Use the artifact as source of truth.
 
 ## Allowed files
 
@@ -55,25 +54,25 @@ Follow the implementation plan:
 - crates/haze-sync-api/src/routes/changes/**
 - crates/haze-sync-api/src/dto/files/**
 - crates/haze-sync-api/src/dto/changes/**
-- crates/haze-sync-api/docs/**
+- crates/haze-sync-api/docs/** only if the artifact proves a docs formatting failure
 - crates/haze-sync-api/control/report.md
 
-## Non-goals
+## Forbidden changes
 
-- No Axum handler implementation.
-- No object-store reads or writes.
-- No operation-log queries.
-- No content streaming.
-- No background cursor updates.
-- No sibling component changes.
-- No workflow changes.
+- Do not add Axum handler implementation.
+- Do not add object-store reads or writes.
+- Do not add operation-log queries.
+- Do not add content streaming.
+- Do not add background cursor updates.
+- Do not change workflow files.
+- Do not change sibling components.
 
 ## CI trigger policy
 
-Follow the CI skip policy in implementation-manifest.md and implementation-worker-prompt.md. Product, test, dependency, contract, workflow, and implementation commits must not skip CI. A final report-only commit may skip CI.
+Follow the CI skip policy in implementation-manifest.md and fixer-worker-prompt.md. Product/source/docs fixer commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
 Write only the report to crates/haze-sync-api/control/report.md.
 
-Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION.
+Use report-template.md. Set REPORT_TYPE to FIX.
