@@ -63,6 +63,7 @@ export function applyUploadOutcome(
   state: BaseRevisionState,
   response: PutFileResponseDto,
   observedAt: string,
+  confirmedContentHash?: ContentHash | null,
 ): BaseStateUpdateResult {
   const outcome = classifyServerStatus(response.status);
   if (outcome !== "accepted" && outcome !== "same_content") {
@@ -77,7 +78,7 @@ export function applyUploadOutcome(
     state: upsertBaseRevision(state, {
       path: response.path,
       revisionId: response.revision_id,
-      contentHash: response.content_hash ?? state.byPath[response.path]?.contentHash ?? null,
+      contentHash: response.content_hash ?? confirmedContentHash ?? state.byPath[response.path]?.contentHash ?? null,
       serverDeleted: false,
       updatedAt: observedAt,
     }),
