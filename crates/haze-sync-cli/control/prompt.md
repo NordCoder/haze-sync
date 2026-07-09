@@ -1,4 +1,4 @@
-# W1-FIX-CLI-P4-CI — CLI CLI-P4 CI fix
+# W1-FIX-CLI-P4-CI-2 — CLI CLI-P4 follow-up CI fix
 
 Component: cli
 Path: crates/haze-sync-cli
@@ -10,15 +10,15 @@ Work only through the GitHub connector. Do not use SSH. Do not use local git. Do
 
 ## Context
 
-CLI-P4 implementation completed with SELF_ACCEPT_PENDING_CI. Component CI for the code-bearing commit failed.
+The first CLI-P4 fixer completed, but post-fix Component CI failed.
 
 - workflow: Component CI
-- workflow_run_id: 29028358662
-- run_number: 634
+- workflow_run_id: 29034837249
+- run_number: 693
 - run_attempt: 1
-- artifact_id: 8202662299
-- artifact_name: ci-diag__component-cli__wf-component-ci__run-29028358662__attempt-1
-- artifact_expires_at: 2026-07-10T15:11:27Z
+- artifact_id: 8205459786
+- artifact_name: ci-diag__component-cli__wf-component-ci__run-29034837249__attempt-1
+- artifact_expires_at: 2026-07-10T16:51:38Z
 
 Use the diagnostics artifact as source of truth.
 
@@ -38,15 +38,15 @@ Read before editing:
 - crates/haze-sync-cli/control/report.md
 - relevant current repository code and PR diff
 
-Download and read diagnostics artifact 8202662299. Read summary.md, manifest.json, and every failed-check log.
+Download and read diagnostics artifact 8205459786. Read summary.md, manifest.json, and every failed-check log.
 
 If the artifact is missing, expired, malformed, or unreadable, report FIX_BLOCKED_BY_LOGS.
 
 ## Task
 
-Fix the minimum cause of the CLI-P4 CI failure inside cli scope.
+Fix the minimum cause of the latest CLI-P4 CI failure inside cli scope.
 
-Expected recent changed area: read-only Server/API client boundary, status/adapters commands, and safe output rendering. Use the artifact as source of truth.
+Expected recent changed area: CLI status/adapters output compatibility and safe rendering. Use the artifact as source of truth.
 
 ## Allowed files
 
@@ -63,6 +63,7 @@ Expected recent changed area: read-only Server/API client boundary, status/adapt
 - Do not add token rotation.
 - Do not change workflow files.
 - Do not change sibling components.
+- Do not delete tests.
 
 ## CI trigger policy
 
