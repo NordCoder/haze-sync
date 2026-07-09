@@ -89,11 +89,16 @@ Required behavior:
 - serialize as strings;
 - expose `as_str`, `Display`, `FromStr`, and `TryFrom<&str>` behavior;
 - reject empty values, null bytes, unsupported characters, and overly long identifiers;
-- require prefixes for typed system IDs:
+- use a total maximum length of 128 bytes for each current identifier value, including any required prefix;
+- allow only ASCII letters, ASCII digits, `_`, `-`, and `.` in current identifier values;
+- require exact lowercase prefixes for typed system IDs:
   - `RevisionId`: `rev_`
   - `OperationId`: `op_`
   - `ConflictId`: `conf_`
+- reject missing, wrong, empty-suffix, or case-mismatched typed ID prefixes;
 - keep `AdapterId` flexible enough for configured adapter names such as `iphone-anna` or `worktree-adapter`.
+
+Current `common` ID ownership is limited to `AdapterId`, `RevisionId`, `OperationId`, and `ConflictId`. Additional IDs such as blob, cursor, tombstone, mapping, or audit IDs must stay in their owning component until they are proven to be stable cross-component primitives and accepted by an explicit contract change.
 
 ID generation is not owned by this component unless explicitly scoped later. `common` validates and carries IDs; Core/Storage/Server decide where IDs are minted.
 
@@ -104,11 +109,13 @@ ID generation is not owned by this component unless explicitly scoped later. `co
 Required behavior:
 
 - parse plain 64-character hex SHA-256 values;
-- parse canonical `sha256:<hex>` values;
+- parse canonical `sha256:<hex>` values with the exact lowercase `sha256:` prefix;
 - normalize output to lowercase prefixed `sha256:<hex>` form;
+- accept uppercase or mixed-case hex digits only in the digest portion and normalize them on output;
 - reject invalid length;
 - reject non-hex characters;
-- serialize and deserialize using canonical prefixed form;
+- serialize using canonical prefixed form;
+- deserialize from the same accepted parse inputs and re-emit canonical prefixed form;
 - expose byte-level access for hashing/storage callers.
 
 Hash computation over file bytes is not owned by `common` unless explicitly scoped. `common` owns hash representation and validation.
@@ -303,8 +310,8 @@ Required test coverage:
 - percent-decoding safety for paths;
 - reserved runtime path rejection;
 - explicit coverage that `_haze_conflicts/**` remains representable as a syncable vault path;
-- ID parsing, prefix enforcement, unsafe value rejection, serde roundtrips;
-- hash parsing, canonical formatting, case normalization, invalid length/character rejection, serde roundtrips;
+- ID parsing, prefix enforcement, unsafe value rejection, max length, allowed character set, and serde roundtrips;
+- hash parsing, canonical formatting, case normalization, exact lowercase prefix behavior, invalid length/character rejection, byte access, and serde roundtrips;
 - adapter role/mode wire values, parsing, capability helpers, serde roundtrips;
 - validation error code/message safety;
 - secret wrapper redaction for `Debug` and `Display`.
