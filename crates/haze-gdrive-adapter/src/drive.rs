@@ -451,10 +451,17 @@ impl DriveProvider for FakeDriveProvider {
 
         self.next_upload_number += 1;
         let provider_id = format!("fake-upload-{}", self.next_upload_number);
-        let metadata =
-            DriveMetadata::new_file(provider_id.clone(), request.name, request.mime_type)
-                .with_parent(request.parent_id);
+        let metadata = DriveMetadata::new_file(
+            provider_id.clone(),
+            request.name,
+            request.mime_type,
+        )
+        .with_parent(request.parent_id.clone());
         self.metadata_by_id.insert(provider_id.clone(), metadata);
+        self.children_by_parent_id
+            .entry(request.parent_id)
+            .or_default()
+            .push(provider_id.clone());
         self.content_by_id
             .insert(provider_id.clone(), request.content);
         Ok(DriveMutationOutcome {
@@ -605,6 +612,10 @@ mod tests {
                 content: b"created".to_vec(),
             })
             .expect("upload");
+
+        let children = provider.list_children("root").expect("children");
+        assert_eq!(children.len(), 1);
+        assert_eq!(children[0].id, upload.provider_id);
 
         let update = provider
             .update_file(DriveUpdateRequest {
