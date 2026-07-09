@@ -2,6 +2,37 @@
 
 ## Entries
 
+### 2026-07-09 — W1/DEP-P4 database migrations, backup, and restore runbook
+
+Agent:
+Implementation Worker
+
+Branch:
+component/deployment
+
+Prompt:
+deploy/control/prompt.md
+
+Report:
+deploy/control/report.md
+
+Commit(s):
+
+- 4b22b5f3de7a6d43b1cf73d60591c87addaf069d — Document migration backup restore runbook
+- 1d443092db3d7896c4c1a62eea529e2354da22aa — Record manual migration procedure decision
+- a6c1e28344f61d5ae32e52d110231c8894c921e2 — Link server runbook to migration backup restore procedure
+
+Summary:
+Implemented DEP-P4 as documentation-only Deployment runbook work. Added `deploy/docs/migrations-backup-restore.md` with the current migration execution owner, pre-migration stopped/quiesced requirements, local and production-style PostgreSQL backup command shapes, object-store backup coordination, manual SQLx migration command shape, post-migration health/readiness checks, local and production-style restore order, consistency warnings, and dry-run/checklist verification. Recorded the decision that migrations are currently operator-run manual SQLx commands until a later accepted CLI, Server entry point, or deploy script exists. Linked the server compose runbook to the migration/backup/restore procedure and preserved the rule that compose/server images do not auto-run migrations.
+
+Status:
+SELF_ACCEPT_PENDING_CI
+
+Follow-ups:
+Run documentation review and external validation where available. Validate command syntax in a shell/Docker environment before treating the runbook as operationally proven. Future phases should define host directory permissions, production backup path layout, reverse proxy/TLS, provider service rollout, and any accepted migration CLI/server/deploy-script entry point.
+
+---
+
 ### 2026-07-09 — W1/DEP-P3 server packaging and service wiring
 
 Agent:
