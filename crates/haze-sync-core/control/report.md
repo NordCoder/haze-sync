@@ -1,13 +1,13 @@
 REPORT_TYPE:
-FIX
+IMPLEMENTATION
 
 STATUS:
-FIX_COMPLETE
+SELF_ACCEPT_PENDING_CI
 
 AGENT:
-role: fixer-worker
-agent_execution_id: W1-FIX-CORE-CI
-chat_name: core — W1 FIX-CORE-CI CI Fix
+role: implementation-worker
+agent_execution_id: W1-CORE-P3
+chat_name: core — W1 CORE-P3 Implementation
 
 COMPONENT:
 name: core
@@ -21,11 +21,11 @@ control_report_path: crates/haze-sync-core/control/report.md
 
 WAVE:
 id: W1
-phase_id: FIX-CORE-CI
-dependency_status: control state was PROMPT_READY, active agent role was fixer-worker, active_prompt matched crates/haze-sync-core/control/prompt.md, and the active prompt provided diagnostics artifact metadata for PR #43 run 29003582305 attempt 1.
+phase_id: CORE-P3
+dependency_status: control state was PROMPT_READY, active_agent_role was implementation-worker, active_prompt matched crates/haze-sync-core/control/prompt.md, and current control state reported previous Component CI as green.
 
 SUMMARY:
-Fixed the minimum cause of the Component CI failure for PR #43. The diagnostics artifact identified only `rust-fmt` failing, with a rustfmt diff in `crates/haze-sync-core/src/revision_service/mod.rs`. Applied the exact rustfmt-equivalent formatting change to the affected `assert_eq!` call. No behavior, public API semantics, component docs/contracts, workflow files, sibling components, or tests were changed/deleted. A new Component CI run was observed for the source commit and was still in progress at report time.
+Implemented CORE-P3 revision service safety hardening by expanding pure unit tests for the base revision and content matrix in `revision_service`. The production algorithm was already aligned with the contract, so this run made no behavior or public API changes. The new tests harden accepted new-file/current-base paths, same-content idempotent outcomes across old/null bases, stale/null-base conflict_saved safety, missing-file unknown-base rejection, hash-mismatch pre-storage rejection, and absence of insert/append/content-store side effects for unsafe stale overwrite paths. Product source commit triggered Component CI and was still pending at report time.
 
 CHANGED_FILES:
 - crates/haze-sync-core/src/revision_service/mod.rs
@@ -34,15 +34,15 @@ CHANGED_FILES:
 BRANCH_AND_CONTROL:
 current_branch: component/core
 base_branch: main
-base_sha: PR #43 base observed as 1a82bea5c87953db378e5e03429326df38320ee8
-head_sha: source fix commit 2f0145abe845c923c3ad9f4c50d9df5408c65cf5; report commit written after this report
+base_sha: PR #43 base observed as 1a82bea5c87953db378e5e03429326df38320ee8; compare against current main showed component/core diverged from current main with merge-base 1a82bea5c87953db378e5e03429326df38320ee8
+head_sha: product/source commit 70b8eb163ab5474878f9ea30eba77185be6f261a; this report commit is report-only and follows it
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
 ci_skip_used: yes
-ci_skip_reason: used `[skip ci]` only on this control/report-only commit; the source fix commit did not use CI skip and triggered Component CI run 29006327324.
+ci_skip_reason: used `[skip ci]` only for this final control/report-only commit; the product/source commit did not skip CI and triggered Component CI run 29009453634.
 
 SCOPE:
 allowed_files_only: yes
@@ -61,58 +61,61 @@ affected_components: core only
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- applied rustfmt formatting to the long `assert_eq!` in `revision_service` test code exactly as reported by diagnostics
-behavior_changes: none
-bugs_found: cargo fmt/rustfmt formatting failure only
-bugs_fixed: rustfmt formatting failure in crates/haze-sync-core/src/revision_service/mod.rs
-cleanups_made: formatting-only cleanup
-non_goals_preserved: no behavior change, no public API semantic change, no docs/contracts/workflow/sibling component edits, no test deletion
-deferred_work: wait for Component CI run 29006327324 to finish; if it fails, route the next failed diagnostics artifact to fixer-worker
+- added recording repository/content-store/operation-log test doubles in `revision_service` tests
+- added a file-missing + base=null acceptance test that verifies revision insertion, content storage, and operation append
+- added a file-missing + non-null base rejection test that verifies no accepted-write side effects
+- added an existing-file + current-base + different-content acceptance test
+- added an existing-file + same-content test for old and null bases that verifies same_content and no accepted-write side effects
+- added existing-file + stale-base + different-content conflict_saved test with no insert/content-store/operation-log side effects
+- added existing-file + null-base + different-content conflict_saved test with no accepted-write side effects
+- added hash-mismatch safety test proving rejection occurs before repository lookup/content-store/insert/operation append
+- preserved the existing conflict_saved serialization test and its public-status assertion
+behavior_changes: none; tests only
+bugs_found: none in production logic; missing coverage for required safety matrix was addressed
+bugs_fixed: none; no production code changed
+cleanups_made: test-only harness and matrix coverage additions
+non_goals_preserved: no downstream wiring, no Storage transaction/lock ownership, no API DTO ownership, no Server runtime behavior, no provider/filesystem behavior, no sibling component changes, no workflow changes
+deferred_work: run/observe Component CI for product commit 70b8eb163ab5474878f9ea30eba77185be6f261a; if CI fails, route diagnostics to fixer-worker
 
 TESTS_AND_CHECKS:
 checks_run:
 - read implementation-manifest.md from Project Sources
 - read report-template.md from Project Sources
-- read fixer-worker-prompt.md from Project Sources
+- read implementation-worker-prompt.md from Project Sources
 - read chatgpt-gh-connector.md from Project Sources
 - read haze-sync-development-wave-plan.md as background
 - read crates/haze-sync-core/control/state.md on branch component/core
 - read crates/haze-sync-core/control/prompt.md on branch component/core
 - read previous crates/haze-sync-core/control/report.md before overwriting it
 - read crates/haze-sync-core/docs/component-contract.md
-- read crates/haze-sync-core/docs/implementation-plan.md CORE-P2 section
+- read CORE-P3 section of crates/haze-sync-core/docs/implementation-plan.md
 - read crates/haze-sync-core/docs/implementation-log.md
 - read crates/haze-sync-core/docs/dependency-map.md
-- read PR #43 metadata and changed filenames through GitHub connector
-- downloaded diagnostics artifact 8192586969 for workflow run 29003582305 attempt 1
-- read diagnostics summary, manifest, rust-fmt failure marker, and rust-fmt log from the artifact
-- fetched current affected source lines before editing
-- applied the exact rustfmt-equivalent change from diagnostics
-- fetched affected source lines after editing to verify the formatted assertion shape
-- observed PR #43 head updated to 2f0145abe845c923c3ad9f4c50d9df5408c65cf5
-- observed new Component CI run 29006327324 in_progress for the source fix commit
+- read relevant current code in crates/haze-sync-core/src/revision_service/mod.rs and crates/haze-sync-core/src/conflict_saved_planner/mod.rs
+- compared main..component/core through GitHub connector
+- read PR #43 metadata and observed PR head advanced to product commit 70b8eb163ab5474878f9ea30eba77185be6f261a
+- observed Component CI run 29009453634 in_progress for product commit 70b8eb163ab5474878f9ea30eba77185be6f261a
 checks_not_run:
-- cargo fmt --all --check: not run locally because the GitHub connector does not provide shell execution
-- cargo check -p haze-sync-core: not run locally because the GitHub connector does not provide shell execution
-- cargo test -p haze-sync-core: not run locally because the GitHub connector does not provide shell execution
-- cargo clippy -p haze-sync-core --all-targets -- -D warnings: not run locally because the GitHub connector does not provide shell execution
-ci_status: CI_PENDING for new Component CI run 29006327324 at report time
-workflow_urls: PR #43 Component CI run observed via GitHub connector, run_id 29006327324
-known_failures: prior run 29003582305 failed rust-fmt; source fix commit has pending CI, no new failure observed yet
+- cargo fmt --check: not run locally because work is GitHub-connector-only and no shell execution is available
+- cargo check -p haze-sync-core: not run locally because work is GitHub-connector-only and no shell execution is available
+- cargo test -p haze-sync-core: not run locally because work is GitHub-connector-only and no shell execution is available
+- cargo clippy -p haze-sync-core --all-targets -- -D warnings: not run locally because work is GitHub-connector-only and no shell execution is available
+ci_status: CI_PENDING for Component CI run 29009453634 at report time; previous control state reported run 29006893977 as CI_GREEN before this implementation commit
+workflow_urls: PR #43 Component CI run observed through GitHub connector, run_id 29009453634
+known_failures: none for product commit at report time; CI still pending
 
 CI_DIAGNOSTICS:
-artifact_based_logs: yes
-artifact_name: ci-diag__component-core__wf-component-ci__run-29003582305__attempt-1
-artifact_id: 8192586969
-workflow_run_id: 29003582305
-workflow_run_attempt: 1
-artifact_status: downloaded and readable; archive contained summary.md, manifest.json, failures/rust-fmt.txt, and logs/rust-fmt.log at artifact root rather than under a ci-diagnostics/ directory, but all required logical diagnostics files were present and read
-summary_read: yes, summary.md
-manifest_read: yes, manifest.json
-logs_read:
-- logs/rust-fmt.log
-raw_job_logs_used: no for the active diagnostic source; artifact logs were sufficient
-diagnostics_failure: rust-fmt failed with `cargo fmt --all --check`; rustfmt required splitting `assert_eq!(decoded_conflict.incoming_content.content_hash, incoming_hash);` into the multi-line formatted form
+artifact_based_logs: no
+artifact_name: none
+artifact_id: none
+workflow_run_id: none for diagnostics; current implementation CI run observed as 29009453634
+workflow_run_attempt: none for diagnostics
+artifact_status: not read; implementation-worker prompt explicitly said not to read CI diagnostics artifacts
+summary_read: no
+manifest_read: no
+logs_read: none
+raw_job_logs_used: no
+diagnostics_failure: none
 
 SAFETY_AND_SECRECY:
 secrets_committed: no
@@ -123,17 +126,18 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- The downloaded diagnostics artifact layout omitted the `ci-diagnostics/` path prefix described by the prompt, but the required logical files were present, readable, and internally consistent.
-- New Component CI run 29006327324 was still in progress at report time; no green CI result is claimed.
+- GitHub connector does not provide shell execution, so local cargo fmt/check/test/clippy could not be run by this worker.
+- Product commit CI was in progress at report time; no CI_GREEN claim is made for this phase.
+- The final report-only commit used `[skip ci]`; this skipped report commit is not CI evidence.
 
 BLOCKERS:
 none
 
 NEXT_RECOMMENDED_AGENT:
-orchestrator
+clean-code-reviewer
 
 FINAL_VERDICT:
-FIX_COMPLETE. The rustfmt-only failure identified by diagnostics was fixed inside core scope. Await the new Component CI run 29006327324 before making any merge-readiness decision.
+SELF_ACCEPT_PENDING_CI. CORE-P3 was implemented as test-only revision service safety hardening inside core scope, with no behavior changes. Await Component CI for product commit 70b8eb163ab5474878f9ea30eba77185be6f261a, then run clean-code-reviewer if CI/report triage accepts this implementation pass.
 
 PUSHED:
 yes
