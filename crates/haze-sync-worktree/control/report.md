@@ -1,12 +1,12 @@
 REPORT_TYPE:
-FIX
+CLEAN_CODE_REVIEW
 
 STATUS:
-FIX_COMPLETE
+CLEAN_ACCEPT
 
 AGENT:
-role: fixer-worker
-agent_execution_id: W1-FIX-WT-P4-CI-worktree-fixer-20260709
+role: clean-code-reviewer
+agent_execution_id: W1-WT-P4C-worktree-clean-code-review-20260709
 chat_name: worktree persistent component worker
 
 COMPONENT:
@@ -21,29 +21,27 @@ control_report_path: crates/haze-sync-worktree/control/report.md
 
 WAVE:
 id: W1
-phase_id: FIX-WT-P4-CI
-dependency_status: control state was PROMPT_READY; active prompt matched crates/haze-sync-worktree/control/prompt.md; active role was fixer-worker; CI diagnostics metadata was present in the control state and prompt.
+phase_id: WT-P4C
+dependency_status: control state was PROMPT_READY; active prompt matched crates/haze-sync-worktree/control/prompt.md; active role was clean-code-reviewer; post-fix Component CI was green in state for run 29034738311.
 
 SUMMARY:
-Fixed the minimum WT-P4 CI failure identified by the diagnostics artifact. The artifact for run 29028324784 listed one failed check, rust-fmt, with formatting diffs in crates/haze-sync-worktree/src/import_planner.rs and crates/haze-sync-worktree/src/lib.rs. Applied only rustfmt-equivalent formatting to those two source files. No Worktree behavior, tests, dependencies, docs, contracts, workflows, sibling components, direct Storage/SQLx writes, route handlers, provider behavior, conflict policy, or hard-delete behavior were changed.
+Reviewed the WT-P4 import planner, abstract Core/API submission boundary, and the WT-P4 CI fixer result. No source changes were required. The implementation stays within Worktree scope, preserves base revision/null-base semantics, plans new/modified/deleted local file candidates deterministically, keeps same-content unchanged files out of submissions, carries stable scanner facts plus bytes only through WorktreeImportFile, submits through an abstract WorktreeImportClient trait rather than Storage/API/DB internals, and updates local last-applied state only from accepted-equivalent authoritative outcomes. Conflict-saved, rejected, and not-found outcomes do not update local state. The post-fix Component CI run 29034738311 was observed completed successfully for cargo fmt, cargo check, cargo test, cargo clippy, and diagnostics finalization.
 
 CHANGED_FILES:
-- crates/haze-sync-worktree/src/lib.rs
-- crates/haze-sync-worktree/src/import_planner.rs
 - crates/haze-sync-worktree/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/worktree
 base_branch: main
-base_sha: GitHub compare_commits after the fix observed base c1e69a664388b0cba028170e8398b9088218957d and merge base 1a82bea5c87953db378e5e03429326df38320ee8.
-head_sha: e285ffcec9bc302e3640bfa69e3aa459f6576f75 before this report-only commit; this report write creates a later control-only commit.
+base_sha: GitHub compare_commits during clean review observed base c1e69a664388b0cba028170e8398b9088218957d and merge base 1a82bea5c87953db378e5e03429326df38320ee8.
+head_sha: cc864f67ae453d114b294475805efba333079421 before this report-only commit; this report write creates a later control-only commit.
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes; crates/haze-sync-worktree/control/prompt.md on component/worktree
-control_report_written: yes; crates/haze-sync-worktree/control/report.md replaced with this FIX report
+control_report_written: yes; crates/haze-sync-worktree/control/report.md replaced with this CLEAN_CODE_REVIEW report
 control_files_archived_by_worker: no
-ci_skip_used: yes for this report-only commit; no for source/product fixer commits
-ci_skip_reason: this final report update changes only crates/haze-sync-worktree/control/report.md and cannot affect executable behavior or validation outcome; source fixer commits did not skip CI
+ci_skip_used: yes for this report-only commit
+ci_skip_reason: this commit changes only crates/haze-sync-worktree/control/report.md and cannot affect executable behavior or validation outcome; skipped workflow is not CI evidence
 
 SCOPE:
 allowed_files_only: yes
@@ -54,7 +52,7 @@ forbidden_files_touched: no
 
 CONTRACT:
 contract_read: yes
-contract_satisfied: yes; rustfmt-equivalent formatting does not change Worktree behavior or contract semantics
+contract_satisfied: yes
 contract_changes_requested: no
 contract_change_rationale: none
 affected_components: worktree only
@@ -62,60 +60,54 @@ affected_components: worktree only
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- Read active FIX-WT-P4-CI prompt and current report.
-- Read component contract, implementation plan, implementation log, and dependency map.
-- Read relevant current Worktree source files.
-- Fetched and downloaded diagnostics artifact ci-diag__component-worktree__wf-component-ci__run-29028324784__attempt-1.
-- Read summary.md, manifest.json, failures/rust-fmt.txt, and logs/rust-fmt.log from the diagnostics artifact.
-- Applied rustfmt-equivalent formatting to the WT-P4 import planner sort_by expression, two test let bindings, and import_planner public re-export list in lib.rs.
-- Observed a new Component CI workflow run for the final source fixer commit.
-behavior_changes: none
-bugs_found: rustfmt mismatch in crates/haze-sync-worktree/src/import_planner.rs and crates/haze-sync-worktree/src/lib.rs
-bugs_fixed: fixed rustfmt mismatch in crates/haze-sync-worktree/src/import_planner.rs and crates/haze-sync-worktree/src/lib.rs
-cleanups_made: formatting-only cleanup required by CI
-non_goals_preserved: yes; no direct SQLx/Storage writes, no route handlers, no provider/GDrive behavior, no conflict policy decisions inside Worktree, no hard delete, no workflow changes, no sibling component changes, no dependency changes, and no tests deleted
+- Reviewed active WT-P4C prompt and current fixer report.
+- Reviewed component contract, implementation plan, implementation log, and dependency map.
+- Reviewed src/import_planner.rs for state comparison, new/modified/delete planning, base revision semantics, stable-file import wrapping, abstract submission trait, outcome handling, and state update rules.
+- Reviewed src/lib.rs public exports for WT-P4 primitives.
+- Reviewed current PR diff through compare_commits.
+- Observed green post-fix Component CI metadata for run 29034738311.
+behavior_changes: none; no source files were changed in this clean review
+bugs_found: none requiring a clean-code source fix
+bugs_fixed: none
+cleanups_made: no source cleanup committed; WT-P4 code was accepted as currently formatted and CI-clean
+non_goals_preserved: yes; no direct SQLx/Storage writes, no route handler implementation, no provider/GDrive behavior, no Worktree-owned conflict policy decisions, no hard delete, no workflow changes, no sibling component changes, no added dependencies, and no test deletion
 deferred_work:
-- Full CI completion remains pending after the new source fixer commit.
+- Durable persistence of WorktreeStateSnapshot remains deferred to later runtime/storage integration phases.
+- A concrete Core/API client remains a future fan-in task; WT-P4 correctly provides only the abstract WorktreeImportClient boundary.
+- Materialization, atomic writer behavior, dirty-overwrite protection, echo guard, local trash mechanics, and delete retention remain deferred to later Worktree phases.
+- Future integration should ensure WorktreeImportFile bytes are sourced from the same stable observation represented by WorktreeFileSnapshot; WT-P4 does not add a concrete filesystem import reader beyond the planning boundary.
 
 TESTS_AND_CHECKS:
 checks_run:
-- Read Project Source process files including implementation-manifest.md, report-template.md, fixer-worker-prompt.md, and chatgpt-gh-connector.md.
-- GitHub connector read of control state and active fix prompt.
+- Read Project Source process files: implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, and chatgpt-gh-connector.md.
+- GitHub connector read of control state and active WT-P4C prompt.
 - GitHub connector read of previous control report.
 - GitHub connector read of component contract, implementation plan, implementation log, and dependency map.
 - GitHub connector read of src/import_planner.rs and src/lib.rs.
-- GitHub connector fetched workflow artifact metadata for run 29028324784.
-- GitHub connector downloaded artifact 8202650036.
-- Artifact inspection of summary.md, manifest.json, failures/rust-fmt.txt, and logs/rust-fmt.log.
-- GitHub connector fetch_commit_workflow_runs for source fixer commit e285ffcec9bc302e3640bfa69e3aa459f6576f75; observed Component CI run 29034738311 pending.
-- GitHub connector fetch_workflow_run_jobs for run 29034738311; jobs were not yet listed when checked.
-- GitHub connector compare_commits from main to component/worktree after the fix.
+- GitHub connector compare_commits from main to component/worktree.
+- GitHub connector fetch_workflow_run_jobs for run 29034738311; observed Rust workspace job completed with conclusion success.
 checks_not_run:
 - local cargo fmt --check: not run; GitHub connector worker does not provide local repository shell execution.
 - local cargo check -p haze-sync-worktree: not run; GitHub connector worker does not provide local repository shell execution.
 - local cargo test -p haze-sync-worktree: not run; GitHub connector worker does not provide local repository shell execution.
 - local cargo clippy -p haze-sync-worktree --all-targets -- -D warnings: not run; GitHub connector worker does not provide local repository shell execution.
-ci_status: CI_PENDING; new Component CI run 29034738311 was pending after source fixer commit e285ffcec9bc302e3640bfa69e3aa459f6576f75
+ci_status: CI_GREEN observed through GitHub workflow metadata for Component CI run 29034738311; this report-only commit uses CI skip and is not CI evidence
 workflow_urls:
-- https://github.com/NordCoder/haze-sync/actions/runs/29028324784
 - https://github.com/NordCoder/haze-sync/actions/runs/29034738311
-known_failures:
-- original WT-P4 run 29028324784: rust-fmt exit_code 1
+known_failures: none for the post-fix CI run
 
 CI_DIAGNOSTICS:
-artifact_based_logs: yes
-artifact_name: ci-diag__component-worktree__wf-component-ci__run-29028324784__attempt-1
-artifact_id: 8202650036
-workflow_run_id: 29028324784
-workflow_run_attempt: 1
-artifact_status: available, not expired, downloaded, readable
-summary_read: yes; summary.md read
-manifest_read: yes; manifest.json read
-logs_read:
-- failures/rust-fmt.txt
-- logs/rust-fmt.log
+artifact_based_logs: no
+artifact_name: none
+artifact_id: none
+workflow_run_id: none for diagnostics; active clean-code prompt explicitly said not to read CI diagnostics artifacts
+workflow_run_attempt: none
+artifact_status: not applicable
+summary_read: no
+manifest_read: no
+logs_read: none
 raw_job_logs_used: no
-diagnostics_failure: none; diagnostics artifact was readable and contained one failed check, rust-fmt
+diagnostics_failure: none
 
 SAFETY_AND_SECRECY:
 secrets_committed: no
@@ -126,19 +118,18 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- rustfmt expected formatting changes in crates/haze-sync-worktree/src/import_planner.rs around a sort_by expression and test let bindings.
-- rustfmt expected formatting changes in crates/haze-sync-worktree/src/lib.rs around the Worktree import planner public export list.
-- Branch remains diverged from main according to compare_commits; no merge, rebase, reset, history rewrite, PR readiness decision, main/sibling branch modification, workflow edit, or control file archiving was performed by this worker.
+- No clean-code blocker found.
+- Branch remains diverged from main according to compare_commits; no merge, rebase, reset, history rewrite, PR readiness decision, or main/sibling branch modification was performed.
+- The final report-only commit uses CI skip and is not CI evidence; CI evidence comes from run 29034738311 before this report commit.
 
 BLOCKERS:
-- No fixer blocker.
-- Full CI completion was still pending when this report was written.
+- No clean-code blocker.
 
 NEXT_RECOMMENDED_AGENT:
 orchestrator
 
 FINAL_VERDICT:
-FIX_COMPLETE. The rust-fmt failure identified by the diagnostics artifact was fixed with minimal formatting-only source changes inside worktree scope. The source fixer commit triggered PR CI; the new run was pending when this report was written.
+CLEAN_ACCEPT. WT-P4 import planner, abstract submission boundary, and CI fixer result are accepted without source changes. Post-fix Component CI was observed green before this report-only commit.
 
 PUSHED:
 yes
