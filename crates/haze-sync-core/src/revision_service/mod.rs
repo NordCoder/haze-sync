@@ -633,10 +633,19 @@ mod tests {
         assert_eq!(repository.inserted_requests.len(), 1);
         assert_eq!(repository.inserted_requests[0].parent_revision_id, None);
         assert_eq!(repository.inserted_requests[0].content_hash, incoming_hash);
-        assert_eq!(content_store.put_calls, vec![(incoming_hash, INCOMING_BYTES.to_vec())]);
+        assert_eq!(
+            content_store.put_calls,
+            vec![(incoming_hash, INCOMING_BYTES.to_vec())]
+        );
         assert_eq!(operation_log.append_calls.len(), 1);
-        assert_eq!(operation_log.append_calls[0].kind, OperationKind::UpsertFile);
-        assert_eq!(operation_log.append_calls[0].revision_id, revision_id("rev_01JNEW"));
+        assert_eq!(
+            operation_log.append_calls[0].kind,
+            OperationKind::UpsertFile
+        );
+        assert_eq!(
+            operation_log.append_calls[0].revision_id,
+            revision_id("rev_01JNEW")
+        );
     }
 
     #[test]
@@ -684,7 +693,10 @@ mod tests {
             panic!("expected accepted new revision outcome");
         };
         assert_eq!(revision.revision_id, revision_id("rev_01JNEW"));
-        assert_eq!(revision.parent_revision_id, Some(current_revision_id.clone()));
+        assert_eq!(
+            revision.parent_revision_id,
+            Some(current_revision_id.clone())
+        );
         assert_eq!(revision.content_hash, incoming_hash);
         assert_eq!(operation.seq, 1);
 
@@ -696,9 +708,15 @@ mod tests {
             Some(current_revision_id)
         );
         assert_eq!(repository.inserted_requests[0].content_hash, incoming_hash);
-        assert_eq!(content_store.put_calls, vec![(incoming_hash, INCOMING_BYTES.to_vec())]);
+        assert_eq!(
+            content_store.put_calls,
+            vec![(incoming_hash, INCOMING_BYTES.to_vec())]
+        );
         assert_eq!(operation_log.append_calls.len(), 1);
-        assert_eq!(operation_log.append_calls[0].revision_id, revision_id("rev_01JNEW"));
+        assert_eq!(
+            operation_log.append_calls[0].revision_id,
+            revision_id("rev_01JNEW")
+        );
     }
 
     #[test]
@@ -749,7 +767,10 @@ mod tests {
         assert_eq!(conflict_saved.current_revision, current);
         assert_eq!(conflict_saved.provided_base_revision_id, Some(old_base));
         assert_eq!(conflict_saved.incoming_content.content_hash, incoming_hash);
-        assert_eq!(conflict_saved.incoming_content.size_bytes, INCOMING_BYTES.len() as u64);
+        assert_eq!(
+            conflict_saved.incoming_content.size_bytes,
+            INCOMING_BYTES.len() as u64
+        );
         assert_eq!(conflict_saved.incoming_content.content, INCOMING_BYTES);
         assert_eq!(conflict_saved.policy_hint, ConflictPolicyHint::PreserveBoth);
 
