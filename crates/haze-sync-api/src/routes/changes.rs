@@ -363,3 +363,109 @@ fn validate_response_page(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn change(seq: i64) -> ChangeEntryDto {
+        ChangeEntryDto {
+            seq,
+            kind: OperationKindDto::UpsertFile,
+            path: VaultPathDto::from("Notes/daily.md"),
+            revision_id: Some(RevisionIdDto::from(format!("rev_01J{seq}"))),
+            content_sha256: Some(ContentSha256Dto::from(format!("sha256:{}", "e".repeat(64)))),
+            size_bytes: Some(128),
+            tombstone_id: None,
+            conflict_id: None,
+            updated_by: AdapterIdDto::from("obsidian-plugin"),
+            updated_at: TimestampDto::from("2026-07-02T10:00:00Z"),
+        }
+    }
+
+    #[test]
+    fn changes_query_defaults_and_rejects_unsafe_bounds() {
+        let defaults = parse_changes_query(None, None).unwrap();
+        assert_eq!(defaults.since_value(), 0);
+        assert_eq!(defaults.limit_value(), DEFAULT_CHANGES_LIMIT);
+        assert_eq!(
+            defaults.limit_value_with_sentinel(),
+            i64::from(DEFAULT_CHANGES_LIMIT) + 1
+        );
+        assert_eq!(defaults.to_dto().since, 0);
+        assert_eq!(defaults.to_dto().limit, DEFAULT_CHANGES_LIMIT);
+
+        let explicit = parse_changes_query(Some("41"), Some("1000")).unwrap();
+        assert_eq!(explicit.since_value(), 41);
+        assert_eq!(explicit.limit_value(), MAX_CHANGES_LIMIT);
+
+        assert_eq!(
+            parse_changes_query(Some("-1"), Some("10")).unwrap_err().kind(),
+            ChangesRouteErrorKind::InvalidSince
+        );
+        assert_eq!(
+            parse_changes_query(Some("abc"), Some("10")).unwrap_err().kind(),
+            ChangesRouteErrorKind::InvalidSince
+        );
+        assert_eq!(
+            parse_changes_query(Some("0"), Some("0")).unwrap_err().kind(),
+            ChangesRouteErrorKind::InvalidLimit
+        );
+        assert_eq!(
+            parse_changes_query(Some("0"), Some("1001"))
+                .unwrap_err()
+                .kind(),
+            ChangesRouteErrorKind::InvalidLimit
+        );
+    }
+
+    #[test]
+    fn changes_query_errors_map_to_safe_public_details() {
+        let error = parse_changes_query(Some("-1"), Some("10")).unwrap_err();
+        assert_eq!(error.status_code(), HTTP_STATUS_BAD_REQUEST);
+
+        let json = serde_json::to_string(&error.error_response()).unwrap();
+        assert!(json.contains("invalid_request"));
+        assert!(json.contains("since"));
+        assert!(!json.contains("database_url"));
+        assert!(!json.contains("stack_trace"));
+        assert!(!json.contains("token"));
+    }
+
+    #[test]
+    fn changes_response_preserves_page_metadata_and_has_more() {
+        let response = changes_response_from_parts(10, 12, true, vec![change(11), change(12)])
+            .expect("page metadata should be valid");
+
+        assert_eq!(response.from_seq, 10);
+        assert_eq!(response.to_seq, 12);
+        assert!(response.has_more);
+        assert_eq!(response.changes.len(), 2);
+
+        let empty = empty_changes_response(ChangesRequest::new(44, 100).unwrap());
+        assert_eq!(empty.from_seq, 44);
+        assert_eq!(empty.to_seq, 44);
+        assert!(!empty.has_more);
+        assert!(empty.changes.is_empty());
+    }
+
+    #[test]
+    fn changes_response_rejects_inconsistent_page_metadata() {
+        assert_eq!(
+            changes_response_from_parts(10, 9, false, Vec::new()).unwrap_err().kind(),
+            ChangesRouteErrorKind::InvalidResponsePage
+        );
+        assert_eq!(
+            changes_response_from_parts(10, 12, false, vec![change(12), change(12)])
+                .unwrap_err()
+                .kind(),
+            ChangesRouteErrorKind::InvalidResponsePage
+        );
+        assert_eq!(
+            changes_response_from_parts(10, 13, false, vec![change(11), change(12)])
+                .unwrap_err()
+                .kind(),
+            ChangesRouteErrorKind::InvalidResponsePage
+        );
+    }
+}
