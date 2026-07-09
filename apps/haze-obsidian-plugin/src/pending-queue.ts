@@ -65,9 +65,10 @@ export function reconcileFullScan(
   for (const fact of facts) {
     const previousFact = currentState.knownFiles[fact.path];
     if (previousFact === undefined) {
-      pendingQueue[fact.path] = upsertPendingEntry(pendingQueue[fact.path], "created", "scan", scannedAt, fact);
+      pendingQueue[fact.path] = upsertPendingEntry(fact.path, pendingQueue[fact.path], "created", "scan", scannedAt, fact);
     } else if (fileFactChanged(previousFact, fact)) {
       pendingQueue[fact.path] = upsertPendingEntry(
+        fact.path,
         pendingQueue[fact.path],
         "modified",
         "scan",
@@ -80,14 +81,7 @@ export function reconcileFullScan(
 
   for (const [path, previousFact] of Object.entries(currentState.knownFiles)) {
     if (!(path in nextKnownFiles)) {
-      pendingQueue[path] = upsertPendingEntry(
-        pendingQueue[path],
-        "deleted",
-        "scan",
-        scannedAt,
-        undefined,
-        previousFact,
-      );
+      pendingQueue[path] = upsertPendingEntry(path, pendingQueue[path], "deleted", "scan", scannedAt, undefined, previousFact);
     }
   }
 
@@ -114,7 +108,7 @@ export function recordEventHint(
     ...currentState,
     pendingQueue: {
       ...currentState.pendingQueue,
-      [path]: upsertPendingEntry(currentState.pendingQueue[path], kind, "event_hint", observedAt),
+      [path]: upsertPendingEntry(path, currentState.pendingQueue[path], kind, "event_hint", observedAt),
     },
     lastEventHintAt: observedAt,
   };
@@ -164,6 +158,7 @@ export function pendingQueueSummaryText(summary: PendingQueueSummary): string {
 }
 
 function upsertPendingEntry(
+  path: string,
   currentEntry: PendingQueueEntry | undefined,
   kind: PendingChangeKind,
   source: PendingChangeSource,
@@ -172,7 +167,7 @@ function upsertPendingEntry(
   previousFile?: LocalFileFact,
 ): PendingQueueEntry {
   return {
-    path: currentEntry?.path ?? file?.path ?? previousFile?.path ?? "",
+    path,
     kind,
     source,
     firstSeenAt: currentEntry?.firstSeenAt ?? observedAt,
