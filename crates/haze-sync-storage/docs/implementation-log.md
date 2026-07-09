@@ -2,6 +2,34 @@
 
 ## Entries
 
+### 2026-07-09 — W1/STOR-P3 object-store hardening
+
+Agent:
+Implementation Worker
+
+Branch:
+component/storage
+
+Prompt:
+crates/haze-sync-storage/control/prompt.md
+
+Report:
+crates/haze-sync-storage/control/report.md
+
+Commit(s):
+See component/storage branch history for the implementation commits.
+
+Summary:
+Hardened object-store verification coverage while preserving the existing content-addressed blob layout and runtime behavior. Added tests for missing blob path-free errors, corrupted committed blob verification through read/exists/stat, unexpected directory entries at blob paths, temporary blob cleanup after failed commit, duplicate writes, hash mismatch handling, and path-free error Display output. Documented that the local object-store root is caller-owned durable storage while Storage owns only the internal hash-addressed layout below that root.
+
+Status:
+SELF_ACCEPT_PENDING_CI
+
+Follow-ups:
+Run cargo fmt/check/test/clippy through CI or an environment with shell execution. Next storage phase should proceed through clean-code review before CI merge readiness.
+
+---
+
 ### 2026-07-06 — W1/STOR-P2 schema and row-model audit
 
 Agent:
