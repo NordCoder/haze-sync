@@ -247,3 +247,37 @@ Affected contracts:
 - Server transaction fan-in;
 - Core persistence boundary;
 - API/CLI error sanitization.
+
+## 2026-07-09 — Normal file flow is caller-composed repository work
+
+Decision:
+
+Normal file PUT/GET/changes support is represented as caller-composed repository primitives rather than a Storage-owned service workflow. A caller-owned transaction should acquire the path advisory lock, create or read content blob metadata, create or find the sync object, insert the immutable file revision, set the current revision according to a Core decision, and append operation-log metadata. Storage returns row/value outputs and change-feed pages that Server can map into Core/API models.
+
+Rationale:
+
+Storage needs to prove durable repository mechanics for the normal file path without absorbing Core upsert policy or Server route orchestration. Keeping the flow as repository composition preserves atomicity under Server-owned transactions while allowing Core to decide base-revision, conflict, idempotency, and delete semantics.
+
+Alternatives:
+
+- Add a Storage `upsert_file` service that decides accepted/conflict outcomes.
+- Add HTTP handlers or upload streaming logic in Storage.
+- Let Server bypass Storage repositories and write ad hoc SQL.
+- Append operation-log entries outside the transaction that updates file metadata.
+
+Consequences:
+
+- Server fan-in must compose the normal file flow explicitly inside one transaction.
+- Core remains responsible for whether a revision becomes current.
+- Operation-log changes pages remain storage-safe internal rows, not public API DTOs.
+- Repository tests cover the normal flow against PostgreSQL when test-support database configuration is available.
+
+Affected contracts:
+
+- content_blobs repository;
+- sync_objects repository;
+- file_revisions repository;
+- operation_log repository;
+- locks;
+- Server transaction fan-in;
+- Core write-decision boundary.
