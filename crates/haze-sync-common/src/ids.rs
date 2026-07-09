@@ -301,7 +301,7 @@ mod tests {
             "bad/path",
             "bad id",
             "bad:id",
-            "bad id",
+            "bad\0id",
             "ümlaut",
             "bad@id",
             "bad#id",
@@ -320,7 +320,7 @@ mod tests {
 
     #[test]
     fn typed_ids_reject_unsafe_values_before_prefix_classification() {
-        for input in ["rev_bad/id", "op_bad id", "conf_bad id"] {
+        for input in ["rev_bad/id", "op_bad id", "conf_bad\0id"] {
             let error = if input.starts_with("rev_") {
                 RevisionId::parse(input).unwrap_err()
             } else if input.starts_with("op_") {
@@ -343,7 +343,10 @@ mod tests {
         );
 
         let revision_max = format!("rev_{}", "a".repeat(MAX_IDENTIFIER_LEN - "rev_".len()));
-        let revision_too_long = format!("rev_{}", "a".repeat(MAX_IDENTIFIER_LEN + 1 - "rev_".len()));
+        let revision_too_long = format!(
+            "rev_{}",
+            "a".repeat(MAX_IDENTIFIER_LEN + 1 - "rev_".len())
+        );
         assert_eq!(revision_max.len(), MAX_IDENTIFIER_LEN);
         assert!(RevisionId::parse(&revision_max).is_ok());
         assert_eq!(
@@ -352,7 +355,10 @@ mod tests {
         );
 
         let operation_max = format!("op_{}", "a".repeat(MAX_IDENTIFIER_LEN - "op_".len()));
-        let operation_too_long = format!("op_{}", "a".repeat(MAX_IDENTIFIER_LEN + 1 - "op_".len()));
+        let operation_too_long = format!(
+            "op_{}",
+            "a".repeat(MAX_IDENTIFIER_LEN + 1 - "op_".len())
+        );
         assert_eq!(operation_max.len(), MAX_IDENTIFIER_LEN);
         assert!(OperationId::parse(&operation_max).is_ok());
         assert_eq!(
@@ -361,7 +367,10 @@ mod tests {
         );
 
         let conflict_max = format!("conf_{}", "a".repeat(MAX_IDENTIFIER_LEN - "conf_".len()));
-        let conflict_too_long = format!("conf_{}", "a".repeat(MAX_IDENTIFIER_LEN + 1 - "conf_".len()));
+        let conflict_too_long = format!(
+            "conf_{}",
+            "a".repeat(MAX_IDENTIFIER_LEN + 1 - "conf_".len())
+        );
         assert_eq!(conflict_max.len(), MAX_IDENTIFIER_LEN);
         assert!(ConflictId::parse(&conflict_max).is_ok());
         assert_eq!(
