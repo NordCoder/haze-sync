@@ -1,13 +1,13 @@
 REPORT_TYPE:
-CLEAN_CODE_REVIEW
+IMPLEMENTATION
 
 STATUS:
-CLEAN_ACCEPT
+SELF_ACCEPT_PENDING_CI
 
 AGENT:
-role: clean-code-reviewer
-agent_execution_id: W1-STOR-P4C-storage-repository-boundary-clean-code-review
-chat_name: storage — W1 STOR-P4C Clean-Code Review
+role: implementation-worker
+agent_execution_id: W1-STOR-P5-storage-normal-file-flow-repository-support
+chat_name: storage — W1 STOR-P5 Implementation
 
 COMPONENT:
 name: storage
@@ -21,27 +21,32 @@ control_report_path: crates/haze-sync-storage/control/report.md
 
 WAVE:
 id: W1
-phase_id: STOR-P4C
-dependency_status: active prompt state was PROMPT_READY; active_prompt matched crates/haze-sync-storage/control/prompt.md; active role was clean-code-reviewer; implementation report status was SELF_ACCEPT_PENDING_CI; active state and prompt recorded Component CI run 29023928350 as successful/CI_GREEN before this review
+phase_id: STOR-P5
+dependency_status: active prompt state was PROMPT_READY; active_prompt matched crates/haze-sync-storage/control/prompt.md; active role was implementation-worker; prior STOR-P4/STOR-P4C were accepted and active state recorded Component CI run 29023928350 as CI_GREEN before this phase
 
 SUMMARY:
-Reviewed STOR-P4 repository validation and safe error boundary hardening for caller-owned executor/transaction boundaries, revision list limit validation, shared helper consistency, sequence/limit/size conversion tests, operation-kind and conflict-status parsing tests, cursor regression behavior, safe RepositoryError code/message/Display behavior, raw SQLx/database/internal text redaction through map_sqlx_error, and transaction-sensitive helper documentation. No source or documentation changes were needed in this clean-code pass. The implementation stays within storage scope, preserves passive executor-based repository helpers, keeps repository errors safe, and does not add DB pool creation, server route wiring, Core policy decisions, public HTTP status mapping, provider behavior, workflow changes, or sibling component changes.
+Implemented STOR-P5 normal file flow repository support within storage scope. Verified content blob metadata insertion/read inputs, sync object current-path/current-revision inputs, immutable file revision metadata, operation-log append metadata, changes-page sentinel behavior, and per-path advisory lock use in a feature-gated PostgreSQL normal file flow test. Documented that normal file flow is caller-composed repository work under Server/Core transaction orchestration. No Core upsert decision implementation, HTTP handler, content upload streaming runtime, adapter loop, conflict/delete behavior beyond current flow dependencies, sibling component changes, or workflow changes were added.
 
 CHANGED_FILES:
+- crates/haze-sync-storage/src/repositories/content_blobs.rs
+- crates/haze-sync-storage/src/repositories/objects.rs
+- crates/haze-sync-storage/src/repositories/operation_log.rs
+- crates/haze-sync-storage/docs/decisions.md
+- crates/haze-sync-storage/docs/implementation-log.md
 - crates/haze-sync-storage/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/storage
 base_branch: main
 base_sha: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
-head_sha: 0df467520f793d0127206ade3c6f02a6f0168f95 before report write; report write creates the next branch head
+head_sha: dfe35b4552ff56bcdeb5a103c6f321f5ed2c74a8 before report write; report write creates the next branch head
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: crates/haze-sync-storage/control/prompt.md
 control_report_written: crates/haze-sync-storage/control/report.md
 control_files_archived_by_worker: no
-ci_skip_used: yes for this report-only commit
-ci_skip_reason: this clean-code review run made no source, product, test, docs, dependency, workflow, script, migration, contract, or behavior changes; only crates/haze-sync-storage/control/report.md was updated
+ci_skip_used: yes for the final report-only commit only
+ci_skip_reason: final commit updates only crates/haze-sync-storage/control/report.md; product/source/docs commits did not use CI skip and triggered PR CI
 
 SCOPE:
 allowed_files_only: yes
@@ -60,41 +65,46 @@ affected_components: storage only
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- Reviewed `crates/haze-sync-storage/src/repositories/revisions.rs` and verified revision list helpers now use the shared limit validator before querying.
-- Reviewed `crates/haze-sync-storage/src/repositories/mod.rs` and verified shared validation/error-boundary tests cover sequence bounds, list limits, size conversion, stable codes/messages/Display, and SQLx error redaction.
-- Reviewed status/operation vocabulary and cursor monotonicity behavior in existing repository modules.
-- Reviewed storage decisions and implementation log documentation for transaction-sensitive repository helper groups.
-- Reviewed PR diff metadata for STOR-P4 relevant files.
-behavior_changes: none in this review; STOR-P4 implementation behavior is accepted as-is
-bugs_found: none in clean-code review
-bugs_fixed: none; no source/doc cleanup was necessary
-cleanups_made: none
-non_goals_preserved: no DB pool creation, no server route wiring, no Core policy decisions, no public HTTP status mapping, no provider behavior, no workflow changes, no sibling component changes
-deferred_work: none for clean-code review; orchestrator should continue lifecycle based on current CI/control state
+- Added content blob metadata tests proving content-addressed metadata is not derived from vault paths and size bounds use repository range validation.
+- Added sync object tests for storage kind strings, validated path/adapter input values, and passive current-revision metadata mapping.
+- Refactored operation changes-page construction into a private helper and added tests for one-sentinel `has_more` behavior and empty-page cursor behavior.
+- Added operation append-entry tests proving upsert operation metadata carries revision/path identifiers without Storage deciding policy outcomes.
+- Added a feature-gated PostgreSQL test that composes a normal file flow inside a caller-owned transaction: insert adapter fixture, acquire path advisory lock, create/read content blob metadata, create/read sync object, insert/read immutable file revision, update/read current revision, append/read operation-log row, and read the changes page enriched with revision metadata.
+- Documented normal file flow repository composition in storage decisions.
+- Added a STOR-P5 entry to the storage implementation log.
+behavior_changes: operation-log `changes_since` now uses an extracted helper for page assembly with the same sentinel-row semantics; repository product semantics are preserved
+bugs_found: none; existing repository primitives were mostly present, STOR-P5 added verification and documentation around the normal file flow
+bugs_fixed: none
+cleanups_made: extracted `change_feed_page_from_rows` to make changes-page behavior testable without changing SQL behavior
+non_goals_preserved: no Core upsert decision implementation, no HTTP handler, no content upload streaming runtime, no adapter loop, no conflict/delete behavior beyond current flow dependencies, no sibling component changes, no workflow changes
+deferred_work: CI/shell verification remains pending; clean-code review should inspect the feature-gated PostgreSQL flow test and page-helper refactor before final lifecycle acceptance
 
 TESTS_AND_CHECKS:
 checks_run:
-- Read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, chatgpt-gh-connector.md, and wave-plan background from Project Sources.
-- Read storage control state, active prompt, previous implementation report, component contract, implementation plan, implementation log, dependency map, relevant repository modules, decisions docs, PR metadata, and main..component/storage compare metadata through GitHub connector.
-- Reviewed PR file patches for `crates/haze-sync-storage/src/repositories/revisions.rs`, `crates/haze-sync-storage/src/repositories/mod.rs`, and `crates/haze-sync-storage/docs/decisions.md` through GitHub connector.
-- Verified from active state/prompt that Component CI run 29023928350 was recorded as CI_GREEN/success before this review.
+- Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, and wave-plan background from Project Sources.
+- Read storage control state, active prompt, previous report, component contract, implementation plan, implementation log, dependency map, relevant repository modules, locks helper, model rows, migrations, PR metadata, and main..component/storage compare metadata through GitHub connector.
+- GitHub connector compare main..component/storage after STOR-P5 changes.
+- GitHub connector PR #47 metadata lookup after STOR-P5 changes.
+- GitHub connector combined status lookup for dfe35b4552ff56bcdeb5a103c6f321f5ed2c74a8 returned no statuses.
+- GitHub connector workflow-run lookup for dfe35b4552ff56bcdeb5a103c6f321f5ed2c74a8 observed Component CI run 29035028384 with status in_progress and conclusion none.
 checks_not_run:
 - cargo fmt --check
 - cargo check -p haze-sync-storage
 - cargo test -p haze-sync-storage
+- cargo test -p haze-sync-storage --features test-support
 - cargo clippy -p haze-sync-storage --all-targets -- -D warnings
-ci_status: CI_GREEN as recorded in state.md and active prompt for Component CI run 29023928350; no new product-code CI was triggered by this report-only run
+ci_status: CI_PENDING for the new Component CI run observed after the STOR-P5 source/doc commits
 workflow_urls:
-- Component CI run 29023928350 recorded in state/prompt as successful for STOR-P4 product-code state
+- Component CI run 29035028384 observed for commit dfe35b4552ff56bcdeb5a103c6f321f5ed2c74a8; status in_progress, conclusion none
 known_failures:
-- none observed in active control state for this phase
+- none observed for STOR-P5 at report time; CI is in progress
 
 CI_DIAGNOSTICS:
-artifact_based_logs: no; active role is clean-code-reviewer and prompt explicitly said not to read CI diagnostics artifacts unless a future active prompt instructs it
+artifact_based_logs: no; active role is implementation-worker and prompt explicitly said not to read CI diagnostics artifacts unless a future active prompt instructs it
 artifact_name: none
 artifact_id: none
-workflow_run_id: 29023928350 from active state/prompt only, not a diagnostics artifact source
-workflow_run_attempt: 1 from active state
+workflow_run_id: 29035028384 for newly observed in-progress Component CI run, not a diagnostics artifact source
+workflow_run_attempt: unknown from commit workflow-run lookup
 artifact_status: not applicable
 summary_read: no
 manifest_read: no
@@ -112,17 +122,17 @@ background_jobs_added: no
 
 ISSUES_FOUND:
 - Branch remains diverged from main: compare reported merge base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2 and main head c1e69a664388b0cba028170e8398b9088218957d before report write.
-- Shell commands could not be run because this worker is restricted to the GitHub connector.
-- This final report-only commit used [skip ci] and is not CI evidence; CI_GREEN is based on active state/prompt metadata for the prior product-code run.
+- Shell commands could not be run because this worker is restricted to the GitHub connector; CI is the pending verification source.
+- The final report-only commit used [skip ci] and is not CI evidence. The source/doc STOR-P5 commits did not skip CI.
 
 BLOCKERS:
-none
+none for implementation; CI verification is pending
 
 NEXT_RECOMMENDED_AGENT:
-orchestrator
+clean-code-reviewer
 
 FINAL_VERDICT:
-CLEAN_ACCEPT. STOR-P4 repository boundary hardening is clean-code accepted with no additional source/doc changes in this pass. The only commit from this run is report-only and used CI skip; it must not be treated as new CI evidence.
+SELF_ACCEPT_PENDING_CI. STOR-P5 was implemented within storage scope with normal file flow repository verification, feature-gated PostgreSQL flow coverage, changes-page behavior tests, transaction-composition documentation, and implementation-log update. Source/docs commits triggered Component CI, which is in progress; the final report-only commit used CI skip and must not be treated as CI evidence.
 
 PUSHED:
 yes
