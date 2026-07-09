@@ -9,7 +9,7 @@ active_report: crates/haze-sync-worktree/control/report.md
 active_agent_role: clean-code-reviewer
 
 wave: W1
-phase: WT-P4C
+phase: WT-P4C-RERUN
 
 implementation_status: SELF_ACCEPT_PENDING_CI
 clean_review_status: PENDING
@@ -20,3 +20,4 @@ ci_run_number: 679
 ci_run_attempt: 1
 known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
+rerun_reason: previous active report did not close WT-P4C
