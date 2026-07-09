@@ -1,13 +1,13 @@
 REPORT_TYPE:
-FIX
+CLEAN_CODE_REVIEW
 
 STATUS:
-FIX_COMPLETE
+CLEAN_ACCEPT
 
 AGENT:
-role: fixer-worker
-agent_execution_id: cli-W1-FIX-CLI-P3-CI
-chat_name: cli — W1 FIX-CLI-P3-CI CI Fix
+role: clean-code-reviewer
+agent_execution_id: cli-W1-CLI-P3C
+chat_name: cli — W1 CLI-P3C Clean-Code Review
 
 COMPONENT:
 name: cli
@@ -21,28 +21,27 @@ control_report_path: crates/haze-sync-cli/control/report.md
 
 WAVE:
 id: W1
-phase_id: FIX-CLI-P3-CI
-dependency_status: CLI-P3 implementation completed with SELF_ACCEPT_PENDING_CI; Component CI run 29009634703 attempt 1 was red with rust-fmt and cargo-clippy failures
+phase_id: CLI-P3C
+dependency_status: CLI-P3 implementation and CI fixer complete; post-fix Component CI run 29011403478 completed successfully for source-fix head a505ea64dd6112dca6e27c84b8aee17ff19b9c00
 
 SUMMARY:
-Fixed the minimum cause of the CLI-P3 CI failure inside cli scope. The CI diagnostics artifact for run 29009634703 attempt 1 reported rustfmt formatting drift in crates/haze-sync-cli/src/config.rs and clippy derivable_impls failures for TokenSource and CliConfig defaults. Applied rustfmt-equivalent formatting and replaced manual Default impls with behavior-preserving derive Default usage. No docs, contracts, workflows, sibling components, config IO, server calls, tests deletion, or runtime behavior changes were made.
+Reviewed the CLI-P3 config and secret-source foundation plus the post-CI-fix source. The implementation is accepted without source or docs changes. The config source precedence model is explicit, token handling is descriptor-based rather than raw-token based, server URLs/token file paths/OS-secret references/token-source values are redacted in Debug and summary surfaces, inline token descriptors are rejected without echo, and the clippy Default derivation is behavior-preserving. Non-goals remain preserved: no config/env/file/stdin/keychain IO, no server calls, no token creation or rotation, no provider tokens or provider calls.
 
 CHANGED_FILES:
-- crates/haze-sync-cli/src/config.rs
 - crates/haze-sync-cli/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/cli
 base_branch: main
 base_sha: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2 from PR #48 metadata
-head_sha: a505ea64dd6112dca6e27c84b8aee17ff19b9c00 before report-only commit; report write creates final head commit
+head_sha: 084212dc342aac33ba018a804e1a36ec394feb09 before report-only commit; report write creates final head commit
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
 ci_skip_used: yes, for this final control/report.md-only commit only
-ci_skip_reason: final report update is strictly control/report-only and cannot change executable behavior or validation outcome; product/source fixer commit did not use CI skip
+ci_skip_reason: final report update is strictly control/report-only and cannot change executable behavior or validation outcome; no source clean-code changes were made in this review
 
 SCOPE:
 allowed_files_only: yes
@@ -63,70 +62,64 @@ completed:
 - Read current control state and active prompt from component/cli.
 - Read previous control report.
 - Read CLI component contract, implementation plan, implementation log, dependency map, and relevant current source.
-- Read PR #48 metadata and diff.
-- Fetched/listed the diagnostics artifact metadata for run 29009634703.
-- Downloaded and read diagnostics artifact 8195027380.
-- Read summary.md, manifest.json, logs/rust-fmt.log, and logs/cargo-clippy.log.
-- Applied the minimum source fix in crates/haze-sync-cli/src/config.rs.
-main_changes:
-- Reflowed SecretFile Debug formatting to rustfmt's expected multiline form.
-- Reflowed the long unsafe_file_path concat test line to rustfmt's expected layout.
-- Changed TokenSource to derive Default and marked the None variant as #[default].
-- Changed CliConfig to derive Default and removed the manual Default impl.
+- Read PR #48 metadata and PR diff.
+- Compared source-fix head a505ea64dd6112dca6e27c84b8aee17ff19b9c00 to current branch head 084212dc342aac33ba018a804e1a36ec394feb09 and confirmed intervening changes touched only CLI control files.
+- Reviewed CLI-P3 config source precedence, token-source descriptor model, redaction surfaces, inline token rejection, and Default derivation after the CI fix.
+main_findings:
+- ConfigField and ConfigSource make source precedence explicit for server URL, profile, output format, and token source.
+- TokenSource accepts safe descriptors: env var, file path descriptor, stdin, OS-secret reference, or none.
+- TokenSource rejects inline literal/bearer/token descriptors without echoing raw values.
+- ServerUrl, SecretFile, OsSecretRef, TokenSource, and CliConfig Debug output avoid exposing raw sensitive values.
+- SafeConfigSummary reports only high-level server_url and token_source state, not raw URL/path/secret-reference values.
+- CliConfig derived Default keeps the same behavior as the previous manual impl: default profile, no server URL, human output, and no token source.
+- TokenSource derived Default keeps the same behavior as the previous manual impl: TokenSource::None.
+- Tests cover precedence, accepted descriptor categories, inline-token rejection, redaction, and invalid error output without raw-value echo.
+- No source changes were required during this clean-code review.
 behavior_changes:
-- none; Default outputs remain TokenSource::None and CliConfig with default profile, no server URL, human output, and no token source
+- none
 bugs_found:
-- rust-fmt failure in config.rs.
-- clippy derivable_impls failures for TokenSource and CliConfig default implementations.
+- none
 bugs_fixed:
-- Fixed rustfmt formatting drift in config.rs.
-- Fixed clippy derivable_impls by deriving Default where clippy required it.
+- none
 cleanups_made:
-- source formatting and behavior-preserving default derivation only
+- none; review-only report
 non_goals_preserved:
-- no config IO
+- no config/env/file/stdin/keychain IO
 - no server calls
-- no docs or contract changes
-- no workflow changes
-- no sibling component changes
-- no test deletion
 - no token creation or rotation
 - no provider tokens or provider calls
+- no workflow changes
+- no sibling component changes
+- no contract changes
 deferred_work:
-- Observe the new Component CI run for head a505ea64dd6112dca6e27c84b8aee17ff19b9c00.
+- Future phases still own actual config loading, HTTP client wiring, live Server/API-backed commands, live doctor behavior, token creation/rotation if accepted, and OS-secret backend integration if accepted.
 
 TESTS_AND_CHECKS:
 checks_run:
-- GitHub fetches for control state, prompt, previous report, component docs, source, PR metadata, and PR diff.
-- CI diagnostics artifact metadata fetch for run 29009634703.
-- Downloaded diagnostics artifact 8195027380.
-- Read summary.md, manifest.json, logs/rust-fmt.log, and logs/cargo-clippy.log from the artifact.
-- Verified updated config.rs snippets through GitHub fetch_file.
-- Observed PR #48 head after source fix as a505ea64dd6112dca6e27c84b8aee17ff19b9c00.
-- Observed new Component CI run 29011403478 for head a505ea64dd6112dca6e27c84b8aee17ff19b9c00 as in_progress.
+- GitHub fetches for control state, active prompt, previous report, component contract, implementation plan, implementation log, dependency map, relevant source files, PR metadata, and PR diff.
+- GitHub compare_commits from source-fix head a505ea64dd6112dca6e27c84b8aee17ff19b9c00 to current head 084212dc342aac33ba018a804e1a36ec394feb09.
+- Observed Component CI run 29011403478 as success in active state/prompt and prior GitHub metadata; no new source changes were made in this review.
 checks_not_run:
 - cargo fmt --all --check: not run locally; GitHub connector does not provide shell execution.
 - cargo check -p haze-sync-cli: not run locally; GitHub connector does not provide shell execution.
 - cargo test -p haze-sync-cli: not run locally; GitHub connector does not provide shell execution.
 - cargo clippy -p haze-sync-cli --all-targets -- -D warnings: not run locally; GitHub connector does not provide shell execution.
-ci_status: CI_PENDING
+ci_status: CI_GREEN for source-fix head a505ea64dd6112dca6e27c84b8aee17ff19b9c00; final report-only commit uses CI skip and is not CI evidence
 workflow_urls:
-- Component CI run 29011403478 for head a505ea64dd6112dca6e27c84b8aee17ff19b9c00 observed as in_progress
+- Component CI run 29011403478 for source-fix head a505ea64dd6112dca6e27c84b8aee17ff19b9c00 completed successfully
 known_failures:
-- Previous run 29009634703 attempt 1 failed rust-fmt and cargo-clippy; both failure causes addressed in config.rs.
+- none for reviewed source head after the CI fix
 
 CI_DIAGNOSTICS:
-artifact_based_logs: yes
-artifact_name: ci-diag__component-cli__wf-component-ci__run-29009634703__attempt-1
-artifact_id: 8195027380
-workflow_run_id: 29009634703
-workflow_run_attempt: 1
-artifact_status: found, not expired, downloaded and readable
-summary_read: yes, summary.md read
-manifest_read: yes, manifest.json read
-logs_read:
-- logs/rust-fmt.log
-- logs/cargo-clippy.log
+artifact_based_logs: no
+artifact_name: none
+artifact_id: none
+workflow_run_id: none
+workflow_run_attempt: none
+artifact_status: not applicable; active role is clean-code-reviewer and prompt explicitly says not to read CI diagnostics artifacts
+summary_read: no
+manifest_read: no
+logs_read: none
 raw_job_logs_used: no
 diagnostics_failure: none
 
@@ -140,17 +133,16 @@ background_jobs_added: no
 
 ISSUES_FOUND:
 - Local shell commands cannot be run through the GitHub connector.
-- The new Component CI run for the fixed head was observed only as in_progress; final green/red result is not available in this worker run.
-- The final report-only commit uses CI skip and is not CI evidence.
+- Final report-only commit uses CI skip and is not CI evidence.
 
 BLOCKERS:
-none for the fixer implementation; CI completion remains pending
+none
 
 NEXT_RECOMMENDED_AGENT:
 orchestrator
 
 FINAL_VERDICT:
-FIX_COMPLETE. The artifact-based CI diagnostics identified rustfmt and clippy derivable_impls failures in cli-owned config.rs, and the minimum behavior-preserving source fix was applied within allowed scope. New CI is pending and must be observed by Orchestrator.
+CLEAN_ACCEPT. CLI-P3 config and secret-source foundation is accepted as clean after the CI fix. No source or docs changes were required in this review, and the reviewed source head has green Component CI evidence.
 
 PUSHED:
 yes
