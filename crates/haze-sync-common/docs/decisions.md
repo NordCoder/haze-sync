@@ -86,6 +86,36 @@ Affected contracts:
 - API path extraction;
 - Core path-based revision decisions.
 
+## 2026-07-09 — Conflict materialization paths remain syncable VaultPaths
+
+Decision:
+
+`_haze_conflicts/**` is not reserved by `haze-sync-common`. `VaultPath` accepts conflict materialization paths as ordinary vault-relative paths. Runtime components may still ignore, materialize, or treat those paths specially in their own scopes.
+
+Rationale:
+
+Conflict materialization is Core/adaptor policy, not a primitive validation concern. Reserving `_haze_conflicts/**` in `common` would make conflict files impossible to represent as shared vault paths and would move part of Core conflict policy into the lowest-level crate.
+
+Alternatives:
+
+- Reserve `_haze_conflicts/**` in `VaultPath`.
+- Add a provider-specific exception for conflict paths.
+- Leave the behavior implicit.
+
+Consequences:
+
+- Common continues to reject only runtime/state paths such as `_haze_runtime`, `_haze_tmp`, `state`, `logs`, `trash`, and temporary file suffixes.
+- Core, Worktree, GDrive, Obsidian, and API layers own any recursion prevention, scan ignoring, or conflict-center policy around `_haze_conflicts/**`.
+- Changing `_haze_conflicts/**` to a common-reserved path later requires an explicit contract change.
+
+Affected contracts:
+
+- Core conflict service;
+- Worktree scanner/importer;
+- GDrive path reconstruction/import;
+- Obsidian local scanner/conflict center;
+- API path extraction.
+
 ## 2026-07-05 — Secret wrappers redact by default and do not serialize
 
 Decision:
