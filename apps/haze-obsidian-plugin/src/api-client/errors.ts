@@ -3,6 +3,7 @@ import { sanitizeStatusMessage } from "../status";
 import { ErrorResponseDto } from "./types";
 
 export type ApiErrorCategory =
+  | "configuration"
   | "offline"
   | "unauthorized"
   | "forbidden"
@@ -79,6 +80,14 @@ export function createHttpError(status: number, endpoint: string, payload: unkno
   });
 }
 
+export function createConfigurationError(message: string, endpoint?: string): ApiClientError {
+  return new ApiClientError({
+    category: "configuration",
+    endpoint,
+    message: sanitizeStatusMessage(message),
+  });
+}
+
 export function createInvalidResponseError(endpoint: string): ApiClientError {
   return new ApiClientError({
     category: "invalid_response",
@@ -102,6 +111,8 @@ function safeErrorMessage(status: number, payload: unknown): string {
   }
 
   switch (mapHttpStatusToCategory(status)) {
+    case "configuration":
+      return "Haze Sync API client is not configured correctly.";
     case "unauthorized":
       return "Authentication failed. Check the adapter token.";
     case "forbidden":
