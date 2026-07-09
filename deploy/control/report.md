@@ -1,12 +1,12 @@
 REPORT_TYPE:
-CLEAN_CODE_REVIEW
+IMPLEMENTATION
 
 STATUS:
-CLEAN_ACCEPT_PENDING_CI
+SELF_ACCEPT_PENDING_CI
 
 AGENT:
-role: clean-code-reviewer
-agent_execution_id: W1-DEP-P3C-deployment-clean-code-review
+role: implementation-worker
+agent_execution_id: W1-DEP-P4-deployment-implementation
 chat_name: deployment — W1 DEP-P3 Implementation
 
 COMPONENT:
@@ -21,38 +21,40 @@ control_report_path: deploy/control/report.md
 
 WAVE:
 id: W1
-phase_id: DEP-P3C
-dependency_status: ready; control state was PROMPT_READY, active_prompt matched deploy/control/prompt.md, and active_agent_role was clean-code-reviewer
+phase_id: DEP-P4
+dependency_status: ready; control state was PROMPT_READY, active_prompt matched deploy/control/prompt.md, active_agent_role was implementation-worker, and DEP-P3 clean-code/CI were accepted in active control metadata
 
 SUMMARY:
-Reviewed DEP-P3 server packaging and local service wiring. The compose wiring remains Deployment-scoped and safe: PostgreSQL and HTTP host binds stay fixed to 127.0.0.1, the server service uses documented Server env vars only, Worktree/GDrive/Obsidian/provider behavior stays disabled or deferred, migrations are explicitly not auto-run, and docs correctly distinguish /health liveness from /ready runtime readiness. During clean-code review I made a small packaging hygiene improvement: the server Docker build now uses `cargo build --release --locked -p haze-sync-server`, and `deploy/server.Dockerfile.dockerignore` limits the image build context by excluding local secrets, .env files, .git, target, node_modules, logs, dumps, backups, archives, and OS/editor noise while preserving .env.example. The new documentation records this build hygiene. CI is still pending/unknown for the DEP-P3 code-bearing commits, so the clean-code verdict is pending CI.
+Implemented DEP-P4 as documentation-only migration, backup, and restore runbook work inside Deployment scope. Added `deploy/docs/migrations-backup-restore.md` to define operator-run manual SQLx migrations, stopped/quiesced writer requirements, pre-migration backups, local and production-style PostgreSQL backup examples, object-store backup coordination, manual migration command shape, post-migration health/readiness checks, restore prerequisites, local and production-style restore order, consistency warnings, and dry-run/checklist verification. Recorded a deployment decision that manual operator-owned SQLx migration remains the current policy until a future accepted CLI, Server entry point, or deploy script exists. Linked existing local/server compose docs to the new procedure and preserved the rule that compose/server images do not auto-run migrations.
 
 CHANGED_FILES:
-- deploy/server.Dockerfile
-- deploy/server.Dockerfile.dockerignore
+- deploy/docs/migrations-backup-restore.md
+- deploy/docs/decisions.md
 - deploy/docs/server-compose.md
+- deploy/docs/local-compose.md
+- deploy/docs/implementation-log.md
 - deploy/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/deployment
 base_branch: main
-base_sha: c1e69a664388b0cba028170e8398b9088218957d from GitHub compare main...component/deployment during final review
-head_sha: 59f1334f80b5204cf68b618747afea73f8aa8c51 before this final report-only update; report update adds the final commit
+base_sha: c1e69a664388b0cba028170e8398b9088218957d from GitHub compare main...component/deployment during final verification
+head_sha: 6b497c458d5bb4cc2dbd700c9b2e38a5a0c23d8c before this final report-only update; report update adds the final commit
 merge_base_sha: 1a82bea5c87953db378e5e03429326df38320ee8
-branch_status: diverged; ahead_by 45 and behind_by 7 before this report-only update
+branch_status: diverged; ahead_by 57 and behind_by 7 before this report-only update
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
 ci_skip_used: yes
-ci_skip_reason: final report-only control commit; clean-code packaging/docs commits were code/doc-bearing and did not use CI skip
+ci_skip_reason: final report-only control commit; DEP-P4 docs commits were code/doc-bearing and did not use CI skip
 
 SCOPE:
 allowed_files_only: yes
 scope_expansion_used: no
 scope_expansion_rationale: not applicable
-cross_component_changes: none; Server files were read only as authorized dependency evidence
+cross_component_changes: none; Server migration helper files were read only as dependency context
 forbidden_files_touched: no
 
 CONTRACT:
@@ -60,65 +62,69 @@ contract_read: yes
 contract_satisfied: yes
 contract_changes_requested: no
 contract_change_rationale: not applicable
-affected_components: deployment; server dependency consumed read-only
+affected_components: deployment; Server and Storage behavior referenced only as existing ownership boundaries
 
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- Reviewed deploy/docker-compose.yml server service wiring for local-only bind behavior, documented env variables, volume behavior, healthcheck choice, and deferred migration/provider/runtime behavior.
-- Reviewed deploy/server.Dockerfile for non-root runtime, secret-free image construction, and no migration execution.
-- Updated deploy/server.Dockerfile to build with Cargo.lock enforced through `--locked`.
-- Added deploy/server.Dockerfile.dockerignore to keep local secrets, runtime state, VCS metadata, generated outputs, and local caches out of the Docker build context.
-- Updated deploy/docs/server-compose.md to document locked build and Dockerfile-specific ignore behavior.
-behavior_changes:
-- Server image builds now fail instead of silently resolving changed dependencies if Cargo.lock is stale.
-- Docker build context is reduced and excludes local secret/runtime/generated files.
+- Added deploy/docs/migrations-backup-restore.md.
+- Documented current migration execution owner as operator-run manual SQLx command.
+- Documented that Storage owns migration contents/schema and Deployment owns operator sequencing.
+- Documented stopped/quiesced writer requirements before backup, migration, and restore.
+- Added local PostgreSQL metadata backup examples using pg_dump placeholders and operator-owned paths outside the repository.
+- Added local object-store backup examples for the server_objects Docker named volume.
+- Added production-style PostgreSQL and object-store backup placeholder command shapes without credentials.
+- Added manual `sqlx migrate run --source migrations` command shape without committing DATABASE_URL.
+- Added post-migration `/health` and `/ready` checks with limitations.
+- Added local and production-style restore order, consistency warnings, and dry-run/checklist verification.
+- Recorded the manual migration policy in deploy/docs/decisions.md.
+- Linked deploy/docs/local-compose.md and deploy/docs/server-compose.md to the migration/backup/restore runbook.
+- Updated deploy/docs/implementation-log.md with DEP-P4 commits and follow-ups.
+behavior_changes: none at runtime; documentation/runbook behavior only
 bugs_found:
-- No functional deployment bug found in compose server wiring.
-- Build reproducibility and context hygiene could be improved; fixed during this review.
-bugs_fixed:
-- Hardened Docker build reproducibility by adding `--locked`.
-- Added Dockerfile-specific ignore file for safer image build context.
+- No runtime bug found.
+- DEP-P3 docs had deferred migration references but no accepted detailed procedure; DEP-P4 fills that runbook gap.
+bugs_fixed: none
 cleanups_made:
-- Documented Docker build hygiene in the server compose runbook.
+- Cross-linked compose docs to the DEP-P4 runbook.
+- Made the migration execution owner explicit instead of leaving it implicit.
 non_goals_preserved:
-- No Server code changes.
-- No GDrive, Worktree, Obsidian, Core, API, Storage, CLI, or Common code changes.
-- No workflow changes.
-- No provider services.
-- No Worktree runtime enablement.
-- No production TLS/private keys.
-- No real credentials.
-- No auto-running migrations.
-- No remote deployment automation.
+- No automatic migration runner.
+- No deploy scripts.
+- No production DB URLs.
+- No backup archives committed.
+- No restore artifacts committed.
+- No hard-delete cleanup.
+- No Server, GDrive, Worktree, Obsidian, Core, API, Storage, CLI, Common, or workflow changes.
+- No real credentials or TLS/private keys.
+- No provider services or Worktree runtime.
 deferred_work:
-- External Docker Compose syntax validation and server image build validation remain pending.
-- Migration execution runbook remains future DEP-P4 work.
-- Root `.env.example` does not currently list `HAZE_SYNC_HTTP_PORT`; adding that root placeholder is outside this clean-code prompt's allowed files and can be handled by Orchestrator if desired.
-- Host directory permissions, reverse proxy/TLS, GDrive adapter service, Worktree runtime bind mounts, and production rollout remain later Deployment phases.
+- Validate command syntax in a shell/Docker environment.
+- Future phases should define host directory permissions and production backup path layout.
+- Future accepted CLI, Server entry point, or deploy script may replace manual SQLx migration execution.
+- Backup integrity checks can be hardened after Storage/object-store verification tooling exists.
 
 TESTS_AND_CHECKS:
 checks_run:
-- Read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, chatgpt-gh-connector.md, and wave-plan guidance from provided Project Source context.
+- Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, and wave-plan guidance from provided Project Source context.
 - Read deploy/control/state.md from component/deployment.
 - Read deploy/control/prompt.md from component/deployment.
-- Read DEP-P3 implementation report from deploy/control/report.md before overwriting it.
+- Read existing deploy/control/report.md before overwriting it.
 - Read deploy/docs/component-contract.md.
-- Read DEP-P3 section of deploy/docs/implementation-plan.md.
+- Read DEP-P4 section of deploy/docs/implementation-plan.md.
 - Read deploy/docs/implementation-log.md.
 - Read deploy/docs/dependency-map.md.
-- Read relevant deployment files: deploy/docker-compose.yml, deploy/server.Dockerfile, deploy/docs/local-compose.md, deploy/docs/server-compose.md, and Cargo.lock presence.
-- Read accepted Server dependency context from component/server as authorized by the active prompt, including Server report/docs and startup/config/health behavior.
+- Read deploy/docs/decisions.md before updating it.
+- Read deploy/docker-compose.yml and deploy/docs/server-compose.md for current service/volume behavior.
+- Read Server db migration helper files as dependency context: crates/haze-sync-server/src/db/mod.rs and crates/haze-sync-server/src/db/migrations.rs.
 - Listed PR #52 changed filenames through GitHub connector.
-- Compared component/deployment against main through GitHub connector after clean-code changes.
-- Re-read changed deploy/server.Dockerfile, deploy/server.Dockerfile.dockerignore, and deploy/docs/server-compose.md after edits.
+- Re-read deploy/docs/migrations-backup-restore.md, deploy/docs/decisions.md, deploy/docs/local-compose.md, and deploy/docs/server-compose.md after edits.
+- Compared component/deployment against main through GitHub connector after edits.
 checks_not_run:
 - docker compose -f deploy/docker-compose.yml config was not run because this worker is constrained to the GitHub connector and has no shell/Docker execution channel.
-- docker compose -f deploy/docker-compose.yml up --build -d postgres server was not run for the same tooling reason.
-- Docker image build was not run for the same tooling reason.
-- curl smoke checks for /health and /ready were not run for the same tooling reason.
-- Cargo checks/tests were not run by this worker because there is no shell execution through the GitHub connector.
-ci_status: CI_PENDING_OR_UNKNOWN for DEP-P3 code-bearing commits; no completed green run for the DEP-P3 code-bearing head was observed by this reviewer
+- pg_dump, pg_restore, docker volume, docker run, curl, sqlx migrate, and restore/dry-run commands were not run for the same tooling reason.
+- Markdown lint was not run for the same tooling reason.
+ci_status: CI_GREEN for prior DEP-P3 clean-code head was present in active control state, workflow_run_id 29025503885 attempt 1; CI is pending/unknown for the new DEP-P4 docs commits until external CI runs
 workflow_urls: none fetched
 known_failures: none observed in active control state
 
@@ -126,9 +132,9 @@ CI_DIAGNOSTICS:
 artifact_based_logs: not read
 artifact_name: not applicable
 artifact_id: not applicable
-workflow_run_id: unknown for DEP-P3 code-bearing head; active state listed CI run id as unknown
-workflow_run_attempt: unknown
-artifact_status: not applicable; active prompt explicitly did not instruct reading CI diagnostics artifacts
+workflow_run_id: 29025503885 from active control state/prompt metadata only
+workflow_run_attempt: 1
+artifact_status: not applicable; implementation prompt explicitly did not instruct reading CI diagnostics artifacts
 summary_read: no
 manifest_read: no
 logs_read: no
@@ -144,20 +150,19 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- Shell/Docker checks could not be executed through the GitHub connector.
-- CI was not observed green for the DEP-P3 code-bearing head.
-- The branch remains diverged from main and behind by 7 commits according to final compare; this reviewer did not rebase, merge, or update branch history because branch management is orchestrator-owned.
-- `HAZE_SYNC_HTTP_PORT` is used by compose but not currently listed in root `.env.example`; the clean-code prompt allowed only deploy/** and deploy/control/report.md, so this reviewer did not modify root `.env.example`.
+- Shell/Docker/sqlx/PostgreSQL command syntax could not be executed through the GitHub connector.
+- The runbook uses Docker/Compose examples that must be validated externally before operational use.
+- The branch remains diverged from main and behind by 7 commits according to final compare; this worker did not rebase, merge, or update branch history because branch management is orchestrator-owned.
 
 BLOCKERS:
-- No clean-code or contract blocker.
-- External CI/Docker Compose validation remains required before DEP-P3 can be treated as CI-accepted.
+- No implementation blocker.
+- External clean-code review and CI/command validation are required before treating DEP-P4 as accepted.
 
 NEXT_RECOMMENDED_AGENT:
-orchestrator
+clean-code-reviewer
 
 FINAL_VERDICT:
-CLEAN_ACCEPT_PENDING_CI. DEP-P3 server packaging and local service wiring are clean-code accepted after build reproducibility/context-hygiene fixes. Merge readiness still requires external CI and Docker Compose validation evidence.
+SELF_ACCEPT_PENDING_CI. DEP-P4 is implemented within Deployment docs scope. The migration/backup/restore process is explicit, secret-safe, consistency-aware, and avoids automatic migrations or generated artifacts.
 
 PUSHED:
 yes
