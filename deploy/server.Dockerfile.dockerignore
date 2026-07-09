@@ -1,0 +1,38 @@
+# Dockerfile-specific ignore file for deploy/server.Dockerfile.
+# Patterns are evaluated against the repository build context.
+
+.git
+.git/**
+
+# Local secrets and runtime state must not enter image build context.
+.env
+.env.*
+!.env.example
+
+# Build outputs and dependency caches.
+target
+ target/**
+node_modules
+node_modules/**
+apps/haze-obsidian-plugin/node_modules
+apps/haze-obsidian-plugin/node_modules/**
+
+# Local/generated operational artifacts.
+*.log
+*.dump
+*.sql
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+logs
+logs/**
+dumps
+dumps/**
+backups
+backups/**
+
+# OS/editor noise.
+.DS_Store
+__MACOSX
+__MACOSX/**
