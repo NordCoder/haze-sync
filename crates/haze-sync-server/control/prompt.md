@@ -1,4 +1,4 @@
-# W1-SRV-P6 — Admin/status, readiness, doctor, and observability hardening
+# W1-SRV-P6-RERUN — Admin/status, readiness, doctor, and observability hardening
 
 Component: server
 Path: crates/haze-sync-server
@@ -7,6 +7,10 @@ PR: #45
 Role: implementation-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
+
+## Rerun guard
+
+This is an explicit refreshed active prompt. The current report before this prompt was for SRV-P5C, not SRV-P6. Therefore SRV-P6-RERUN is not already complete.
 
 ## Context
 
@@ -21,34 +25,11 @@ The next implementation phase is SRV-P6 from crates/haze-sync-server/docs/implem
 
 ## Read
 
-Read before editing:
-
-- implementation-manifest.md from ChatGPT Project Sources
-- report-template.md from ChatGPT Project Sources
-- implementation-worker-prompt.md from ChatGPT Project Sources
-- chatgpt-gh-connector.md from ChatGPT Project Sources
-- crates/haze-sync-server/docs/component-contract.md
-- crates/haze-sync-server/docs/implementation-plan.md
-- crates/haze-sync-server/docs/implementation-log.md
-- crates/haze-sync-server/docs/dependency-map.md
-- crates/haze-sync-server/control/prompt.md
-- crates/haze-sync-server/control/report.md
-- relevant current repository code and PR diff
-
-Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
+Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, relevant code and PR diff. Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
 
 ## Task
 
-Implement SRV-P6: Admin/status, readiness, doctor, and observability hardening.
-
-Follow the implementation plan:
-
-- harden `/ready` and DB/object-store readiness checks;
-- map adapter summaries, cursor presence, pause support, and mode/status summaries safely;
-- add doctor route or server-side doctor inputs only when Core/API contracts exist;
-- ensure skipped/not-run checks are represented honestly;
-- add structured logs/tracing with redaction guarantees if scoped;
-- add metrics endpoint only if system scope accepts it.
+Implement SRV-P6: Admin/status, readiness, doctor, and observability hardening. Focus on honest read-only operational surfaces, safe readiness checks, safe adapter/status summaries, skipped/not-run check representation, redacted logs/tracing if scoped, and metrics only if accepted by system scope.
 
 ## Allowed files
 
@@ -61,20 +42,12 @@ Follow the implementation plan:
 
 ## Non-goals
 
-- No admin mutations by default.
-- No repair execution.
-- No token rotation.
-- No provider calls unless a provider component contract supplies safe checks.
-- No raw cursor/status payload exposure.
-- No sibling component changes.
-- No workflow changes.
+No admin mutations by default, repair execution, token rotation, provider calls without accepted provider contract, raw cursor/status payload exposure, workflow changes, or sibling component changes.
 
 ## CI trigger policy
 
-Follow the CI skip policy in implementation-manifest.md and implementation-worker-prompt.md. Product/source/docs commits must not skip CI. A final report-only commit may skip CI.
+Product/source/docs commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only the report to crates/haze-sync-server/control/report.md.
-
-Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION.
+Write only the report to crates/haze-sync-server/control/report.md. Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION and phase_id to SRV-P6-RERUN.
