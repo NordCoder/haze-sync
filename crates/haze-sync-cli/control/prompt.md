@@ -1,23 +1,24 @@
-# W1-CLI-P3 — CLI config and secret-source foundation
+# W1-FIX-CLI-P3-CI — CLI CLI-P3 CI fix
 
 Component: cli
 Path: crates/haze-sync-cli
 Branch: component/cli
 PR: #48
-Role: implementation-worker
+Role: fixer-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-CLI-P2 and its CI fixer loop are complete. Current Component CI is green for the current PR head.
+CLI-P3 implementation completed with SELF_ACCEPT_PENDING_CI. Product-code CI completed red.
 
 - workflow: Component CI
-- workflow_run_id: 29006877578
-- run_number: 454
-- conclusion: success
-
-The next implementation phase is CLI-P3 from crates/haze-sync-cli/docs/implementation-plan.md.
+- workflow_run_id: 29009634703
+- run_number: 511
+- run_attempt: 1
+- artifact_id: 8195027380
+- artifact_name: ci-diag__component-cli__wf-component-ci__run-29009634703__attempt-1
+- known failed checks: rust-fmt, cargo-clippy
 
 ## Read
 
@@ -25,7 +26,7 @@ Read before editing:
 
 - implementation-manifest.md from ChatGPT Project Sources
 - report-template.md from ChatGPT Project Sources
-- implementation-worker-prompt.md from ChatGPT Project Sources
+- fixer-worker-prompt.md from ChatGPT Project Sources
 - chatgpt-gh-connector.md from ChatGPT Project Sources
 - crates/haze-sync-cli/docs/component-contract.md
 - crates/haze-sync-cli/docs/implementation-plan.md
@@ -35,41 +36,42 @@ Read before editing:
 - crates/haze-sync-cli/control/report.md
 - relevant current repository code and PR diff
 
-Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
+Use the GitHub connector to download and read the diagnostics artifact listed above.
+
+Read summary.md, manifest.json, and every log listed in failed_checks.
+
+If the artifact is missing, expired, malformed, or unreadable, report FIX_BLOCKED_BY_LOGS.
 
 ## Task
 
-Implement CLI-P3: Config and secret-source foundation.
+Fix the minimum cause of the CLI-P3 CI failure inside cli scope.
 
-Follow the implementation plan:
+Expected scope from triage:
 
-- define config source precedence for server URL, profile, output format, and token source;
-- support safe token source representations without encouraging shell-history token usage;
-- redact config and token values in debug/errors;
-- avoid printing local absolute secret paths unless local-only diagnostics explicitly allow them;
-- add tests for redaction and invalid config errors.
+- rustfmt formatting in crates/haze-sync-cli/src/config.rs;
+- clippy derivable_impls for TokenSource and CliConfig defaults.
 
 ## Allowed files
 
 - crates/haze-sync-cli/src/**
-- crates/haze-sync-cli/docs/**
 - crates/haze-sync-cli/control/report.md
 
-## Non-goals
+## Forbidden changes
 
-- No token creation or rotation.
-- No live server calls unless explicitly justified by this phase.
-- No deployment secret provisioning.
-- No provider tokens.
-- No sibling component changes.
-- No workflow changes.
+- Do not change runtime behavior except behavior-preserving Default derivation if required by clippy.
+- Do not add config IO.
+- Do not add server calls.
+- Do not change docs or contracts.
+- Do not change workflow files.
+- Do not change sibling components.
+- Do not delete tests.
 
 ## CI trigger policy
 
-Follow the CI skip policy in implementation-manifest.md and the relevant Project Source worker prompt. Product, test, dependency, contract, workflow, and implementation commits must not skip CI.
+Follow the CI skip policy in implementation-manifest.md and fixer-worker-prompt.md. Product/source fixer commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
 Write only the report to crates/haze-sync-cli/control/report.md.
 
-Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION.
+Use report-template.md. Set REPORT_TYPE to FIX.
