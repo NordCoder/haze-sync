@@ -11,7 +11,7 @@
 
 # Build outputs and dependency caches.
 target
- target/**
+target/**
 node_modules
 node_modules/**
 apps/haze-obsidian-plugin/node_modules
