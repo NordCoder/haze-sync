@@ -11,7 +11,7 @@ export interface PendingQueueEntry {
   source: PendingChangeSource;
   firstSeenAt: string;
   lastSeenAt: string;
-  operationIdempotencyKey?: string;
+  operationIdempotencyKey: string;
   file?: LocalFileFact;
   previousFile?: LocalFileFact;
 }
@@ -51,7 +51,7 @@ export function mergeLocalSyncState(rawState: unknown): LocalSyncState {
 
   return {
     knownFiles: readRecord(rawState.knownFiles, isLocalFileFact),
-    pendingQueue: readRecord(rawState.pendingQueue, isPendingQueueEntry),
+    pendingQueue: readPendingQueue(rawState.pendingQueue),
     lastFullScanAt: readOptionalString(rawState.lastFullScanAt),
     lastEventHintAt: readOptionalString(rawState.lastEventHintAt),
   };
@@ -179,7 +179,7 @@ function upsertPendingEntry(
     firstSeenAt: currentEntry?.firstSeenAt ?? observedAt,
     lastSeenAt: observedAt,
     operationIdempotencyKey:
-      currentOperationKind === operationKind && currentEntry?.operationIdempotencyKey !== undefined
+      currentOperationKind === operationKind && currentEntry !== undefined
         ? currentEntry.operationIdempotencyKey
         : generateLocalIdempotencyKey(operationKind),
     file,
@@ -209,6 +209,42 @@ function fileFactChanged(left: LocalFileFact, right: LocalFileFact): boolean {
   );
 }
 
+function readPendingQueue(value: unknown): Record<string, PendingQueueEntry> {
+  if (!isRecord(value)) {
+    return {};
+  }
+
+  const result: Record<string, PendingQueueEntry> = {};
+  for (const [key, item] of Object.entries(value)) {
+    const entry = readPendingQueueEntry(item);
+    if (entry !== undefined) {
+      result[key] = entry;
+    }
+  }
+
+  return result;
+}
+
+function readPendingQueueEntry(value: unknown): PendingQueueEntry | undefined {
+  if (!isPendingQueueEntryShape(value)) {
+    return undefined;
+  }
+
+  return {
+    path: value.path,
+    kind: value.kind,
+    source: value.source,
+    firstSeenAt: value.firstSeenAt,
+    lastSeenAt: value.lastSeenAt,
+    operationIdempotencyKey:
+      typeof value.operationIdempotencyKey === "string"
+        ? value.operationIdempotencyKey
+        : generateLocalIdempotencyKey(operationKindForPendingChange(value.kind)),
+    file: value.file,
+    previousFile: value.previousFile,
+  };
+}
+
 function readRecord<T>(value: unknown, predicate: (item: unknown) => item is T): Record<string, T> {
   if (!isRecord(value)) {
     return {};
@@ -228,7 +264,7 @@ function readOptionalString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-function isPendingQueueEntry(value: unknown): value is PendingQueueEntry {
+function isPendingQueueEntryShape(value: unknown): value is PendingQueueEntry {
   if (!isRecord(value)) {
     return false;
   }
