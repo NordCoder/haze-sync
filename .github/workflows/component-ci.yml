@@ -1,46 +1,74 @@
 name: Component CI
 
 on:
-  push:
-    branches: ['component/**', 'process/**']
   pull_request:
-    branches: [main]
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: component-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   rust:
     name: Rust workspace
+    if: ${{ github.event_name != 'pull_request' || startsWith(github.head_ref, 'component/') }}
     runs-on: ubuntu-latest
+    env:
+      HAZE_WORKFLOW_SLUG: component-ci
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Rust diagnostics
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Resolve component context
         shell: bash
         run: |
-          set +e
-          mkdir -p ci-diagnostics
-          echo "run_id=$GITHUB_RUN_ID" > ci-diagnostics/metadata.txt
-          echo "sha=$GITHUB_SHA" >> ci-diagnostics/metadata.txt
-          cargo fmt --all --check > ci-diagnostics/fmt.log 2>&1; fmt_status=$?
-          cargo fmt --all >> ci-diagnostics/fmt.log 2>&1; fmt_apply_status=$?
-          git diff -- . > ci-diagnostics/rustfmt.patch || true
-          git checkout -- . || true
-          cargo check --workspace > ci-diagnostics/check.log 2>&1; check_status=$?
-          cargo test --workspace > ci-diagnostics/test.log 2>&1; test_status=$?
-          cargo clippy --workspace --all-targets -- -D warnings > ci-diagnostics/clippy.log 2>&1; clippy_status=$?
-          echo "fmt_status=$fmt_status" >> ci-diagnostics/metadata.txt
-          echo "fmt_apply_status=$fmt_apply_status" >> ci-diagnostics/metadata.txt
-          echo "check_status=$check_status" >> ci-diagnostics/metadata.txt
-          echo "test_status=$test_status" >> ci-diagnostics/metadata.txt
-          echo "clippy_status=$clippy_status" >> ci-diagnostics/metadata.txt
-          if [ "$fmt_status" -ne 0 ] || [ "$fmt_apply_status" -ne 0 ] || [ "$check_status" -ne 0 ] || [ "$test_status" -ne 0 ] || [ "$clippy_status" -ne 0 ]; then exit 1; fi
-      - uses: actions/upload-artifact@v4
-        if: always()
+          branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          component="unknown"
+
+          if [[ "$branch" == component/* ]]; then
+            component="${branch#component/}"
+          fi
+
+          echo "HAZE_COMPONENT=${component}" >> "$GITHUB_ENV"
+          echo "HAZE_COMPONENT_BRANCH=${branch}" >> "$GITHUB_ENV"
+          echo "HAZE_HEAD_SHA=${{ github.event.pull_request.head.sha || github.sha }}" >> "$GITHUB_ENV"
+
+      - name: cargo fmt
+        shell: bash
+        run: bash .github/scripts/ci-run.sh rust-fmt cargo fmt --all --check
+
+      - name: cargo check
+        shell: bash
+        run: bash .github/scripts/ci-run.sh cargo-check cargo check --workspace
+
+      - name: cargo test
+        shell: bash
+        run: bash .github/scripts/ci-run.sh cargo-test cargo test --workspace
+
+      - name: cargo clippy
+        shell: bash
+        run: bash .github/scripts/ci-run.sh cargo-clippy cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Finalize CI diagnostics
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: bash .github/scripts/ci-finalize.sh
+
+      - name: Upload CI diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
         with:
-          name: component-ci-diagnostics
+          name: ci-diag__component-${{ env.HAZE_COMPONENT }}__wf-${{ env.HAZE_WORKFLOW_SLUG }}__run-${{ github.run_id }}__attempt-${{ github.run_attempt }}
           path: ci-diagnostics/
-          retention-days: 3
-          if-no-files-found: error
+          retention-days: 1
+          compression-level: 9
+          if-no-files-found: ignore
+          include-hidden-files: false
