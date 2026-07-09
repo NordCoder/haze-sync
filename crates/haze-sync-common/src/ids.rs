@@ -297,15 +297,7 @@ mod tests {
     #[test]
     fn identifiers_reject_unsafe_values() {
         let invalid_cases = [
-            "",
-            "bad/path",
-            "bad id",
-            "bad:id",
-            "bad\0id",
-            "ümlaut",
-            "bad@id",
-            "bad#id",
-            "bad?id",
+            "", "bad/path", "bad id", "bad:id", "bad\0id", "ümlaut", "bad@id", "bad#id", "bad?id",
             "bad%id",
         ];
 
@@ -343,10 +335,8 @@ mod tests {
         );
 
         let revision_max = format!("rev_{}", "a".repeat(MAX_IDENTIFIER_LEN - "rev_".len()));
-        let revision_too_long = format!(
-            "rev_{}",
-            "a".repeat(MAX_IDENTIFIER_LEN + 1 - "rev_".len())
-        );
+        let revision_too_long =
+            format!("rev_{}", "a".repeat(MAX_IDENTIFIER_LEN + 1 - "rev_".len()));
         assert_eq!(revision_max.len(), MAX_IDENTIFIER_LEN);
         assert!(RevisionId::parse(&revision_max).is_ok());
         assert_eq!(
@@ -355,10 +345,7 @@ mod tests {
         );
 
         let operation_max = format!("op_{}", "a".repeat(MAX_IDENTIFIER_LEN - "op_".len()));
-        let operation_too_long = format!(
-            "op_{}",
-            "a".repeat(MAX_IDENTIFIER_LEN + 1 - "op_".len())
-        );
+        let operation_too_long = format!("op_{}", "a".repeat(MAX_IDENTIFIER_LEN + 1 - "op_".len()));
         assert_eq!(operation_max.len(), MAX_IDENTIFIER_LEN);
         assert!(OperationId::parse(&operation_max).is_ok());
         assert_eq!(
