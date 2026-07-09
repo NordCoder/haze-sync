@@ -1,4 +1,5 @@
-import {
+import type {
+  ApiErrorCategory,
   ContentHash,
   DeleteFileResponseDto,
   PutFileResponseDto,
@@ -108,6 +109,14 @@ export function applyDeleteOutcome(
   };
 }
 
+export function skippedUpdateForApiError(
+  state: BaseRevisionState,
+  category: ApiErrorCategory,
+  reason?: string,
+): BaseStateUpdateResult {
+  return skippedUpdate(state, mutationOutcomeFromApiErrorCategory(category), undefined, reason);
+}
+
 export function markRemoteBaseRevision(
   state: BaseRevisionState,
   path: VaultPath,
@@ -179,6 +188,26 @@ function classifyServerStatus(status: string): ServerMutationOutcome {
       return "server_unavailable";
     case "rejected":
     default:
+      return "rejected";
+  }
+}
+
+function mutationOutcomeFromApiErrorCategory(category: ApiErrorCategory): ServerMutationOutcome {
+  switch (category) {
+    case "unauthorized":
+    case "forbidden":
+      return "unauthorized";
+    case "offline":
+    case "rate_limited":
+    case "server_unavailable":
+      return "server_unavailable";
+    case "conflict":
+      return "conflict_saved";
+    case "configuration":
+    case "invalid_response":
+    case "not_found":
+    case "rejected":
+    case "internal":
       return "rejected";
   }
 }
