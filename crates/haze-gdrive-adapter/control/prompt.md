@@ -1,4 +1,4 @@
-# W1-FIX-GDA-P4-CI — GDrive adapter GDA-P4 CI fix
+# W1-FIX-GDA-P4-CI-RERUN — GDrive adapter GDA-P4 CI fix
 
 Component: gdrive-adapter
 Path: crates/haze-gdrive-adapter
@@ -7,6 +7,10 @@ PR: #50
 Role: fixer-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
+
+## Rerun guard
+
+This is an explicit refreshed active prompt. The current report before this prompt was for GDA-P4, not FIX-GDA-P4-CI. Therefore FIX-GDA-P4-CI-RERUN is not already complete.
 
 ## Context
 
@@ -20,33 +24,13 @@ GDA-P4 implementation completed with SELF_ACCEPT_PENDING_CI. Component CI for th
 - artifact_name: ci-diag__component-gdrive-adapter__wf-component-ci__run-29034799276__attempt-1
 - artifact_expires_at: 2026-07-10T16:51:05Z
 
-Use the diagnostics artifact as source of truth.
-
 ## Read
 
-Read before editing:
-
-- implementation-manifest.md from ChatGPT Project Sources
-- report-template.md from ChatGPT Project Sources
-- fixer-worker-prompt.md from ChatGPT Project Sources
-- chatgpt-gh-connector.md from ChatGPT Project Sources
-- crates/haze-gdrive-adapter/docs/component-contract.md
-- crates/haze-gdrive-adapter/docs/implementation-plan.md
-- crates/haze-gdrive-adapter/docs/implementation-log.md
-- crates/haze-gdrive-adapter/docs/dependency-map.md
-- crates/haze-gdrive-adapter/control/prompt.md
-- crates/haze-gdrive-adapter/control/report.md
-- relevant current repository code and PR diff
-
-Download and read diagnostics artifact 8205445935. Read summary.md, manifest.json, and every failed-check log.
-
-If the artifact is missing, expired, malformed, or unreadable, report FIX_BLOCKED_BY_LOGS.
+Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, relevant code and PR diff. Download and read diagnostics artifact 8205445935. Read summary.md, manifest.json, and every failed-check log. If missing/expired/malformed/unreadable, report FIX_BLOCKED_BY_LOGS.
 
 ## Task
 
-Fix the minimum cause of the GDA-P4 CI failure inside gdrive-adapter scope.
-
-Expected recent changed area: adapter-local mapping, cursor, echo-state boundary. Use the artifact as source of truth.
+Fix the minimum cause of the GDA-P4 CI failure inside gdrive-adapter scope. Expected recent changed area: adapter-local mapping, cursor, echo-state boundary. Use the artifact as source of truth.
 
 ## Allowed files
 
@@ -56,19 +40,12 @@ Expected recent changed area: adapter-local mapping, cursor, echo-state boundary
 
 ## Forbidden changes
 
-- Do not add direct DB access.
-- Do not add provider sync loop.
-- Do not add Core policy.
-- Do not add hard delete.
-- Do not change workflow files.
-- Do not change sibling components.
+No direct DB access, provider sync loop, Core policy, hard delete, workflow changes, or sibling component changes.
 
 ## CI trigger policy
 
-Follow the CI skip policy in implementation-manifest.md and fixer-worker-prompt.md. Product/source/docs fixer commits must not skip CI. A final report-only commit may skip CI.
+Product/source/docs fixer commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only the report to crates/haze-gdrive-adapter/control/report.md.
-
-Use report-template.md. Set REPORT_TYPE to FIX.
+Write only the report to crates/haze-gdrive-adapter/control/report.md. Use report-template.md. Set REPORT_TYPE to FIX and phase_id to FIX-GDA-P4-CI-RERUN.
