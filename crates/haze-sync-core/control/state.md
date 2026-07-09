@@ -9,7 +9,7 @@ active_report: crates/haze-sync-core/control/report.md
 active_agent_role: fixer-worker
 
 wave: W1
-phase: FIX-CORE-P4-CI
+phase: FIX-CORE-P4-CI-RERUN
 
 implementation_status: SELF_NEEDS_FIX
 clean_review_status: NOT_STARTED
@@ -24,3 +24,4 @@ ci_artifact_expires_at: 2026-07-10T15:07:56Z
 known_failed_checks:
 - diagnostics-artifact-required
 architect_status: ARCHITECT_ACCEPT
+rerun_reason: previous active report did not close FIX-CORE-P4-CI
