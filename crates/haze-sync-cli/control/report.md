@@ -1,13 +1,13 @@
 REPORT_TYPE:
-IMPLEMENTATION
+FIX
 
 STATUS:
-SELF_ACCEPT_PENDING_CI
+FIX_COMPLETE
 
 AGENT:
-role: implementation-worker
-agent_execution_id: W1-persistent-cli-CLI-FMT
-chat_name: W1 persistent — cli
+role: fixer-worker
+agent_execution_id: cli-W1-FIX-CLI-CI
+chat_name: cli — W1 FIX-CLI-CI CI Fix
 
 COMPONENT:
 name: cli
@@ -21,27 +21,29 @@ control_report_path: crates/haze-sync-cli/control/report.md
 
 WAVE:
 id: W1
-phase_id: CLI-FMT
-dependency_status: active prompt requested Rust source formatting only
+phase_id: FIX-CLI-CI
+dependency_status: CI diagnostics artifact identified a formatting-only rust-fmt failure inside cli-owned Rust source files
 
 SUMMARY:
-Executed the CLI-FMT prompt. Reviewed CLI Rust source files and applied a small formatting-only change to crates/haze-sync-cli/src/main.rs so the long adapters match arm is formatted as a block-style arm. No docs, workflows, sibling components, prompt/state files, or non-Rust files were edited. Shell rustfmt could not be run through the GitHub connector, so the result remains pending CI/shell verification.
+Fixed the minimum cause of the CLI Component CI failure. The diagnostics artifact for run 29003636467 attempt 1 reported that `cargo fmt --all --check` failed only on rustfmt diffs in crates/haze-sync-cli/src/commands.rs and crates/haze-sync-cli/src/doctor.rs. Applied the exact rustfmt-equivalent formatting changes in those two files. No behavior, public API semantics, docs, contracts, workflows, sibling components, or tests were changed.
 
 CHANGED_FILES:
-- crates/haze-sync-cli/src/main.rs
+- crates/haze-sync-cli/src/commands.rs
+- crates/haze-sync-cli/src/doctor.rs
 - crates/haze-sync-cli/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/cli
 base_branch: main
-base_sha: current main resolved by compare_commits to c51af7baba0c5869c7837b7ce2f0825a03d02374 during this run
-head_sha: c2a8195077ab9d57d01d935771f84c23ea9d78c4 before report write; report write creates the final head commit
-merge_base: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2 observed through GitHub compare
+base_sha: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2 from PR #48 metadata
+head_sha: 936efcc3a306a52980d2af7272965814361ae9be before report write; report write creates final head commit
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
+ci_skip_used: yes, for the report-only control/report.md commit only
+ci_skip_reason: final report update is strictly control/report-only and cannot change executable behavior or validation outcome
 
 SCOPE:
 allowed_files_only: yes
@@ -51,51 +53,75 @@ cross_component_changes: none
 forbidden_files_touched: none
 
 CONTRACT:
-contract_read: not required by the short active prompt; no contract-relevant behavior was changed
-contract_satisfied: no product behavior changed
+contract_read: yes
+contract_satisfied: yes
 contract_changes_requested: none
 contract_change_rationale: none
 affected_components: cli only
 
 IMPLEMENTATION_OR_REVIEW:
 completed:
-- Read current control state and active prompt.
-- Reviewed CLI Rust source formatting.
-- Reflowed the long adapters match arm in main.rs into a block-style arm.
+- Read active control state and prompt.
+- Read previous control report.
+- Read CLI component contract, implementation plan, implementation log, and dependency map.
+- Read PR #48 metadata and PR diff.
+- Downloaded and read the CI diagnostics artifact for workflow run 29003636467 attempt 1.
+- Read summary.md, manifest.json, and the failed rust-fmt log listed in failed_checks.
+- Applied rustfmt-equivalent formatting fixes in commands.rs and doctor.rs.
 main_changes:
-- Formatting-only change in crates/haze-sync-cli/src/main.rs.
+- Collapsed the DoctorCommand assert in commands.rs onto the rustfmt-expected single-line assertion.
+- Reflowed the long parse_cli unwrap_err expression in commands.rs to rustfmt-expected layout.
+- Expanded the DoctorCliCommand::Help assert in doctor.rs to rustfmt-expected multiline layout.
 behavior_changes:
 - none
 bugs_found:
-- none
+- CI rust-fmt failure caused by formatting drift in commands.rs and doctor.rs.
 bugs_fixed:
-- none
+- Fixed the rustfmt diffs reported by CI diagnostics.
 cleanups_made:
-- rustfmt-style formatting cleanup in main.rs
+- formatting-only cleanup in cli Rust source files
 non_goals_preserved:
-- no docs edits
-- no workflow edits
-- no prompt/state edits
-- no sibling component edits
-- no product behavior changes
+- no behavior change
+- no public API semantic change
+- no docs/contract change
+- no workflow change
+- no sibling component change
+- no test deletion
 deferred_work:
-- Run cargo fmt --check in an environment with shell access.
-- Run normal CLI cargo check/test/clippy or CI.
+- Observe the new Component CI run for head 936efcc3a306a52980d2af7272965814361ae9be.
 
 TESTS_AND_CHECKS:
 checks_run:
-- Read crates/haze-sync-cli/control/state.md.
-- Read crates/haze-sync-cli/control/prompt.md.
-- Read CLI Rust source files under crates/haze-sync-cli/src/.
-- Compared component/cli against current main through GitHub compare_commits.
+- Fetched/listed workflow artifact metadata for run 29003636467.
+- Downloaded diagnostics artifact 8192614016.
+- Read diagnostics summary, manifest, and failed rust-fmt log from the downloaded artifact.
+- Verified current file snippets after formatting updates through GitHub fetch_file.
+- Observed PR #48 head after code fixes as 936efcc3a306a52980d2af7272965814361ae9be.
+- Observed a new Component CI workflow run for fixed head 936efcc3a306a52980d2af7272965814361ae9be: run 29006131118, status pending.
 checks_not_run:
-- cargo fmt --check: not run; GitHub connector does not provide shell execution.
-- cargo check -p haze-sync-cli: not run; GitHub connector does not provide shell execution.
-- cargo test -p haze-sync-cli: not run; GitHub connector does not provide shell execution.
-- cargo clippy -p haze-sync-cli --all-targets -- -D warnings: not run; GitHub connector does not provide shell execution.
-ci_status: CI_UNKNOWN
-workflow_urls: none observed
-known_failures: none observed
+- cargo fmt --all --check: not run locally; GitHub connector does not provide shell execution.
+- cargo check -p haze-sync-cli: not run locally; GitHub connector does not provide shell execution.
+- cargo test -p haze-sync-cli: not run locally; GitHub connector does not provide shell execution.
+- cargo clippy -p haze-sync-cli --all-targets -- -D warnings: not run locally; GitHub connector does not provide shell execution.
+ci_status: CI_PENDING
+workflow_urls:
+- Component CI run 29006131118 for head 936efcc3a306a52980d2af7272965814361ae9be is pending
+known_failures:
+- Previous run 29003636467 attempt 1 failed rust-fmt; fixed by formatting-only source changes.
+
+CI_DIAGNOSTICS:
+artifact_based_logs: yes
+artifact_name: ci-diag__component-cli__wf-component-ci__run-29003636467__attempt-1
+artifact_id: 8192614016
+workflow_run_id: 29003636467
+workflow_run_attempt: 1
+artifact_status: found, not expired, downloaded and readable
+summary_read: yes, summary.md read
+manifest_read: yes, manifest.json read
+logs_read:
+- logs/rust-fmt.log
+raw_job_logs_used: no
+diagnostics_failure: none
 
 SAFETY_AND_SECRECY:
 secrets_committed: no
@@ -106,17 +132,17 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- Shell formatting could not be executed through the GitHub connector.
-- Branch is still diverged from current main; this worker did not merge/rebase/reset/cherry-pick/force-push/update refs.
+- Local shell commands cannot be run through the GitHub connector.
+- The new Component CI run for the fixed head was only observed as pending; final green/red result is not yet available in this worker run.
 
 BLOCKERS:
-none for formatting-only implementation; shell/CI verification remains pending
+none for the formatting fix
 
 NEXT_RECOMMENDED_AGENT:
 orchestrator
 
 FINAL_VERDICT:
-SELF_ACCEPT_PENDING_CI. CLI-FMT formatting-only prompt was completed within scope, with no behavior changes and no contract change request.
+FIX_COMPLETE. The artifact-based CI diagnostics identified a formatting-only failure in cli Rust source files, and the minimum rustfmt-equivalent changes were applied within allowed scope. New CI is pending and must be observed by Orchestrator.
 
 PUSHED:
 yes
