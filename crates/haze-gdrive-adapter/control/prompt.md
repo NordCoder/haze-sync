@@ -1,24 +1,21 @@
-# W1-FIX-GDA-P3-CI — GDrive adapter GDA-P3 CI fix
+# W1-GDA-P3C — GDrive adapter provider abstraction clean-code review
 
 Component: gdrive-adapter
 Path: crates/haze-gdrive-adapter
 Branch: component/gdrive-adapter
 PR: #50
-Role: fixer-worker
+Role: clean-code-reviewer
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-GDA-P3 implementation completed with SELF_ACCEPT_PENDING_CI. Product-code CI completed red.
+GDA-P3 implementation and CI fixer are complete. Post-fix Component CI is green.
 
 - workflow: Component CI
-- workflow_run_id: 29009433586
-- run_number: 489
-- run_attempt: 1
-- artifact_id: 8194949937
-- artifact_name: ci-diag__component-gdrive-adapter__wf-component-ci__run-29009433586__attempt-1
-- known failed check: rust-fmt
+- workflow_run_id: 29011304281
+- run_number: 535
+- conclusion: success
 
 ## Read
 
@@ -26,7 +23,7 @@ Read before editing:
 
 - implementation-manifest.md from ChatGPT Project Sources
 - report-template.md from ChatGPT Project Sources
-- fixer-worker-prompt.md from ChatGPT Project Sources
+- clean-code-reviewer-prompt.md from ChatGPT Project Sources
 - chatgpt-gh-connector.md from ChatGPT Project Sources
 - crates/haze-gdrive-adapter/docs/component-contract.md
 - crates/haze-gdrive-adapter/docs/implementation-plan.md
@@ -36,39 +33,41 @@ Read before editing:
 - crates/haze-gdrive-adapter/control/report.md
 - relevant current repository code and PR diff
 
-Use the GitHub connector to download and read the diagnostics artifact listed above.
-
-Read summary.md, manifest.json, and every log listed in failed_checks.
-
-If the artifact is missing, expired, malformed, or unreadable, report FIX_BLOCKED_BY_LOGS.
+Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
 
 ## Task
 
-Fix the minimum cause of the GDA-P3 CI failure inside gdrive-adapter scope.
+Review GDA-P3 fake-first Drive provider abstraction, provider-safe DTO normalization, and CI fix.
 
-Expected scope from triage: rustfmt formatting in crates/haze-gdrive-adapter/src/drive.rs.
+Focus areas:
+
+- DriveProvider boundary and fake provider design;
+- provider-neutral metadata facts;
+- unsupported file classification;
+- sanitized provider error categories;
+- tests for normalization and fake behavior;
+- preservation of non-goals: no real Google SDK wiring, no live provider calls, no Core API writes, no mapping persistence, no delete side effects.
 
 ## Allowed files
 
 - crates/haze-gdrive-adapter/src/**
+- crates/haze-gdrive-adapter/docs/**
 - crates/haze-gdrive-adapter/control/report.md
 
 ## Forbidden changes
 
-- Do not change runtime behavior.
 - Do not add real Google SDK wiring.
-- Do not add provider side effects.
-- Do not change docs or contracts.
+- Do not add live provider calls or credential behavior.
+- Do not add Core/API writes.
 - Do not change workflow files.
 - Do not change sibling components.
-- Do not delete tests.
 
 ## CI trigger policy
 
-Follow the CI skip policy in implementation-manifest.md and fixer-worker-prompt.md. Product/source fixer commits must not skip CI. A final report-only commit may skip CI.
+Follow the CI skip policy in implementation-manifest.md and clean-code-reviewer-prompt.md. Source clean-code commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
 Write only the report to crates/haze-gdrive-adapter/control/report.md.
 
-Use report-template.md. Set REPORT_TYPE to FIX.
+Use report-template.md. Set REPORT_TYPE to CLEAN_CODE_REVIEW.
