@@ -257,7 +257,10 @@ mod tests {
     #[test]
     fn serde_accepts_plain_or_prefixed_input_and_emits_prefixed_form() {
         let plain = "abcdef0123456789".repeat(4);
-        for input_json in [format!("\"{plain}\""), format!("\"{SHA256_PREFIX}{plain}\"")] {
+        for input_json in [
+            format!("\"{plain}\""),
+            format!("\"{SHA256_PREFIX}{plain}\""),
+        ] {
             let decoded: Sha256 = serde_json::from_str(&input_json).unwrap();
             assert_eq!(
                 serde_json::to_string(&decoded).unwrap(),
