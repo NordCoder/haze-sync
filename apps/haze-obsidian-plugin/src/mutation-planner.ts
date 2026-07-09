@@ -4,7 +4,7 @@ import { generateLocalIdempotencyKey } from "./idempotency-keys";
 import { PendingQueueEntry } from "./pending-queue";
 
 export type PlannedMutationKind = "upload" | "delete";
-export type PlannerSkipReason = "missing_file_fact" | "same_content";
+export type PlannerSkipReason = "missing_file_fact" | "missing_upload_body" | "same_content";
 
 export interface PlannedUploadMutation {
   kind: "upload";
@@ -73,28 +73,17 @@ function planUpload(
   options: MutationPlanOptions,
 ): { planned: PlannedUploadMutation } | { skipped: SkippedPendingMutation } {
   if (entry.file === undefined) {
-    return {
-      skipped: {
-        path: entry.path,
-        kind: "upload",
-        queueEntry: entry,
-        reason: "missing_file_fact",
-      },
-    };
+    return skippedUpload(entry, "missing_file_fact");
   }
 
   if (entry.file.contentHash === getBaseContentHash(baseState, entry.path)) {
-    return {
-      skipped: {
-        path: entry.path,
-        kind: "upload",
-        queueEntry: entry,
-        reason: "same_content",
-      },
-    };
+    return skippedUpload(entry, "same_content");
   }
 
-  const body = options.makeUploadBody?.(entry) ?? new ArrayBuffer(0);
+  const body = options.makeUploadBody?.(entry);
+  if (body === undefined) {
+    return skippedUpload(entry, "missing_upload_body");
+  }
 
   return {
     planned: {
@@ -122,6 +111,20 @@ function planDelete(entry: PendingQueueEntry, baseState: BaseRevisionState): Pla
       path: entry.path,
       baseRevisionId: baseRevisionForRequest(baseState, entry.path),
       idempotencyKey: generateLocalIdempotencyKey("delete"),
+    },
+  };
+}
+
+function skippedUpload(
+  entry: PendingQueueEntry,
+  reason: PlannerSkipReason,
+): { skipped: SkippedPendingMutation } {
+  return {
+    skipped: {
+      path: entry.path,
+      kind: "upload",
+      queueEntry: entry,
+      reason,
     },
   };
 }
