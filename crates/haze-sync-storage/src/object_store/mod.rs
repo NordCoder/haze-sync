@@ -406,6 +406,10 @@ mod tests {
         fn store(&self) -> LocalObjectStore {
             LocalObjectStore::new(self.path.clone())
         }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
     }
 
     impl Drop for TestRoot {
@@ -487,7 +491,7 @@ mod tests {
         let store = root.store();
         let hash = hash_bytes(b"missing blob");
 
-        assert_eq!(store.stat(hash).unwrap(), None);
+        assert!(store.stat(hash).unwrap().is_none());
         let error = store
             .get_bytes(hash)
             .expect_err("missing blob should fail to read");
@@ -571,10 +575,7 @@ mod tests {
         let root = TestRoot::new("display-path-free");
         let hash = hash_bytes(b"display fixture");
         let path_text = root.path().display().to_string();
-        let io_error = ObjectStoreError::io(
-            "test_operation",
-            io::Error::new(io::ErrorKind::Other, path_text.clone()),
-        );
+        let io_error = ObjectStoreError::io("test_operation", io::Error::other(path_text));
 
         for error in [
             ObjectStoreError::HashMismatch {
@@ -637,12 +638,6 @@ mod tests {
         assert!(!store.exists(hash).unwrap());
         assert_eq!(store.get_bytes(hash).unwrap_err().code(), "missing_blob");
         assert!(!store.blob_path(hash).exists());
-    }
-
-    impl TestRoot {
-        fn path(&self) -> &Path {
-            &self.path
-        }
     }
 
     fn temp_dir_is_empty(store: &LocalObjectStore) -> bool {
