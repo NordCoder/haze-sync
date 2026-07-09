@@ -17,7 +17,6 @@ import {
 import { parsePluginData, serializePluginData } from "./plugin-data";
 import {
   PluginSettings,
-  SettingsValidationResult,
   createDefaultPluginSettings,
   settingsAreReady,
   syncModeLabel,
