@@ -315,6 +315,8 @@ impl WorktreeImportPlanner {
             }
         }
 
+        actions.sort_by(|left, right| left.vault_path().as_str().cmp(right.vault_path().as_str()));
+
         Ok(WorktreeImportPlan { actions, unchanged })
     }
 }
@@ -338,7 +340,10 @@ fn stable_files_by_path(
     Ok(by_path)
 }
 
-fn put_action(local_file: &WorktreeImportFile, base_revision: WorktreeBaseRevision) -> WorktreeImportAction {
+fn put_action(
+    local_file: &WorktreeImportFile,
+    base_revision: WorktreeBaseRevision,
+) -> WorktreeImportAction {
     WorktreeImportAction::put(
         local_file.snapshot.vault_path.clone(),
         base_revision,
@@ -353,7 +358,10 @@ pub trait WorktreeImportClient {
     type Error;
 
     /// Submit one planned import request through Core/API.
-    fn submit(&mut self, action: WorktreeImportAction) -> Result<WorktreeImportOutcome, Self::Error>;
+    fn submit(
+        &mut self,
+        action: WorktreeImportAction,
+    ) -> Result<WorktreeImportOutcome, Self::Error>;
 }
 
 /// Core/API result for one import request.
@@ -499,10 +507,10 @@ mod tests {
         ContentHash::from_bytes([byte; 32])
     }
 
-    fn stable_file(path: &str, content_hash: ContentHash, bytes: &[u8]) -> WorktreeImportFile {
+    fn stable_file(vault_path: &str, content_hash: ContentHash, bytes: &[u8]) -> WorktreeImportFile {
         WorktreeImportFile::new(
             WorktreeFileSnapshot {
-                vault_path: self::path(path),
+                vault_path: path(vault_path),
                 size: bytes.len() as u64,
                 modified: None,
                 content_hash,
@@ -513,9 +521,9 @@ mod tests {
         .unwrap()
     }
 
-    fn unstable_snapshot(path: &str) -> WorktreeFileSnapshot {
+    fn unstable_snapshot(vault_path: &str) -> WorktreeFileSnapshot {
         WorktreeFileSnapshot {
-            vault_path: self::path(path),
+            vault_path: path(vault_path),
             size: 3,
             modified: None,
             content_hash: hash(1),
