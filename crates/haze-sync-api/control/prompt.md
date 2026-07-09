@@ -1,23 +1,24 @@
-# W1-API-P3 — Header, auth, and safe error contract hardening
+# W1-FIX-API-P3-CI — API API-P3 CI fix
 
 Component: api
 Path: crates/haze-sync-api
 Branch: component/api
 PR: #44
-Role: implementation-worker
+Role: fixer-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-API-P2 and its CI fixer loop are complete. Current Component CI is green for the current PR head.
+API-P3 implementation completed with SELF_ACCEPT_PENDING_CI. Product-code CI completed red.
 
 - workflow: Component CI
-- workflow_run_id: 29006904242
-- run_number: 457
-- conclusion: success
-
-The next implementation phase is API-P3 from crates/haze-sync-api/docs/implementation-plan.md.
+- workflow_run_id: 29009458012
+- run_number: 494
+- run_attempt: 1
+- artifact_id: 8194965506
+- artifact_name: ci-diag__component-api__wf-component-ci__run-29009458012__attempt-1
+- known failed check: rust-fmt
 
 ## Read
 
@@ -25,7 +26,7 @@ Read before editing:
 
 - implementation-manifest.md from ChatGPT Project Sources
 - report-template.md from ChatGPT Project Sources
-- implementation-worker-prompt.md from ChatGPT Project Sources
+- fixer-worker-prompt.md from ChatGPT Project Sources
 - chatgpt-gh-connector.md from ChatGPT Project Sources
 - crates/haze-sync-api/docs/component-contract.md
 - crates/haze-sync-api/docs/implementation-plan.md
@@ -35,45 +36,38 @@ Read before editing:
 - crates/haze-sync-api/control/report.md
 - relevant current repository code and PR diff
 
-Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
+Use the GitHub connector to download and read the diagnostics artifact listed above.
+
+Read summary.md, manifest.json, and every log listed in failed_checks.
+
+If the artifact is missing, expired, malformed, or unreadable, report FIX_BLOCKED_BY_LOGS.
 
 ## Task
 
-Implement API-P3: Header, auth, and safe error contract hardening.
+Fix the minimum cause of the API-P3 CI failure inside api scope.
 
-Follow the implementation plan:
-
-- test Bearer authorization parsing/wrapping without leaking token text;
-- test token hash formatting redaction and verification behavior where applicable;
-- test Idempotency-Key validation and non-exposure in errors/debug output;
-- test X-Content-SHA256 parsing and canonical conversion to common hash types;
-- test X-Base-Revision-Id including explicit null semantics;
-- test public error response codes/messages/details for safe field/header/query naming.
+Expected scope from triage: rustfmt formatting in crates/haze-sync-api/src/contracts/headers.rs.
 
 ## Allowed files
 
-- crates/haze-sync-api/src/auth/**
-- crates/haze-sync-api/src/contracts/headers/**
-- crates/haze-sync-api/src/contracts/errors/**
-- crates/haze-sync-api/docs/**
+- crates/haze-sync-api/src/**
 - crates/haze-sync-api/control/report.md
 
-## Non-goals
+## Forbidden changes
 
-- No token persistence.
-- No token creation or rotation.
-- No runtime auth lookup.
-- No middleware.
-- No SQLx or config loading.
-- No sibling component changes.
-- No workflow changes.
+- Do not change behavior.
+- Do not change public API semantics.
+- Do not change docs or contracts.
+- Do not change workflow files.
+- Do not change sibling components.
+- Do not delete tests.
 
 ## CI trigger policy
 
-Follow the CI skip policy in implementation-manifest.md and the relevant Project Source worker prompt. Product, test, dependency, contract, workflow, and implementation commits must not skip CI.
+Follow the CI skip policy in implementation-manifest.md and fixer-worker-prompt.md. Product/source fixer commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
 Write only the report to crates/haze-sync-api/control/report.md.
 
-Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION.
+Use report-template.md. Set REPORT_TYPE to FIX.
