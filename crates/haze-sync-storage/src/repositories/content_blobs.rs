@@ -86,3 +86,48 @@ fn content_blob_from_row(row: &PgRow) -> RepositoryResult<ContentBlobRow> {
         created_at: row.try_get("created_at").map_err(map_sqlx_error)?,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repositories::RepositoryError;
+
+    #[test]
+    fn new_content_blob_metadata_uses_content_hash_not_vault_path() {
+        let hash = ContentHash::parse(&"a".repeat(64)).unwrap();
+        let input = NewContentBlob {
+            sha256: hash,
+            size_bytes: 42,
+            object_store_path: "sha256/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        };
+
+        assert_eq!(
+            input.sha256.to_prefixed_string(),
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        );
+        assert_eq!(input.size_bytes, 42);
+        assert!(!input.object_store_path.contains("Notes/"));
+        assert!(!input.object_store_path.starts_with('/'));
+    }
+
+    #[test]
+    fn content_blob_size_uses_repository_range_validation() {
+        let hash = ContentHash::parse(&"b".repeat(64)).unwrap();
+        let valid = NewContentBlob {
+            sha256: hash,
+            size_bytes: i64::MAX as u64,
+            object_store_path: "sha256/bb/blob",
+        };
+        let invalid = NewContentBlob {
+            sha256: hash,
+            size_bytes: i64::MAX as u64 + 1,
+            object_store_path: "sha256/bb/blob",
+        };
+
+        assert_eq!(size_bytes_to_i64(valid.size_bytes), Ok(i64::MAX));
+        assert_eq!(
+            size_bytes_to_i64(invalid.size_bytes),
+            Err(RepositoryError::InvalidSizeBytes)
+        );
+    }
+}
