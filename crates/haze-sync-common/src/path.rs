@@ -226,7 +226,11 @@ mod tests {
             } else {
                 ValidationError::EmptyPath
             };
-            assert_eq!(VaultPath::parse(input).unwrap_err(), expected, "input={input:?}");
+            assert_eq!(
+                VaultPath::parse(input).unwrap_err(),
+                expected,
+                "input={input:?}"
+            );
         }
     }
 
