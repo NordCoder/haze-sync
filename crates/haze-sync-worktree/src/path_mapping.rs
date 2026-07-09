@@ -43,6 +43,10 @@ impl WorktreeConfig {
         Ok(Self { root })
     }
 
+    pub(crate) fn root_path(&self) -> &Path {
+        &self.root
+    }
+
     /// Map a validated `VaultPath` to a local path under the configured root.
     pub fn vault_path_to_local(
         &self,
