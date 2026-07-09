@@ -170,7 +170,10 @@ mod tests {
 
     #[test]
     fn doctor_help_is_supported_and_usage_stays_safe() {
-        assert_eq!(parse_doctor_args(["--help"]).unwrap(), DoctorCliCommand::Help);
+        assert_eq!(
+            parse_doctor_args(["--help"]).unwrap(),
+            DoctorCliCommand::Help
+        );
         assert!(usage().contains("read-only offline summary"));
         assert_no_sensitive_leaks(usage());
     }
