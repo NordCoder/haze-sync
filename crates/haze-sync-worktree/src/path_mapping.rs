@@ -192,7 +192,9 @@ impl WorktreePathError {
             Self::UnsafeLocalComponent => "local path contains unsafe components",
             Self::BackslashEscape => "path must not use backslash separators",
             Self::NonUtf8LocalPath => "local path must be valid UTF-8 before vault mapping",
-            Self::ReservedRuntimePath => "path is reserved for worktree runtime state and must not sync",
+            Self::ReservedRuntimePath => {
+                "path is reserved for worktree runtime state and must not sync"
+            }
             Self::InvalidVaultPath(error) => error.message(),
         }
     }
@@ -429,9 +431,7 @@ mod tests {
     fn recognizes_reserved_local_paths() {
         let config = config();
 
-        assert!(config.is_reserved_local_path(
-            "/srv/haze-vault/worktree/_haze_runtime/echo/marker"
-        ));
+        assert!(config.is_reserved_local_path("/srv/haze-vault/worktree/_haze_runtime/echo/marker"));
         assert!(config.is_reserved_local_path("/srv/haze-vault/worktree/Notes/draft.swp"));
         assert!(!config.is_reserved_local_path("/srv/haze-vault/worktree/Notes/a.md"));
         assert!(!config.is_reserved_local_path("/srv/haze-vault/other/Notes/a.md"));
