@@ -1,23 +1,26 @@
-# W1-CORE-P4 — Conflict preservation and resolution primitives
+# W1-FIX-CORE-P4-CI — Core CORE-P4 CI fix
 
 Component: core
 Path: crates/haze-sync-core
 Branch: component/core
 PR: #43
-Role: implementation-worker
+Role: fixer-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-CORE-P3 implementation, CI fixer, and clean-code review are accepted. Component CI evidence for the accepted source state is green.
+CORE-P4 implementation completed, but Component CI for the code/docs implementation head failed.
 
 - workflow: Component CI
-- workflow_run_id: 29011346160
-- run_number: 536
-- conclusion: success
+- workflow_run_id: 29028092129
+- run_number: unknown
+- run_attempt: 1
+- artifact_id: 8202551525
+- artifact_name: ci-diag__component-core__wf-component-ci__run-29028092129__attempt-1
+- artifact_expires_at: 2026-07-10T15:07:56Z
 
-The next implementation phase is CORE-P4 from crates/haze-sync-core/docs/implementation-plan.md.
+Use the diagnostics artifact as source of truth.
 
 ## Read
 
@@ -25,7 +28,7 @@ Read before editing:
 
 - implementation-manifest.md from ChatGPT Project Sources
 - report-template.md from ChatGPT Project Sources
-- implementation-worker-prompt.md from ChatGPT Project Sources
+- fixer-worker-prompt.md from ChatGPT Project Sources
 - chatgpt-gh-connector.md from ChatGPT Project Sources
 - crates/haze-sync-core/docs/component-contract.md
 - crates/haze-sync-core/docs/implementation-plan.md
@@ -35,44 +38,40 @@ Read before editing:
 - crates/haze-sync-core/control/report.md
 - relevant current repository code and PR diff
 
-Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
+Download and read diagnostics artifact 8202551525. Read summary.md, manifest.json, and every failed-check log.
+
+If the artifact is missing, expired, malformed, or unreadable, report FIX_BLOCKED_BY_LOGS.
 
 ## Task
 
-Implement CORE-P4: Conflict preservation and resolution primitives.
+Fix the minimum cause of the CORE-P4 CI failure inside core scope.
 
-Follow the implementation plan:
-
-- test conflict-copy path generation for nested paths, extensions, unsafe adapter IDs, timestamps, and recursive conflict-area input;
-- verify `_haze_conflicts/open/**` materialization remains compatible with VaultPath rules;
-- define pure decision primitives for accepted conflict resolution actions where Core owns them: accept_current, accept_conflict, keep_both, mark_resolved;
-- represent resolution effects as storage/API-neutral plans, not persisted writes;
-- clarify which actions are metadata-only and which require new current revision creation.
+Expected recent changed area: conflict preservation and resolution primitives. Use the artifact as source of truth.
 
 ## Allowed files
 
 - crates/haze-sync-core/src/conflict_service/**
 - crates/haze-sync-core/src/policy_engine/**
 - crates/haze-sync-core/src/conflict_saved_planner/**
-- crates/haze-sync-core/docs/**
+- crates/haze-sync-core/docs/** only if the artifact proves a docs formatting failure
 - crates/haze-sync-core/control/report.md
 
-## Non-goals
+## Forbidden changes
 
-- No conflict route wiring.
-- No conflict row repository implementation.
-- No object-store writes.
-- No API DTO ownership.
-- No Obsidian conflict UI behavior.
-- No sibling component changes.
-- No workflow changes.
+- Do not add conflict route wiring.
+- Do not add conflict row repository implementation.
+- Do not add object-store writes.
+- Do not change API DTO ownership.
+- Do not add Obsidian conflict UI behavior.
+- Do not change workflow files.
+- Do not change sibling components.
 
 ## CI trigger policy
 
-Follow the CI skip policy in implementation-manifest.md and implementation-worker-prompt.md. Product, test, dependency, contract, workflow, and implementation commits must not skip CI. A final report-only commit may skip CI.
+Follow the CI skip policy in implementation-manifest.md and fixer-worker-prompt.md. Product/source/docs fixer commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
 Write only the report to crates/haze-sync-core/control/report.md.
 
-Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION.
+Use report-template.md. Set REPORT_TYPE to FIX.
