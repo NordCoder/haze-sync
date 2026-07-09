@@ -575,7 +575,10 @@ mod tests {
         let root = TestRoot::new("display-path-free");
         let hash = hash_bytes(b"display fixture");
         let path_text = root.path().display().to_string();
-        let io_error = ObjectStoreError::io("test_operation", io::Error::other(path_text));
+        let io_error = ObjectStoreError::io(
+            "test_operation",
+            io::Error::new(io::ErrorKind::PermissionDenied, path_text),
+        );
 
         for error in [
             ObjectStoreError::HashMismatch {
