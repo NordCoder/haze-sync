@@ -1,13 +1,13 @@
 REPORT_TYPE:
-FIX
+CLEAN_CODE_REVIEW
 
 STATUS:
-FIX_COMPLETE_CI_GREEN
+CLEAN_ACCEPT
 
 AGENT:
-role: fixer-worker
-agent_execution_id: W1-FIX-API-P3-CI
-chat_name: api — W1 FIX-API-P3-CI CI Fix
+role: clean-code-reviewer
+agent_execution_id: W1-API-P3C
+chat_name: api — W1 API-P3C Clean-Code Review
 
 COMPONENT:
 name: api
@@ -21,21 +21,20 @@ control_report_path: crates/haze-sync-api/control/report.md
 
 WAVE:
 id: W1
-phase_id: FIX-API-P3-CI
-dependency_status: active control state was PROMPT_READY; CI status was CI_RED for rust-fmt before fixer commit; post-fix CI is green
+phase_id: API-P3C
+dependency_status: active control state was PROMPT_READY; API-P3 implementation and fixer were complete; post-fix Component CI was green
 
 SUMMARY:
-Fixed the minimum reported API-P3 CI failure. The diagnostics artifact for Component CI run 29009458012 attempt 1 identified a rust-fmt failure in crates/haze-sync-api/src/contracts/headers.rs. Applied only the formatter-required line break for the BaseRevisionIdHeader::parse("NULL").unwrap().as_optional_revision_id() assertion chain. No behavior, public API semantics, docs, contracts, workflows, tests, or sibling components were changed. The code-bearing source fix commit d5509459b8f7f46bdd0a0df0d562d23b849df86b triggered Component CI run 29011290632, which completed successfully.
+Reviewed API-P3 header, auth, and safe error contract hardening plus the rustfmt CI fix. The implementation satisfies the passive API component contract: bearer values and token hashes remain redacted in formatting, Idempotency-Key debug output is redacted, X-Content-SHA256 parsing canonicalizes and converts to haze_sync_common::ContentHash, X-Base-Revision-Id preserves explicit null semantics, and public error detail tests use safe field/header/query names without raw key/token values. No source cleanup was required during review.
 
 CHANGED_FILES:
-- crates/haze-sync-api/src/contracts/headers.rs
 - crates/haze-sync-api/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/api
 base_branch: main
 base_sha: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
-head_sha: d5509459b8f7f46bdd0a0df0d562d23b849df86b before report-only CI-status update; final report-only commit follows with CI skip
+head_sha: d5509459b8f7f46bdd0a0df0d562d23b849df86b was the last code-bearing API-P3 fix commit reviewed; final report-only commit follows with CI skip
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
@@ -61,54 +60,57 @@ affected_components: none
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- Applied rustfmt-required multiline formatting to the BaseRevisionIdHeader::parse("NULL").unwrap().as_optional_revision_id() assertion in crates/haze-sync-api/src/contracts/headers.rs.
-behavior_changes: none
-bugs_found: rust-fmt reported formatting drift in headers.rs
-bugs_fixed: rustfmt-equivalent formatting drift
-cleanups_made: formatting only
+- Reviewed crates/haze-sync-api/src/auth/mod.rs bearer/token hash redaction and pure verifier behavior.
+- Reviewed crates/haze-sync-api/src/contracts/headers.rs bearer, idempotency key, content hash, and base revision header contracts.
+- Reviewed crates/haze-sync-api/src/contracts/errors.rs safe public error detail coverage.
+- Reviewed current PR diff for API-P3 scope and boundaries.
+behavior_changes: none in this clean-code review
+bugs_found: none blocking
+bugs_fixed: none
+cleanups_made: none; existing source was accepted as clear and component-scoped
 non_goals_preserved:
-- no behavior change
-- no public API semantic change
-- no docs or contract changes
+- no token persistence or creation
+- no runtime auth lookup
+- no middleware
+- no SQLx or config loading
 - no workflow changes
 - no sibling component changes
-- no tests deleted
+- no CI diagnostics artifact reading in clean-code role
 deferred_work:
-- None for this fixer run.
+- none for API-P3 clean-code review
 
 TESTS_AND_CHECKS:
 checks_run:
-- Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, and chatgpt-gh-connector.md from Project Sources.
-- Read current control state and active fixer prompt from component/api.
-- Read previous implementation/fix reports.
+- Read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, and chatgpt-gh-connector.md from Project Sources.
+- Read current control state and active clean-code prompt from component/api.
+- Read previous fix report.
 - Read API component contract, implementation plan, implementation log, and dependency map.
-- Listed and downloaded diagnostics artifact 8194965506 for workflow run 29009458012 attempt 1.
-- Read diagnostic summary, manifest, failure marker, and rust-fmt log from the artifact.
-- Verified the updated formatted region through GitHub connector file read.
+- Compared component/api against base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2.
+- Inspected relevant current API source in auth, contracts/headers, and contracts/errors.
 - Observed Component CI run 29011290632 for code-bearing fix commit d5509459b8f7f46bdd0a0df0d562d23b849df86b completed with conclusion success.
-- Observed job Rust workspace in run 29011290632 completed with conclusion success.
+- Observed Rust workspace job in run 29011290632 completed with conclusion success.
 - Observed steps cargo fmt, cargo check, cargo test, and cargo clippy completed with conclusion success.
 checks_not_run:
-- Local shell checks were not run.
+- Local cargo fmt --check
+- Local cargo check -p haze-sync-api
+- Local cargo test -p haze-sync-api
+- Local cargo clippy -p haze-sync-api --all-targets -- -D warnings
 Reason: this worker is constrained to GitHub connector only; no local shell execution is available.
 ci_status: CI_GREEN
 workflow_urls:
 - Component CI run 29011290632 completed successfully for d5509459b8f7f46bdd0a0df0d562d23b849df86b
-known_failures:
-- Original failed check: rust-fmt in run 29009458012 attempt 1
+known_failures: none current
 
 CI_DIAGNOSTICS:
-artifact_based_logs: yes
-artifact_name: ci-diag__component-api__wf-component-ci__run-29009458012__attempt-1
-artifact_id: 8194965506
-workflow_run_id: 29009458012
-workflow_run_attempt: 1
-artifact_status: available, not expired, downloaded and readable; diagnostic files were present at artifact root as summary.md, manifest.json, failures/rust-fmt.txt, and logs/rust-fmt.log
-summary_read: yes, summary.md
-manifest_read: yes, manifest.json
-logs_read:
-- logs/rust-fmt.log
-- failures/rust-fmt.txt
+artifact_based_logs: no
+artifact_name: none
+artifact_id: none
+workflow_run_id: none
+workflow_run_attempt: none
+artifact_status: not applicable; clean-code prompt explicitly said not to read diagnostics artifacts
+summary_read: no
+manifest_read: no
+logs_read: none
 raw_job_logs_used: no
 diagnostics_failure: none
 
@@ -121,7 +123,7 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- Diagnostic artifact paths were at artifact root rather than under ci-diagnostics/, but the expected summary, manifest, failure marker, and log content were present and readable.
+none blocking
 
 BLOCKERS:
 none
@@ -130,7 +132,7 @@ NEXT_RECOMMENDED_AGENT:
 orchestrator
 
 FINAL_VERDICT:
-FIX_COMPLETE_CI_GREEN. Minimum rust-fmt cause was fixed inside api scope, and post-fix Component CI completed successfully for the code-bearing fix commit.
+CLEAN_ACCEPT. API-P3 implementation and CI fix are clean-code accepted with observed green Component CI for the last code-bearing commit.
 
 PUSHED:
 yes
