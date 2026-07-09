@@ -451,12 +451,9 @@ impl DriveProvider for FakeDriveProvider {
 
         self.next_upload_number += 1;
         let provider_id = format!("fake-upload-{}", self.next_upload_number);
-        let metadata = DriveMetadata::new_file(
-            provider_id.clone(),
-            request.name,
-            request.mime_type,
-        )
-        .with_parent(request.parent_id.clone());
+        let metadata =
+            DriveMetadata::new_file(provider_id.clone(), request.name, request.mime_type)
+                .with_parent(request.parent_id.clone());
         self.metadata_by_id.insert(provider_id.clone(), metadata);
         self.children_by_parent_id
             .entry(request.parent_id)
