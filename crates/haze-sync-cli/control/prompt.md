@@ -1,24 +1,21 @@
-# W1-FIX-CLI-P3-CI — CLI CLI-P3 CI fix
+# W1-CLI-P3C — CLI config clean-code review
 
 Component: cli
 Path: crates/haze-sync-cli
 Branch: component/cli
 PR: #48
-Role: fixer-worker
+Role: clean-code-reviewer
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-CLI-P3 implementation completed with SELF_ACCEPT_PENDING_CI. Product-code CI completed red.
+CLI-P3 implementation and CI fixer are complete. Post-fix Component CI is green.
 
 - workflow: Component CI
-- workflow_run_id: 29009634703
-- run_number: 511
-- run_attempt: 1
-- artifact_id: 8195027380
-- artifact_name: ci-diag__component-cli__wf-component-ci__run-29009634703__attempt-1
-- known failed checks: rust-fmt, cargo-clippy
+- workflow_run_id: 29011403478
+- run_number: 537
+- conclusion: success
 
 ## Read
 
@@ -26,7 +23,7 @@ Read before editing:
 
 - implementation-manifest.md from ChatGPT Project Sources
 - report-template.md from ChatGPT Project Sources
-- fixer-worker-prompt.md from ChatGPT Project Sources
+- clean-code-reviewer-prompt.md from ChatGPT Project Sources
 - chatgpt-gh-connector.md from ChatGPT Project Sources
 - crates/haze-sync-cli/docs/component-contract.md
 - crates/haze-sync-cli/docs/implementation-plan.md
@@ -36,42 +33,41 @@ Read before editing:
 - crates/haze-sync-cli/control/report.md
 - relevant current repository code and PR diff
 
-Use the GitHub connector to download and read the diagnostics artifact listed above.
-
-Read summary.md, manifest.json, and every log listed in failed_checks.
-
-If the artifact is missing, expired, malformed, or unreadable, report FIX_BLOCKED_BY_LOGS.
+Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
 
 ## Task
 
-Fix the minimum cause of the CLI-P3 CI failure inside cli scope.
+Review CLI-P3 config and secret-source foundation plus the CI fix.
 
-Expected scope from triage:
+Focus areas:
 
-- rustfmt formatting in crates/haze-sync-cli/src/config.rs;
-- clippy derivable_impls for TokenSource and CliConfig defaults.
+- config source precedence model;
+- safe token source descriptors;
+- redaction of server URLs, token paths, OS-secret refs, and token-source values;
+- inline token rejection;
+- Default derivation after clippy fix;
+- preservation of non-goals: no config IO, no server calls, no token creation/rotation, no provider tokens.
 
 ## Allowed files
 
 - crates/haze-sync-cli/src/**
+- crates/haze-sync-cli/docs/**
 - crates/haze-sync-cli/control/report.md
 
 ## Forbidden changes
 
-- Do not change runtime behavior except behavior-preserving Default derivation if required by clippy.
-- Do not add config IO.
+- Do not add config/env/file/stdin/keychain IO.
 - Do not add server calls.
-- Do not change docs or contracts.
+- Do not add token creation or rotation.
 - Do not change workflow files.
 - Do not change sibling components.
-- Do not delete tests.
 
 ## CI trigger policy
 
-Follow the CI skip policy in implementation-manifest.md and fixer-worker-prompt.md. Product/source fixer commits must not skip CI. A final report-only commit may skip CI.
+Follow the CI skip policy in implementation-manifest.md and clean-code-reviewer-prompt.md. Source clean-code commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
 Write only the report to crates/haze-sync-cli/control/report.md.
 
-Use report-template.md. Set REPORT_TYPE to FIX.
+Use report-template.md. Set REPORT_TYPE to CLEAN_CODE_REVIEW.
