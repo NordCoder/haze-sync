@@ -1,5 +1,6 @@
+import type { LocalMutationKind } from "./idempotency-keys";
+import { generateLocalIdempotencyKey } from "./idempotency-keys";
 import { LocalFileFact } from "./local-file-facts";
-import { LocalMutationKind, generateLocalIdempotencyKey } from "./idempotency-keys";
 
 export type PendingChangeKind = "created" | "modified" | "deleted";
 export type PendingChangeSource = "event_hint" | "scan";
