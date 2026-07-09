@@ -24,3 +24,5 @@ ci_artifact_expires_at: 2026-07-10T08:08:15Z
 known_failed_checks:
 - rust-fmt
 architect_status: ARCHITECT_ACCEPT
+ci_retrigger_nonce: 20260709T091500Z-common
+ci_retrigger_reason: prior_worker_commits_used_ci_skip
