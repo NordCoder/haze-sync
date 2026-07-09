@@ -41,14 +41,14 @@ BRANCH_AND_CONTROL:
 current_branch: component/api
 base_branch: main
 base_sha: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
-head_sha: 435868c021468a4f968e3d81115259acb556df6a before this report-only commit; reviewed code-bearing fix commit 7748d81690ee1d78035c21756e6bd9235127dadb had green CI
- default_branch_modified: no
+head_sha: 435868c021468a4f968e3d81115259acb556df6a before clean-code report-only commits; reviewed code-bearing fix commit 7748d81690ee1d78035c21756e6bd9235127dadb had green CI
+default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
-ci_skip_used: yes, only for this report-only clean-code report commit
-ci_skip_reason: final commit updates only crates/haze-sync-api/control/report.md and cannot change executable behavior or validation outcome; skipped workflow is not CI evidence
+ci_skip_used: yes, only for report-only clean-code report commits
+ci_skip_reason: report commits update only crates/haze-sync-api/control/report.md and cannot change executable behavior or validation outcome; skipped workflows are not CI evidence
 
 SCOPE:
 allowed_files_only: yes
