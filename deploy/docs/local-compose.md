@@ -2,18 +2,18 @@
 
 ## Scope
 
-`deploy/docker-compose.yml` is a local development scaffold for dependency startup only.
+`deploy/docker-compose.yml` is a local development scaffold for dependency and server startup smoke workflows.
 
 It currently starts:
 
 ```text
 PostgreSQL 16
+haze-sync-server
 ```
 
 It does not start:
 
 ```text
-haze-sync-server
 haze-gdrive-adapter
 worktree runtime
 Obsidian plugin
@@ -23,11 +23,13 @@ backup / restore jobs
 provider credential flows
 ```
 
-Compose syntax validation or successful PostgreSQL startup is not production readiness evidence.
+Compose syntax validation or successful local service startup is not production readiness evidence.
 
 ## Local safety boundary
 
-The PostgreSQL service binds to `127.0.0.1` only. Do not widen this bind address in the local scaffold. Public or remote exposure belongs to a later reverse-proxy/TLS deployment phase after Server auth and production access boundaries are accepted.
+PostgreSQL and server HTTP ports bind to `127.0.0.1` on the host only. Do not widen those bind addresses in the local scaffold. Public or remote exposure belongs to a later reverse-proxy/TLS deployment phase after Server auth and production access boundaries are accepted.
+
+The server listens on `0.0.0.0:8080` inside its container so Docker can publish the port to the host. This does not change the host-side local-only bind in compose.
 
 The compose file uses local placeholder defaults. Override them only through an untracked `.env` file when needed. Do not commit real passwords, database URLs, OAuth tokens, provider payloads, TLS keys, logs, dumps, vault data, object-store data, or backup archives.
 
@@ -44,7 +46,33 @@ POSTGRES_PORT
 
 `POSTGRES_PORT` changes only the local host port. The container port remains `5432`, and the host bind address remains fixed to `127.0.0.1`.
 
-`.env.example` also includes Server and adapter placeholders so local configuration names stay visible, but `deploy/docker-compose.yml` does not consume those values until later Server/GDrive/Worktree service wiring phases.
+The server service uses documented Server config variables inside the Compose network:
+
+```text
+HAZE_SYNC_LISTEN_ADDR
+HAZE_SYNC_DATABASE_URL
+HAZE_SYNC_OBJECT_STORE_PATH
+HAZE_SYNC_WORKTREE_PATH
+HAZE_SYNC_WORKTREE_ADAPTER_MODE
+HAZE_GDRIVE_ADAPTER_MODE
+HAZE_OBSIDIAN_ADAPTER_MODE
+```
+
+`HAZE_SYNC_HTTP_PORT` changes only the local host HTTP port. The server container port remains `8080`, and the host bind address remains fixed to `127.0.0.1`.
+
+The Compose-provided database URL is a local placeholder for the internal Compose network. Do not paste production database URLs into tracked files or reports.
+
+## Packaging path
+
+DEP-P3 uses container packaging for local deployment smoke workflows:
+
+```text
+deploy/server.Dockerfile
+```
+
+The image builds the `haze-sync-server` binary from the Rust workspace, installs only minimal runtime support required for TLS roots and the local HTTP healthcheck, runs as a non-root `haze-sync` user, and does not bake secrets into the image.
+
+Migrations are not run by the image or compose service. Migration execution remains an explicit operator action for a later deployment phase.
 
 ## Syntax validation
 
@@ -54,14 +82,16 @@ From the repository root, run:
 docker compose -f deploy/docker-compose.yml config
 ```
 
-This validates Docker Compose syntax and interpolation only. It does not prove that Haze Sync Server, adapters, migrations, or production sync are ready.
+This validates Docker Compose syntax and interpolation only. It does not prove that migrations, adapters, Worktree runtime, reverse proxy/TLS, or production sync are ready.
 
-## Optional local PostgreSQL smoke
+When local `.env` contains real local-only secrets, do not paste full rendered `docker compose config` output into public reports.
 
-Start the local PostgreSQL dependency:
+## Optional local startup smoke
+
+Start PostgreSQL and the local server:
 
 ```bash
-docker compose -f deploy/docker-compose.yml up -d postgres
+docker compose -f deploy/docker-compose.yml up --build -d postgres server
 ```
 
 Check service state:
@@ -69,6 +99,20 @@ Check service state:
 ```bash
 docker compose -f deploy/docker-compose.yml ps
 ```
+
+Check local process health:
+
+```bash
+curl -fsS http://127.0.0.1:8080/health
+```
+
+Check readiness:
+
+```bash
+curl -fsS http://127.0.0.1:8080/ready
+```
+
+`/health` only proves that the HTTP process/router responds. `/ready` reports sanitized database and object-store readiness. Neither endpoint proves migrations, provider credentials, adapter loops, Worktree runtime, reverse proxy/TLS, backups, or production sync readiness.
 
 Run the PostgreSQL readiness probe inside the container:
 
@@ -82,22 +126,26 @@ When no local `.env` overrides are loaded, use the documented local placeholders
 docker compose -f deploy/docker-compose.yml exec postgres pg_isready -U haze_sync -d haze_sync
 ```
 
-Stop the local dependency without deleting the named database volume:
+## Shutdown and local reset
+
+Stop local services without deleting named volumes:
 
 ```bash
 docker compose -f deploy/docker-compose.yml down
 ```
 
-Delete the local named database volume only when intentionally resetting local development state:
+Delete local named volumes only when intentionally resetting local development state:
 
 ```bash
 docker compose -f deploy/docker-compose.yml down -v
 ```
 
-Do not run destructive reset commands against production services.
+`down -v` deletes the local PostgreSQL and server object-store volumes. Do not run destructive reset commands against production services.
 
 ## Deferred object-store and worktree binds
 
-Object-store and worktree bind directories are intentionally not mounted by this phase.
+The server object store uses a named Docker volume in this local scaffold. Host bind paths and permission guidance are deferred to later Deployment host-directory phases.
 
-They remain deferred because Server startup, object-store path handling, Worktree runtime ownership, backup boundaries, and permission guidance are not yet accepted as deployment service wiring contracts. Later deployment phases may add those mounts after the Server and Worktree contracts are ready enough to avoid creating misleading or unused host directories.
+Worktree runtime bind directories are intentionally not mounted by this phase.
+
+They remain deferred because Worktree runtime ownership, backup boundaries, and permission guidance are not yet accepted as deployment service wiring contracts. Later deployment phases may add those mounts after the Server and Worktree contracts are ready enough to avoid creating misleading or unused host directories.
