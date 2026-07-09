@@ -10,6 +10,7 @@ The component is responsible for pure policy and decision logic that keeps Core 
 - stale, unknown, and explicit-null base revision safety outcomes;
 - conflict policy selection and conflict-copy path generation;
 - metadata-only `conflict_saved` preservation planning;
+- storage/API-neutral conflict resolution action planning;
 - tombstone metadata creation and retention validation;
 - mass-delete guard threshold evaluation;
 - idempotency key, fingerprint, and replay decision primitives;
@@ -25,7 +26,7 @@ The public crate surface is exported from `src/lib.rs`.
 Current public modules:
 
 - `revision_service` — storage-agnostic upsert algorithm over caller-owned repository, content-store, and operation-log traits.
-- `conflict_service` — conflict policy names, conflict record metadata, conflict-copy path requests, conflict path generation, and conflict validation errors.
+- `conflict_service` — conflict policy names, conflict record metadata, conflict-copy path requests, conflict path generation, conflict validation errors, and storage/API-neutral conflict resolution action plans.
 - `policy_engine` — pure conflict policy application that keeps the current revision authoritative and plans incoming-content backup/conflict metadata.
 - `conflict_saved_planner` — fan-in planner that converts `revision_service` `conflict_saved` outcomes into storage/API-neutral conflict preservation plans.
 - `tombstone_service` — tombstone identifiers, retention metadata, tombstone creation inputs, and restore-ready tombstone metadata without restore behavior.
@@ -49,6 +50,7 @@ Required input rules:
 - Caller-owned repository/content-store/operation-log implementations must enforce their own transaction boundaries, locks, durability, and persistence behavior.
 - Delete-guard evaluations must include an adapter/run scope and the caller's proposed delete count plus pre-run total file count.
 - Manual delete unlocks must be scoped to the exact adapter/run and threshold category they cover.
+- Conflict resolution planning must receive a validated open conflict record and a Core-owned action name.
 - Doctor inputs must be pre-redacted. Core doctor helpers must receive booleans, counts, hashes, and other safe summaries rather than secrets, database URLs, provider payloads, or local absolute paths.
 
 ## Output contracts
@@ -62,6 +64,7 @@ Required output rules:
 - Hash mismatch outcomes include expected and actual content hashes only.
 - Stale, unknown, or explicit-null base writes against different existing content must not silently overwrite current content. They return a `conflict_saved` semantic outcome when current content exists.
 - Conflict preservation outputs are metadata-only plans. They do not write conflict-copy bytes, persist conflict rows, or append operation-log entries.
+- Conflict resolution outputs are storage/API-neutral plans. `accept_current`, `keep_both`, and `mark_resolved` are metadata-only from Core's perspective; `accept_conflict` requires downstream storage to create a new current revision from preserved incoming conflict content.
 - Tombstone outputs record delete intent and retention metadata only. They do not physically remove revisions, blobs, worktree files, or provider files.
 - Delete-guard outputs classify whether a proposed delete run is allowed, blocked by count, blocked by ratio, or blocked pending manual unlock.
 - Operation-log and changes-feed outputs validate sequence ordering and limit bounds but do not query storage.
@@ -153,6 +156,7 @@ Required test categories:
 - stale, unknown, and explicit-null base behavior with no silent overwrite;
 - conflict path generation, recursive conflict-area rejection, and path mismatch validation;
 - conflict policy outcomes and conflict-saved planning;
+- conflict resolution action planning, including metadata-only actions and new-current-revision effects;
 - tombstone id validation, retention validation, and restore-ready metadata shape;
 - delete guard count/ratio/manual-unlock decisions, including scoped unlock mismatch cases;
 - idempotency key validation, request fingerprint determinism, replay of same request, and conflict for different request;
