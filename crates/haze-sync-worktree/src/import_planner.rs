@@ -315,11 +315,7 @@ impl WorktreeImportPlanner {
             }
         }
 
-        actions.sort_by(|left, right| {
-            left.vault_path()
-                .as_str()
-                .cmp(right.vault_path().as_str())
-        });
+        actions.sort_by(|left, right| left.vault_path().as_str().cmp(right.vault_path().as_str()));
 
         Ok(WorktreeImportPlan { actions, unchanged })
     }
@@ -590,11 +586,9 @@ mod tests {
         let mut state = WorktreeStateSnapshot::new();
         state.record_tombstoned(path("restored.md"), revision("rev_deleted"));
 
-        let plan = WorktreeImportPlanner::plan(
-            &state,
-            [stable_file("restored.md", hash(7), b"restored")],
-        )
-        .unwrap();
+        let plan =
+            WorktreeImportPlanner::plan(&state, [stable_file("restored.md", hash(7), b"restored")])
+                .unwrap();
 
         assert_eq!(plan.actions().len(), 1);
         assert!(matches!(
@@ -607,8 +601,8 @@ mod tests {
 
     #[test]
     fn planner_rejects_unstable_and_duplicate_local_facts() {
-        let unstable = WorktreeImportFile::new(unstable_snapshot("unstable.md"), b"bad".to_vec())
-            .unwrap_err();
+        let unstable =
+            WorktreeImportFile::new(unstable_snapshot("unstable.md"), b"bad".to_vec()).unwrap_err();
         assert_eq!(
             unstable,
             WorktreeImportPlanError::UnstableLocalFile {
