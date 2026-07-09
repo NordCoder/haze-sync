@@ -115,10 +115,9 @@ impl ProfileName {
         if value.is_empty() {
             return Err(ConfigError::EmptyProfileName);
         }
-        if !value
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.'))
-        {
+        if !value.chars().all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.')
+        }) {
             return Err(ConfigError::InvalidProfileName);
         }
 
@@ -330,7 +329,10 @@ impl TokenSource {
             };
             return Ok(Self::OsSecret(OsSecretRef::parse(service, account)?));
         }
-        if value.starts_with("literal:") || value.starts_with("bearer:") || value.starts_with("token:") {
+        if value.starts_with("literal:")
+            || value.starts_with("bearer:")
+            || value.starts_with("token:")
+        {
             return Err(ConfigError::InlineTokenValueRejected);
         }
 
@@ -377,7 +379,7 @@ pub struct CliConfig {
 impl CliConfig {
     /// Create a CLI config model from validated values.
     #[must_use]
-    pub const fn new(
+    pub fn new(
         profile: ProfileName,
         server_url: Option<ServerUrl>,
         output_format: OutputFormat,
@@ -393,7 +395,7 @@ impl CliConfig {
 
     /// Produce a report-safe summary.
     #[must_use]
-    pub const fn safe_summary(&self) -> SafeConfigSummary<'_> {
+    pub fn safe_summary(&self) -> SafeConfigSummary<'_> {
         SafeConfigSummary { config: self }
     }
 }
@@ -507,7 +509,7 @@ mod tests {
     fn config_source_precedence_is_explicit() {
         assert_eq!(
             source_precedence(ConfigField::ServerUrl),
-            [
+            &[
                 ConfigSource::CliFlag,
                 ConfigSource::Environment,
                 ConfigSource::ConfigFile,
@@ -516,7 +518,7 @@ mod tests {
         );
         assert_eq!(
             source_precedence(ConfigField::TokenSource),
-            [
+            &[
                 ConfigSource::CliFlag,
                 ConfigSource::Environment,
                 ConfigSource::ConfigFile,
@@ -584,7 +586,10 @@ mod tests {
         let token_error = TokenSource::parse("bearer:redacted-test-value")
             .unwrap_err()
             .to_string();
-        let file_debug = format!("{:?}", TokenSource::parse(&format!("file:{unsafe_file_path}")).unwrap());
+        let file_debug = format!(
+            "{:?}",
+            TokenSource::parse(&format!("file:{unsafe_file_path}")).unwrap()
+        );
 
         assert!(!server_error.contains("operator"));
         assert!(!server_error.contains("localhost"));
