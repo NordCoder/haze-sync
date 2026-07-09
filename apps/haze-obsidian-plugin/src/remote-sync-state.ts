@@ -7,6 +7,7 @@ export type RemoteConflictReason =
   | "missing_content_hash"
   | "missing_revision"
   | "non_file_path"
+  | "revision_mismatch"
   | "unsupported_change"
   | "unsupported_path"
   | "write_failed";
@@ -184,6 +185,7 @@ function isRemoteConflictReason(value: unknown): value is RemoteConflictReason {
     value === "missing_content_hash" ||
     value === "missing_revision" ||
     value === "non_file_path" ||
+    value === "revision_mismatch" ||
     value === "unsupported_change" ||
     value === "unsupported_path" ||
     value === "write_failed"
