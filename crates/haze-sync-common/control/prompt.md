@@ -1,63 +1,88 @@
-# W1-FIX-CMM-MERGEABILITY — Common mergeability fix
+# W1-FIX-COMMON-CI — Common CI fix
 
 Component: common
-Component path: crates/haze-sync-common
+Path: crates/haze-sync-common
 Branch: component/common
 PR: #46
-
-## Role
-
-You are a Fixer Worker for NordCoder/haze-sync.
+Role: fixer-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review.
 
 ## Context
 
-The W1 common implementation and clean-code review are accepted pending CI, but PR #46 is not mergeable. Current observations:
+Component CI completed with failure for the current PR head.
 
-- PR #46: mergeable=false
-- merge_commit_sha: null
-- component/common is ahead of main and behind current main
-- no PR Component CI run exists for the current common head
-- likely conflict/drift around `.github/workflows/component-ci.yml` and/or common component files
+- workflow: Component CI
+- workflow_run_id: 29003617374
+- run_number: 407
+- run_attempt: 1
+- artifact_id: 8192610322
+- artifact_name: ci-diag__component-common__wf-component-ci__run-29003617374__attempt-1
+- known failed check: rust-fmt
 
 ## Read
 
-- crates/haze-sync-common/control/state.md
-- crates/haze-sync-common/control/report.md
+Read all required sources before editing:
+
+- implementation-manifest.md from ChatGPT Project Sources
+- report-template.md from ChatGPT Project Sources
 - crates/haze-sync-common/docs/component-contract.md
 - crates/haze-sync-common/docs/implementation-plan.md
-- current `main` versions of files that conflict or drift
-- compare `main...component/common`
-- PR #46 metadata
+- crates/haze-sync-common/docs/dependency-map.md
+- crates/haze-sync-common/control/prompt.md
+- crates/haze-sync-common/control/report.md
+- current PR diff and relevant current repository code
+
+Use the GitHub connector to download and read the diagnostics artifact listed above.
+
+Read inside the artifact:
+
+- ci-diagnostics/summary.md
+- ci-diagnostics/manifest.json
+- every log listed in failed_checks
+
+Do not ask Orchestrator to paste raw logs. If the artifact is missing, expired, or malformed, report FIX_BLOCKED_BY_LOGS.
 
 ## Task
 
-Restore mergeability for `component/common` while preserving accepted common component changes.
+Fix the minimum cause of the CI failure.
 
-Preferred fix:
-
-- align `.github/workflows/component-ci.yml` with current main policy if it is part of the conflict;
-- keep common-owned source/docs/report changes intact;
-- make only the minimum required conflict/sync edits.
-
-If the GitHub connector cannot safely resolve the mergeability issue without local merge tooling, do not guess. Write a blocked report explaining the exact unresolved files and recommended local/Codex command sequence.
+Expected scope is rustfmt-equivalent formatting only in common-owned Rust files.
 
 ## Allowed files
 
-- .github/workflows/component-ci.yml only if needed for mergeability
-- crates/haze-sync-common/src/** only if needed to resolve drift/conflict
-- crates/haze-sync-common/docs/** only if needed to resolve drift/conflict
+- crates/haze-sync-common/**/*.rs
 - crates/haze-sync-common/control/report.md
 
-Do not edit sibling components. Do not edit main. Do not merge.
+## Forbidden changes
+
+- Do not change behavior.
+- Do not change public API semantics.
+- Do not change component docs or contracts.
+- Do not change workflow files.
+- Do not change sibling components.
+- Do not delete tests.
+
+If the diagnostics reveal a non-formatting issue, fix it only if it is inside common scope and required for CI. Otherwise report the appropriate blocker.
 
 ## Checks
 
-Use GitHub connector evidence only. Do not claim local checks passed. If CI is not available after fix, say so honestly.
+Run or observe the failing check again if possible through available tooling.
+
+If you cannot run shell commands, say so in the report. Do not claim checks passed unless you actually ran them or observed CI metadata.
 
 ## Report
 
-Replace crates/haze-sync-common/control/report.md with a FIXER report.
+Write only the report to crates/haze-sync-common/control/report.md.
 
-Expected status: SELF_ACCEPT_PENDING_CI, SELF_NEEDS_FIX, or BLOCKED_BY_TOOLING.
+Use report-template.md.
+
+Set REPORT_TYPE to FIX.
+
+Use one of:
+
+- FIX_COMPLETE
+- FIX_NEEDS_MORE
+- FIX_BLOCKED_BY_LOGS
+- FIX_BLOCKED_BY_CONTRACT
+- FIX_BLOCKED_BY_TOOLING
