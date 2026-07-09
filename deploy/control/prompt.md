@@ -1,29 +1,23 @@
-# W1-DEP-P3C-RERUN — Deployment server packaging clean-code review
+# W1-DEP-P4 — Database migrations, backup, and restore runbook
 
 Component: deployment
 Path: deploy
 Branch: component/deployment
 PR: #52
-Role: clean-code-reviewer
+Role: implementation-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-This is an explicit rerun of the DEP-P3 clean-code review control slot because the previous persistent worker chat did not write a DEP-P3C clean-code report.
+DEP-P3 implementation and clean-code review are accepted. Component CI for the deployment code-bearing clean-code head completed green.
 
-The current deploy/control/report.md is still a DEP-P3 implementation report with STATUS SELF_ACCEPT_PENDING_CI, not a DEP-P3C clean-code report. Therefore this prompt is active and not already completed.
+- workflow: Component CI
+- workflow_run_id: 29025503885
+- run_number: 593
+- conclusion: success
 
-DEP-P3 implementation report says Deployment added server packaging and local service wiring inside deployment scope:
-
-- deploy/server.Dockerfile
-- deploy/docker-compose.yml server service
-- local-only PostgreSQL and HTTP bindings
-- documented Server config variables and volumes
-- healthcheck using accepted Server /health behavior
-- local compose/runbook documentation
-
-Orchestrator has not confirmed a completed green CI run for the DEP-P3 code-bearing commit. Treat CI as pending or unknown unless you observe a completed green run through GitHub connector metadata.
+The next implementation phase is DEP-P4 from deploy/docs/implementation-plan.md.
 
 ## Read
 
@@ -31,7 +25,7 @@ Read before editing:
 
 - implementation-manifest.md from ChatGPT Project Sources
 - report-template.md from ChatGPT Project Sources
-- clean-code-reviewer-prompt.md from ChatGPT Project Sources
+- implementation-worker-prompt.md from ChatGPT Project Sources
 - chatgpt-gh-connector.md from ChatGPT Project Sources
 - deploy/docs/component-contract.md
 - deploy/docs/implementation-plan.md
@@ -40,47 +34,43 @@ Read before editing:
 - deploy/control/prompt.md
 - deploy/control/report.md
 - relevant current deployment files and PR diff
-- accepted Server dependency evidence referenced by the DEP-P3 implementation report, read-only only
 
 Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
 
 ## Task
 
-Review DEP-P3 server packaging and local service wiring.
+Implement DEP-P4: Database migrations, backup, and restore runbook.
 
-Focus areas:
+Follow the deployment plan:
 
-- deploy/server.Dockerfile safety, reproducibility, and non-root execution;
-- docker-compose server wiring and local-only bind behavior;
-- documented Server environment variables and volumes;
-- PostgreSQL and object-store volume behavior;
-- /health versus /ready documentation correctness;
-- migration policy explicitly deferred, no auto-running migrations;
-- no secrets, real credentials, TLS keys, provider services, Worktree runtime, or sibling changes.
+- document migration execution owner: CLI, Server, manual sqlx, or deploy script;
+- define pre-migration backup steps;
+- define database backup command examples using placeholders;
+- define restore order and consistency warnings;
+- document stopped-service or quiesced-sync requirements;
+- add dry-run/checklist style verification.
 
 ## Allowed files
 
-- deploy/**
+- deploy/docs/**
+- deploy/scripts/** only if explicitly accepted and safe
 - deploy/control/report.md
 
-## Forbidden changes
+## Non-goals
 
-- Do not modify Server code.
-- Do not modify GDrive, Worktree, Obsidian, Core, API, Storage, CLI, or Common code.
-- Do not add real credentials.
-- Do not add production TLS/private keys.
-- Do not add provider services.
-- Do not enable Worktree runtime unless a future explicit fan-in scopes it.
-- Do not change workflow files.
+- No automatic migration runner unless Server/Storage contract accepts it.
+- No production DB URLs.
+- No backup archives committed.
+- No hard-delete cleanup.
+- No sibling component changes.
+- No workflow changes.
 
 ## CI trigger policy
 
-Follow the CI skip policy in implementation-manifest.md and clean-code-reviewer-prompt.md. Deployment/source/doc clean-code commits must not skip CI. A final report-only commit may skip CI.
+Follow the CI skip policy in implementation-manifest.md and implementation-worker-prompt.md. Product/deploy docs or scripts commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
 Write only the report to deploy/control/report.md.
 
-Use report-template.md. Set REPORT_TYPE to CLEAN_CODE_REVIEW.
-
-If no source/docs changes are made and CI is still not observed green, use CLEAN_ACCEPT_PENDING_CI rather than CLEAN_ACCEPT.
+Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION.
