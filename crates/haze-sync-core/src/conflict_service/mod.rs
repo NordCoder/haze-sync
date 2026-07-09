@@ -291,7 +291,9 @@ pub enum ConflictResolutionRevisionEffect {
     /// No new current revision is required; downstream only updates metadata.
     MetadataOnlyCurrentUnchanged { current_revision_id: RevisionId },
     /// Downstream storage must create a new current revision from the conflict copy content.
-    CreateCurrentRevisionFromConflict { new_revision: NewCurrentRevisionPlan },
+    CreateCurrentRevisionFromConflict {
+        new_revision: NewCurrentRevisionPlan,
+    },
 }
 
 impl ConflictResolutionRevisionEffect {
@@ -467,8 +469,7 @@ pub fn is_conflict_area_path(path: &VaultPath) -> bool {
 #[must_use]
 pub fn is_open_conflict_area_path(path: &VaultPath) -> bool {
     let mut segments = path.segments();
-    segments.next() == Some(CONFLICT_ROOT_SEGMENT)
-        && segments.next() == Some(CONFLICT_OPEN_SEGMENT)
+    segments.next() == Some(CONFLICT_ROOT_SEGMENT) && segments.next() == Some(CONFLICT_OPEN_SEGMENT)
 }
 
 pub fn validate_original_path(path: &VaultPath) -> Result<(), ConflictPolicyError> {
@@ -627,12 +628,9 @@ mod tests {
 
     #[test]
     fn conflict_path_generation_preserves_nested_path_extension_and_timestamp() {
-        let request = ConflictPathRequest::parse(
-            "Folder/Sub/archive.tar.gz",
-            "gdrive-adapter",
-            timestamp(),
-        )
-        .expect("request should parse");
+        let request =
+            ConflictPathRequest::parse("Folder/Sub/archive.tar.gz", "gdrive-adapter", timestamp())
+                .expect("request should parse");
 
         let conflict_path = generate_conflict_path(&request).expect("path should generate");
 
@@ -649,9 +647,8 @@ mod tests {
 
     #[test]
     fn conflict_path_generation_handles_files_without_extensions() {
-        let request =
-            ConflictPathRequest::parse("Notes/README", "worktree-adapter", timestamp())
-                .expect("request should parse");
+        let request = ConflictPathRequest::parse("Notes/README", "worktree-adapter", timestamp())
+            .expect("request should parse");
 
         let conflict_path = generate_conflict_path(&request).expect("path should generate");
 
@@ -707,7 +704,10 @@ mod tests {
             panic!("accept_conflict should create a new current revision plan");
         };
         assert_eq!(new_revision.path, vault_path("Notes/a.md"));
-        assert_eq!(new_revision.parent_revision_id, revision_id("rev_01JCURRENT"));
+        assert_eq!(
+            new_revision.parent_revision_id,
+            revision_id("rev_01JCURRENT")
+        );
         assert_eq!(new_revision.content_hash, content_hash(7));
         assert_eq!(new_revision.size_bytes, 42);
         assert_eq!(new_revision.created_by, adapter_id());
