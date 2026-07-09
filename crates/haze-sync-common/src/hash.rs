@@ -172,7 +172,10 @@ mod tests {
         for input in [mixed_hex.clone(), format!("{SHA256_PREFIX}{mixed_hex}")] {
             let hash = Sha256::parse(&input).unwrap();
             assert_eq!(hash.as_hex(), expected_hex, "input={input:?}");
-            assert_eq!(hash.to_prefixed_string(), format!("{SHA256_PREFIX}{expected_hex}"));
+            assert_eq!(
+                hash.to_prefixed_string(),
+                format!("{SHA256_PREFIX}{expected_hex}")
+            );
             assert_eq!(hash.to_string(), format!("{SHA256_PREFIX}{expected_hex}"));
         }
     }
@@ -194,7 +197,10 @@ mod tests {
         assert_eq!(hash.as_bytes(), &bytes);
         assert_eq!(hash.into_bytes(), bytes);
         assert_eq!(hash.as_hex(), "ab".repeat(SHA256_BYTES));
-        assert_eq!(hash.to_prefixed_string(), format!("{SHA256_PREFIX}{}", "ab".repeat(SHA256_BYTES)));
+        assert_eq!(
+            hash.to_prefixed_string(),
+            format!("{SHA256_PREFIX}{}", "ab".repeat(SHA256_BYTES))
+        );
     }
 
     #[test]
@@ -267,7 +273,10 @@ mod tests {
             format!("\"SHA256:{}\"", repeated("0")),
             format!("\"{}z\"", &repeated("0")[..63]),
         ] {
-            assert!(serde_json::from_str::<Sha256>(&json).is_err(), "json={json:?}");
+            assert!(
+                serde_json::from_str::<Sha256>(&json).is_err(),
+                "json={json:?}"
+            );
         }
     }
 }
