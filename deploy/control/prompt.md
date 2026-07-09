@@ -1,27 +1,27 @@
-# W1-DEP-P3 — Server packaging and service wiring
+# W1-DEP-P3C — Deployment server packaging clean-code review
 
 Component: deployment
 Path: deploy
 Branch: component/deployment
 PR: #52
-Role: implementation-worker
+Role: clean-code-reviewer
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-DEP-P2 clean-code review and Component CI were previously accepted. DEP-P3 was blocked until Server startup/config/readiness behavior became accepted enough to use as a deployment dependency.
+DEP-P3 implementation completed with SELF_ACCEPT_PENDING_CI.
 
-The Server component now has accepted Server startup/config/readiness work from earlier phases and accepted SRV-P4 clean-code review with green CI. Orchestrator authorizes DEP-P3 to use accepted Server control reports/docs as dependency evidence, but not to modify Server.
+The implementation report says Deployment added server container packaging and local service wiring inside deployment scope:
 
-Server dependency evidence to read:
+- deploy/server.Dockerfile
+- deploy/docker-compose.yml server service
+- local-only PostgreSQL and HTTP bindings
+- documented Server config variables and volumes
+- healthcheck using accepted Server /health behavior
+- local compose/runbook documentation
 
-- crates/haze-sync-server/control/report.md on component/server
-- crates/haze-sync-server/docs/component-contract.md on component/server
-- crates/haze-sync-server/docs/implementation-plan.md on component/server
-- crates/haze-sync-server/docs/implementation-log.md on component/server
-
-Deployment must still remain deploy-scope only. If the accepted Server surface is insufficient for a concrete deployment wiring decision, report BLOCKED_BY_DEPENDENCY with exact missing behavior.
+Orchestrator has not yet confirmed a completed green CI run for the DEP-P3 code-bearing commit. Treat CI as pending or unknown unless you observe a completed green run through GitHub connector metadata.
 
 ## Read
 
@@ -29,7 +29,7 @@ Read before editing:
 
 - implementation-manifest.md from ChatGPT Project Sources
 - report-template.md from ChatGPT Project Sources
-- implementation-worker-prompt.md from ChatGPT Project Sources
+- clean-code-reviewer-prompt.md from ChatGPT Project Sources
 - chatgpt-gh-connector.md from ChatGPT Project Sources
 - deploy/docs/component-contract.md
 - deploy/docs/implementation-plan.md
@@ -37,48 +37,48 @@ Read before editing:
 - deploy/docs/dependency-map.md
 - deploy/control/prompt.md
 - deploy/control/report.md
-- accepted Server dependency files listed above
 - relevant current deployment files and PR diff
+- accepted Server dependency evidence referenced by the DEP-P3 implementation report, read-only only
 
 Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
 
 ## Task
 
-Implement DEP-P3: Server packaging and service wiring.
+Review DEP-P3 server packaging and local service wiring.
 
-Follow the deployment plan:
+Focus areas:
 
-- decide binary versus container packaging path inside deploy scope;
-- define server environment variables and volumes using documented Server config only;
-- wire PostgreSQL connection and object-store path through placeholders or safe local defaults;
-- expose local/proxy-bound listen address safely;
-- add readiness/liveness checks using accepted Server readiness/health behavior;
-- document startup and shutdown;
-- avoid auto-running migrations until migration policy is accepted.
+- deploy/server.Dockerfile safety, reproducibility, and non-root execution;
+- docker-compose server wiring and local-only bind behavior;
+- documented Server environment variables and volumes;
+- PostgreSQL and object-store volume behavior;
+- /health versus /ready documentation correctness;
+- migration policy explicitly deferred, no auto-running migrations;
+- no secrets, real credentials, TLS keys, provider services, Worktree runtime, or sibling changes.
 
 ## Allowed files
 
 - deploy/**
-- Dockerfile or server packaging files only if already accepted by deployment scope
-- docs/runbooks only if introduced under deployment scope
 - deploy/control/report.md
 
-## Non-goals
+## Forbidden changes
 
-- No Server code changes.
-- No GDrive adapter service.
-- No Worktree runtime unless Server/Worktree fan-in is ready.
-- No production TLS/private keys.
-- No real credentials.
-- No sibling component changes.
-- No workflow changes.
+- Do not modify Server code.
+- Do not modify GDrive, Worktree, Obsidian, Core, API, Storage, CLI, or Common code.
+- Do not add real credentials.
+- Do not add production TLS/private keys.
+- Do not add provider services.
+- Do not enable Worktree runtime unless a future explicit fan-in scopes it.
+- Do not change workflow files.
 
 ## CI trigger policy
 
-Follow the CI skip policy in implementation-manifest.md and implementation-worker-prompt.md. Product, deployment, docs, script, contract, workflow, and implementation commits must not skip CI. A final report-only commit may skip CI.
+Follow the CI skip policy in implementation-manifest.md and clean-code-reviewer-prompt.md. Deployment/source/doc clean-code commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
 Write only the report to deploy/control/report.md.
 
-Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION.
+Use report-template.md. Set REPORT_TYPE to CLEAN_CODE_REVIEW.
+
+If no source/docs changes are made and CI is still not observed green, use CLEAN_ACCEPT_PENDING_CI rather than CLEAN_ACCEPT.
