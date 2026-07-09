@@ -47,7 +47,7 @@ export function classifyVaultPath(rawPath: string): VaultPathClassification {
     return exclude(rawPath, "absolute_path");
   }
 
-  const normalized = rawPath.replace(/\\/gu, "/").trim();
+  const normalized = rawPath.replace(/\\/gu, "/");
   if (normalized.length === 0) {
     return exclude(rawPath, "empty_path");
   }
