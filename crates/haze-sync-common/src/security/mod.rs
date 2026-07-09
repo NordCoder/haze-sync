@@ -98,6 +98,32 @@ mod tests {
     }
 
     #[test]
+    fn formatting_contexts_do_not_leak_wrapped_value() {
+        let raw_value = "fixture_token_like_value";
+        let secret = SecretString::new(raw_value);
+
+        let display_context = format!("secret={secret}");
+        let debug_context = format!("secret={secret:?}");
+        let alternate_debug_context = format!("secret={secret:#?}");
+
+        for formatted in [display_context, debug_context, alternate_debug_context] {
+            assert!(formatted.contains(REDACTED), "formatted={formatted:?}");
+            assert!(!formatted.contains(raw_value), "formatted={formatted:?}");
+        }
+    }
+
+    #[test]
+    fn cloned_secret_still_redacts_when_formatted() {
+        let raw_value = "fixture_clone_value";
+        let secret = SecretString::from(raw_value);
+        let cloned = secret.clone();
+
+        assert_eq!(cloned.as_sensitive_str(), raw_value);
+        assert_eq!(cloned.to_string(), REDACTED);
+        assert!(!format!("{cloned:?}").contains(raw_value));
+    }
+
+    #[test]
     fn sensitive_accessors_are_explicit() {
         let raw_value = "fixture_secret_value";
         let secret = SecretString::from(raw_value);
