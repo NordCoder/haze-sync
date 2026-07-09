@@ -175,3 +175,35 @@ Affected contracts:
 - GDrive adapter component contract;
 - Server/API adapter integration;
 - deployment topology.
+
+## 2026-07-09 — Object-store root is caller-owned durable storage
+
+Decision:
+
+`LocalObjectStore` treats its root as a caller-provided durable storage directory. Storage owns the hash-addressed layout below that root, including the internal `tmp` directory and `sha256/<prefix>/<full-hex>` blob layout, but it does not choose deployment paths, create backups, run garbage collection, or expose local paths in public errors.
+
+Rationale:
+
+The object store must be reusable by Server, deployment, backup/restore, and test harnesses without hard-coding environment-specific paths. Keeping temporary files under the same root keeps commit operations on one filesystem for the current hard-link commit strategy. Path-free errors preserve the component secrecy contract even when filesystem sources include local paths.
+
+Alternatives:
+
+- Hard-code a production object-store root in Storage.
+- Put temporary blobs outside the object-store root.
+- Include local filesystem paths in public error formatting for easier debugging.
+- Add cleanup or garbage-collection jobs directly to Storage.
+
+Consequences:
+
+- Server/deployment must configure and provision the root directory.
+- Backup/restore and doctor phases must treat the root as durable data.
+- Storage tests cover missing blobs, corrupted blobs, unexpected entries, duplicate writes, temporary cleanup after failed commits, and path-free error formatting.
+- Retention cleanup and garbage collection remain future scoped work outside STOR-P3.
+
+Affected contracts:
+
+- object_store;
+- component contract;
+- deployment/runbook planning;
+- backup/restore planning;
+- future doctor checks.
