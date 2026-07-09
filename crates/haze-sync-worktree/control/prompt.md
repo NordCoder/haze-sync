@@ -1,24 +1,21 @@
-# W1-FIX-WORKTREE-WT-P3-CI — Worktree WT-P3 CI fix
+# W1-WT-P3C — Worktree scanner clean-code review
 
 Component: worktree
 Path: crates/haze-sync-worktree
 Branch: component/worktree
 PR: #49
-Role: fixer-worker
+Role: clean-code-reviewer
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-WT-P3 implementation completed with SELF_ACCEPT_PENDING_CI. Product-code CI completed red.
+WT-P3 implementation and CI fixer are complete. Post-fix Component CI is green.
 
 - workflow: Component CI
-- workflow_run_id: 29009639256
-- run_number: 512
-- run_attempt: 1
-- artifact_id: 8195028185
-- artifact_name: ci-diag__component-worktree__wf-component-ci__run-29009639256__attempt-1
-- known failed checks: rust-fmt, cargo-clippy
+- workflow_run_id: 29011302368
+- run_number: 533
+- conclusion: success
 
 ## Read
 
@@ -26,7 +23,7 @@ Read before editing:
 
 - implementation-manifest.md from ChatGPT Project Sources
 - report-template.md from ChatGPT Project Sources
-- fixer-worker-prompt.md from ChatGPT Project Sources
+- clean-code-reviewer-prompt.md from ChatGPT Project Sources
 - chatgpt-gh-connector.md from ChatGPT Project Sources
 - crates/haze-sync-worktree/docs/component-contract.md
 - crates/haze-sync-worktree/docs/implementation-plan.md
@@ -36,41 +33,40 @@ Read before editing:
 - crates/haze-sync-worktree/control/report.md
 - relevant current repository code and PR diff
 
-Use the GitHub connector to download and read the diagnostics artifact listed above.
-
-Read summary.md, manifest.json, and every log listed in failed_checks.
-
-If the artifact is missing, expired, malformed, or unreadable, report FIX_BLOCKED_BY_LOGS.
+Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
 
 ## Task
 
-Fix the minimum cause of the WT-P3 CI failure inside worktree scope.
+Review WT-P3 scanner, ignore rules, stable-file detection, and the CI fix.
 
-Expected scope from triage:
+Focus areas:
 
-- rustfmt formatting in crates/haze-sync-worktree/src/scanner.rs;
-- clippy needless range loop in scanner SHA-256 schedule code.
+- root-contained traversal and path safety;
+- reserved/temp/unsafe entry classification;
+- stable-file metadata-before/after heuristic;
+- content hashing implementation and clippy fix correctness;
+- tests and module boundaries;
+- preservation of non-goals: no watcher reliance, no Core/API import calls, no materialization, no delete propagation, no provider behavior.
 
 ## Allowed files
 
 - crates/haze-sync-worktree/src/**
+- crates/haze-sync-worktree/docs/**
 - crates/haze-sync-worktree/control/report.md
 
 ## Forbidden changes
 
-- Do not change Worktree behavior except as required by formatting or clippy-equivalent cleanup.
 - Do not add dependencies.
-- Do not change docs or contracts.
+- Do not add runtime sync/import/materialization behavior.
 - Do not change workflow files.
 - Do not change sibling components.
-- Do not delete tests.
 
 ## CI trigger policy
 
-Follow the CI skip policy in implementation-manifest.md and fixer-worker-prompt.md. Product/source fixer commits must not skip CI. A final report-only commit may skip CI.
+Follow the CI skip policy in implementation-manifest.md and clean-code-reviewer-prompt.md. Source clean-code commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
 Write only the report to crates/haze-sync-worktree/control/report.md.
 
-Use report-template.md. Set REPORT_TYPE to FIX.
+Use report-template.md. Set REPORT_TYPE to CLEAN_CODE_REVIEW.
