@@ -1,5 +1,6 @@
 import { Plugin, TAbstractFile, TFile } from "obsidian";
 
+import { HazeSyncApiClient } from "./api-client";
 import {
   BaseRevisionState,
   createDefaultBaseRevisionState,
@@ -16,6 +17,13 @@ import {
 } from "./pending-queue";
 import { parsePluginData, serializePluginData } from "./plugin-data";
 import {
+  RemoteEchoSuppressor,
+  fetchRemoteChangePage,
+  markRemotePullStarted,
+  materializeRemoteChange,
+} from "./remote-materializer";
+import { RemoteSyncState, createDefaultRemoteSyncState } from "./remote-sync-state";
+import {
   PluginSettings,
   createDefaultPluginSettings,
   settingsAreReady,
@@ -31,6 +39,8 @@ export default class HazeSyncPlugin extends Plugin {
 
   private localState: LocalSyncState = createDefaultLocalSyncState();
   private baseRevisionState: BaseRevisionState = createDefaultBaseRevisionState();
+  private remoteSyncState: RemoteSyncState = createDefaultRemoteSyncState();
+  private readonly remoteEchoSuppressor = new RemoteEchoSuppressor();
   private pendingDataSave: Promise<void> = Promise.resolve();
   private scanner?: VaultScanner;
   private statusReporter?: SafeStatusReporter;
@@ -48,6 +58,7 @@ export default class HazeSyncPlugin extends Plugin {
     this.settingsTab = new HazeSyncSettingsTab(this.app, this);
     this.addSettingTab(this.settingsTab);
     this.addScanCommand();
+    this.addRemotePullCommand();
     this.registerVaultEventHints();
 
     this.refreshSettingsStatus();
@@ -66,6 +77,7 @@ export default class HazeSyncPlugin extends Plugin {
     this.settings = data.settings;
     this.localState = data.localState;
     this.baseRevisionState = data.baseRevisionState;
+    this.remoteSyncState = data.remoteSyncState;
   }
 
   async saveSettings(): Promise<void> {
@@ -92,14 +104,18 @@ export default class HazeSyncPlugin extends Plugin {
 
     const queueText = pendingQueueSummaryText(summarizePendingQueue(this.localState.pendingQueue));
     const baseCount = Object.keys(this.baseRevisionState.byPath).length;
+    const remoteConflictCount = Object.keys(this.remoteSyncState.conflicts).length;
+    const remoteCursor = this.remoteSyncState.changeCursor ?? "none";
 
     if (validation.normalized.syncMode === "disabled") {
-      this.statusReporter.setStatus(`Configured; sync mode is disabled; ${queueText}; ${baseCount} tracked base revision(s).`);
+      this.statusReporter.setStatus(
+        `Configured; sync mode is disabled; ${queueText}; ${baseCount} tracked base revision(s); remote cursor ${remoteCursor}; ${remoteConflictCount} remote conflict(s).`,
+      );
       return;
     }
 
     this.statusReporter.setStatus(
-      `Configured in ${syncModeLabel(validation.normalized.syncMode)} mode; ${queueText}; ${baseCount} tracked base revision(s).`,
+      `Configured in ${syncModeLabel(validation.normalized.syncMode)} mode; ${queueText}; ${baseCount} tracked base revision(s); remote cursor ${remoteCursor}; ${remoteConflictCount} remote conflict(s).`,
     );
   }
 
@@ -109,6 +125,16 @@ export default class HazeSyncPlugin extends Plugin {
       name: "Scan vault for local changes",
       callback: () => {
         void this.scanVaultForLocalChanges();
+      },
+    });
+  }
+
+  private addRemotePullCommand(): void {
+    this.addCommand({
+      id: "haze-sync-pull-remote-changes",
+      name: "Pull remote changes safely",
+      callback: () => {
+        void this.pullRemoteChangesSafely();
       },
     });
   }
@@ -158,6 +184,71 @@ export default class HazeSyncPlugin extends Plugin {
     this.refreshSettingsStatus();
   }
 
+  private async pullRemoteChangesSafely(): Promise<void> {
+    const validation = validatePluginSettings(this.settings);
+    this.settings = validation.normalized;
+    if (!settingsAreReady(this.settings)) {
+      this.refreshSettingsStatus(validation);
+      this.statusReporter?.notice("Configure Haze Sync settings before pulling remote changes.", "warning");
+      return;
+    }
+
+    const observedAt = new Date().toISOString();
+    this.remoteSyncState = markRemotePullStarted(this.remoteSyncState, observedAt);
+
+    const client = HazeSyncApiClient.fromSettings(this.settings);
+    const response = await fetchRemoteChangePage(client, this.remoteSyncState, { limit: 50 });
+    let applied = 0;
+    let conflicts = 0;
+    let tombstones = 0;
+    let noOps = 0;
+
+    for (const change of response.changes) {
+      const download = change.kind === "upsert" ? await client.getFile(change.path) : undefined;
+      const result = await materializeRemoteChange({
+        vault: this.app.vault,
+        change,
+        download,
+        baseRevisionState: this.baseRevisionState,
+        remoteSyncState: this.remoteSyncState,
+        observedAt,
+        echoSuppressor: this.remoteEchoSuppressor,
+      });
+
+      this.baseRevisionState = result.baseRevisionState;
+      this.remoteSyncState = result.remoteSyncState;
+
+      switch (result.status) {
+        case "applied":
+          applied += 1;
+          break;
+        case "conflict_queued":
+          conflicts += 1;
+          await this.persistPluginData();
+          this.refreshSettingsStatus();
+          this.statusReporter?.notice(
+            `Remote pull stopped: queued conflict for ${result.path}. Local file was preserved.`,
+            "warning",
+          );
+          return;
+        case "no_op":
+          noOps += 1;
+          break;
+        case "tombstone_recorded":
+          tombstones += 1;
+          break;
+      }
+    }
+
+    await this.persistPluginData();
+    this.refreshSettingsStatus();
+    const moreText = response.has_more ? " More remote changes are available; run pull again." : "";
+    this.statusReporter?.notice(
+      `Remote pull complete: ${applied} applied, ${noOps} already current, ${tombstones} tombstone(s), ${conflicts} conflict(s).${moreText}`,
+      conflicts === 0 ? "success" : "warning",
+    );
+  }
+
   private recordVaultEventHint(file: TAbstractFile, kind: PendingChangeKind, pathOverride?: string): void {
     if (!(file instanceof TFile) && pathOverride === undefined) {
       return;
@@ -165,6 +256,10 @@ export default class HazeSyncPlugin extends Plugin {
 
     const classification = factFromEventPath(pathOverride ?? file.path);
     if (!classification.included) {
+      return;
+    }
+
+    if (this.remoteEchoSuppressor.isSuppressed(classification.path)) {
       return;
     }
 
@@ -176,7 +271,7 @@ export default class HazeSyncPlugin extends Plugin {
   }
 
   private persistPluginData(): Promise<void> {
-    const data = serializePluginData(this.settings, this.localState, this.baseRevisionState);
+    const data = serializePluginData(this.settings, this.localState, this.baseRevisionState, this.remoteSyncState);
     const write = this.pendingDataSave.then(
       () => this.saveData(data),
       () => this.saveData(data),
