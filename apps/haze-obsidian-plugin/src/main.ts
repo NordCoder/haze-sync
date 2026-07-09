@@ -1,15 +1,9 @@
 import { Plugin, TAbstractFile, TFile } from "obsidian";
 
 import {
-  PluginSettings,
-  SettingsValidationResult,
-  createDefaultPluginSettings,
-  settingsAreReady,
-  syncModeLabel,
-  validatePluginSettings,
-} from "./settings";
-import { HazeSyncSettingsTab } from "./settings-tab";
-import { SafeStatusReporter } from "./status";
+  BaseRevisionState,
+  createDefaultBaseRevisionState,
+} from "./base-revision-store";
 import { factFromEventPath } from "./local-file-facts";
 import {
   LocalSyncState,
@@ -21,12 +15,23 @@ import {
   summarizePendingQueue,
 } from "./pending-queue";
 import { parsePluginData, serializePluginData } from "./plugin-data";
+import {
+  PluginSettings,
+  SettingsValidationResult,
+  createDefaultPluginSettings,
+  settingsAreReady,
+  syncModeLabel,
+  validatePluginSettings,
+} from "./settings";
+import { HazeSyncSettingsTab } from "./settings-tab";
+import { SafeStatusReporter } from "./status";
 import { VaultScanner } from "./vault-scanner";
 
 export default class HazeSyncPlugin extends Plugin {
   settings: PluginSettings = createDefaultPluginSettings();
 
   private localState: LocalSyncState = createDefaultLocalSyncState();
+  private baseRevisionState: BaseRevisionState = createDefaultBaseRevisionState();
   private pendingDataSave: Promise<void> = Promise.resolve();
   private scanner?: VaultScanner;
   private statusReporter?: SafeStatusReporter;
@@ -61,6 +66,7 @@ export default class HazeSyncPlugin extends Plugin {
     const data = parsePluginData(await this.loadData());
     this.settings = data.settings;
     this.localState = data.localState;
+    this.baseRevisionState = data.baseRevisionState;
   }
 
   async saveSettings(): Promise<void> {
@@ -86,13 +92,16 @@ export default class HazeSyncPlugin extends Plugin {
     }
 
     const queueText = pendingQueueSummaryText(summarizePendingQueue(this.localState.pendingQueue));
+    const baseCount = Object.keys(this.baseRevisionState.byPath).length;
 
     if (validation.normalized.syncMode === "disabled") {
-      this.statusReporter.setStatus(`Configured; sync mode is disabled; ${queueText}.`);
+      this.statusReporter.setStatus(`Configured; sync mode is disabled; ${queueText}; ${baseCount} tracked base revision(s).`);
       return;
     }
 
-    this.statusReporter.setStatus(`Configured in ${syncModeLabel(validation.normalized.syncMode)} mode; ${queueText}.`);
+    this.statusReporter.setStatus(
+      `Configured in ${syncModeLabel(validation.normalized.syncMode)} mode; ${queueText}; ${baseCount} tracked base revision(s).`,
+    );
   }
 
   private addScanCommand(): void {
@@ -168,7 +177,7 @@ export default class HazeSyncPlugin extends Plugin {
   }
 
   private persistPluginData(): Promise<void> {
-    const data = serializePluginData(this.settings, this.localState);
+    const data = serializePluginData(this.settings, this.localState, this.baseRevisionState);
     const write = this.pendingDataSave.then(
       () => this.saveData(data),
       () => this.saveData(data),
