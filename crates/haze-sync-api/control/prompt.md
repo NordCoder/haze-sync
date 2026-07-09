@@ -1,26 +1,21 @@
-# W1-FIX-API-P4-CI — API API-P4 CI fix
+# W1-API-P4C — API file/changes route-helper clean-code review
 
 Component: api
 Path: crates/haze-sync-api
 Branch: component/api
 PR: #44
-Role: fixer-worker
+Role: clean-code-reviewer
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-API-P4 implementation completed, but Component CI for the code-bearing commit failed.
+API-P4 implementation and CI fixer are complete. Post-fix Component CI is green.
 
 - workflow: Component CI
-- workflow_run_id: 29028332903
-- run_number: unknown
-- run_attempt: 1
-- artifact_id: 8202653799
-- artifact_name: ci-diag__component-api__wf-component-ci__run-29028332903__attempt-1
-- artifact_expires_at: 2026-07-10T15:11:11Z
-
-Use the diagnostics artifact as source of truth. Do not infer the root cause only from workflow step summaries.
+- workflow_run_id: 29034803865
+- run_number: 689
+- conclusion: success
 
 ## Read
 
@@ -28,7 +23,7 @@ Read before editing:
 
 - implementation-manifest.md from ChatGPT Project Sources
 - report-template.md from ChatGPT Project Sources
-- fixer-worker-prompt.md from ChatGPT Project Sources
+- clean-code-reviewer-prompt.md from ChatGPT Project Sources
 - chatgpt-gh-connector.md from ChatGPT Project Sources
 - crates/haze-sync-api/docs/component-contract.md
 - crates/haze-sync-api/docs/implementation-plan.md
@@ -38,15 +33,21 @@ Read before editing:
 - crates/haze-sync-api/control/report.md
 - relevant current repository code and PR diff
 
-Download and read diagnostics artifact 8202653799. Read summary.md, manifest.json, and every failed-check log.
-
-If the artifact is missing, expired, malformed, or unreadable, report FIX_BLOCKED_BY_LOGS.
+Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
 
 ## Task
 
-Fix the minimum cause of the API-P4 CI failure inside api scope.
+Review API-P4 file and changes route-helper hardening plus the CI fixer.
 
-Expected recent changed area: file and changes route-helper contract hardening. Use the artifact as source of truth.
+Focus areas:
+
+- VaultPath parsing through file route helpers;
+- upload metadata extraction for path, idempotency key, content hash, base revision, body length, and body bytes;
+- authenticated helper behavior for verified adapter principal without runtime auth lookup;
+- public response mapping for accepted, same-content, conflict-saved, hash-mismatch, and stale outcomes;
+- changes query since/limit bounds and response page metadata;
+- source compatibility of public request-parts construction;
+- preservation of passive API boundaries: no Axum handler implementation, no object-store access, no operation-log queries, no content streaming, no background cursor updates.
 
 ## Allowed files
 
@@ -54,7 +55,7 @@ Expected recent changed area: file and changes route-helper contract hardening. 
 - crates/haze-sync-api/src/routes/changes/**
 - crates/haze-sync-api/src/dto/files/**
 - crates/haze-sync-api/src/dto/changes/**
-- crates/haze-sync-api/docs/** only if the artifact proves a docs formatting failure
+- crates/haze-sync-api/docs/**
 - crates/haze-sync-api/control/report.md
 
 ## Forbidden changes
@@ -69,10 +70,10 @@ Expected recent changed area: file and changes route-helper contract hardening. 
 
 ## CI trigger policy
 
-Follow the CI skip policy in implementation-manifest.md and fixer-worker-prompt.md. Product/source/docs fixer commits must not skip CI. A final report-only commit may skip CI.
+Follow the CI skip policy in implementation-manifest.md and clean-code-reviewer-prompt.md. Source/doc clean-code commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
 Write only the report to crates/haze-sync-api/control/report.md.
 
-Use report-template.md. Set REPORT_TYPE to FIX.
+Use report-template.md. Set REPORT_TYPE to CLEAN_CODE_REVIEW.
