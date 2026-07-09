@@ -21,6 +21,7 @@ import {
   fetchRemoteChangePage,
   markRemotePullStarted,
   materializeRemoteChange,
+  remoteChangeNeedsDownload,
 } from "./remote-materializer";
 import { RemoteSyncState, createDefaultRemoteSyncState } from "./remote-sync-state";
 import {
@@ -66,6 +67,7 @@ export default class HazeSyncPlugin extends Plugin {
   }
 
   onunload(): void {
+    this.remoteEchoSuppressor.dispose();
     this.statusReporter?.dispose();
     this.statusReporter = undefined;
     this.settingsTab = undefined;
@@ -193,7 +195,7 @@ export default class HazeSyncPlugin extends Plugin {
       return;
     }
 
-    if (this.settings.syncMode === "disabled" || this.settings.syncMode === "push_only") {
+    if (this.settings.syncMode === "disabled" || this.settings.syncMode === "push_only" || this.settings.syncMode === "dry_run") {
       this.refreshSettingsStatus(validation);
       this.statusReporter?.notice("Remote pull is disabled by the current sync mode.", "warning");
       return;
@@ -212,7 +214,7 @@ export default class HazeSyncPlugin extends Plugin {
       const response = await fetchRemoteChangePage(client, this.remoteSyncState, { limit: 50 });
 
       for (const change of response.changes) {
-        const download = change.kind === "upsert" ? await client.getFile(change.path) : undefined;
+        const download = remoteChangeNeedsDownload(change) ? await client.getFile(change.path) : undefined;
         const result = await materializeRemoteChange({
           vault: this.app.vault,
           change,
