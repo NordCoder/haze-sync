@@ -9,7 +9,7 @@ ARG RUST_VERSION=1.75
 FROM rust:${RUST_VERSION}-bookworm AS builder
 WORKDIR /workspace
 COPY . .
-RUN cargo build --release -p haze-sync-server
+RUN cargo build --release --locked -p haze-sync-server
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
