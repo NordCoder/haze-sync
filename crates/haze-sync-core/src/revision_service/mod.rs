@@ -468,6 +468,91 @@ impl Error for RevisionServiceError {}
 mod tests {
     use super::*;
 
+    const CURRENT_BYTES: &[u8] = b"current content";
+    const INCOMING_BYTES: &[u8] = b"incoming content";
+
+    #[derive(Debug)]
+    struct RecordingRepository {
+        current_revision: Option<StoredRevision>,
+        current_revision_calls: usize,
+        inserted_requests: Vec<InsertRevisionRequest>,
+        next_revision_id: RevisionId,
+    }
+
+    impl RecordingRepository {
+        fn with_current(current_revision: Option<StoredRevision>) -> Self {
+            Self {
+                current_revision,
+                current_revision_calls: 0,
+                inserted_requests: Vec::new(),
+                next_revision_id: revision_id("rev_01JNEW"),
+            }
+        }
+    }
+
+    impl RevisionRepository for RecordingRepository {
+        fn current_revision(
+            &mut self,
+            _path: &VaultPath,
+        ) -> Result<Option<StoredRevision>, RevisionServiceError> {
+            self.current_revision_calls += 1;
+            Ok(self.current_revision.clone())
+        }
+
+        fn insert_revision(
+            &mut self,
+            request: InsertRevisionRequest,
+        ) -> Result<StoredRevision, RevisionServiceError> {
+            self.inserted_requests.push(request.clone());
+            Ok(StoredRevision {
+                revision_id: self.next_revision_id.clone(),
+                path: request.path,
+                parent_revision_id: request.parent_revision_id,
+                content_hash: request.content_hash,
+                size_bytes: request.size_bytes,
+                created_by: request.adapter_id,
+            })
+        }
+    }
+
+    #[derive(Debug, Default)]
+    struct RecordingContentStore {
+        put_calls: Vec<(ContentHash, Vec<u8>)>,
+    }
+
+    impl ContentStore for RecordingContentStore {
+        fn put_content(
+            &mut self,
+            expected_hash: ContentHash,
+            bytes: &[u8],
+        ) -> Result<StoredContent, RevisionServiceError> {
+            self.put_calls.push((expected_hash, bytes.to_vec()));
+            Ok(StoredContent {
+                hash: expected_hash,
+                size_bytes: bytes.len() as u64,
+            })
+        }
+    }
+
+    #[derive(Debug, Default)]
+    struct RecordingOperationLog {
+        append_calls: Vec<AppendOperationRequest>,
+    }
+
+    impl OperationLog for RecordingOperationLog {
+        fn append_operation(
+            &mut self,
+            request: AppendOperationRequest,
+        ) -> Result<OperationLogEntry, RevisionServiceError> {
+            self.append_calls.push(request);
+            Ok(OperationLogEntry {
+                operation_id: OperationId::parse("op_01JTEST")
+                    .expect("fixture operation id should parse"),
+                seq: self.append_calls.len() as i64,
+            })
+        }
+    }
+
     fn adapter_id() -> AdapterId {
         AdapterId::parse("gdrive-adapter").expect("fixture adapter id should parse")
     }
@@ -485,10 +570,243 @@ mod tests {
             revision_id: revision_id("rev_01JCURRENT"),
             path: vault_path(),
             parent_revision_id: None,
-            content_hash: compute_content_hash(b"current content"),
-            size_bytes: 15,
+            content_hash: compute_content_hash(CURRENT_BYTES),
+            size_bytes: CURRENT_BYTES.len() as u64,
             created_by: adapter_id(),
         }
+    }
+
+    fn request(base_revision_id: Option<RevisionId>, content: &[u8]) -> UpsertFileRequest {
+        UpsertFileRequest::new(
+            vault_path(),
+            adapter_id(),
+            base_revision_id,
+            compute_content_hash(content),
+            content.to_vec(),
+        )
+    }
+
+    fn service_with_current(
+        current_revision: Option<StoredRevision>,
+    ) -> RevisionService<RecordingRepository, RecordingContentStore, RecordingOperationLog> {
+        RevisionService::new(
+            RecordingRepository::with_current(current_revision),
+            RecordingContentStore::default(),
+            RecordingOperationLog::default(),
+        )
+    }
+
+    fn assert_no_accepted_write_side_effects(
+        repository: &RecordingRepository,
+        content_store: &RecordingContentStore,
+        operation_log: &RecordingOperationLog,
+    ) {
+        assert!(repository.inserted_requests.is_empty());
+        assert!(content_store.put_calls.is_empty());
+        assert!(operation_log.append_calls.is_empty());
+    }
+
+    #[test]
+    fn file_missing_base_null_accepts_new_file_and_records_insert_and_operation() {
+        let incoming_hash = compute_content_hash(INCOMING_BYTES);
+        let mut service = service_with_current(None);
+
+        let outcome = service
+            .upsert_file(request(None, INCOMING_BYTES))
+            .expect("upsert should not fail");
+
+        let UpsertOutcome::AcceptedNewFile {
+            revision,
+            operation,
+        } = outcome
+        else {
+            panic!("expected accepted new file outcome");
+        };
+        assert_eq!(revision.revision_id, revision_id("rev_01JNEW"));
+        assert_eq!(revision.parent_revision_id, None);
+        assert_eq!(revision.content_hash, incoming_hash);
+        assert_eq!(revision.size_bytes, INCOMING_BYTES.len() as u64);
+        assert_eq!(operation.seq, 1);
+
+        let (repository, content_store, operation_log) = service.into_inner();
+        assert_eq!(repository.current_revision_calls, 1);
+        assert_eq!(repository.inserted_requests.len(), 1);
+        assert_eq!(repository.inserted_requests[0].parent_revision_id, None);
+        assert_eq!(repository.inserted_requests[0].content_hash, incoming_hash);
+        assert_eq!(content_store.put_calls, vec![(incoming_hash, INCOMING_BYTES.to_vec())]);
+        assert_eq!(operation_log.append_calls.len(), 1);
+        assert_eq!(operation_log.append_calls[0].kind, OperationKind::UpsertFile);
+        assert_eq!(operation_log.append_calls[0].revision_id, revision_id("rev_01JNEW"));
+    }
+
+    #[test]
+    fn file_missing_non_null_base_rejects_without_accepted_side_effects() {
+        let old_base = revision_id("rev_01JOLD");
+        let mut service = service_with_current(None);
+
+        let outcome = service
+            .upsert_file(request(Some(old_base.clone()), INCOMING_BYTES))
+            .expect("upsert should not fail");
+
+        let UpsertOutcome::RejectedStaleOrUnknownBase {
+            current_revision,
+            provided_base_revision_id,
+            conflict_saved,
+        } = outcome
+        else {
+            panic!("expected stale or unknown base rejection");
+        };
+        assert!(current_revision.is_none());
+        assert_eq!(provided_base_revision_id, Some(old_base));
+        assert!(conflict_saved.is_none());
+
+        let (repository, content_store, operation_log) = service.into_inner();
+        assert_eq!(repository.current_revision_calls, 1);
+        assert_no_accepted_write_side_effects(&repository, &content_store, &operation_log);
+    }
+
+    #[test]
+    fn existing_file_current_base_different_content_accepts_new_revision() {
+        let current = current_revision();
+        let current_revision_id = current.revision_id.clone();
+        let incoming_hash = compute_content_hash(INCOMING_BYTES);
+        let mut service = service_with_current(Some(current));
+
+        let outcome = service
+            .upsert_file(request(Some(current_revision_id.clone()), INCOMING_BYTES))
+            .expect("upsert should not fail");
+
+        let UpsertOutcome::AcceptedNewRevision {
+            revision,
+            operation,
+        } = outcome
+        else {
+            panic!("expected accepted new revision outcome");
+        };
+        assert_eq!(revision.revision_id, revision_id("rev_01JNEW"));
+        assert_eq!(revision.parent_revision_id, Some(current_revision_id.clone()));
+        assert_eq!(revision.content_hash, incoming_hash);
+        assert_eq!(operation.seq, 1);
+
+        let (repository, content_store, operation_log) = service.into_inner();
+        assert_eq!(repository.current_revision_calls, 1);
+        assert_eq!(repository.inserted_requests.len(), 1);
+        assert_eq!(
+            repository.inserted_requests[0].parent_revision_id,
+            Some(current_revision_id)
+        );
+        assert_eq!(repository.inserted_requests[0].content_hash, incoming_hash);
+        assert_eq!(content_store.put_calls, vec![(incoming_hash, INCOMING_BYTES.to_vec())]);
+        assert_eq!(operation_log.append_calls.len(), 1);
+        assert_eq!(operation_log.append_calls[0].revision_id, revision_id("rev_01JNEW"));
+    }
+
+    #[test]
+    fn existing_file_same_content_ignores_old_and_null_base_without_side_effects() {
+        for base_revision_id in [None, Some(revision_id("rev_01JOLD"))] {
+            let current = current_revision();
+            let mut service = service_with_current(Some(current.clone()));
+
+            let outcome = service
+                .upsert_file(request(base_revision_id.clone(), CURRENT_BYTES))
+                .expect("upsert should not fail");
+
+            let UpsertOutcome::IgnoredDuplicateSameContent { current_revision } = outcome else {
+                panic!("expected same-content outcome");
+            };
+            assert_eq!(current_revision, current);
+            assert_eq!(outcome_public_status(&current_revision), "same_content");
+
+            let (repository, content_store, operation_log) = service.into_inner();
+            assert_eq!(repository.current_revision_calls, 1);
+            assert_no_accepted_write_side_effects(&repository, &content_store, &operation_log);
+        }
+    }
+
+    #[test]
+    fn existing_file_stale_base_different_content_returns_conflict_saved_without_side_effects() {
+        let old_base = revision_id("rev_01JOLD");
+        let current = current_revision();
+        let incoming_hash = compute_content_hash(INCOMING_BYTES);
+        let mut service = service_with_current(Some(current.clone()));
+
+        let outcome = service
+            .upsert_file(request(Some(old_base.clone()), INCOMING_BYTES))
+            .expect("upsert should not fail");
+
+        assert_eq!(outcome.public_status(), "conflict_saved");
+        let UpsertOutcome::RejectedStaleOrUnknownBase {
+            current_revision,
+            provided_base_revision_id,
+            conflict_saved,
+        } = outcome
+        else {
+            panic!("expected conflict_saved stale-base outcome");
+        };
+        assert_eq!(current_revision, Some(current.clone()));
+        assert_eq!(provided_base_revision_id, Some(old_base.clone()));
+        let conflict_saved = conflict_saved.expect("stale base should preserve incoming content");
+        assert_eq!(conflict_saved.current_revision, current);
+        assert_eq!(conflict_saved.provided_base_revision_id, Some(old_base));
+        assert_eq!(conflict_saved.incoming_content.content_hash, incoming_hash);
+        assert_eq!(conflict_saved.incoming_content.size_bytes, INCOMING_BYTES.len() as u64);
+        assert_eq!(conflict_saved.incoming_content.content, INCOMING_BYTES);
+        assert_eq!(conflict_saved.policy_hint, ConflictPolicyHint::PreserveBoth);
+
+        let (repository, content_store, operation_log) = service.into_inner();
+        assert_eq!(repository.current_revision_calls, 1);
+        assert_no_accepted_write_side_effects(&repository, &content_store, &operation_log);
+    }
+
+    #[test]
+    fn existing_file_null_base_different_content_returns_conflict_saved_without_side_effects() {
+        let current = current_revision();
+        let incoming_hash = compute_content_hash(INCOMING_BYTES);
+        let mut service = service_with_current(Some(current.clone()));
+
+        let outcome = service
+            .upsert_file(request(None, INCOMING_BYTES))
+            .expect("upsert should not fail");
+
+        assert_eq!(outcome.public_status(), "conflict_saved");
+        let conflict_saved = outcome
+            .conflict_saved()
+            .expect("null base with existing different content should save conflict");
+        assert_eq!(conflict_saved.current_revision, current);
+        assert_eq!(conflict_saved.provided_base_revision_id, None);
+        assert_eq!(conflict_saved.incoming_content.content_hash, incoming_hash);
+        assert_eq!(conflict_saved.incoming_content.content, INCOMING_BYTES);
+
+        let (repository, content_store, operation_log) = service.into_inner();
+        assert_eq!(repository.current_revision_calls, 1);
+        assert_no_accepted_write_side_effects(&repository, &content_store, &operation_log);
+    }
+
+    #[test]
+    fn hash_mismatch_rejects_before_repository_lookup_or_side_effects() {
+        let expected = compute_content_hash(b"declared content");
+        let actual = compute_content_hash(INCOMING_BYTES);
+        let mut request = request(Some(revision_id("rev_01JCURRENT")), INCOMING_BYTES);
+        request.expected_hash = expected;
+        let mut service = service_with_current(Some(current_revision()));
+
+        let outcome = service
+            .upsert_file(request)
+            .expect("hash mismatch should be a safe outcome");
+
+        let UpsertOutcome::RejectedHashMismatch {
+            expected: reported_expected,
+            actual: reported_actual,
+        } = outcome
+        else {
+            panic!("expected hash mismatch outcome");
+        };
+        assert_eq!(reported_expected, expected);
+        assert_eq!(reported_actual, actual);
+
+        let (repository, content_store, operation_log) = service.into_inner();
+        assert_eq!(repository.current_revision_calls, 0);
+        assert_no_accepted_write_side_effects(&repository, &content_store, &operation_log);
     }
 
     #[test]
@@ -530,5 +848,12 @@ mod tests {
             incoming_hash
         );
         assert!(decoded_conflict.incoming_content.content.is_empty());
+    }
+
+    fn outcome_public_status(current_revision: &StoredRevision) -> &'static str {
+        UpsertOutcome::IgnoredDuplicateSameContent {
+            current_revision: current_revision.clone(),
+        }
+        .public_status()
     }
 }
