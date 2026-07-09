@@ -1,12 +1,12 @@
 REPORT_TYPE:
-IMPLEMENTATION
+FIX
 
 STATUS:
-BLOCKED_BY_TOOLING
+FIX_COMPLETE
 
 AGENT:
-role: implementation-worker
-agent_execution_id: W1-WT-P4-worktree-implementation-20260709-ci-followup
+role: fixer-worker
+agent_execution_id: W1-FIX-WT-P4-CI-worktree-fixer-20260709
 chat_name: worktree persistent component worker
 
 COMPONENT:
@@ -21,27 +21,29 @@ control_report_path: crates/haze-sync-worktree/control/report.md
 
 WAVE:
 id: W1
-phase_id: WT-P4
-dependency_status: control state was still PROMPT_READY for WT-P4 implementation-worker; active prompt matched crates/haze-sync-worktree/control/prompt.md; WT-P4 source implementation had already been completed and reported; this report update records the now-completed CI result.
+phase_id: FIX-WT-P4-CI
+dependency_status: control state was PROMPT_READY; active prompt matched crates/haze-sync-worktree/control/prompt.md; active role was fixer-worker; CI diagnostics metadata was present in the control state and prompt.
 
 SUMMARY:
-WT-P4 implementation remains complete, but the Component CI workflow did not finish green. GitHub workflow metadata for run 29028324784 shows cargo fmt, cargo check, cargo test, and cargo clippy all completed successfully. The Rust workspace job conclusion is failure because the Finalize CI diagnostics step failed; Upload CI diagnostics then completed successfully. This worker did not read CI diagnostics artifacts because the active prompt is implementation-worker and explicitly forbids reading diagnostics artifacts unless a future active prompt instructs it. No source changes were made in this follow-up; the blocker is tooling/CI-diagnostics handling outside the WT-P4 allowed implementation scope.
+Fixed the minimum WT-P4 CI failure identified by the diagnostics artifact. The artifact for run 29028324784 listed one failed check, rust-fmt, with formatting diffs in crates/haze-sync-worktree/src/import_planner.rs and crates/haze-sync-worktree/src/lib.rs. Applied only rustfmt-equivalent formatting to those two source files. No Worktree behavior, tests, dependencies, docs, contracts, workflows, sibling components, direct Storage/SQLx writes, route handlers, provider behavior, conflict policy, or hard-delete behavior were changed.
 
 CHANGED_FILES:
+- crates/haze-sync-worktree/src/lib.rs
+- crates/haze-sync-worktree/src/import_planner.rs
 - crates/haze-sync-worktree/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/worktree
 base_branch: main
-base_sha: not re-compared during this CI follow-up; previous WT-P4 implementation report observed base c1e69a664388b0cba028170e8398b9088218957d and merge base 1a82bea5c87953db378e5e03429326df38320ee8.
-head_sha: fad30566a6ede8d6c133f62f7c83480381eb3747 before this report-only commit; WT-P4 source head before report-only commits was 7dc27ead8b53d388e724e7dce834ded1710b0fec.
+base_sha: GitHub compare_commits after the fix observed base c1e69a664388b0cba028170e8398b9088218957d and merge base 1a82bea5c87953db378e5e03429326df38320ee8.
+head_sha: e285ffcec9bc302e3640bfa69e3aa459f6576f75 before this report-only commit; this report write creates a later control-only commit.
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes; crates/haze-sync-worktree/control/prompt.md on component/worktree
-control_report_written: yes; crates/haze-sync-worktree/control/report.md replaced with this IMPLEMENTATION follow-up report
+control_report_written: yes; crates/haze-sync-worktree/control/report.md replaced with this FIX report
 control_files_archived_by_worker: no
-ci_skip_used: yes for this report-only commit; no for WT-P4 source/product commits
-ci_skip_reason: this final commit changes only crates/haze-sync-worktree/control/report.md and is not CI evidence; the source commits already triggered Component CI run 29028324784
+ci_skip_used: yes for this report-only commit; no for source/product fixer commits
+ci_skip_reason: this final report update changes only crates/haze-sync-worktree/control/report.md and cannot affect executable behavior or validation outcome; source fixer commits did not skip CI
 
 SCOPE:
 allowed_files_only: yes
@@ -51,68 +53,69 @@ cross_component_changes: no
 forbidden_files_touched: no
 
 CONTRACT:
-contract_read: yes in WT-P4 implementation pass
-contract_satisfied: yes for WT-P4 source implementation
+contract_read: yes
+contract_satisfied: yes; rustfmt-equivalent formatting does not change Worktree behavior or contract semantics
 contract_changes_requested: no
 contract_change_rationale: none
 affected_components: worktree only
 
 IMPLEMENTATION_OR_REVIEW:
-completed: yes for WT-P4 source implementation
+completed: yes
 main_changes:
-- WT-P4 source implementation was already completed in src/import_planner.rs and src/lib.rs.
-- This follow-up made no product/source changes.
-- Checked current active control state and prompt.
-- Read current implementation report.
-- Observed Component CI run 29028324784 completion through GitHub workflow metadata.
-- Observed cargo fmt, cargo check, cargo test, and cargo clippy success.
-- Observed Finalize CI diagnostics failure causing the workflow job conclusion to fail.
-behavior_changes: none in this follow-up report-only commit
-bugs_found: no WT-P4 source bug identified from available implementation-worker-safe metadata
-bugs_fixed: none
-cleanups_made: none
-non_goals_preserved: yes; no direct SQLx/Storage writes, no route handler implementation, no provider/GDrive behavior, no conflict policy decisions inside Worktree, no hard delete, no sibling component changes, and no workflow changes
+- Read active FIX-WT-P4-CI prompt and current report.
+- Read component contract, implementation plan, implementation log, and dependency map.
+- Read relevant current Worktree source files.
+- Fetched and downloaded diagnostics artifact ci-diag__component-worktree__wf-component-ci__run-29028324784__attempt-1.
+- Read summary.md, manifest.json, failures/rust-fmt.txt, and logs/rust-fmt.log from the diagnostics artifact.
+- Applied rustfmt-equivalent formatting to the WT-P4 import planner sort_by expression, two test let bindings, and import_planner public re-export list in lib.rs.
+- Observed a new Component CI workflow run for the final source fixer commit.
+behavior_changes: none
+bugs_found: rustfmt mismatch in crates/haze-sync-worktree/src/import_planner.rs and crates/haze-sync-worktree/src/lib.rs
+bugs_fixed: fixed rustfmt mismatch in crates/haze-sync-worktree/src/import_planner.rs and crates/haze-sync-worktree/src/lib.rs
+cleanups_made: formatting-only cleanup required by CI
+non_goals_preserved: yes; no direct SQLx/Storage writes, no route handlers, no provider/GDrive behavior, no conflict policy decisions inside Worktree, no hard delete, no workflow changes, no sibling component changes, no dependency changes, and no tests deleted
 deferred_work:
-- Orchestrator should schedule the appropriate next agent/tooling path for CI diagnostics finalization failure. This implementation worker did not read diagnostics artifacts or modify workflow/tooling.
-- Durable persistence of WorktreeStateSnapshot remains deferred to later runtime/storage integration phases.
-- Real Core/API client implementation remains deferred to fan-in with Core/API/Server contracts; WT-P4 provides only the abstract trait boundary.
-- Materialization, atomic writer behavior, dirty-overwrite protection, echo guard, local trash mechanics, and delete retention remain deferred to later Worktree phases.
+- Full CI completion remains pending after the new source fixer commit.
 
 TESTS_AND_CHECKS:
 checks_run:
-- GitHub connector read of control state and active WT-P4 prompt.
-- GitHub connector read of current control report.
-- GitHub connector fetch_workflow_run_jobs for run 29028324784.
-- Observed Rust workspace job completed with conclusion failure.
-- Observed cargo fmt step completed with conclusion success.
-- Observed cargo check step completed with conclusion success.
-- Observed cargo test step completed with conclusion success.
-- Observed cargo clippy step completed with conclusion success.
-- Observed Finalize CI diagnostics step completed with conclusion failure.
-- Observed Upload CI diagnostics step completed with conclusion success.
+- Read Project Source process files including implementation-manifest.md, report-template.md, fixer-worker-prompt.md, and chatgpt-gh-connector.md.
+- GitHub connector read of control state and active fix prompt.
+- GitHub connector read of previous control report.
+- GitHub connector read of component contract, implementation plan, implementation log, and dependency map.
+- GitHub connector read of src/import_planner.rs and src/lib.rs.
+- GitHub connector fetched workflow artifact metadata for run 29028324784.
+- GitHub connector downloaded artifact 8202650036.
+- Artifact inspection of summary.md, manifest.json, failures/rust-fmt.txt, and logs/rust-fmt.log.
+- GitHub connector fetch_commit_workflow_runs for source fixer commit e285ffcec9bc302e3640bfa69e3aa459f6576f75; observed Component CI run 29034738311 pending.
+- GitHub connector fetch_workflow_run_jobs for run 29034738311; jobs were not yet listed when checked.
+- GitHub connector compare_commits from main to component/worktree after the fix.
 checks_not_run:
-- local cargo fmt --check: not run; this worker is restricted to GitHub connector access and has no local repository shell execution.
-- local cargo check -p haze-sync-worktree: not run; this worker is restricted to GitHub connector access and has no local repository shell execution.
-- local cargo test -p haze-sync-worktree: not run; this worker is restricted to GitHub connector access and has no local repository shell execution.
-- local cargo clippy -p haze-sync-worktree --all-targets -- -D warnings: not run; this worker is restricted to GitHub connector access and has no local repository shell execution.
-ci_status: CI_RED_TOOLING; code validation steps were green, workflow failed at Finalize CI diagnostics
+- local cargo fmt --check: not run; GitHub connector worker does not provide local repository shell execution.
+- local cargo check -p haze-sync-worktree: not run; GitHub connector worker does not provide local repository shell execution.
+- local cargo test -p haze-sync-worktree: not run; GitHub connector worker does not provide local repository shell execution.
+- local cargo clippy -p haze-sync-worktree --all-targets -- -D warnings: not run; GitHub connector worker does not provide local repository shell execution.
+ci_status: CI_PENDING; new Component CI run 29034738311 was pending after source fixer commit e285ffcec9bc302e3640bfa69e3aa459f6576f75
 workflow_urls:
 - https://github.com/NordCoder/haze-sync/actions/runs/29028324784
+- https://github.com/NordCoder/haze-sync/actions/runs/29034738311
 known_failures:
-- run 29028324784: Finalize CI diagnostics step failed; job conclusion failure despite cargo fmt/check/test/clippy success
+- original WT-P4 run 29028324784: rust-fmt exit_code 1
 
 CI_DIAGNOSTICS:
-artifact_based_logs: no
-artifact_name: not read
-artifact_id: not read
-workflow_run_id: 29028324784 for workflow metadata only; diagnostics artifacts were not read
-workflow_run_attempt: not read
-artifact_status: not read
-summary_read: no
-manifest_read: no
-logs_read: none
+artifact_based_logs: yes
+artifact_name: ci-diag__component-worktree__wf-component-ci__run-29028324784__attempt-1
+artifact_id: 8202650036
+workflow_run_id: 29028324784
+workflow_run_attempt: 1
+artifact_status: available, not expired, downloaded, readable
+summary_read: yes; summary.md read
+manifest_read: yes; manifest.json read
+logs_read:
+- failures/rust-fmt.txt
+- logs/rust-fmt.log
 raw_job_logs_used: no
-diagnostics_failure: Finalize CI diagnostics step failed according to workflow job metadata; details not read by this implementation worker
+diagnostics_failure: none; diagnostics artifact was readable and contained one failed check, rust-fmt
 
 SAFETY_AND_SECRECY:
 secrets_committed: no
@@ -123,18 +126,19 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- The WT-P4 code validation steps were green in CI metadata.
-- The overall workflow was red due to CI diagnostics finalization tooling, which is outside WT-P4 implementation-worker allowed scope.
-- No merge, rebase, reset, history rewrite, PR readiness decision, workflow edit, main edit, or sibling branch edit was performed.
+- rustfmt expected formatting changes in crates/haze-sync-worktree/src/import_planner.rs around a sort_by expression and test let bindings.
+- rustfmt expected formatting changes in crates/haze-sync-worktree/src/lib.rs around the Worktree import planner public export list.
+- Branch remains diverged from main according to compare_commits; no merge, rebase, reset, history rewrite, PR readiness decision, main/sibling branch modification, workflow edit, or control file archiving was performed by this worker.
 
 BLOCKERS:
-- BLOCKED_BY_TOOLING: Component CI run 29028324784 failed at Finalize CI diagnostics while all code validation steps passed. This worker cannot fix workflow/diagnostics tooling under the active WT-P4 implementation prompt and did not read diagnostics artifacts.
+- No fixer blocker.
+- Full CI completion was still pending when this report was written.
 
 NEXT_RECOMMENDED_AGENT:
 orchestrator
 
 FINAL_VERDICT:
-WT-P4 implementation source work is complete and code validation steps are green, but the overall Component CI run is red due to the Finalize CI diagnostics step. This is reported as BLOCKED_BY_TOOLING for orchestration.
+FIX_COMPLETE. The rust-fmt failure identified by the diagnostics artifact was fixed with minimal formatting-only source changes inside worktree scope. The source fixer commit triggered PR CI; the new run was pending when this report was written.
 
 PUSHED:
 yes
