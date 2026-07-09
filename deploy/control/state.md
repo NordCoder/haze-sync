@@ -9,7 +9,7 @@ active_report: deploy/control/report.md
 active_agent_role: clean-code-reviewer
 
 wave: W1
-phase: DEP-P4C
+phase: DEP-P4C-RERUN
 
 implementation_status: SELF_ACCEPT_PENDING_CI
 clean_review_status: PENDING
@@ -20,3 +20,4 @@ ci_run_number: 690
 ci_run_attempt: 1
 known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
+rerun_reason: previous active report did not close DEP-P4C
