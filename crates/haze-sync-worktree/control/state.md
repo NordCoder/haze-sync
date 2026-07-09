@@ -6,13 +6,13 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-worktree/control/prompt.md
 active_report: crates/haze-sync-worktree/control/report.md
-active_agent_role: clean-code-reviewer
+active_agent_role: implementation-worker
 
 wave: W1
-phase: WT-P3C
+phase: WT-P4
 
-implementation_status: SELF_ACCEPT_PENDING_CI
-clean_review_status: PENDING
+implementation_status: PENDING
+clean_review_status: NOT_STARTED
 ci_status: CI_GREEN
 ci_workflow: Component CI
 ci_run_id: 29011302368
