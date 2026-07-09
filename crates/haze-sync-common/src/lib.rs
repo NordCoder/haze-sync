@@ -59,7 +59,10 @@ mod tests {
         );
         assert_eq!(AdapterRole::ObsidianPlugin.to_string(), "obsidian_plugin");
         assert_eq!(AdapterMode::Bidirectional.to_string(), "bidirectional");
-        assert_eq!(ValidationError::InvalidIdentifier.code(), "invalid_identifier");
+        assert_eq!(
+            ValidationError::InvalidIdentifier.code(),
+            "invalid_identifier"
+        );
     }
 
     #[test]
