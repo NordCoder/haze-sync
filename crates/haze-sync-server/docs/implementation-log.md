@@ -68,6 +68,17 @@ Summary: Reviewed conflict-saved preservation, conflict list/status filtering, m
 Status: SELF_ACCEPT_PENDING_CI
 Follow-ups: Run `cargo fmt --check`, `cargo check -p haze-sync-server`, `cargo test -p haze-sync-server`, and `cargo clippy -p haze-sync-server --all-targets -- -D warnings` in CI or a shell-capable environment. Clean-code review should verify the storage-unavailable semantics and that existing conflict/delete/idempotency behavior remains intact.
 
+### 2026-07-09 — W1/SRV-P6
+
+Agent: implementation-worker
+Branch: component/server
+Prompt: crates/haze-sync-server/control/prompt.md
+Report: crates/haze-sync-server/control/report.md
+Commit(s): component/server SRV-P6 admin/status readiness hardening commits
+Summary: Hardened the read-only admin status route so it is readiness-driven even when Storage is absent. The route now always checks the explicit readiness state and maps database/object-store status into the safe admin DTO, while database-derived counters remain absent unless a DB pool is configured. Added admin-route unit coverage for dependency-free status output, including pause unsupported, no operation sequence, no adapter count, and sanitized serialization. No doctor route, metrics endpoint, admin mutation, provider call, token rotation, repair execution, workflow change, or sibling change was introduced.
+Status: SELF_ACCEPT_PENDING_CI
+Follow-ups: Run `cargo fmt --check`, `cargo check -p haze-sync-server`, `cargo test -p haze-sync-server`, and `cargo clippy -p haze-sync-server --all-targets -- -D warnings` in CI or a shell-capable environment. Clean-code review should verify readiness/status honesty and that admin outputs remain safe and read-only.
+
 ---
 
 Use this format for future entries:
