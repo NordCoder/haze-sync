@@ -1,8 +1,10 @@
-# Local development compose scaffold only.
+# Local development compose scaffold.
 #
-# This file starts local dependencies for developer workflows. It is not a
-# production deployment: no Haze Sync server, adapters, migrations, reverse
-# proxy, TLS, provider credentials, or production secrets are configured here.
+# This file starts local dependencies and the local haze-sync-server process for
+# developer/operator smoke workflows. It is not production deployment: no GDrive
+# adapter, Worktree runtime, reverse proxy, TLS, provider credentials, production
+# secrets, migration runner, backup jobs, or remote deployment automation are
+# configured here.
 
 services:
   postgres:
@@ -24,11 +26,45 @@ services:
       retries: 5
       start_period: 5s
 
-  # Future phases will add haze-sync-server and haze-gdrive-adapter service wiring
-  # only after their startup/config/secret contracts are stable.
+  server:
+    build:
+      context: ..
+      dockerfile: deploy/server.Dockerfile
+    environment:
+      # The server listens on all interfaces inside the container so Docker can
+      # publish it. The host bind below remains 127.0.0.1 only.
+      HAZE_SYNC_LISTEN_ADDR: 0.0.0.0:8080
+      # Local placeholder URL for the Compose network only. Use an untracked .env
+      # file for local overrides; do not commit production database URLs.
+      HAZE_SYNC_DATABASE_URL: postgresql://${POSTGRES_USER:-haze_sync}:${POSTGRES_PASSWORD:-haze_sync_local_placeholder}@postgres:5432/${POSTGRES_DB:-haze_sync}
+      HAZE_SYNC_OBJECT_STORE_PATH: /var/lib/haze-sync/objects
+      HAZE_SYNC_WORKTREE_PATH: /var/lib/haze-sync/worktree
+      HAZE_SYNC_WORKTREE_ADAPTER_MODE: disabled
+      HAZE_GDRIVE_ADAPTER_MODE: disabled
+      HAZE_OBSIDIAN_ADAPTER_MODE: disabled
+    ports:
+      # Local/proxy-bound HTTP exposure. Public TLS/reverse-proxy wiring is a
+      # later deployment phase; do not widen this bind in local compose.
+      - "127.0.0.1:${HAZE_SYNC_HTTP_PORT:-8080}:8080"
+    volumes:
+      - server_objects:/var/lib/haze-sync/objects
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Future phases will add haze-gdrive-adapter service wiring only after its
+  # startup/config/secret contracts are stable.
   #
-  # Object-store and worktree bind mounts are intentionally deferred; the current
-  # compose file owns local PostgreSQL dependency startup only.
+  # Worktree runtime bind mounts remain intentionally deferred; the server service
+  # keeps the Worktree adapter mode disabled until Server/Worktree fan-in accepts
+  # runtime hosting behavior.
 
 volumes:
   postgres_data:
+  server_objects:
