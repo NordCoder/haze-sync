@@ -99,13 +99,14 @@ impl fmt::Display for SecretPath {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AdapterMode {
     Disabled,
     ReadOnly,
     ImportOnly,
     ExportOnly,
     Bidirectional,
+    #[default]
     DryRun,
 }
 
@@ -125,12 +126,6 @@ impl AdapterMode {
 
     pub const fn is_dry_run_mode(self) -> bool {
         matches!(self, Self::DryRun)
-    }
-}
-
-impl Default for AdapterMode {
-    fn default() -> Self {
-        Self::DryRun
     }
 }
 
@@ -155,10 +150,7 @@ pub struct RuntimeIntervals {
 }
 
 impl RuntimeIntervals {
-    pub fn new(
-        poll_interval: Duration,
-        full_scan_interval: Duration,
-    ) -> Result<Self, ConfigError> {
+    pub fn new(poll_interval: Duration, full_scan_interval: Duration) -> Result<Self, ConfigError> {
         if poll_interval.is_zero() {
             return Err(ConfigError::invalid(
                 ENV_POLL_INTERVAL_SECONDS,
@@ -285,18 +277,14 @@ impl AdapterConfig {
             Duration::from_secs(full_scan_interval),
         )?;
 
-        let max_deletes_per_run = parse_optional_u32(
-            source,
-            ENV_MAX_DELETES_PER_RUN,
-            DEFAULT_MAX_DELETES_PER_RUN,
-        )?;
+        let max_deletes_per_run =
+            parse_optional_u32(source, ENV_MAX_DELETES_PER_RUN, DEFAULT_MAX_DELETES_PER_RUN)?;
         let max_delete_ratio_percent = parse_optional_u8(
             source,
             ENV_MAX_DELETE_RATIO_PERCENT,
             DEFAULT_MAX_DELETE_RATIO_PERCENT,
         )?;
-        let delete_safety =
-            DeleteSafetyConfig::new(max_deletes_per_run, max_delete_ratio_percent)?;
+        let delete_safety = DeleteSafetyConfig::new(max_deletes_per_run, max_delete_ratio_percent)?;
 
         Ok(Self {
             server_url,
@@ -340,7 +328,9 @@ fn load_adapter_token(source: &impl ConfigSource) -> Result<SecretString, Config
     let token_file = optional_value(source, ENV_ADAPTER_TOKEN_FILE);
 
     match (direct_token, token_file) {
-        (Some(_), Some(_)) => Err(ConfigError::ambiguous_secret_source(ENV_ADAPTER_TOKEN_SOURCE)),
+        (Some(_), Some(_)) => Err(ConfigError::ambiguous_secret_source(
+            ENV_ADAPTER_TOKEN_SOURCE,
+        )),
         (Some(token), None) => SecretString::from_raw(ENV_ADAPTER_TOKEN, token),
         (None, Some(path)) => {
             let secret_path = SecretPath::from_raw(ENV_ADAPTER_TOKEN_FILE, path)?;
