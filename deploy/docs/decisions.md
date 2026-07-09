@@ -1,5 +1,34 @@
 # Decisions: deployment
 
+## 2026-07-09 — DEP-P4 uses operator-run manual SQLx migrations
+
+Decision:
+
+Until a later accepted entry point or deploy script exists, migrations are operator-owned and run manually with SQLx from the repository `migrations` directory after pre-migration backups and while writers are stopped or quiesced.
+
+Rationale:
+
+The accepted server binary deliberately does not auto-run migrations, and Deployment must not invent an automatic migration runner. A manual SQLx command keeps execution explicit while preserving Storage ownership of migration contents and Server ownership of runtime internals.
+
+Alternatives:
+
+- Add automatic migration execution to compose or the server image.
+- Add a deployment script before script behavior is accepted.
+- Treat server startup as migration success evidence.
+
+Consequences:
+
+- Operators must run the documented migration command explicitly.
+- Backup and object-store consistency checks must happen before migration.
+- Deployment can later replace this procedure only through an accepted CLI, Server entry point, or deploy-script phase.
+
+Affected contracts:
+
+- deploy/docs/migrations-backup-restore.md;
+- Server startup policy;
+- Storage migration ownership;
+- backup/restore runbooks.
+
 ## 2026-07-05 — Deployment owns operations scaffolding, not product behavior
 
 Decision:
