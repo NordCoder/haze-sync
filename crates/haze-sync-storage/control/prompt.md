@@ -1,12 +1,88 @@
-# W1-STOR-FMT
+# W1-FIX-STORAGE-CI — Storage CI fix
 
 Component: storage
+Path: crates/haze-sync-storage
 Branch: component/storage
+PR: #47
+Role: fixer-worker
 
-Use GitHub connector only.
+Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review.
 
-Read state and report.
+## Context
 
-Format storage Rust source only.
+Component CI completed with failure for the current PR head.
 
-Write report.
+- workflow: Component CI
+- workflow_run_id: 29003627764
+- run_number: 408
+- run_attempt: 1
+- artifact_id: 8192611505
+- artifact_name: ci-diag__component-storage__wf-component-ci__run-29003627764__attempt-1
+- known failed check: rust-fmt
+
+## Read
+
+Read all required sources before editing:
+
+- implementation-manifest.md from ChatGPT Project Sources
+- report-template.md from ChatGPT Project Sources
+- crates/haze-sync-storage/docs/component-contract.md
+- crates/haze-sync-storage/docs/implementation-plan.md
+- crates/haze-sync-storage/docs/dependency-map.md
+- crates/haze-sync-storage/control/prompt.md
+- crates/haze-sync-storage/control/report.md
+- current PR diff and relevant current repository code
+
+Use the GitHub connector to download and read the diagnostics artifact listed above.
+
+Read inside the artifact:
+
+- ci-diagnostics/summary.md
+- ci-diagnostics/manifest.json
+- every log listed in failed_checks
+
+Do not ask Orchestrator to paste raw logs. If the artifact is missing, expired, or malformed, report FIX_BLOCKED_BY_LOGS.
+
+## Task
+
+Fix the minimum cause of the CI failure.
+
+Expected scope is rustfmt-equivalent formatting only in storage-owned Rust files.
+
+## Allowed files
+
+- crates/haze-sync-storage/**/*.rs
+- crates/haze-sync-storage/control/report.md
+
+## Forbidden changes
+
+- Do not change behavior.
+- Do not change public API semantics.
+- Do not change component docs or contracts.
+- Do not change workflow files.
+- Do not change sibling components.
+- Do not delete tests.
+
+If the diagnostics reveal a non-formatting issue, fix it only if it is inside storage scope and required for CI. Otherwise report the appropriate blocker.
+
+## Checks
+
+Run or observe the failing check again if possible through available tooling.
+
+If you cannot run shell commands, say so in the report. Do not claim checks passed unless you actually ran them or observed CI metadata.
+
+## Report
+
+Write only the report to crates/haze-sync-storage/control/report.md.
+
+Use report-template.md.
+
+Set REPORT_TYPE to FIX.
+
+Use one of:
+
+- FIX_COMPLETE
+- FIX_NEEDS_MORE
+- FIX_BLOCKED_BY_LOGS
+- FIX_BLOCKED_BY_CONTRACT
+- FIX_BLOCKED_BY_TOOLING
