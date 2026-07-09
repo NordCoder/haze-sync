@@ -280,7 +280,7 @@ mod tests {
     #[test]
     fn current_revision_update_input_remains_passive_metadata() {
         let revision_id = RevisionId::parse("rev_01JSTORP5").unwrap();
-        let revision_id = Some(&revision_id).map(RevisionId::as_str);
+        let revision_id = Some(RevisionId::as_str(&revision_id));
 
         assert_eq!(revision_id, Some("rev_01JSTORP5"));
     }
