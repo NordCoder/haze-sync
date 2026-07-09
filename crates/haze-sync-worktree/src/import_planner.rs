@@ -315,7 +315,11 @@ impl WorktreeImportPlanner {
             }
         }
 
-        actions.sort_by(|left, right| left.vault_path().as_str().cmp(right.vault_path().as_str()));
+        actions.sort_by(|left, right| {
+            left.vault_path()
+                .as_str()
+                .cmp(right.vault_path().as_str())
+        });
 
         Ok(WorktreeImportPlan { actions, unchanged })
     }
@@ -507,7 +511,11 @@ mod tests {
         ContentHash::from_bytes([byte; 32])
     }
 
-    fn stable_file(vault_path: &str, content_hash: ContentHash, bytes: &[u8]) -> WorktreeImportFile {
+    fn stable_file(
+        vault_path: &str,
+        content_hash: ContentHash,
+        bytes: &[u8],
+    ) -> WorktreeImportFile {
         WorktreeImportFile::new(
             WorktreeFileSnapshot {
                 vault_path: path(vault_path),
@@ -565,7 +573,7 @@ mod tests {
                 if put.vault_path.as_str() == "modified.md"
                     && put.base_revision == WorktreeBaseRevision::Known(revision("rev_modified"))
                     && put.content_hash == hash(5)
-                    && put.bytes == b"modified"
+                    && put.bytes.as_slice() == b"modified"
         ));
         assert!(matches!(
             &plan.actions()[2],
@@ -573,7 +581,7 @@ mod tests {
                 if put.vault_path.as_str() == "new.md"
                     && put.base_revision == WorktreeBaseRevision::Null
                     && put.content_hash == hash(4)
-                    && put.bytes == b"new"
+                    && put.bytes.as_slice() == b"new"
         ));
     }
 
