@@ -58,6 +58,34 @@ Run clean-code review and CI/shell checks. Future phases still own config/secret
 
 ---
 
+### 2026-07-09 — W1/CLI-P3 config and secret-source foundation
+
+Agent:
+Implementation Worker
+
+Branch:
+component/cli
+
+Prompt:
+`crates/haze-sync-cli/control/prompt.md`
+
+Report:
+`crates/haze-sync-cli/control/report.md`
+
+Commit(s):
+See branch history for this implementation pass.
+
+Summary:
+Added a CLI-local config module with explicit source precedence for server URL, profile, output format, and token source. The new token-source model supports safe descriptors for env var, config file path, stdin, OS-secret reference, or none, while rejecting inline token values. Config debug and report summaries redact server URLs, file paths, OS-secret references, and token-source values. The phase added tests for precedence, accepted token-source descriptors, inline token rejection, redacted debug/summary output, and invalid config errors that do not echo raw values. No env/file/stdin/keychain/server/provider IO was added.
+
+Status:
+SELF_ACCEPT_PENDING_CI
+
+Follow-ups:
+Run clean-code review and CI/shell checks. Future phases still own actual config loading, HTTP client wiring, live Server/API commands, live doctor behavior, token creation/rotation, and OS-secret integration if accepted.
+
+---
+
 Use this format for future entries:
 
 ~~~text
