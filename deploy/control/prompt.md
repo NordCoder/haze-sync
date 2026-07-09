@@ -1,98 +1,25 @@
-# W1-DEP-P3 — Deployment server packaging and service wiring
+# W1-DEP-P3-BLOCKED — Deployment waiting for Server dependency
 
 Component: deployment
 Path: deploy
 Branch: component/deployment
 PR: #52
-Role: implementation-worker
+Role: none
 
-Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review.
+## Status
 
-## Context
+DEP-P3 is blocked by dependency.
 
-DEP-P2 clean-code review completed with CLEAN_ACCEPT_PENDING_CI.
+The latest deployment report concluded BLOCKED_BY_DEPENDENCY: Deployment must not invent Server startup, listener/config, readiness/liveness, migration, container, or service behavior on Server's behalf.
 
-Component CI is green for the current PR head.
+Server SRV-P3 is accepted in component/server, but Deployment must wait until the Server deployment-relevant surface is available through main/fan-in or an explicit Orchestrator prompt authorizes a cross-component dependency basis.
 
-- workflow: Component CI
-- workflow_run_id: 29003702641
-- run_number: 413
-- conclusion: success
+## Worker behavior
 
-The next deployment phase is DEP-P3 from deploy/docs/implementation-plan.md.
+No worker should execute deployment implementation work from this prompt.
 
-## Read
+If a deployment worker is asked to continue while control/state.md is not PROMPT_READY, it should stop and report that deployment has no active prompt ready.
 
-Read all required sources before editing:
+## Next condition
 
-- implementation-manifest.md from ChatGPT Project Sources
-- report-template.md from ChatGPT Project Sources
-- deploy/docs/component-contract.md
-- deploy/docs/implementation-plan.md
-- deploy/docs/implementation-log.md
-- deploy/docs/dependency-map.md
-- deploy/control/prompt.md
-- deploy/control/report.md
-- relevant current repository code
-
-Also inspect the current Server component contract/docs only as dependency context for startup/config/readiness assumptions. Do not modify Server files.
-
-## Task
-
-Implement DEP-P3: Server packaging and service wiring.
-
-Follow the DEP-P3 plan:
-
-- decide and document the server packaging path;
-- define server environment variables and volumes using placeholders only;
-- wire PostgreSQL connection and object-store path for deployment configuration;
-- expose local/proxy-bound listen address safely;
-- add readiness/liveness checks where appropriate;
-- document startup and shutdown;
-- avoid auto-running migrations unless the accepted contracts explicitly require it.
-
-## Dependency guard
-
-If Server startup/config/readiness behavior is not sufficiently accepted for DEP-P3 wiring, do not invent it in Deployment.
-
-In that case, report BLOCKED_BY_DEPENDENCY or BLOCKED_BY_CONTRACT with the exact missing dependency.
-
-## Allowed files
-
-- deploy/**
-- .env.example only if placeholder alignment is required
-
-## Forbidden changes
-
-- Do not modify Server code.
-- Do not modify GDrive adapter code.
-- Do not modify Worktree code.
-- Do not add production secrets.
-- Do not add TLS private keys.
-- Do not add remote deployment automation.
-- Do not start provider/runtime sync behavior.
-- Do not auto-run migrations unless accepted by contract.
-- Do not archive control files.
-
-## Checks
-
-Run applicable checks if possible.
-
-If you cannot run shell commands, say so in the report. Do not claim checks passed unless you actually ran them or observed CI metadata.
-
-## Report
-
-Write only the report to deploy/control/report.md.
-
-Use report-template.md.
-
-Set REPORT_TYPE to IMPLEMENTATION.
-
-Use one of:
-
-- SELF_ACCEPT
-- SELF_ACCEPT_PENDING_CI
-- SELF_NEEDS_FIX
-- BLOCKED_BY_CONTRACT
-- BLOCKED_BY_DEPENDENCY
-- BLOCKED_BY_TOOLING
+Orchestrator may unblock DEP-P3 only after the Server startup/config/readiness/migration surface is accepted in the dependency baseline used by Deployment.
