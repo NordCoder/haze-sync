@@ -2,6 +2,7 @@ export { HazeSyncApiClient } from "./client";
 export type { HazeSyncApiClientOptions, HttpTransport } from "./client";
 export {
   ApiClientError,
+  createConfigurationError,
   createHttpError,
   createInvalidResponseError,
   createOfflineError,
