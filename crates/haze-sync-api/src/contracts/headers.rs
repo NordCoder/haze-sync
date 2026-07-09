@@ -293,7 +293,9 @@ mod tests {
         assert!(null_base.is_null());
         assert_eq!(revision_base.as_optional_revision_id(), Some("rev_01J"));
         assert_eq!(
-            BaseRevisionIdHeader::parse("NULL").unwrap().as_optional_revision_id(),
+            BaseRevisionIdHeader::parse("NULL")
+                .unwrap()
+                .as_optional_revision_id(),
             Some("NULL")
         );
         assert_eq!(
