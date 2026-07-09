@@ -1,85 +1,84 @@
-# W1-SRV-P3C — Server clean-code review
+# W1-SRV-P4 — File PUT/GET/changes transaction fan-in hardening
 
 Component: server
 Path: crates/haze-sync-server
 Branch: component/server
 PR: #45
-Role: clean-code-reviewer
+Role: implementation-worker
 
-Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review.
+Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-The latest implementation report completed SRV-P3 production startup, config loading, listener, and graceful shutdown with status SELF_ACCEPT_PENDING_CI.
-
-Component CI is green for the current PR head.
+SRV-P3 implementation and clean-code review are complete. Current Component CI is green for the current PR head.
 
 - workflow: Component CI
-- workflow_run_id: 29003607526
-- run_number: 406
+- workflow_run_id: 29006911851
+- run_number: 458
 - conclusion: success
+
+The next implementation phase is SRV-P4 from crates/haze-sync-server/docs/implementation-plan.md.
 
 ## Read
 
-Read all required sources before editing:
+Read before editing:
 
 - implementation-manifest.md from ChatGPT Project Sources
 - report-template.md from ChatGPT Project Sources
+- implementation-worker-prompt.md from ChatGPT Project Sources
+- chatgpt-gh-connector.md from ChatGPT Project Sources
 - crates/haze-sync-server/docs/component-contract.md
 - crates/haze-sync-server/docs/implementation-plan.md
 - crates/haze-sync-server/docs/implementation-log.md
 - crates/haze-sync-server/docs/dependency-map.md
 - crates/haze-sync-server/control/prompt.md
 - crates/haze-sync-server/control/report.md
-- current component diff and relevant repository code
+- relevant current repository code and PR diff
+
+Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
 
 ## Task
 
-Review the SRV-P3 implementation and improve it where appropriate.
+Implement SRV-P4: File PUT/GET/changes transaction fan-in hardening.
 
-Focus areas:
+Follow the implementation plan:
 
-- production startup correctness;
-- config loading and object-store root preparation;
-- PostgreSQL pool initialization path;
-- Axum listener binding and graceful shutdown;
-- sanitized startup errors;
-- dependency scope expansion in Cargo.toml;
-- preservation of route semantics and non-goals.
+- ensure PUT uses API header/path parsers and Core revision outcomes;
+- coordinate object-store write, storage metadata, current revision, file revision, operation log, and idempotency response where the existing component contracts allow it;
+- ensure same-content and hash-mismatch outcomes map to safe API responses;
+- implement or harden GET file metadata/content path using Storage/ObjectStore safely where scoped;
+- implement or harden changes feed mapping from operation-log repository to API DTOs where scoped;
+- preserve transaction boundaries and safe public error mapping.
+
+## Dependency guard
+
+If Storage/API/Core surfaces are insufficient for this phase without cross-component changes, do not invent sibling behavior. Report BLOCKED_BY_DEPENDENCY or BLOCKED_BY_CONTRACT with the exact missing dependency.
 
 ## Allowed files
 
-- crates/haze-sync-server/**
+- crates/haze-sync-server/src/routes/v1/**
+- crates/haze-sync-server/src/routes/**
+- crates/haze-sync-server/src/state.rs
+- crates/haze-sync-server/src/http/**
+- crates/haze-sync-server/docs/**
+- crates/haze-sync-server/control/report.md
 
-## Forbidden changes
+## Non-goals
 
-- Do not add adapter loops.
-- Do not add provider calls.
-- Do not add worktree runtime behavior.
-- Do not change API/Core/Storage semantics.
-- Do not add deployment scripts.
-- Do not auto-run migrations unless the contract explicitly accepts it.
-- Do not archive control files.
+- No conflict resolution route behavior beyond scoped preservation fan-in.
+- No adapter loops.
+- No provider runtime.
+- No API DTO redesign.
+- No Storage schema change unless explicitly blocked and reported.
+- No sibling component changes.
+- No workflow changes.
 
-## Checks
+## CI trigger policy
 
-Run applicable checks if possible.
-
-If you cannot run shell commands, say so in the report. Do not claim checks passed unless you actually ran them or observed CI metadata.
+Follow the CI skip policy in implementation-manifest.md and the relevant Project Source worker prompt. Product, test, dependency, contract, workflow, and implementation commits must not skip CI.
 
 ## Report
 
 Write only the report to crates/haze-sync-server/control/report.md.
 
-Use report-template.md.
-
-Set REPORT_TYPE to CLEAN_CODE_REVIEW.
-
-Use one of:
-
-- CLEAN_ACCEPT
-- CLEAN_ACCEPT_PENDING_CI
-- CLEAN_NEEDS_FIX
-- CLEAN_BLOCKED_BY_CONTRACT
-- CLEAN_BLOCKED_BY_SCOPE
-- CLEAN_BLOCKED_BY_TOOLING
+Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION.
