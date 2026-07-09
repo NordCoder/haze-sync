@@ -5,6 +5,8 @@ use std::process::ExitCode;
 pub enum CliExitCode {
     /// Command parsed and completed successfully.
     Success,
+    /// Runtime command failed after parsing succeeded.
+    RuntimeError,
     /// Command-line usage or parse error.
     UsageError,
 }
@@ -15,6 +17,7 @@ impl CliExitCode {
     pub const fn code(self) -> u8 {
         match self {
             Self::Success => 0,
+            Self::RuntimeError => 1,
             Self::UsageError => 2,
         }
     }
@@ -42,6 +45,16 @@ impl CliOutput {
             exit_code: CliExitCode::Success,
             stdout: stdout.into(),
             stderr: String::new(),
+        }
+    }
+
+    /// Safe runtime error output.
+    #[must_use]
+    pub fn runtime_error(stderr: impl Into<String>) -> Self {
+        Self {
+            exit_code: CliExitCode::RuntimeError,
+            stdout: String::new(),
+            stderr: stderr.into(),
         }
     }
 
