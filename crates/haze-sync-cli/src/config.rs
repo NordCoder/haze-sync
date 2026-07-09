@@ -507,24 +507,15 @@ mod tests {
 
     #[test]
     fn config_source_precedence_is_explicit() {
-        assert_eq!(
-            source_precedence(ConfigField::ServerUrl),
-            &[
-                ConfigSource::CliFlag,
-                ConfigSource::Environment,
-                ConfigSource::ConfigFile,
-                ConfigSource::BuiltInDefault
-            ]
-        );
-        assert_eq!(
-            source_precedence(ConfigField::TokenSource),
-            &[
-                ConfigSource::CliFlag,
-                ConfigSource::Environment,
-                ConfigSource::ConfigFile,
-                ConfigSource::BuiltInDefault
-            ]
-        );
+        let expected = &[
+            ConfigSource::CliFlag,
+            ConfigSource::Environment,
+            ConfigSource::ConfigFile,
+            ConfigSource::BuiltInDefault,
+        ];
+
+        assert_eq!(source_precedence(ConfigField::ServerUrl), expected);
+        assert_eq!(source_precedence(ConfigField::TokenSource), expected);
     }
 
     #[test]
