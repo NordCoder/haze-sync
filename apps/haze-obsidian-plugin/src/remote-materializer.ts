@@ -116,6 +116,16 @@ async function materializeUpsert(
     return queueConflict(input, "missing_revision");
   }
 
+  const downloadedRevisionId = input.download.metadata.revision_id;
+  if (
+    input.change.revision_id !== undefined &&
+    input.change.revision_id !== null &&
+    downloadedRevisionId !== undefined &&
+    downloadedRevisionId !== input.change.revision_id
+  ) {
+    return queueConflict(input, "revision_mismatch");
+  }
+
   const actualHash = await sha256Hex(input.download.body);
   if (actualHash !== expectedHash) {
     return queueConflict(input, "hash_mismatch");
