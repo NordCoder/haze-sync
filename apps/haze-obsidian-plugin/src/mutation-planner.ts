@@ -1,7 +1,6 @@
 import type { DeleteFileRequest, PutFileRequest, RevisionId, VaultPath } from "./api-client";
 import { BaseRevisionState, getBaseContentHash, getBaseRevisionId } from "./base-revision-store";
-import { generateLocalIdempotencyKey } from "./idempotency-keys";
-import { PendingQueueEntry } from "./pending-queue";
+import type { PendingQueueEntry } from "./pending-queue";
 
 export type PlannedMutationKind = "upload" | "delete";
 export type PlannerSkipReason = "missing_file_fact" | "missing_upload_body" | "same_content";
@@ -95,7 +94,7 @@ function planUpload(
         body,
         contentHash: entry.file.contentHash,
         baseRevisionId: baseRevisionForRequest(baseState, entry.path),
-        idempotencyKey: idempotencyKeyForEntry(entry, "upload"),
+        idempotencyKey: entry.operationIdempotencyKey,
         contentType: contentTypeForExtension(entry.file.extension),
       },
     },
@@ -110,7 +109,7 @@ function planDelete(entry: PendingQueueEntry, baseState: BaseRevisionState): Pla
     request: {
       path: entry.path,
       baseRevisionId: baseRevisionForRequest(baseState, entry.path),
-      idempotencyKey: idempotencyKeyForEntry(entry, "delete"),
+      idempotencyKey: entry.operationIdempotencyKey,
     },
   };
 }
@@ -127,10 +126,6 @@ function skippedUpload(
       reason,
     },
   };
-}
-
-function idempotencyKeyForEntry(entry: PendingQueueEntry, kind: PlannedMutationKind): string {
-  return entry.operationIdempotencyKey ?? generateLocalIdempotencyKey(kind);
 }
 
 function baseRevisionForRequest(state: BaseRevisionState, path: VaultPath): RevisionId | null {
