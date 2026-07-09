@@ -525,7 +525,10 @@ mod tests {
         let decoded_conflict = decoded
             .conflict_saved()
             .expect("conflict_saved should survive serde roundtrip");
-        assert_eq!(decoded_conflict.incoming_content.content_hash, incoming_hash);
+        assert_eq!(
+            decoded_conflict.incoming_content.content_hash,
+            incoming_hash
+        );
         assert!(decoded_conflict.incoming_content.content.is_empty());
     }
 }
