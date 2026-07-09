@@ -1,88 +1,79 @@
-# W1-FIX-API-CI — API CI fix
+# W1-API-P3 — Header, auth, and safe error contract hardening
 
 Component: api
 Path: crates/haze-sync-api
 Branch: component/api
 PR: #44
-Role: fixer-worker
+Role: implementation-worker
 
-Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review.
+Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-Component CI completed with failure for the current PR head.
+API-P2 and its CI fixer loop are complete. Current Component CI is green for the current PR head.
 
 - workflow: Component CI
-- workflow_run_id: 29003592920
-- run_number: 405
-- run_attempt: 1
-- artifact_id: 8192587540
-- artifact_name: ci-diag__component-api__wf-component-ci__run-29003592920__attempt-1
-- known failed check: rust-fmt
+- workflow_run_id: 29006904242
+- run_number: 457
+- conclusion: success
+
+The next implementation phase is API-P3 from crates/haze-sync-api/docs/implementation-plan.md.
 
 ## Read
 
-Read all required sources before editing:
+Read before editing:
 
 - implementation-manifest.md from ChatGPT Project Sources
 - report-template.md from ChatGPT Project Sources
+- implementation-worker-prompt.md from ChatGPT Project Sources
+- chatgpt-gh-connector.md from ChatGPT Project Sources
 - crates/haze-sync-api/docs/component-contract.md
 - crates/haze-sync-api/docs/implementation-plan.md
+- crates/haze-sync-api/docs/implementation-log.md
 - crates/haze-sync-api/docs/dependency-map.md
 - crates/haze-sync-api/control/prompt.md
 - crates/haze-sync-api/control/report.md
-- current PR diff and relevant current repository code
+- relevant current repository code and PR diff
 
-Use the GitHub connector to download and read the diagnostics artifact listed above.
-
-Read inside the artifact:
-
-- ci-diagnostics/summary.md
-- ci-diagnostics/manifest.json
-- every log listed in failed_checks
-
-Do not ask Orchestrator to paste raw logs. If the artifact is missing, expired, or malformed, report FIX_BLOCKED_BY_LOGS.
+Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
 
 ## Task
 
-Fix the minimum cause of the CI failure.
+Implement API-P3: Header, auth, and safe error contract hardening.
 
-Expected scope is rustfmt-equivalent formatting only in api-owned Rust files.
+Follow the implementation plan:
+
+- test Bearer authorization parsing/wrapping without leaking token text;
+- test token hash formatting redaction and verification behavior where applicable;
+- test Idempotency-Key validation and non-exposure in errors/debug output;
+- test X-Content-SHA256 parsing and canonical conversion to common hash types;
+- test X-Base-Revision-Id including explicit null semantics;
+- test public error response codes/messages/details for safe field/header/query naming.
 
 ## Allowed files
 
-- crates/haze-sync-api/**/*.rs
+- crates/haze-sync-api/src/auth/**
+- crates/haze-sync-api/src/contracts/headers/**
+- crates/haze-sync-api/src/contracts/errors/**
+- crates/haze-sync-api/docs/**
 - crates/haze-sync-api/control/report.md
 
-## Forbidden changes
+## Non-goals
 
-- Do not change behavior.
-- Do not change public API semantics.
-- Do not change component docs or contracts.
-- Do not change workflow files.
-- Do not change sibling components.
-- Do not delete tests.
+- No token persistence.
+- No token creation or rotation.
+- No runtime auth lookup.
+- No middleware.
+- No SQLx or config loading.
+- No sibling component changes.
+- No workflow changes.
 
-If the diagnostics reveal a non-formatting issue, fix it only if it is inside api scope and required for CI. Otherwise report the appropriate blocker.
+## CI trigger policy
 
-## Checks
-
-Run or observe the failing check again if possible through available tooling.
-
-If you cannot run shell commands, say so in the report. Do not claim checks passed unless you actually ran them or observed CI metadata.
+Follow the CI skip policy in implementation-manifest.md and the relevant Project Source worker prompt. Product, test, dependency, contract, workflow, and implementation commits must not skip CI.
 
 ## Report
 
 Write only the report to crates/haze-sync-api/control/report.md.
 
-Use report-template.md.
-
-Set REPORT_TYPE to FIX.
-
-Use one of:
-
-- FIX_COMPLETE
-- FIX_NEEDS_MORE
-- FIX_BLOCKED_BY_LOGS
-- FIX_BLOCKED_BY_CONTRACT
-- FIX_BLOCKED_BY_TOOLING
+Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION.
