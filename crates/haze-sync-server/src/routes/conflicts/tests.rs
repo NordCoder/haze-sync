@@ -6,7 +6,6 @@ use haze_sync_storage::{
     test_support::connect_test_database_from_env,
 };
 use http_body_util::BodyExt as _;
-use serde_json::json;
 use sqlx::PgPool;
 use tower::ServiceExt as _;
 
@@ -169,10 +168,14 @@ async fn seed_conflict_fixture(
 }
 
 #[tokio::test]
-async fn get_open_conflicts_without_storage_returns_safe_empty_dto() {
+async fn get_open_conflicts_without_storage_returns_safe_unavailable_error() {
     let (status, json) = request_json("GET", "/conflicts?status=open", Body::empty()).await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(json["conflicts"], json!([]));
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(json["error"]["code"], "internal_error");
+    let rendered = json.to_string();
+    assert!(!rendered.contains("postgres://"));
+    assert!(!rendered.contains("conflict_route_test_token"));
+    assert!(!rendered.contains("sqlx::Error"));
 }
 
 #[tokio::test]
