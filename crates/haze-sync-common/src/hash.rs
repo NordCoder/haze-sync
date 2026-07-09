@@ -165,6 +165,19 @@ mod tests {
     }
 
     #[test]
+    fn canonical_output_is_always_lowercase_prefixed_hex() {
+        let mixed_hex = "0123456789ABCDEF".repeat(4);
+        let expected_hex = "0123456789abcdef".repeat(4);
+
+        for input in [mixed_hex.clone(), format!("{SHA256_PREFIX}{mixed_hex}")] {
+            let hash = Sha256::parse(&input).unwrap();
+            assert_eq!(hash.as_hex(), expected_hex, "input={input:?}");
+            assert_eq!(hash.to_prefixed_string(), format!("{SHA256_PREFIX}{expected_hex}"));
+            assert_eq!(hash.to_string(), format!("{SHA256_PREFIX}{expected_hex}"));
+        }
+    }
+
+    #[test]
     fn from_str_and_try_from_share_parse_contract() {
         let hex = repeated("1");
         let from_str = Sha256::from_str(&hex).unwrap();
@@ -181,6 +194,7 @@ mod tests {
         assert_eq!(hash.as_bytes(), &bytes);
         assert_eq!(hash.into_bytes(), bytes);
         assert_eq!(hash.as_hex(), "ab".repeat(SHA256_BYTES));
+        assert_eq!(hash.to_prefixed_string(), format!("{SHA256_PREFIX}{}", "ab".repeat(SHA256_BYTES)));
     }
 
     #[test]
@@ -195,23 +209,33 @@ mod tests {
 
     #[test]
     fn rejects_invalid_hash_length() {
-        assert_eq!(
-            Sha256::parse("abc").unwrap_err(),
-            ValidationError::InvalidHashLength
-        );
-        assert_eq!(
-            Sha256::parse(&format!("{SHA256_PREFIX}{}", repeated("0") + "0")).unwrap_err(),
-            ValidationError::InvalidHashLength
-        );
+        for input in [
+            "abc".to_owned(),
+            format!("{SHA256_PREFIX}{}", repeated("0") + "0"),
+            format!("SHA256:{}", repeated("0")),
+            format!("sha256:{}:{}", repeated("0"), repeated("0")),
+        ] {
+            assert_eq!(
+                Sha256::parse(&input).unwrap_err(),
+                ValidationError::InvalidHashLength,
+                "input={input:?}"
+            );
+        }
     }
 
     #[test]
     fn rejects_invalid_hash_characters() {
-        let invalid = format!("{}z", &repeated("0")[..63]);
-        assert_eq!(
-            Sha256::parse(&invalid).unwrap_err(),
-            ValidationError::InvalidHashCharacter
-        );
+        for input in [
+            format!("{}z", &repeated("0")[..63]),
+            format!("{SHA256_PREFIX}{}g", &repeated("0")[..63]),
+            format!("{}-", &repeated("0")[..63]),
+        ] {
+            assert_eq!(
+                Sha256::parse(&input).unwrap_err(),
+                ValidationError::InvalidHashCharacter,
+                "input={input:?}"
+            );
+        }
     }
 
     #[test]
@@ -225,7 +249,25 @@ mod tests {
     }
 
     #[test]
-    fn serde_rejects_non_canonical_values_safely() {
-        assert!(serde_json::from_str::<Sha256>("\"not-a-hash\"").is_err());
+    fn serde_accepts_plain_or_prefixed_input_and_emits_prefixed_form() {
+        let plain = "abcdef0123456789".repeat(4);
+        for input_json in [format!("\"{plain}\""), format!("\"{SHA256_PREFIX}{plain}\"")] {
+            let decoded: Sha256 = serde_json::from_str(&input_json).unwrap();
+            assert_eq!(
+                serde_json::to_string(&decoded).unwrap(),
+                format!("\"{SHA256_PREFIX}{plain}\"")
+            );
+        }
+    }
+
+    #[test]
+    fn serde_rejects_invalid_values_safely() {
+        for json in [
+            "\"not-a-hash\"".to_owned(),
+            format!("\"SHA256:{}\"", repeated("0")),
+            format!("\"{}z\"", &repeated("0")[..63]),
+        ] {
+            assert!(serde_json::from_str::<Sha256>(&json).is_err(), "json={json:?}");
+        }
     }
 }
