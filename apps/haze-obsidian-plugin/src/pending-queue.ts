@@ -16,6 +16,17 @@ export interface PendingQueueEntry {
   previousFile?: LocalFileFact;
 }
 
+interface StoredPendingQueueEntry {
+  path: string;
+  kind: PendingChangeKind;
+  source: PendingChangeSource;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  operationIdempotencyKey?: string;
+  file?: LocalFileFact;
+  previousFile?: LocalFileFact;
+}
+
 export interface LocalSyncState {
   knownFiles: Record<string, LocalFileFact>;
   pendingQueue: Record<string, PendingQueueEntry>;
@@ -226,7 +237,7 @@ function readPendingQueue(value: unknown): Record<string, PendingQueueEntry> {
 }
 
 function readPendingQueueEntry(value: unknown): PendingQueueEntry | undefined {
-  if (!isPendingQueueEntryShape(value)) {
+  if (!isStoredPendingQueueEntry(value)) {
     return undefined;
   }
 
@@ -237,9 +248,7 @@ function readPendingQueueEntry(value: unknown): PendingQueueEntry | undefined {
     firstSeenAt: value.firstSeenAt,
     lastSeenAt: value.lastSeenAt,
     operationIdempotencyKey:
-      typeof value.operationIdempotencyKey === "string"
-        ? value.operationIdempotencyKey
-        : generateLocalIdempotencyKey(operationKindForPendingChange(value.kind)),
+      value.operationIdempotencyKey ?? generateLocalIdempotencyKey(operationKindForPendingChange(value.kind)),
     file: value.file,
     previousFile: value.previousFile,
   };
@@ -264,7 +273,7 @@ function readOptionalString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-function isPendingQueueEntryShape(value: unknown): value is PendingQueueEntry {
+function isStoredPendingQueueEntry(value: unknown): value is StoredPendingQueueEntry {
   if (!isRecord(value)) {
     return false;
   }
