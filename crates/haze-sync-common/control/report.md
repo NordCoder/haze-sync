@@ -1,13 +1,13 @@
 REPORT_TYPE:
-FIX
+IMPLEMENTATION
 
 STATUS:
-FIX_COMPLETE
+SELF_ACCEPT_PENDING_CI
 
 AGENT:
-role: fixer-worker
-agent_execution_id: W1-FIX-COMMON-CI-common
-chat_name: common — W1 FIX-COMMON-CI CI Fix
+role: implementation-worker
+agent_execution_id: W1-CMM-P3-common-vaultpath-contract-hardening
+chat_name: common — W1 CMM-P3 Implementation
 
 COMPONENT:
 name: common
@@ -21,31 +21,30 @@ control_report_path: crates/haze-sync-common/control/report.md
 
 WAVE:
 id: W1
-phase_id: FIX-COMMON-CI
-dependency_status: implementation and clean-code review accepted pending CI; active state reported CI_RED for Component CI run 29003617374 attempt 1 with known failed check rust-fmt
+phase_id: CMM-P3
+dependency_status: CMM-P2 and its CI fixer loop complete; active state reported prior Component CI GREEN before this CMM-P3 implementation
 
 SUMMARY:
-Fixed the minimum cause of the reported CI failure. The diagnostics artifact for Component CI run 29003617374 attempt 1 showed only `rust-fmt` failing because `cargo fmt --all --check` wanted rustfmt-equivalent wrapping in common-owned Rust tests. Applied formatting-only edits to the listed common Rust files. No behavior, public API semantics, component docs, contracts, workflows, sibling components, or tests were changed/deleted.
+Implemented CMM-P3 VaultPath contract hardening within the common component scope. Expanded VaultPath tests for encoded traversal, encoded absolute paths, Windows drive/separator escape forms, null-byte encodings, invalid percent encodings, reserved runtime/state path boundaries, runtime-like non-reserved names, serde rejection, and the explicit decision that `_haze_conflicts/**` and `_haze_agent_outbox/**` remain representable syncable vault paths. Documented the conflict materialization path decision in `decisions.md` and clarified the reserved path set in the component contract. No runtime behavior, public API semantic, sibling, provider-specific, workflow, or Core/API/Storage/Server behavior changes were made.
 
 CHANGED_FILES:
-- crates/haze-sync-common/src/error.rs
-- crates/haze-sync-common/src/lib.rs
 - crates/haze-sync-common/src/path.rs
-- crates/haze-sync-common/src/security/mod.rs
+- crates/haze-sync-common/docs/decisions.md
+- crates/haze-sync-common/docs/component-contract.md
 - crates/haze-sync-common/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/common
 base_branch: main
-base_sha: PR metadata reports base_sha 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
-head_sha: 8ba1af0459d6d49cc99c6141520555d157b839da before this report write; final head is the report update commit returned by GitHub contents API
+base_sha: PR metadata reports base_sha 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2; compare_commits currently reports main at c1e69a664388b0cba028170e8398b9088218957d with merge base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
+head_sha: c46075ece525d30e4685de6d99da23ac28be4a56 before this report-only commit; final head is the report update commit returned by GitHub contents API
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
-ci_skip_used: no
-ci_skip_reason: not used; report commit was written without skip metadata so CI behavior remains observable by GitHub
+ci_skip_used: yes
+ci_skip_reason: final commit updates only crates/haze-sync-common/control/report.md after code/docs changes were already committed without CI skip; skipped report-only workflow is not CI evidence
 
 SCOPE:
 allowed_files_only: yes
@@ -64,56 +63,57 @@ affected_components: none
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- read Project Sources: implementation manifest, report template, fixer-worker prompt, GitHub connector guide, and wave plan background
-- read active common control state and prompt from component/common
+- read Project Sources for implementation manifest, report template, implementation-worker prompt, GitHub connector guide, and wave-plan background as applicable
+- read active common control state and active CMM-P3 prompt from component/common
 - read previous common control report, component contract, implementation plan, implementation log, and dependency map
-- listed PR #46 changed filenames for current PR diff context
-- fetched diagnostics artifact metadata and downloaded artifact id 8192610322
-- read diagnostics summary.md, manifest.json, failures/rust-fmt.txt, and logs/rust-fmt.log
-- applied rustfmt-equivalent formatting in error.rs, lib.rs, path.rs, and security/mod.rs exactly where diagnostics identified formatting diffs
-- observed PR #46 metadata after formatting changes: head 8ba1af0459d6d49cc99c6141520555d157b839da, mergeable true
-- observed a new Component CI workflow run for head 8ba1af0459d6d49cc99c6141520555d157b839da in queued status before this report write
-behavior_changes: none; formatting-only Rust edits
-bugs_found: CI rust-fmt failure from cargo fmt --all --check
-bugs_fixed: applied rustfmt-equivalent wrapping for the common Rust files listed by diagnostics
-cleanups_made: formatting only
-non_goals_preserved: no behavior changes, no public API semantic changes, no component docs/contracts changes, no workflow changes, no sibling component edits, no test deletion, no merge/rebase/PR readiness decision
-deferred_work: observe the post-fix CI run to completion; this worker cannot claim CI green before GitHub reports it
+- inspected relevant `path.rs` and `error.rs` source and current PR metadata/diff through the GitHub connector
+- expanded `VaultPath` tests for dot/duplicate separator normalization with encoded dot segments
+- expanded encoded path separator tests for upper/lowercase percent-encoded slash forms
+- added coverage that home-like names such as `~drafts/...` remain valid while `~` and `~/...` are rejected
+- expanded traversal rejection coverage for mixed-case percent-encoded `..` and encoded separator traversal forms
+- expanded Unix absolute path rejection coverage for doubled slashes, encoded slashes, and encoded home paths
+- expanded Windows drive and separator rejection coverage for lowercase drives and percent-encoded colon/backslash forms
+- expanded null-byte and invalid percent encoding rejection coverage
+- expanded reserved runtime/state path coverage for exact first segments, normalized forms, encoded separators, and temporary suffixes
+- added positive tests for names that only resemble runtime state but are not reserved
+- added explicit tests that `_haze_conflicts/**` and `_haze_agent_outbox/**` are syncable `VaultPath` values rather than common-reserved runtime paths
+- documented the conflict materialization path decision in `docs/decisions.md`
+- clarified the reserved runtime/state set and `_haze_conflicts/**`/`_haze_agent_outbox/**` behavior in `docs/component-contract.md`
+behavior_changes: none intended; production path validation code was not changed
+bugs_found: no runtime bug found; CMM-P3 ambiguity around conflict materialization paths was clarified without changing current behavior
+bugs_fixed: none
+cleanups_made: test matrix hardening and contract documentation only
+non_goals_preserved: no runtime behavior, no sibling crate edits, no provider-specific path exceptions, no Core/API/Storage/Server behavior, no workflow changes, no CI diagnostics artifact reads by implementation worker
+deferred_work: clean-code review for CMM-P3 and CI completion/observation for the code/docs commit
 
 TESTS_AND_CHECKS:
 checks_run:
 - GitHub connector read of crates/haze-sync-common/control/state.md
 - GitHub connector read of crates/haze-sync-common/control/prompt.md
 - GitHub connector read of previous crates/haze-sync-common/control/report.md
-- GitHub connector read of common component contract, implementation plan, implementation log, and dependency map
-- GitHub connector list_pr_changed_filenames for PR #46
-- GitHub connector fetch_workflow_run_artifacts for run 29003617374 filtered by artifact name
-- GitHub connector download_workflow_artifact for artifact id 8192610322
-- artifact read of ci-diagnostics/summary.md, ci-diagnostics/manifest.json, failures/rust-fmt.txt, and logs/rust-fmt.log
-- GitHub connector get_pr_info for PR #46 after formatting fix
-- GitHub connector fetch_commit_workflow_runs for commit 8ba1af0459d6d49cc99c6141520555d157b839da; observed Component CI run 29006076972 queued
+- GitHub connector read of common component contract, implementation plan, implementation log, dependency map, decisions, and relevant path/error source
+- GitHub connector get_pr_info for PR #46 after CMM-P3 code/docs commits; observed mergeable true at head c46075ece525d30e4685de6d99da23ac28be4a56
+- GitHub connector compare_commits for main...component/common
+- GitHub connector fetch_commit_workflow_runs for code/docs commit c46075ece525d30e4685de6d99da23ac28be4a56; observed Component CI run 29009442790 in_progress before report write
 checks_not_run:
-- cargo fmt --all --check: not run locally because work is restricted to GitHub connector and no shell-capable repository checkout is available
 - cargo fmt --check: not run locally because work is restricted to GitHub connector and no shell-capable repository checkout is available
 - cargo check -p haze-sync-common: not run locally because work is restricted to GitHub connector and no shell-capable repository checkout is available
 - cargo test -p haze-sync-common: not run locally because work is restricted to GitHub connector and no shell-capable repository checkout is available
 - cargo clippy -p haze-sync-common --all-targets -- -D warnings: not run locally because work is restricted to GitHub connector and no shell-capable repository checkout is available
 ci_status: CI_PENDING
-workflow_urls: Component CI run 29006076972 queued for post-fix head 8ba1af0459d6d49cc99c6141520555d157b839da before this report write
-known_failures: previous diagnostics from run 29003617374 attempt 1 showed rust-fmt failure only; no post-fix failure observed before report write
+workflow_urls: Component CI run 29009442790 in_progress for code/docs commit c46075ece525d30e4685de6d99da23ac28be4a56 before this report-only commit
+known_failures: none observed for CMM-P3 before report write
 
 CI_DIAGNOSTICS:
-artifact_based_logs: yes
-artifact_name: ci-diag__component-common__wf-component-ci__run-29003617374__attempt-1
-artifact_id: 8192610322
-workflow_run_id: 29003617374
-workflow_run_attempt: 1
-artifact_status: available, not expired, downloaded, readable
-summary_read: yes
-manifest_read: yes
-logs_read:
-- failures/rust-fmt.txt
-- logs/rust-fmt.log
+artifact_based_logs: no
+artifact_name: not applicable
+artifact_id: not applicable
+workflow_run_id: not applicable for this implementation pass
+workflow_run_attempt: not applicable
+artifact_status: not read; implementation prompt explicitly prohibited CI diagnostics artifact reads unless future prompt instructs it
+summary_read: no
+manifest_read: no
+logs_read: none
 raw_job_logs_used: no
 diagnostics_failure: none
 
@@ -126,18 +126,18 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- The only diagnostics-backed CI failure was rustfmt formatting in common Rust tests.
-- No local shell checks were run because this worker is restricted to GitHub connector access.
-- A post-fix Component CI run was only queued before this report write, so CI green was not observed in this run.
+- Local shell checks could not be run through the GitHub connector.
+- Component CI for the CMM-P3 code/docs commit was observed in progress, not completed, before report write.
+- The final report-only commit uses `[skip ci]`; that skipped commit is not CI evidence and must not be treated as CI green.
 
 BLOCKERS:
-none for this formatter fix; post-fix CI completion remains to be observed by orchestrator or a later worker if it fails
+none for implementation; CMM-P3 validation is pending CI completion and clean-code review
 
 NEXT_RECOMMENDED_AGENT:
-orchestrator
+clean-code-reviewer
 
 FINAL_VERDICT:
-FIX_COMPLETE — diagnostics-backed rust-fmt failure was fixed with formatting-only edits in common-owned Rust files. CI is pending/queued, not yet green.
+SELF_ACCEPT_PENDING_CI — CMM-P3 implementation is complete inside common scope with VaultPath test/contract hardening and no behavior change. CI for the code/docs commit is pending/in progress, and the final report-only commit intentionally uses CI skip.
 
 PUSHED:
 yes
