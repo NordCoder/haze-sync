@@ -30,7 +30,6 @@ pub const APPLICATION_OCTET_STREAM: &str = "application/octet-stream";
 
 pub struct PutFileRouteRequestParts<'a> {
     pub route_path: &'a str,
-    pub adapter_principal: Option<&'a AdapterPrincipal>,
     pub idempotency_key: Option<&'a str>,
     pub content_sha256: Option<&'a str>,
     pub base_revision_id: Option<&'a str>,
@@ -41,7 +40,7 @@ pub struct PutFileRouteRequestParts<'a> {
 #[derive(Clone, PartialEq, Eq)]
 pub struct PutFileRouteRequest {
     path: VaultPath,
-    adapter_principal: AdapterPrincipal,
+    adapter_principal: Option<AdapterPrincipal>,
     idempotency_key: IdempotencyKey,
     base_revision_id: Option<RevisionId>,
     content_sha256: ContentHash,
@@ -56,8 +55,8 @@ impl PutFileRouteRequest {
     }
 
     #[must_use]
-    pub fn adapter_principal(&self) -> &AdapterPrincipal {
-        &self.adapter_principal
+    pub fn adapter_principal(&self) -> Option<&AdapterPrincipal> {
+        self.adapter_principal.as_ref()
     }
 
     #[must_use]
@@ -131,20 +130,29 @@ pub fn parse_put_file_request(
     }
 
     let path = parse_vault_path(parts.route_path)?;
-    let adapter_principal = parse_required_adapter_principal(parts.adapter_principal)?;
     let idempotency_key = parse_required_idempotency_key(parts.idempotency_key)?;
     let content_sha256 = parse_required_content_hash(parts.content_sha256)?;
     let base_revision_id = parse_required_base_revision(parts.base_revision_id)?;
 
     Ok(PutFileRouteRequest {
         path,
-        adapter_principal,
+        adapter_principal: None,
         idempotency_key,
         base_revision_id,
         content_sha256,
         size_bytes,
         body: parts.body,
     })
+}
+
+pub fn parse_authenticated_put_file_request(
+    parts: PutFileRouteRequestParts<'_>,
+    adapter_principal: Option<&AdapterPrincipal>,
+) -> Result<PutFileRouteRequest, FileRouteError> {
+    let adapter_principal = parse_required_adapter_principal(adapter_principal)?;
+    let mut request = parse_put_file_request(parts)?;
+    request.adapter_principal = Some(adapter_principal);
+    Ok(request)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -377,10 +385,7 @@ pub fn ignored_same_content_response(path: VaultPath) -> PutFileResponse {
 }
 
 #[must_use]
-pub fn rejected_upload_response(
-    path: VaultPath,
-    reason: FileRejectedReasonDto,
-) -> PutFileResponse {
+pub fn rejected_upload_response(path: VaultPath, reason: FileRejectedReasonDto) -> PutFileResponse {
     PutFileResponse::Rejected {
         reason,
         path: VaultPathDto::from(path),
@@ -421,7 +426,9 @@ fn parse_vault_path(value: &str) -> Result<VaultPath, FileRouteError> {
 fn parse_required_adapter_principal(
     value: Option<&AdapterPrincipal>,
 ) -> Result<AdapterPrincipal, FileRouteError> {
-    value.cloned().ok_or(FileRouteError::MissingAdapterPrincipal)
+    value
+        .cloned()
+        .ok_or(FileRouteError::MissingAdapterPrincipal)
 }
 
 fn parse_required_idempotency_key(value: Option<&str>) -> Result<IdempotencyKey, FileRouteError> {
@@ -442,9 +449,7 @@ fn parse_required_content_hash(value: Option<&str>) -> Result<ContentHash, FileR
         .map_err(|_| FileRouteError::InvalidContentSha256)
 }
 
-fn parse_required_base_revision(
-    value: Option<&str>,
-) -> Result<Option<RevisionId>, FileRouteError> {
+fn parse_required_base_revision(value: Option<&str>) -> Result<Option<RevisionId>, FileRouteError> {
     let value = value.ok_or(FileRouteError::MissingRequiredHeader {
         header: X_BASE_REVISION_ID_HEADER,
     })?;
@@ -497,12 +502,10 @@ mod tests {
 
     #[test]
     fn put_file_request_extracts_safe_metadata_and_redacts_sensitive_inputs() {
-        let principal = principal();
         let raw_hash = hash_with("A");
         let canonical_hash = hash_with("a");
         let request = parse_put_file_request(PutFileRouteRequestParts {
             route_path: "./Notes//daily.md",
-            adapter_principal: Some(&principal),
             idempotency_key: Some("idem-01"),
             content_sha256: Some(&raw_hash),
             base_revision_id: Some("null"),
@@ -512,7 +515,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(request.path().as_str(), "Notes/daily.md");
-        assert_eq!(request.adapter_principal(), &principal);
+        assert_eq!(request.adapter_principal(), None);
         assert_eq!(request.idempotency_key().as_str(), "idem-01");
         assert_eq!(request.base_revision_id(), None);
         assert_eq!(request.content_sha256().to_string(), canonical_hash);
@@ -532,16 +535,18 @@ mod tests {
     }
 
     #[test]
-    fn put_file_request_requires_verified_adapter_principal() {
-        let error = parse_put_file_request(PutFileRouteRequestParts {
-            route_path: "Notes/daily.md",
-            adapter_principal: None,
-            idempotency_key: Some("idem-01"),
-            content_sha256: Some(&hash_with("b")),
-            base_revision_id: Some("rev_01JBASE"),
-            body: Vec::new(),
-            max_upload_bytes: None,
-        })
+    fn authenticated_put_file_request_requires_verified_adapter_principal() {
+        let error = parse_authenticated_put_file_request(
+            PutFileRouteRequestParts {
+                route_path: "Notes/daily.md",
+                idempotency_key: Some("idem-01"),
+                content_sha256: Some(&hash_with("b")),
+                base_revision_id: Some("rev_01JBASE"),
+                body: Vec::new(),
+                max_upload_bytes: None,
+            },
+            None,
+        )
         .unwrap_err();
 
         assert_eq!(error, FileRouteError::MissingAdapterPrincipal);
@@ -552,14 +557,28 @@ mod tests {
         assert!(json.contains("missing_token"));
         assert!(!json.contains("idem-01"));
         assert!(!json.contains("fixture-token"));
+
+        let principal = principal();
+        let request = parse_authenticated_put_file_request(
+            PutFileRouteRequestParts {
+                route_path: "Notes/daily.md",
+                idempotency_key: Some("idem-01"),
+                content_sha256: Some(&hash_with("b")),
+                base_revision_id: Some("rev_01JBASE"),
+                body: Vec::new(),
+                max_upload_bytes: None,
+            },
+            Some(&principal),
+        )
+        .unwrap();
+
+        assert_eq!(request.adapter_principal(), Some(&principal));
     }
 
     #[test]
     fn put_file_request_parses_known_base_revision_and_size_limit() {
-        let principal = principal();
         let request = parse_put_file_request(PutFileRouteRequestParts {
             route_path: "Notes/daily.md",
-            adapter_principal: Some(&principal),
             idempotency_key: Some("idem-02"),
             content_sha256: Some(&hash_with("c")),
             base_revision_id: Some("rev_01JBASE"),
@@ -574,7 +593,6 @@ mod tests {
         assert_eq!(
             parse_put_file_request(PutFileRouteRequestParts {
                 route_path: "Notes/daily.md",
-                adapter_principal: Some(&principal),
                 idempotency_key: Some("idem-02"),
                 content_sha256: Some(&hash_with("c")),
                 base_revision_id: Some("rev_01JBASE"),
@@ -631,7 +649,10 @@ mod tests {
         let hash_mismatch = hash_mismatch_upload_response(path("Notes/daily.md"));
         let stale = stale_base_upload_response(path("Notes/daily.md"));
 
-        assert!(matches!(accepted, PutFileResponse::Accepted { seq: 42, .. }));
+        assert!(matches!(
+            accepted,
+            PutFileResponse::Accepted { seq: 42, .. }
+        ));
         assert_eq!(
             same_content,
             PutFileResponse::Ignored {
