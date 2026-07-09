@@ -246,3 +246,42 @@ fn sync_object_from_row(row: &PgRow) -> RepositoryResult<SyncObjectRow> {
         updated_by: row.try_get("updated_by").map_err(map_sqlx_error)?,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sync_object_kind_names_match_storage_contract() {
+        assert_eq!(SyncObjectKind::File.as_str(), "file");
+        assert_eq!(
+            SyncObjectKind::DirectoryPlaceholder.as_str(),
+            "directory_placeholder"
+        );
+    }
+
+    #[test]
+    fn new_sync_object_input_uses_validated_path_and_adapter_values() {
+        let path = VaultPath::parse("Notes/today.md").unwrap();
+        let adapter_id = AdapterId::parse("worktree-adapter").unwrap();
+        let input = NewSyncObject {
+            object_id: "obj_01JSTORP5",
+            path: &path,
+            kind: SyncObjectKind::File,
+            updated_by: &adapter_id,
+        };
+
+        assert_eq!(input.object_id, "obj_01JSTORP5");
+        assert_eq!(input.path.as_str(), "Notes/today.md");
+        assert_eq!(input.kind.as_str(), "file");
+        assert_eq!(input.updated_by.as_str(), "worktree-adapter");
+    }
+
+    #[test]
+    fn current_revision_update_input_remains_passive_metadata() {
+        let revision_id = RevisionId::parse("rev_01JSTORP5").unwrap();
+        let revision_id = Some(&revision_id).map(RevisionId::as_str);
+
+        assert_eq!(revision_id, Some("rev_01JSTORP5"));
+    }
+}
