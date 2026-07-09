@@ -369,12 +369,14 @@ mod tests {
     use super::*;
 
     fn change(seq: i64) -> ChangeEntryDto {
+        let content_hash = ContentSha256Dto::from(format!("sha256:{}", "e".repeat(64)));
+
         ChangeEntryDto {
             seq,
             kind: OperationKindDto::UpsertFile,
             path: VaultPathDto::from("Notes/daily.md"),
             revision_id: Some(RevisionIdDto::from(format!("rev_01J{seq}"))),
-            content_sha256: Some(ContentSha256Dto::from(format!("sha256:{}", "e".repeat(64)))),
+            content_sha256: Some(content_hash),
             size_bytes: Some(128),
             tombstone_id: None,
             conflict_id: None,
@@ -400,15 +402,21 @@ mod tests {
         assert_eq!(explicit.limit_value(), MAX_CHANGES_LIMIT);
 
         assert_eq!(
-            parse_changes_query(Some("-1"), Some("10")).unwrap_err().kind(),
+            parse_changes_query(Some("-1"), Some("10"))
+                .unwrap_err()
+                .kind(),
             ChangesRouteErrorKind::InvalidSince
         );
         assert_eq!(
-            parse_changes_query(Some("abc"), Some("10")).unwrap_err().kind(),
+            parse_changes_query(Some("abc"), Some("10"))
+                .unwrap_err()
+                .kind(),
             ChangesRouteErrorKind::InvalidSince
         );
         assert_eq!(
-            parse_changes_query(Some("0"), Some("0")).unwrap_err().kind(),
+            parse_changes_query(Some("0"), Some("0"))
+                .unwrap_err()
+                .kind(),
             ChangesRouteErrorKind::InvalidLimit
         );
         assert_eq!(
@@ -452,7 +460,9 @@ mod tests {
     #[test]
     fn changes_response_rejects_inconsistent_page_metadata() {
         assert_eq!(
-            changes_response_from_parts(10, 9, false, Vec::new()).unwrap_err().kind(),
+            changes_response_from_parts(10, 9, false, Vec::new())
+                .unwrap_err()
+                .kind(),
             ChangesRouteErrorKind::InvalidResponsePage
         );
         assert_eq!(
