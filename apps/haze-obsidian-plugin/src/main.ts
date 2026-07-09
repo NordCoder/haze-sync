@@ -27,6 +27,7 @@ export default class HazeSyncPlugin extends Plugin {
   settings: PluginSettings = createDefaultPluginSettings();
 
   private localState: LocalSyncState = createDefaultLocalSyncState();
+  private pendingDataSave: Promise<void> = Promise.resolve();
   private scanner?: VaultScanner;
   private statusReporter?: SafeStatusReporter;
   private settingsTab?: HazeSyncSettingsTab;
@@ -160,11 +161,20 @@ export default class HazeSyncPlugin extends Plugin {
     }
 
     this.localState = recordEventHint(this.localState, classification.path, kind, new Date().toISOString());
-    void this.persistPluginData();
+    void this.persistPluginData().catch(() => {
+      this.statusReporter?.setStatus("Could not save local pending queue state.", "warning");
+    });
     this.refreshSettingsStatus();
   }
 
-  private async persistPluginData(): Promise<void> {
-    await this.saveData(serializePluginData(this.settings, this.localState));
+  private persistPluginData(): Promise<void> {
+    const data = serializePluginData(this.settings, this.localState);
+    const write = this.pendingDataSave.then(
+      () => this.saveData(data),
+      () => this.saveData(data),
+    );
+    this.pendingDataSave = write.catch(() => undefined);
+
+    return write;
   }
 }
