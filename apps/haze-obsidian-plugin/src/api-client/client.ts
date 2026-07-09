@@ -2,6 +2,7 @@ import { PluginSettings } from "../settings";
 
 import {
   ApiClientError,
+  createConfigurationError,
   createHttpError,
   createInvalidResponseError,
   createOfflineError,
@@ -56,25 +57,21 @@ export class HazeSyncApiClient {
   }
 
   async getServerInfo(): Promise<ServerInfoDto> {
-    return this.requestJson("GET", buildApiUrl(this.config.serverUrl, "/v1/server-info"), {
+    return this.requestJson("GET", this.apiUrl("/v1/server-info"), {
       validate: isServerInfoDto,
     });
   }
 
   async getChanges(request: ChangesRequest = {}): Promise<ChangesResponseDto> {
-    return this.requestJson("GET", buildApiUrl(this.config.serverUrl, "/v1/changes", request), {
+    return this.requestJson("GET", this.apiUrl("/v1/changes", request), {
       validate: isChangesResponseDto,
     });
   }
 
   async getFile(path: string): Promise<FileDownload> {
-    const response = await this.requestRaw(
-      "GET",
-      buildFilePathUrl(this.config.serverUrl, "/v1/files", path),
-      {
-        headers: buildApiHeaders(this.config.authToken, { accept: "application/octet-stream" }),
-      },
-    );
+    const response = await this.requestRaw("GET", this.filePathUrl("/v1/files", path), {
+      headers: buildApiHeaders(this.config.authToken, { accept: "application/octet-stream" }),
+    });
 
     const metadata: Partial<FileDownload["metadata"]> = {
       path,
@@ -90,7 +87,7 @@ export class HazeSyncApiClient {
   }
 
   async putFile(request: PutFileRequest): Promise<PutFileResponseDto> {
-    return this.requestJson("PUT", buildFilePathUrl(this.config.serverUrl, "/v1/files", request.path), {
+    return this.requestJson("PUT", this.filePathUrl("/v1/files", request.path), {
       body: request.body,
       headers: buildApiHeaders(this.config.authToken, {
         idempotencyKey: request.idempotencyKey,
@@ -103,7 +100,7 @@ export class HazeSyncApiClient {
   }
 
   async deleteFile(request: DeleteFileRequest): Promise<DeleteFileResponseDto> {
-    return this.requestJson("DELETE", buildFilePathUrl(this.config.serverUrl, "/v1/files", request.path), {
+    return this.requestJson("DELETE", this.filePathUrl("/v1/files", request.path), {
       headers: buildApiHeaders(this.config.authToken, {
         idempotencyKey: request.idempotencyKey,
         baseRevisionId: request.baseRevisionId,
@@ -113,24 +110,38 @@ export class HazeSyncApiClient {
   }
 
   async getConflicts(request: ConflictListRequest = {}): Promise<ConflictsResponseDto> {
-    return this.requestJson("GET", buildApiUrl(this.config.serverUrl, "/v1/conflicts", request), {
+    return this.requestJson("GET", this.apiUrl("/v1/conflicts", request), {
       validate: isConflictsResponseDto,
     });
   }
 
   async resolveConflict(request: ResolveConflictRequest): Promise<ResolveConflictResponseDto> {
-    return this.requestJson(
-      "POST",
-      buildApiUrl(this.config.serverUrl, `/v1/conflicts/${encodeURIComponent(request.conflictId)}/resolve`),
-      {
-        body: JSON.stringify({ action: request.action }),
-        headers: buildApiHeaders(this.config.authToken, {
-          idempotencyKey: request.idempotencyKey,
-          contentType: "application/json",
-        }),
-        validate: isResolveConflictResponseDto,
-      },
-    );
+    return this.requestJson("POST", this.apiUrl(`/v1/conflicts/${encodeURIComponent(request.conflictId)}/resolve`), {
+      body: JSON.stringify({ action: request.action }),
+      headers: buildApiHeaders(this.config.authToken, {
+        idempotencyKey: request.idempotencyKey,
+        contentType: "application/json",
+      }),
+      validate: isResolveConflictResponseDto,
+    });
+  }
+
+  private apiUrl(path: string, query?: Record<string, string | number | undefined>): URL {
+    try {
+      assertConfiguredServer(this.config);
+      return buildApiUrl(this.config.serverUrl, path, query);
+    } catch {
+      throw createConfigurationError("Haze Sync Server URL is not configured correctly.");
+    }
+  }
+
+  private filePathUrl(pathPrefix: string, path: string): URL {
+    try {
+      assertConfiguredServer(this.config);
+      return buildFilePathUrl(this.config.serverUrl, pathPrefix, path);
+    } catch {
+      throw createConfigurationError("Haze Sync Server URL is not configured correctly.");
+    }
   }
 
   private async requestJson<T>(method: string, url: URL, options: RequestJsonOptions<T>): Promise<T> {
@@ -145,8 +156,16 @@ export class HazeSyncApiClient {
   }
 
   private async requestRaw(method: string, url: URL, options: RequestRawOptions = {}): Promise<Response> {
-    assertConfiguredServer(this.config);
-    assertSameOrigin(url, this.config.serverUrl);
+    try {
+      assertConfiguredServer(this.config);
+      assertSameOrigin(url, this.config.serverUrl);
+    } catch (error) {
+      if (error instanceof ApiClientError) {
+        throw error;
+      }
+
+      throw createConfigurationError("Request URL does not match the configured Haze Sync Server origin.", endpointForReport(url));
+    }
 
     let response: Response;
     try {
