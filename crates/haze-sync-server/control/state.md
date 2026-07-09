@@ -9,7 +9,7 @@ active_report: crates/haze-sync-server/control/report.md
 active_agent_role: implementation-worker
 
 wave: W1
-phase: SRV-P6
+phase: SRV-P6-RERUN
 
 implementation_status: PENDING
 clean_review_status: NOT_STARTED
@@ -20,3 +20,4 @@ ci_run_number: 619
 ci_run_attempt: 1
 known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
+rerun_reason: previous active report did not close SRV-P6
