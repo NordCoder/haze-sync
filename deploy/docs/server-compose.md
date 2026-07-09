@@ -6,6 +6,8 @@ This runbook documents the DEP-P3 local server service wiring in `deploy/docker-
 
 The server service is intended for local and prod-like smoke workflows only. It is not a full production deployment and must not be used as evidence that provider sync, Worktree runtime, reverse proxy/TLS, migrations, backups, or real-vault rollout are ready.
 
+For database migration, backup, and restore sequencing, use `deploy/docs/migrations-backup-restore.md`.
+
 ## Packaging decision
 
 DEP-P3 chooses container packaging inside Deployment scope:
@@ -78,7 +80,7 @@ docker compose -f deploy/docker-compose.yml up --build -d postgres server
 
 The server service waits for the PostgreSQL healthcheck through Compose `depends_on.condition: service_healthy`.
 
-The server image and compose service do not run migrations. Apply migrations through the accepted operator procedure once the migration deployment phase defines it.
+The server image and compose service do not run migrations. Apply migrations through `deploy/docs/migrations-backup-restore.md` before treating the service as schema-ready.
 
 ## Health and readiness
 
