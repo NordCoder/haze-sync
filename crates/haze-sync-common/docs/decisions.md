@@ -116,6 +116,67 @@ Affected contracts:
 - Obsidian local scanner/conflict center;
 - API path extraction.
 
+## 2026-07-09 — Shared ID set stays limited until downstream contracts prove new IDs
+
+Decision:
+
+`common` currently owns only `AdapterId`, `RevisionId`, `OperationId`, and `ConflictId`. It does not add `BlobId`, `CursorId`, `TombstoneId`, mapping IDs, audit IDs, or other additional identifier newtypes during CMM-P4.
+
+Rationale:
+
+Additional IDs may be storage-local, Core-local, adapter-local, or generated under transactional/runtime constraints. Adding them to `common` before downstream contracts prove stable cross-component ownership would expand the shared API prematurely and create unnecessary fan-in risk.
+
+Alternatives:
+
+- Add speculative ID types for likely future tables and services.
+- Let every component use raw strings indefinitely.
+- Move all ID representation to Storage or Core.
+
+Consequences:
+
+- Downstream components may define local IDs when ownership is component-specific.
+- A later shared ID can still move into `common` through an explicit contract change and compatibility phase.
+- Current common ID validation is hardened around the accepted four ID types only.
+
+Affected contracts:
+
+- Core revision/operation/conflict services;
+- Storage repositories;
+- Server route handlers;
+- Worktree/GDrive adapter mapping state;
+- API DTO contracts.
+
+## 2026-07-09 — Common owns SHA-256 representation, not hashing computation
+
+Decision:
+
+`Sha256` / `ContentHash` remains a representation and validation primitive. It accepts plain 64-character hex or exact lowercase-prefixed `sha256:<hex>` input, normalizes digest case on output, and serializes as canonical lowercase `sha256:<hex>`. `common` does not add byte hashing helpers or object-store behavior.
+
+Rationale:
+
+Hash computation requires content bytes and belongs to components that own content IO, object storage, provider downloads, or local scans. Keeping computation out of `common` preserves its runtime-free and provider-free role while still giving all components one stable wire representation.
+
+Alternatives:
+
+- Add `Sha256::digest(bytes)` to common.
+- Accept multiple algorithm prefixes.
+- Let each component format hashes independently.
+
+Consequences:
+
+- Worktree, GDrive, Obsidian, Core, and Storage compute hashes in their own scopes.
+- All components can still share parsing, validation, byte access, and canonical wire formatting.
+- Adding hash computation or additional algorithms later requires an explicit contract change.
+
+Affected contracts:
+
+- Core content store;
+- Storage blob metadata;
+- API hash headers/DTOs;
+- Worktree scanner;
+- GDrive importer/exporter;
+- Obsidian local scanner.
+
 ## 2026-07-05 — Secret wrappers redact by default and do not serialize
 
 Decision:
