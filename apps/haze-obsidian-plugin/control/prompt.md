@@ -1,23 +1,21 @@
-# W1-OBS-P4 — Vault path mapping, scan, and pending queue foundation
+# W1-OBS-P4C — Obsidian plugin clean-code review
 
 Component: obsidian-plugin
 Path: apps/haze-obsidian-plugin
 Branch: component/obsidian-plugin
 PR: #51
-Role: implementation-worker
+Role: clean-code-reviewer
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-OBS-P3 implementation and clean-code review are complete. Current Component CI is green for the current PR head.
+OBS-P4 implementation completed with SELF_ACCEPT_PENDING_CI. Product-code CI is green.
 
 - workflow: Component CI
-- workflow_run_id: 29006856129
-- run_number: 452
+- workflow_run_id: 29009503628
+- run_number: 502
 - conclusion: success
-
-The next implementation phase is OBS-P4 from apps/haze-obsidian-plugin/docs/implementation-plan.md.
 
 ## Read
 
@@ -25,7 +23,7 @@ Read before editing:
 
 - implementation-manifest.md from ChatGPT Project Sources
 - report-template.md from ChatGPT Project Sources
-- implementation-worker-prompt.md from ChatGPT Project Sources
+- clean-code-reviewer-prompt.md from ChatGPT Project Sources
 - chatgpt-gh-connector.md from ChatGPT Project Sources
 - apps/haze-obsidian-plugin/docs/component-contract.md
 - apps/haze-obsidian-plugin/docs/implementation-plan.md
@@ -39,17 +37,16 @@ Do not read CI diagnostics artifacts unless a future active prompt explicitly in
 
 ## Task
 
-Implement OBS-P4: Vault path mapping, scan, and pending queue foundation.
+Review OBS-P4 implementation and improve it only where appropriate.
 
-Follow the implementation plan:
+Focus areas:
 
-- map Obsidian TFile paths to API-compatible vault paths;
-- exclude plugin metadata, internal directories, temporary files, and unsupported resources;
-- implement an explicit scan/reconcile entrypoint;
-- capture safe local file facts: path, mtime or revision marker where available, hash, size;
-- maintain pending queue state for new, modified, and deleted files;
-- distinguish event hints from full scans;
-- make queue state safe to inspect through status/UI helpers where scoped.
+- vault path classification and exclusions;
+- local file fact hashing through Obsidian APIs;
+- pending queue reconciliation for new, modified, and deleted files;
+- event hints versus full scan correctness;
+- plugin data compatibility and safe status summaries;
+- preservation of non-goals: no server writes, no upload/download execution, no vault mutation beyond local plugin state.
 
 ## Allowed files
 
@@ -57,22 +54,22 @@ Follow the implementation plan:
 - apps/haze-obsidian-plugin/docs/**
 - apps/haze-obsidian-plugin/control/report.md
 
-## Non-goals
+## Forbidden changes
 
-- No upload/download execution.
-- No server writes.
-- No conflict resolution.
-- No direct filesystem APIs outside Obsidian abstractions unless justified.
-- No Google Drive behavior.
-- No sibling component changes.
-- No workflow changes.
+- Do not add network sync execution.
+- Do not add server writes.
+- Do not add conflict resolution.
+- Do not add Google Drive behavior.
+- Do not redesign public API.
+- Do not change workflow files.
+- Do not change sibling components.
 
 ## CI trigger policy
 
-Follow the CI skip policy in implementation-manifest.md and the relevant Project Source worker prompt. Product, test, dependency, contract, workflow, and implementation commits must not skip CI.
+Follow the CI skip policy in implementation-manifest.md and clean-code-reviewer-prompt.md. Source clean-code commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
 Write only the report to apps/haze-obsidian-plugin/control/report.md.
 
-Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION.
+Use report-template.md. Set REPORT_TYPE to CLEAN_CODE_REVIEW.
