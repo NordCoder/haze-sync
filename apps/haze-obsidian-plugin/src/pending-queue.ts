@@ -1,4 +1,5 @@
 import { LocalFileFact } from "./local-file-facts";
+import { LocalMutationKind, generateLocalIdempotencyKey } from "./idempotency-keys";
 
 export type PendingChangeKind = "created" | "modified" | "deleted";
 export type PendingChangeSource = "event_hint" | "scan";
@@ -9,6 +10,7 @@ export interface PendingQueueEntry {
   source: PendingChangeSource;
   firstSeenAt: string;
   lastSeenAt: string;
+  operationIdempotencyKey?: string;
   file?: LocalFileFact;
   previousFile?: LocalFileFact;
 }
@@ -166,15 +168,26 @@ function upsertPendingEntry(
   file?: LocalFileFact,
   previousFile?: LocalFileFact,
 ): PendingQueueEntry {
+  const operationKind = operationKindForPendingChange(kind);
+  const currentOperationKind = currentEntry === undefined ? undefined : operationKindForPendingChange(currentEntry.kind);
+
   return {
     path,
     kind,
     source,
     firstSeenAt: currentEntry?.firstSeenAt ?? observedAt,
     lastSeenAt: observedAt,
+    operationIdempotencyKey:
+      currentOperationKind === operationKind && currentEntry?.operationIdempotencyKey !== undefined
+        ? currentEntry.operationIdempotencyKey
+        : generateLocalIdempotencyKey(operationKind),
     file,
     previousFile: previousFile ?? currentEntry?.previousFile,
   };
+}
+
+function operationKindForPendingChange(kind: PendingChangeKind): LocalMutationKind {
+  return kind === "deleted" ? "delete" : "upload";
 }
 
 function indexFactsByPath(facts: LocalFileFact[]): Record<string, LocalFileFact> {
@@ -225,6 +238,7 @@ function isPendingQueueEntry(value: unknown): value is PendingQueueEntry {
     isPendingChangeSource(value.source) &&
     typeof value.firstSeenAt === "string" &&
     typeof value.lastSeenAt === "string" &&
+    (value.operationIdempotencyKey === undefined || typeof value.operationIdempotencyKey === "string") &&
     (value.file === undefined || isLocalFileFact(value.file)) &&
     (value.previousFile === undefined || isLocalFileFact(value.previousFile))
   );
