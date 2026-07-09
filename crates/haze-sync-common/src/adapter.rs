@@ -177,11 +177,26 @@ mod tests {
             assert_eq!(expected.as_str(), *wire);
             assert_eq!(expected.to_string(), *wire);
         }
+    }
 
-        assert_eq!(
-            AdapterRole::from_str("root").unwrap_err(),
-            ValidationError::InvalidAdapterRole
-        );
+    #[test]
+    fn role_rejects_unknown_or_non_exact_wire_values() {
+        for input in [
+            "root",
+            "owner",
+            "readonly-agent",
+            "read_only_agent",
+            "ReadonlyAgent",
+            "READONLY_AGENT",
+            "obsidian-plugin",
+            "gdrive",
+        ] {
+            assert_eq!(
+                AdapterRole::from_str(input).unwrap_err(),
+                ValidationError::InvalidAdapterRole,
+                "input={input:?}"
+            );
+        }
     }
 
     #[test]
@@ -192,11 +207,26 @@ mod tests {
             assert_eq!(expected.as_str(), *wire);
             assert_eq!(expected.to_string(), *wire);
         }
+    }
 
-        assert_eq!(
-            AdapterMode::from_str("unsafe_full_access").unwrap_err(),
-            ValidationError::InvalidAdapterMode
-        );
+    #[test]
+    fn mode_rejects_unknown_or_non_exact_wire_values() {
+        for input in [
+            "unsafe_full_access",
+            "read-only",
+            "readOnly",
+            "READ_ONLY",
+            "import",
+            "export",
+            "dryrun",
+            "bi_directional",
+        ] {
+            assert_eq!(
+                AdapterMode::from_str(input).unwrap_err(),
+                ValidationError::InvalidAdapterMode,
+                "input={input:?}"
+            );
+        }
     }
 
     #[test]
@@ -223,8 +253,21 @@ mod tests {
             assert_eq!(json, format!("\"{wire}\""));
             assert_eq!(serde_json::from_str::<AdapterRole>(&json).unwrap(), *role);
         }
+    }
 
-        assert!(serde_json::from_str::<AdapterRole>("\"owner\"").is_err());
+    #[test]
+    fn role_serde_rejects_unknown_or_non_exact_wire_values() {
+        for json in [
+            "\"owner\"",
+            "\"readonly-agent\"",
+            "\"ReadonlyAgent\"",
+            "\"READONLY_AGENT\"",
+        ] {
+            assert!(
+                serde_json::from_str::<AdapterRole>(json).is_err(),
+                "json={json:?}"
+            );
+        }
     }
 
     #[test]
@@ -234,7 +277,20 @@ mod tests {
             assert_eq!(json, format!("\"{wire}\""));
             assert_eq!(serde_json::from_str::<AdapterMode>(&json).unwrap(), *mode);
         }
+    }
 
-        assert!(serde_json::from_str::<AdapterMode>("\"unsafe_full_access\"").is_err());
+    #[test]
+    fn mode_serde_rejects_unknown_or_non_exact_wire_values() {
+        for json in [
+            "\"unsafe_full_access\"",
+            "\"read-only\"",
+            "\"readOnly\"",
+            "\"READ_ONLY\"",
+        ] {
+            assert!(
+                serde_json::from_str::<AdapterMode>(json).is_err(),
+                "json={json:?}"
+            );
+        }
     }
 }
