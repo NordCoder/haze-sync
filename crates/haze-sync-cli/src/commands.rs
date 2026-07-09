@@ -6,7 +6,10 @@
 //! state. Parse errors intentionally avoid echoing raw arguments because CLI
 //! output is commonly copied into logs, tickets, and chat.
 
-use crate::doctor::{self, DoctorCliCommand, DoctorCommand, DoctorParseError};
+use crate::{
+    doctor::{self, DoctorCliCommand, DoctorCommand, DoctorParseError},
+    server_api::ReadCommandMode,
+};
 use std::fmt;
 
 /// Parsed top-level CLI command.
@@ -14,9 +17,9 @@ use std::fmt;
 pub enum CliCommand {
     /// `haze-sync --help` / `haze-sync help` or command-specific help.
     Help(HelpTopic),
-    /// `haze-sync status` scaffold command.
-    Status,
-    /// `haze-sync adapters ...` scaffold command group.
+    /// `haze-sync status [--offline]` read-only status command.
+    Status(StatusCommand),
+    /// `haze-sync adapters ...` command group.
     Adapters(AdaptersCommand),
     /// `haze-sync doctor [--offline]` offline diagnostic command.
     Doctor(DoctorCommand),
@@ -31,11 +34,17 @@ pub enum HelpTopic {
     Doctor,
 }
 
+/// Parsed status command.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct StatusCommand {
+    pub mode: ReadCommandMode,
+}
+
 /// Parsed adapters subcommand.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AdaptersCommand {
-    /// `haze-sync adapters list` scaffold command.
-    List,
+    /// `haze-sync adapters list [--offline]` read-only adapter summary.
+    List { mode: ReadCommandMode },
 }
 
 /// Safe CLI parse error.
@@ -71,7 +80,7 @@ impl std::error::Error for CliParseError {}
 
 #[must_use]
 pub const fn usage() -> &'static str {
-    "usage: haze-sync <command>\n\ncommands:\n  status             read-only placeholder status summary\n  adapters list      read-only placeholder adapter summary\n  doctor [--offline] read-only offline doctor summary"
+    "usage: haze-sync <command>\n\ncommands:\n  status [--offline]        read-only server status summary\n  adapters list [--offline] read-only adapter summary\n  doctor [--offline]        read-only offline doctor summary"
 }
 
 /// Parse process arguments into the minimal command model.
@@ -93,14 +102,21 @@ where
             reject_trailing(args)?;
             Ok(CliCommand::Help(HelpTopic::Root))
         }
-        "status" => {
-            reject_trailing(args)?;
-            Ok(CliCommand::Status)
-        }
+        "status" => parse_status_command(args),
         "adapters" => parse_adapters_command(args),
         "doctor" => parse_doctor_command(args),
         _ => Err(CliParseError::UnknownCommand),
     }
+}
+
+fn parse_status_command<I, S>(args: I) -> Result<CliCommand, CliParseError>
+where
+    I: Iterator<Item = S>,
+    S: AsRef<str>,
+{
+    Ok(CliCommand::Status(StatusCommand {
+        mode: parse_read_mode(args)?,
+    }))
 }
 
 fn parse_adapters_command<I, S>(mut args: I) -> Result<CliCommand, CliParseError>
@@ -111,10 +127,9 @@ where
     let command = next_argument(&mut args).ok_or(CliParseError::MissingAdaptersCommand)?;
 
     match command.as_str() {
-        "list" => {
-            reject_trailing(args)?;
-            Ok(CliCommand::Adapters(AdaptersCommand::List))
-        }
+        "list" => Ok(CliCommand::Adapters(AdaptersCommand::List {
+            mode: parse_read_mode(args)?,
+        })),
         _ => Err(CliParseError::UnknownAdaptersCommand),
     }
 }
@@ -128,6 +143,22 @@ where
         DoctorCliCommand::Doctor(command) => Ok(CliCommand::Doctor(command)),
         DoctorCliCommand::Help => Ok(CliCommand::Help(HelpTopic::Doctor)),
     }
+}
+
+fn parse_read_mode<I, S>(args: I) -> Result<ReadCommandMode, CliParseError>
+where
+    I: Iterator<Item = S>,
+    S: AsRef<str>,
+{
+    let mut mode = ReadCommandMode::Auto;
+    for argument in args {
+        match argument.as_ref() {
+            "--offline" => mode = ReadCommandMode::Offline,
+            _ => return Err(CliParseError::UnexpectedArgument),
+        }
+    }
+
+    Ok(mode)
 }
 
 fn next_argument<I, S>(args: &mut I) -> Option<String>
@@ -158,14 +189,48 @@ mod tests {
     fn status_command_parses() {
         let command = parse_cli(["haze-sync", "status"]).unwrap();
 
-        assert_eq!(command, CliCommand::Status);
+        assert_eq!(
+            command,
+            CliCommand::Status(StatusCommand {
+                mode: ReadCommandMode::Auto,
+            })
+        );
+    }
+
+    #[test]
+    fn status_offline_command_parses() {
+        let command = parse_cli(["haze-sync", "status", "--offline"]).unwrap();
+
+        assert_eq!(
+            command,
+            CliCommand::Status(StatusCommand {
+                mode: ReadCommandMode::Offline,
+            })
+        );
     }
 
     #[test]
     fn adapters_list_command_parses() {
         let command = parse_cli(["haze-sync", "adapters", "list"]).unwrap();
 
-        assert_eq!(command, CliCommand::Adapters(AdaptersCommand::List));
+        assert_eq!(
+            command,
+            CliCommand::Adapters(AdaptersCommand::List {
+                mode: ReadCommandMode::Auto,
+            })
+        );
+    }
+
+    #[test]
+    fn adapters_list_offline_command_parses() {
+        let command = parse_cli(["haze-sync", "adapters", "list", "--offline"]).unwrap();
+
+        assert_eq!(
+            command,
+            CliCommand::Adapters(AdaptersCommand::List {
+                mode: ReadCommandMode::Offline,
+            })
+        );
     }
 
     #[test]
