@@ -397,7 +397,8 @@ mod tests {
             path: "Notes/today.md".to_owned(),
             revision_id: Some(format!("rev_01JSTORP5{seq}")),
             content_sha256: Some(
-                "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_owned(),
+                "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                    .to_owned(),
             ),
             size_bytes: Some(42),
             tombstone_id: None,
@@ -424,7 +425,6 @@ mod postgres_tests {
     };
     use crate::test_support::connect_test_database_from_env;
     use haze_sync_common::ContentHash;
-    use sqlx::Acquire;
 
     #[tokio::test]
     async fn normal_file_flow_roundtrips_under_caller_owned_transaction() {
@@ -511,15 +511,11 @@ mod postgres_tests {
         assert_eq!(revision.revision_id, revision_id.as_str());
         assert_eq!(revision.content_sha256, content_hash.to_prefixed_string());
 
-        let updated_object = set_current_revision_by_path(
-            &mut *tx,
-            &path,
-            Some(&revision_id),
-            &adapter_id,
-        )
-        .await
-        .unwrap()
-        .unwrap();
+        let updated_object =
+            set_current_revision_by_path(&mut *tx, &path, Some(&revision_id), &adapter_id)
+                .await
+                .unwrap()
+                .unwrap();
         assert_eq!(
             updated_object.current_revision_id.as_deref(),
             Some(revision_id.as_str())
@@ -547,7 +543,10 @@ mod postgres_tests {
             .await
             .unwrap()
             .unwrap();
-        let loaded_object = get_sync_object_by_path(&mut *tx, &path).await.unwrap().unwrap();
+        let loaded_object = get_sync_object_by_path(&mut *tx, &path)
+            .await
+            .unwrap()
+            .unwrap();
         let loaded_revision = get_file_revision_by_id(&mut *tx, &revision_id)
             .await
             .unwrap()
@@ -565,7 +564,10 @@ mod postgres_tests {
         let expected_hash = content_hash.to_prefixed_string();
 
         assert_eq!(loaded_blob, blob);
-        assert_eq!(loaded_object.current_revision_id, updated_object.current_revision_id);
+        assert_eq!(
+            loaded_object.current_revision_id,
+            updated_object.current_revision_id
+        );
         assert_eq!(loaded_revision, revision);
         assert_eq!(current_revision, revision);
         assert_eq!(loaded_operation.seq, operation.seq);
