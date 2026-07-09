@@ -1,13 +1,13 @@
 REPORT_TYPE:
-FIX
+IMPLEMENTATION
 
 STATUS:
-FIX_COMPLETE
+SELF_ACCEPT_PENDING_CI
 
 AGENT:
-role: fixer-worker
-agent_execution_id: W1-FIX-GDA-P3C-CI
-chat_name: gdrive-adapter — W1 FIX-GDRIVE-ADAPTER-CI CI Fix
+role: implementation-worker
+agent_execution_id: W1-GDA-P4-implementation
+chat_name: gdrive-adapter — W1 GDA-P4 Implementation
 
 COMPONENT:
 name: gdrive-adapter
@@ -21,31 +21,32 @@ control_report_path: crates/haze-gdrive-adapter/control/report.md
 
 WAVE:
 id: W1
-phase_id: FIX-GDA-P3C-CI
-dependency_status: Active control state was PROMPT_READY and active prompt matched crates/haze-gdrive-adapter/control/prompt.md. CI_RED metadata identified Component CI run 29023789542 attempt 1 with diagnostics artifact 8200613102 and known failed check diagnostics-artifact-required. The active fixer prompt required reading the artifact and using it as source of truth.
+phase_id: GDA-P4
+dependency_status: Active control state was PROMPT_READY and active prompt matched crates/haze-gdrive-adapter/control/prompt.md. Previous GDA-P3C CI-fix run 29027970390 was reported green in control state before this implementation started.
 
 SUMMARY:
-Fixed the minimum GDA-P3C CI failure inside gdrive-adapter scope. The diagnostics artifact showed the actual failed check was rust-fmt in crates/haze-gdrive-adapter/src/drive.rs, not a product-test/check/clippy failure. Applied the rustfmt-equivalent formatting change around FakeDriveProvider::upload_file. No runtime behavior, fake provider behavior, tests, Google SDK wiring, live provider calls, credential behavior, Core/API writes, mapping persistence, docs/contracts, workflows, sibling components, or main branch state were changed.
+Implemented the GDA-P4 adapter-local mapping, cursor, and echo-state boundary. Added a new state module with a safe vault-relative path type, safe timestamp wrapper, GDrive mapping model, Drive/Core state observations, Drive change-feed cursor, Core change cursor, echo guard entries/decisions, and an explicit persistence policy that rejects direct database access. The implementation preserves the current architecture boundary: it does not add DB access, provider sync loops, Core policy, Google SDK wiring, live provider calls, hard deletes, workflow changes, sibling component changes, or raw provider cursor payload exposure.
 
 CHANGED_FILES:
-- crates/haze-gdrive-adapter/src/drive.rs
+- crates/haze-gdrive-adapter/src/state.rs
+- crates/haze-gdrive-adapter/src/lib.rs
 - crates/haze-gdrive-adapter/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/gdrive-adapter
 base_branch: main
 base_sha: current main observed as c1e69a664388b0cba028170e8398b9088218957d during this run; PR base_sha remains 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
-head_sha: 9981fca53809c4e26cb7e1b6f6e05fb326a47fb7 before writing this report; the report itself is written by a later GitHub contents API commit with [skip ci].
+head_sha: 7bf962afa530264869ae9e296fdda971fb38ff7a before writing this report; the report itself is written by a later GitHub contents API commit with [skip ci].
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
 ci_skip_used: yes for the report-only commit only
-ci_skip_reason: final commit changes only crates/haze-gdrive-adapter/control/report.md and cannot change executable behavior or validation outcome. Source fixer commit did not use CI skip and triggered PR CI.
+ci_skip_reason: final commit changes only crates/haze-gdrive-adapter/control/report.md and cannot change executable behavior or validation outcome. Product/source implementation commits did not use CI skip and triggered PR CI.
 
 SCOPE:
-allowed_files_only: yes for this fixer run
+allowed_files_only: yes for this implementation run
 scope_expansion_used: no
 scope_expansion_rationale: none
 cross_component_changes: no
@@ -61,45 +62,56 @@ affected_components: none
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- Applied the rustfmt formatting required by logs/rust-fmt.log in FakeDriveProvider::upload_file.
-- Kept the clean-code behavior fix intact: fake uploads are still indexed under the requested parent id.
-behavior_changes: none
-bugs_found:
-- CI diagnostics artifact reported rust-fmt failure in crates/haze-gdrive-adapter/src/drive.rs.
-bugs_fixed:
-- Fixed the rustfmt-reported formatting difference in drive.rs.
-cleanups_made: rustfmt-equivalent formatting only
+- Added crates/haze-gdrive-adapter/src/state.rs.
+- Added StateError, SafeTimestamp, and VaultPath validation primitives for safe adapter state.
+- Added GDriveMapping with vault path, Drive file id, parent id, name, checksum, Drive version, Drive modified time, Core revision, Core sequence, last imported/exported timestamps, last seen timestamp, and delete candidate timestamp.
+- Added DriveStateObservation and CoreStateObservation update inputs for mapping state.
+- Added DriveChangeCursor for start/page/sync token progression and invalidation-to-full-scan behavior.
+- Added CoreChangeCursor with monotonic progression and regression rejection.
+- Added EchoGuardEntry, DriveEchoObservation, EchoDecision, and EchoGuard to suppress adapter-created Drive echoes by checksum or Drive version while accepting different remote edits.
+- Added MappingPersistenceBoundary and StatePersistencePolicy to document and enforce that direct DB access is not accepted by this component boundary.
+- Exported the new state module and public state types from src/lib.rs.
+- Added unit tests covering mapping/delete-candidate lifecycle, vault path validation, Drive cursor progression/invalidation, Core cursor regression rejection, echo suppression/remote acceptance, and direct DB rejection.
+behavior_changes:
+- New library API for adapter-local mapping/cursor/echo state exists.
+- Existing binary runtime behavior is unchanged.
+- Existing provider abstraction behavior is unchanged.
+- No persistence implementation or network behavior was added.
+bugs_found: none
+bugs_fixed: none
+cleanups_made:
+- Kept state modeling in a separate state.rs module instead of mixing it into drive.rs or runtime.rs.
 non_goals_preserved:
-- No runtime behavior changes.
-- No real Google SDK wiring.
+- No direct DB access.
+- No provider sync loop.
+- No Core policy decisions.
+- No hard delete behavior.
+- No Google SDK wiring.
 - No live Google Drive calls.
 - No OAuth credential behavior changes.
-- No Core/API writes.
-- No mapping DB persistence.
-- No provider delete side effects.
-- No docs or contract changes.
-- No workflow changes.
+- No raw provider cursor JSON or raw provider payload exposure.
 - No sibling component changes.
+- No workflow changes.
 deferred_work:
-- Orchestrator should triage completion of Component CI run 29027970390 after it finishes.
-- Future GDrive phases still own real Google client implementation, Core client integration, mapping/cursor/echo state, full scan/import/export/change feed/delete guardrails.
+- Concrete durable persistence remains a Server/API-mediated or accepted repository fan-in decision.
+- Future phases still need full scan/import planning, change-feed handling, export planning, delete guardrails, and status/doctor behavior.
+- Orchestrator should triage Component CI run 29034799276 after it finishes.
 
 TESTS_AND_CHECKS:
 checks_run:
-- Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, and haze-sync-development-wave-plan.md from Project Sources as required by the run instructions.
+- Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, and haze-sync-development-wave-plan.md from Project Sources as required by the run instructions.
 - Read current control state and active prompt from component/gdrive-adapter.
 - Verified active_prompt matched crates/haze-gdrive-adapter/control/prompt.md.
-- Read previous control report, component contract, implementation plan GDA-P3 section, implementation log, and dependency map.
-- Read PR #50 metadata and changed filenames.
-- Listed workflow artifacts for run 29023789542 and found artifact 8200613102.
-- Downloaded diagnostics artifact 8200613102 through GitHub connector.
-- Read diagnostics summary.md, manifest.json, failures/rust-fmt.txt, and logs/rust-fmt.log from the artifact.
-- Reviewed current drive.rs formatting-relevant section through GitHub connector.
-- Updated drive.rs through GitHub connector with the rustfmt-equivalent formatting change.
-- Observed PR #50 head update to source-fix commit 9981fca53809c4e26cb7e1b6f6e05fb326a47fb7.
-- Observed new Component CI run 29027970390 for source-fix commit 9981fca53809c4e26cb7e1b6f6e05fb326a47fb7.
-- Observed Rust workspace job 86152734204 in progress; Install Rust toolchain was in progress, and cargo fmt/check/test/clippy were still pending at last observation.
-- Compared component/gdrive-adapter against current main; connector reported branch diverged, ahead by 51 and behind by 12, with merge base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2.
+- Read previous control report.
+- Read component contract, GDA-P4 implementation plan section, implementation log, dependency map, and decisions.
+- Searched the repository for existing gdrive_mapping/cursor/echo implementation shape and found no existing implementation to reuse.
+- Read relevant current repository code: lib.rs, config.rs, drive.rs, and Cargo.toml.
+- Created state.rs through GitHub connector.
+- Updated lib.rs through GitHub connector.
+- Observed PR #50 head update to source implementation commit 7bf962afa530264869ae9e296fdda971fb38ff7a.
+- Observed new Component CI run 29034799276 for source implementation commit 7bf962afa530264869ae9e296fdda971fb38ff7a.
+- Observed Rust workspace job 86176772467 in progress; Install Rust toolchain was in progress, and cargo fmt/check/test/clippy were pending at last observation.
+- Compared component/gdrive-adapter against current main; connector reported branch diverged, ahead by 58 and behind by 12, with merge base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2.
 checks_not_run:
 - cargo fmt --check
 - cargo check -p haze-gdrive-adapter
@@ -108,24 +120,21 @@ checks_not_run:
 Reason: this run was constrained to GitHub connector access and did not have local shell execution for repository checks.
 ci_status: CI_PENDING
 workflow_urls:
-- https://github.com/NordCoder/haze-sync/actions/runs/29023789542
 - https://github.com/NordCoder/haze-sync/actions/runs/29027970390
+- https://github.com/NordCoder/haze-sync/actions/runs/29034799276
 known_failures:
-- Previous failed run 29023789542: artifact summary listed rust-fmt with exit_code 1.
-- No known failures observed yet on fix run 29027970390; workflow was still in progress.
+- none observed on GDA-P4 implementation run at report time; CI was still in progress.
 
 CI_DIAGNOSTICS:
-artifact_based_logs: yes
-artifact_name: ci-diag__component-gdrive-adapter__wf-component-ci__run-29023789542__attempt-1
-artifact_id: 8200613102
-workflow_run_id: 29023789542
-workflow_run_attempt: 1
-artifact_status: found, downloaded, and readable. Artifact files were packaged at archive root as summary.md, manifest.json, failures/*.txt, and logs/*.log rather than under a ci-diagnostics/ prefix, but the required summary, manifest, failure marker, and failed-check log were present and readable.
-summary_read: yes, summary.md
-manifest_read: yes, manifest.json
-logs_read:
-- failures/rust-fmt.txt
-- logs/rust-fmt.log
+artifact_based_logs: no
+artifact_name: none
+artifact_id: none
+workflow_run_id: none for this implementation phase diagnostics
+workflow_run_attempt: none
+artifact_status: not applicable; implementation prompt explicitly said not to read CI diagnostics artifacts.
+summary_read: no
+manifest_read: no
+logs_read: none
 raw_job_logs_used: no
 diagnostics_failure: none
 
@@ -138,20 +147,19 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- The control state known_failed_checks value was diagnostics-artifact-required, while the downloaded artifact's manifest listed rust-fmt as the actual failed check. The artifact was used as source of truth per active prompt.
-- Diagnostics artifact layout omitted the expected ci-diagnostics/ directory prefix, but all required logical files were present and readable at archive root.
+- No existing gdrive_mapping/storage implementation shape was found by repository search, so GDA-P4 implements an adapter-local model and leaves concrete durable persistence as a fan-in decision.
 - GitHub connector cannot run local shell commands.
-- Fix CI run 29027970390 was still in progress at report time, so CI green was not claimed.
+- Component CI run 29034799276 was still in progress at report time, so CI green was not claimed for the implementation source commit.
 - Branch is behind current main by 12 commits as observed by GitHub compare; no merge, rebase, or branch update was performed.
 
 BLOCKERS:
-none for this fixer task
+none for this implementation task
 
 NEXT_RECOMMENDED_AGENT:
 orchestrator
 
 FINAL_VERDICT:
-FIX_COMPLETE. The minimum rust-fmt cause from diagnostics was fixed inside gdrive-adapter scope. The source-fix commit triggered Component CI, but the workflow was still pending overall, so merge readiness must wait for orchestrator CI triage.
+SELF_ACCEPT_PENDING_CI. GDA-P4 implementation is complete inside gdrive-adapter scope and preserves the component contract/non-goals. The source implementation commit triggered Component CI, but the workflow was still pending overall, so the orchestrator must triage CI before assigning clean-code review or a fixer.
 
 PUSHED:
 yes
