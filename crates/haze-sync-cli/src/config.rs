@@ -252,7 +252,10 @@ impl SecretFile {
 
 impl fmt::Debug for SecretFile {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.debug_tuple("SecretFile").field(&REDACTED).finish()
+        formatter
+            .debug_tuple("SecretFile")
+            .field(&REDACTED)
+            .finish()
     }
 }
 
@@ -293,9 +296,10 @@ impl fmt::Debug for OsSecretRef {
 }
 
 /// Safe descriptor for where a token should be loaded from.
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Default, Eq, PartialEq)]
 pub enum TokenSource {
     /// No token source configured.
+    #[default]
     None,
     /// Read token from an environment variable in a future network phase.
     EnvVar(EnvVarName),
@@ -351,12 +355,6 @@ impl TokenSource {
     }
 }
 
-impl Default for TokenSource {
-    fn default() -> Self {
-        Self::None
-    }
-}
-
 impl fmt::Debug for TokenSource {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
@@ -368,7 +366,7 @@ impl fmt::Debug for TokenSource {
 }
 
 /// CLI-local config model for future network-backed commands.
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Default, Eq, PartialEq)]
 pub struct CliConfig {
     pub profile: ProfileName,
     pub server_url: Option<ServerUrl>,
@@ -397,17 +395,6 @@ impl CliConfig {
     #[must_use]
     pub fn safe_summary(&self) -> SafeConfigSummary<'_> {
         SafeConfigSummary { config: self }
-    }
-}
-
-impl Default for CliConfig {
-    fn default() -> Self {
-        Self {
-            profile: ProfileName::default(),
-            server_url: None,
-            output_format: OutputFormat::default(),
-            token_source: TokenSource::default(),
-        }
     }
 }
 
@@ -571,7 +558,8 @@ mod tests {
     #[test]
     fn invalid_config_errors_do_not_echo_raw_values() {
         let unsafe_server_url = concat!("post", "gres", "://", "operator@localhost/db");
-        let unsafe_file_path = concat!("C", ":", "\\", "Users", "\\", "operator", "\\", "token.txt");
+        let unsafe_file_path =
+            concat!("C", ":", "\\", "Users", "\\", "operator", "\\", "token.txt");
 
         let server_error = ServerUrl::parse(unsafe_server_url).unwrap_err().to_string();
         let token_error = TokenSource::parse("bearer:redacted-test-value")
