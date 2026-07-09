@@ -482,6 +482,117 @@ mod tests {
     }
 
     #[test]
+    fn missing_blob_is_reported_without_path_leakage() {
+        let root = TestRoot::new("missing-path-free");
+        let store = root.store();
+        let hash = hash_bytes(b"missing blob");
+
+        assert_eq!(store.stat(hash).unwrap(), None);
+        let error = store
+            .get_bytes(hash)
+            .expect_err("missing blob should fail to read");
+
+        assert_eq!(error.code(), "missing_blob");
+        assert_display_is_path_free(&error, root.path());
+    }
+
+    #[test]
+    fn corrupted_committed_blob_is_rejected_by_read_exists_and_stat() {
+        let root = TestRoot::new("corrupted-blob");
+        let store = root.store();
+        let bytes = b"verified bytes";
+        let hash = hash_bytes(bytes);
+
+        store
+            .put_bytes(hash, bytes)
+            .expect("initial put should succeed");
+        fs::write(store.blob_path(hash), b"corrupted bytes")
+            .expect("committed blob should be writable by test");
+
+        let get_error = store
+            .get_bytes(hash)
+            .expect_err("corrupted blob should fail read verification");
+        let exists_error = store
+            .exists(hash)
+            .expect_err("corrupted blob should fail exists verification");
+        let stat_error = store
+            .stat(hash)
+            .expect_err("corrupted blob should fail stat verification");
+
+        assert_eq!(get_error.code(), "stored_blob_hash_mismatch");
+        assert_eq!(exists_error.code(), "stored_blob_hash_mismatch");
+        assert_eq!(stat_error.code(), "stored_blob_hash_mismatch");
+        assert_display_is_path_free(&get_error, root.path());
+        assert_display_is_path_free(&stat_error, root.path());
+    }
+
+    #[test]
+    fn directory_at_blob_path_is_rejected_as_unexpected_object_type() {
+        let root = TestRoot::new("directory-at-blob");
+        let store = root.store();
+        let hash = hash_bytes(b"directory entry fixture");
+        let blob_path = store.blob_path(hash);
+
+        fs::create_dir_all(&blob_path).expect("test should create directory at blob path");
+
+        let stat_error = store
+            .stat(hash)
+            .expect_err("directory blob entry should be rejected by stat");
+        let exists_error = store
+            .exists(hash)
+            .expect_err("directory blob entry should be rejected by exists");
+
+        assert_eq!(stat_error.code(), "unexpected_object_store_entry_type");
+        assert_eq!(exists_error.code(), "unexpected_object_store_entry_type");
+        assert_display_is_path_free(&stat_error, root.path());
+    }
+
+    #[test]
+    fn failed_commit_removes_temp_blob() {
+        let root = TestRoot::new("failed-commit-cleanup");
+        let store = root.store();
+        let bytes = b"content that cannot be committed";
+        let hash = hash_bytes(bytes);
+        let blob_path = store.blob_path(hash);
+
+        fs::create_dir_all(&blob_path).expect("test should create directory at blob path");
+
+        let error = store
+            .put_bytes(hash, bytes)
+            .expect_err("non-file destination should fail commit");
+
+        assert_eq!(error.code(), "unexpected_object_store_entry_type");
+        assert!(temp_dir_is_empty(&store));
+        assert_display_is_path_free(&error, root.path());
+    }
+
+    #[test]
+    fn error_display_omits_paths_even_when_source_mentions_path() {
+        let root = TestRoot::new("display-path-free");
+        let hash = hash_bytes(b"display fixture");
+        let path_text = root.path().display().to_string();
+        let io_error = ObjectStoreError::io(
+            "test_operation",
+            io::Error::new(io::ErrorKind::Other, path_text.clone()),
+        );
+
+        for error in [
+            ObjectStoreError::HashMismatch {
+                expected: hash,
+                actual: hash_bytes(b"different fixture"),
+            },
+            ObjectStoreError::StoredBlobMismatch { hash },
+            ObjectStoreError::MissingBlob { hash },
+            ObjectStoreError::InvalidLayout,
+            ObjectStoreError::UnexpectedObjectType,
+            ObjectStoreError::AlreadyCommitted,
+            io_error,
+        ] {
+            assert_display_is_path_free(&error, root.path());
+        }
+    }
+
+    #[test]
     fn object_path_uses_sha256_prefix_layout() {
         let bytes = b"prefix layout fixture";
         let hash = hash_bytes(bytes);
@@ -526,5 +637,37 @@ mod tests {
         assert!(!store.exists(hash).unwrap());
         assert_eq!(store.get_bytes(hash).unwrap_err().code(), "missing_blob");
         assert!(!store.blob_path(hash).exists());
+    }
+
+    impl TestRoot {
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    fn temp_dir_is_empty(store: &LocalObjectStore) -> bool {
+        let temp_dir = store.temp_dir();
+        if !temp_dir.exists() {
+            return true;
+        }
+
+        fs::read_dir(temp_dir)
+            .expect("temp dir should be readable")
+            .next()
+            .is_none()
+    }
+
+    fn assert_display_is_path_free(error: &ObjectStoreError, root: &Path) {
+        let display = error.to_string();
+        let root_text = root.display().to_string();
+
+        assert!(
+            !display.contains(&root_text),
+            "object store error Display leaked root path: {display}"
+        );
+        assert!(
+            !display.contains(std::path::MAIN_SEPARATOR),
+            "object store error Display leaked a path-like separator: {display}"
+        );
     }
 }
