@@ -1,26 +1,21 @@
-# W1-FIX-WT-P4-CI — Worktree WT-P4 CI fix
+# W1-WT-P4C — Worktree import planner clean-code review
 
 Component: worktree
 Path: crates/haze-sync-worktree
 Branch: component/worktree
 PR: #49
-Role: fixer-worker
+Role: clean-code-reviewer
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-WT-P4 implementation completed, but Component CI for the code-bearing commit failed.
+WT-P4 implementation and CI fixer are complete. Post-fix Component CI is green.
 
 - workflow: Component CI
-- workflow_run_id: 29028324784
-- run_number: unknown
-- run_attempt: 1
-- artifact_id: 8202650036
-- artifact_name: ci-diag__component-worktree__wf-component-ci__run-29028324784__attempt-1
-- artifact_expires_at: 2026-07-10T15:11:04Z
-
-The implementation report observed cargo fmt/check/test/clippy step summaries as success but the diagnostics finalizer failed. The diagnostics artifact is the source of truth. Do not infer the root cause from step summaries alone.
+- workflow_run_id: 29034738311
+- run_number: 679
+- conclusion: success
 
 ## Read
 
@@ -28,7 +23,7 @@ Read before editing:
 
 - implementation-manifest.md from ChatGPT Project Sources
 - report-template.md from ChatGPT Project Sources
-- fixer-worker-prompt.md from ChatGPT Project Sources
+- clean-code-reviewer-prompt.md from ChatGPT Project Sources
 - chatgpt-gh-connector.md from ChatGPT Project Sources
 - crates/haze-sync-worktree/docs/component-contract.md
 - crates/haze-sync-worktree/docs/implementation-plan.md
@@ -38,22 +33,27 @@ Read before editing:
 - crates/haze-sync-worktree/control/report.md
 - relevant current repository code and PR diff
 
-Use the GitHub connector to download and read the diagnostics artifact listed above.
-
-Read summary.md, manifest.json, and every log listed in failed_checks.
-
-If the artifact is missing, expired, malformed, or unreadable, report FIX_BLOCKED_BY_LOGS.
+Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
 
 ## Task
 
-Fix the minimum cause of the WT-P4 CI failure inside worktree scope. Use the diagnostics artifact as source of truth.
+Review WT-P4 import planner and Core/API submission boundary plus the CI fixer.
 
-Expected recent changed area: WT-P4 import planner and abstract Core/API submission boundary.
+Focus areas:
+
+- local state comparison against last applied Core revision;
+- import plans for new, modified, and deleted local files;
+- base revision and explicit null-base handling;
+- stable-file-only content/hash inclusion;
+- abstract API/Core client trait boundary;
+- outcome handling for accepted, same-content, conflict-saved, rejected, tombstoned, and not-found;
+- local state updates only after accepted outcomes;
+- preservation of non-goals: no direct SQLx/Storage writes, no route handlers, no provider/GDrive behavior, no Worktree-owned conflict policy, no hard delete.
 
 ## Allowed files
 
 - crates/haze-sync-worktree/src/**
-- crates/haze-sync-worktree/docs/** only if the artifact proves a docs formatting failure
+- crates/haze-sync-worktree/docs/**
 - crates/haze-sync-worktree/control/report.md
 
 ## Forbidden changes
@@ -68,10 +68,10 @@ Expected recent changed area: WT-P4 import planner and abstract Core/API submiss
 
 ## CI trigger policy
 
-Follow the CI skip policy in implementation-manifest.md and fixer-worker-prompt.md. Product/source/docs fixer commits must not skip CI. A final report-only commit may skip CI.
+Follow the CI skip policy in implementation-manifest.md and clean-code-reviewer-prompt.md. Source/doc clean-code commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
 Write only the report to crates/haze-sync-worktree/control/report.md.
 
-Use report-template.md. Set REPORT_TYPE to FIX.
+Use report-template.md. Set REPORT_TYPE to CLEAN_CODE_REVIEW.
