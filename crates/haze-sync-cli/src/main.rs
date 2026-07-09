@@ -4,6 +4,7 @@ mod commands;
 mod config;
 mod doctor;
 mod output;
+mod server_api;
 
 fn main() -> ExitCode {
     let output = run_from_args(std::env::args());
@@ -23,6 +24,9 @@ where
 }
 
 fn render_command(command: commands::CliCommand) -> output::CliOutput {
+    let config = config::CliConfig::default();
+    let client = server_api::DeferredHttpClient;
+
     match command {
         commands::CliCommand::Help(commands::HelpTopic::Root) => {
             output::CliOutput::success(commands::usage())
@@ -30,13 +34,11 @@ fn render_command(command: commands::CliCommand) -> output::CliOutput {
         commands::CliCommand::Help(commands::HelpTopic::Doctor) => {
             output::CliOutput::success(doctor::usage())
         }
-        commands::CliCommand::Status => output::CliOutput::success(
-            "status command parsed; live server calls remain unavailable",
-        ),
-        commands::CliCommand::Adapters(commands::AdaptersCommand::List) => {
-            output::CliOutput::success(
-                "adapters list command parsed; live server calls remain unavailable",
-            )
+        commands::CliCommand::Status(command) => {
+            server_api::render_status_command(&config, command.mode, &client)
+        }
+        commands::CliCommand::Adapters(commands::AdaptersCommand::List { mode }) => {
+            server_api::render_adapters_command(&config, mode, &client)
         }
         commands::CliCommand::Doctor(command) => {
             let report = command.build_offline_report();
@@ -61,14 +63,34 @@ mod tests {
     use crate::output::CliExitCode;
 
     #[test]
-    fn status_writes_summary_to_stdout() {
+    fn status_writes_not_configured_summary_to_stdout() {
         let output = run_from_args(["haze-sync", "status"]);
 
         assert_eq!(output.exit_code, CliExitCode::Success);
-        assert_eq!(
-            output.stdout,
-            "status command parsed; live server calls remain unavailable"
-        );
+        assert!(output.stdout.contains("status: not_configured"));
+        assert!(output.stdout.contains("server_url: unset"));
+        assert!(output.stdout.contains("live server calls: not attempted"));
+        assert!(output.stderr.is_empty());
+    }
+
+    #[test]
+    fn status_offline_writes_offline_summary_to_stdout() {
+        let output = run_from_args(["haze-sync", "status", "--offline"]);
+
+        assert_eq!(output.exit_code, CliExitCode::Success);
+        assert!(output.stdout.contains("status: offline"));
+        assert!(output.stdout.contains("live server calls: not attempted"));
+        assert!(output.stderr.is_empty());
+    }
+
+    #[test]
+    fn adapters_list_writes_not_configured_summary_to_stdout() {
+        let output = run_from_args(["haze-sync", "adapters", "list"]);
+
+        assert_eq!(output.exit_code, CliExitCode::Success);
+        assert!(output.stdout.contains("adapters: not_configured"));
+        assert!(output.stdout.contains("server_url: unset"));
+        assert!(output.stdout.contains("live server calls: not attempted"));
         assert!(output.stderr.is_empty());
     }
 
