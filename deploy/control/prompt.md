@@ -1,4 +1,4 @@
-# W1-DEP-P3C — Deployment server packaging clean-code review
+# W1-DEP-P3C-RERUN — Deployment server packaging clean-code review
 
 Component: deployment
 Path: deploy
@@ -10,9 +10,11 @@ Work only through the GitHub connector. Do not use SSH. Do not use local git. Do
 
 ## Context
 
-DEP-P3 implementation completed with SELF_ACCEPT_PENDING_CI.
+This is an explicit rerun of the DEP-P3 clean-code review control slot because the previous persistent worker chat did not write a DEP-P3C clean-code report.
 
-The implementation report says Deployment added server container packaging and local service wiring inside deployment scope:
+The current deploy/control/report.md is still a DEP-P3 implementation report with STATUS SELF_ACCEPT_PENDING_CI, not a DEP-P3C clean-code report. Therefore this prompt is active and not already completed.
+
+DEP-P3 implementation report says Deployment added server packaging and local service wiring inside deployment scope:
 
 - deploy/server.Dockerfile
 - deploy/docker-compose.yml server service
@@ -21,7 +23,7 @@ The implementation report says Deployment added server container packaging and l
 - healthcheck using accepted Server /health behavior
 - local compose/runbook documentation
 
-Orchestrator has not yet confirmed a completed green CI run for the DEP-P3 code-bearing commit. Treat CI as pending or unknown unless you observe a completed green run through GitHub connector metadata.
+Orchestrator has not confirmed a completed green CI run for the DEP-P3 code-bearing commit. Treat CI as pending or unknown unless you observe a completed green run through GitHub connector metadata.
 
 ## Read
 
