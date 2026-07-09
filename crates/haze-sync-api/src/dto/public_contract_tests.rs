@@ -43,10 +43,7 @@ fn shared_enum_vocabulary_is_snake_case_and_stable() {
     assert_json_string(&CommonResponseStatus::SameContent, "same_content");
     assert_json_string(&CommonResponseStatus::ConflictSaved, "conflict_saved");
     assert_json_string(&CommonResponseStatus::Tombstoned, "tombstoned");
-    assert_json_string(
-        &CommonResponseStatus::TombstoneCreated,
-        "tombstone_created",
-    );
+    assert_json_string(&CommonResponseStatus::TombstoneCreated, "tombstone_created");
     assert_json_string(&CommonResponseStatus::NotFound, "not_found");
     assert_json_string(&CommonResponseStatus::ValidationError, "validation_error");
     assert_json_string(&CommonResponseStatus::Unauthorized, "unauthorized");
@@ -356,7 +353,10 @@ fn delete_file_outcomes_roundtrip_tombstone_guard_vocabulary() {
         &DeleteRejectedReasonDto::IdempotencyConflict,
         "idempotency_conflict",
     );
-    assert_json_string(&DeleteRejectedReasonDto::ValidationError, "validation_error");
+    assert_json_string(
+        &DeleteRejectedReasonDto::ValidationError,
+        "validation_error",
+    );
 
     for response in responses {
         assert_roundtrip(&response);
@@ -475,7 +475,10 @@ fn public_error_json_uses_safe_codes_and_sanitized_details_only() {
     assert_json_string(&PublicErrorCode::ForbiddenRole, "forbidden_role");
     assert_json_string(&PublicErrorCode::NotFound, "not_found");
     assert_json_string(&PublicErrorCode::Conflict, "conflict");
-    assert_json_string(&PublicErrorCode::IdempotencyConflict, "idempotency_conflict");
+    assert_json_string(
+        &PublicErrorCode::IdempotencyConflict,
+        "idempotency_conflict",
+    );
     assert_json_string(&PublicErrorCode::PayloadTooLarge, "payload_too_large");
     assert_json_string(&PublicErrorCode::RateLimited, "rate_limited");
     assert_json_string(&PublicErrorCode::UnsafeDelete, "unsafe_delete");
