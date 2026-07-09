@@ -98,7 +98,8 @@ mod tests {
         let input = NewContentBlob {
             sha256: hash,
             size_bytes: 42,
-            object_store_path: "sha256/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            object_store_path:
+                "sha256/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         };
 
         assert_eq!(
