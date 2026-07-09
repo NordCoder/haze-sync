@@ -33,9 +33,8 @@ impl fmt::Display for StateError {
                 formatter,
                 "cursor regression rejected: current={current}, attempted={attempted}"
             ),
-            Self::DirectDatabaseAccessNotAccepted => formatter.write_str(
-                "direct database access is not accepted for gdrive-adapter state",
-            ),
+            Self::DirectDatabaseAccessNotAccepted => formatter
+                .write_str("direct database access is not accepted for gdrive-adapter state"),
         }
     }
 }
@@ -84,7 +83,9 @@ impl VaultPath {
             return Err(StateError::InvalidVaultPath("path must be vault-relative"));
         }
         if trimmed.contains('\\') {
-            return Err(StateError::InvalidVaultPath("path must use forward slashes"));
+            return Err(StateError::InvalidVaultPath(
+                "path must use forward slashes",
+            ));
         }
         if trimmed
             .split('/')
@@ -417,7 +418,10 @@ impl EchoGuard {
     }
 
     pub fn decision_for(&self, observation: &DriveEchoObservation) -> EchoDecision {
-        let Some(entry) = self.entries_by_drive_file_id.get(&observation.drive_file_id) else {
+        let Some(entry) = self
+            .entries_by_drive_file_id
+            .get(&observation.drive_file_id)
+        else {
             return EchoDecision::AcceptRemoteChange;
         };
 
@@ -441,7 +445,9 @@ impl EchoGuard {
     }
 
     pub fn expire(&mut self, drive_file_id: &str) -> bool {
-        self.entries_by_drive_file_id.remove(drive_file_id).is_some()
+        self.entries_by_drive_file_id
+            .remove(drive_file_id)
+            .is_some()
     }
 
     pub fn len(&self) -> usize {
@@ -492,10 +498,7 @@ impl Default for StatePersistencePolicy {
     }
 }
 
-fn required_string(
-    field: &'static str,
-    raw: impl Into<String>,
-) -> Result<String, StateError> {
+fn required_string(field: &'static str, raw: impl Into<String>) -> Result<String, StateError> {
     let value = raw.into();
     let trimmed = value.trim();
     if trimmed.is_empty() {
@@ -521,21 +524,21 @@ mod tests {
 
     #[test]
     fn mapping_tracks_drive_core_and_delete_candidate_state() {
-        let mut mapping =
-            GDriveMapping::new(VaultPath::new("notes/plan.md").expect("path"), "drive-1", "root", "plan.md")
-                .expect("mapping");
-        let drive_observation = DriveStateObservation::new(
+        let mut mapping = GDriveMapping::new(
+            VaultPath::new("notes/plan.md").expect("path"),
             "drive-1",
             "root",
             "plan.md",
-            ts("2026-07-09T12:00:00Z"),
         )
-        .expect("drive observation")
-        .with_checksum("checksum-1")
-        .expect("checksum")
-        .with_drive_version("drive-version-1")
-        .expect("drive version")
-        .with_drive_modified_time(ts("2026-07-09T11:59:00Z"));
+        .expect("mapping");
+        let drive_observation =
+            DriveStateObservation::new("drive-1", "root", "plan.md", ts("2026-07-09T12:00:00Z"))
+                .expect("drive observation")
+                .with_checksum("checksum-1")
+                .expect("checksum")
+                .with_drive_version("drive-version-1")
+                .expect("drive version")
+                .with_drive_modified_time(ts("2026-07-09T11:59:00Z"));
 
         mapping.record_drive_observation(drive_observation);
         mapping.record_import(
@@ -607,9 +610,13 @@ mod tests {
 
     #[test]
     fn echo_guard_suppresses_adapter_echo_and_accepts_real_remote_change() {
-        let mut mapping =
-            GDriveMapping::new(VaultPath::new("notes/plan.md").expect("path"), "drive-1", "root", "plan.md")
-                .expect("mapping");
+        let mut mapping = GDriveMapping::new(
+            VaultPath::new("notes/plan.md").expect("path"),
+            "drive-1",
+            "root",
+            "plan.md",
+        )
+        .expect("mapping");
         mapping.checksum = Some("exported-checksum".to_owned());
         mapping.drive_version = Some("exported-version".to_owned());
         mapping.record_export(
@@ -619,8 +626,7 @@ mod tests {
 
         let mut guard = EchoGuard::new();
         guard.record_exported_write(
-            EchoGuardEntry::from_mapping(&mapping, ts("2026-07-09T12:00:00Z"))
-                .expect("echo entry"),
+            EchoGuardEntry::from_mapping(&mapping, ts("2026-07-09T12:00:00Z")).expect("echo entry"),
         );
 
         let adapter_echo = DriveEchoObservation::new("drive-1")
