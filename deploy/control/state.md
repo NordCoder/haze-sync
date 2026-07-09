@@ -20,3 +20,5 @@ ci_run_number: 413
 ci_run_attempt: 1
 known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
+ci_retrigger_nonce: 20260709T091500Z-deployment
+ci_retrigger_reason: prior_worker_commits_used_ci_skip
