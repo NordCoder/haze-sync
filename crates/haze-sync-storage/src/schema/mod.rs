@@ -124,7 +124,10 @@ mod tests {
             let previous = migration_prefix(pair[0]);
             let next = migration_prefix(pair[1]);
 
-            assert!(previous < next, "migration filenames must be strictly ordered");
+            assert!(
+                previous < next,
+                "migration filenames must be strictly ordered"
+            );
         }
     }
 
