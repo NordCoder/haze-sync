@@ -6,23 +6,17 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-core/control/prompt.md
 active_report: crates/haze-sync-core/control/report.md
-active_agent_role: fixer-worker
+active_agent_role: implementation-worker
 
 wave: W1
-phase: FIX-CORE-CI
+phase: CORE-P3
 
-implementation_status: SELF_ACCEPT_PENDING_CI
-clean_review_status: CLEAN_ACCEPT_PENDING_CI
-ci_status: CI_RED
+implementation_status: PENDING
+clean_review_status: NOT_STARTED
+ci_status: CI_GREEN
 ci_workflow: Component CI
-ci_run_id: 29003582305
-ci_run_number: 404
+ci_run_id: 29006893977
+ci_run_number: 456
 ci_run_attempt: 1
-ci_artifact_id: 8192586969
-ci_artifact_name: ci-diag__component-core__wf-component-ci__run-29003582305__attempt-1
-ci_artifact_expires_at: 2026-07-10T08:07:10Z
-known_failed_checks:
-- rust-fmt
+known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
-ci_retrigger_nonce: 20260709T091500Z-core
-ci_retrigger_reason: prior_worker_commits_used_ci_skip
