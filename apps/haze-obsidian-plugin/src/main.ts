@@ -193,60 +193,73 @@ export default class HazeSyncPlugin extends Plugin {
       return;
     }
 
+    if (this.settings.syncMode === "disabled" || this.settings.syncMode === "push_only") {
+      this.refreshSettingsStatus(validation);
+      this.statusReporter?.notice("Remote pull is disabled by the current sync mode.", "warning");
+      return;
+    }
+
     const observedAt = new Date().toISOString();
     this.remoteSyncState = markRemotePullStarted(this.remoteSyncState, observedAt);
 
-    const client = HazeSyncApiClient.fromSettings(this.settings);
-    const response = await fetchRemoteChangePage(client, this.remoteSyncState, { limit: 50 });
     let applied = 0;
     let conflicts = 0;
     let tombstones = 0;
     let noOps = 0;
 
-    for (const change of response.changes) {
-      const download = change.kind === "upsert" ? await client.getFile(change.path) : undefined;
-      const result = await materializeRemoteChange({
-        vault: this.app.vault,
-        change,
-        download,
-        baseRevisionState: this.baseRevisionState,
-        remoteSyncState: this.remoteSyncState,
-        observedAt,
-        echoSuppressor: this.remoteEchoSuppressor,
-      });
+    try {
+      const client = HazeSyncApiClient.fromSettings(this.settings);
+      const response = await fetchRemoteChangePage(client, this.remoteSyncState, { limit: 50 });
 
-      this.baseRevisionState = result.baseRevisionState;
-      this.remoteSyncState = result.remoteSyncState;
+      for (const change of response.changes) {
+        const download = change.kind === "upsert" ? await client.getFile(change.path) : undefined;
+        const result = await materializeRemoteChange({
+          vault: this.app.vault,
+          change,
+          download,
+          baseRevisionState: this.baseRevisionState,
+          remoteSyncState: this.remoteSyncState,
+          observedAt,
+          echoSuppressor: this.remoteEchoSuppressor,
+        });
 
-      switch (result.status) {
-        case "applied":
-          applied += 1;
-          break;
-        case "conflict_queued":
-          conflicts += 1;
-          await this.persistPluginData();
-          this.refreshSettingsStatus();
-          this.statusReporter?.notice(
-            `Remote pull stopped: queued conflict for ${result.path}. Local file was preserved.`,
-            "warning",
-          );
-          return;
-        case "no_op":
-          noOps += 1;
-          break;
-        case "tombstone_recorded":
-          tombstones += 1;
-          break;
+        this.baseRevisionState = result.baseRevisionState;
+        this.remoteSyncState = result.remoteSyncState;
+
+        switch (result.status) {
+          case "applied":
+            applied += 1;
+            break;
+          case "conflict_queued":
+            conflicts += 1;
+            await this.persistPluginData();
+            this.refreshSettingsStatus();
+            this.statusReporter?.notice(
+              `Remote pull stopped: queued conflict for ${result.path}. Local file was preserved.`,
+              "warning",
+            );
+            return;
+          case "no_op":
+            noOps += 1;
+            break;
+          case "tombstone_recorded":
+            tombstones += 1;
+            break;
+        }
       }
-    }
 
-    await this.persistPluginData();
-    this.refreshSettingsStatus();
-    const moreText = response.has_more ? " More remote changes are available; run pull again." : "";
-    this.statusReporter?.notice(
-      `Remote pull complete: ${applied} applied, ${noOps} already current, ${tombstones} tombstone(s), ${conflicts} conflict(s).${moreText}`,
-      conflicts === 0 ? "success" : "warning",
-    );
+      await this.persistPluginData();
+      this.refreshSettingsStatus();
+      const moreText = response.has_more ? " More remote changes are available; run pull again." : "";
+      this.statusReporter?.notice(
+        `Remote pull complete: ${applied} applied, ${noOps} already current, ${tombstones} tombstone(s), ${conflicts} conflict(s).${moreText}`,
+        conflicts === 0 ? "success" : "warning",
+      );
+    } catch {
+      await this.persistPluginData();
+      this.refreshSettingsStatus();
+      this.statusReporter?.notice("Remote pull failed safely. Local files were preserved and cursor was not advanced for the failed change.", "warning");
+    }
   }
 
   private recordVaultEventHint(file: TAbstractFile, kind: PendingChangeKind, pathOverride?: string): void {
