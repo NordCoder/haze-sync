@@ -172,10 +172,7 @@ mod tests {
     fn doctor_command_parses_through_top_level_model() {
         let command = parse_cli(["haze-sync", "doctor", "--offline"]).unwrap();
 
-        assert_eq!(
-            command,
-            CliCommand::Doctor(DoctorCommand { offline: true })
-        );
+        assert_eq!(command, CliCommand::Doctor(DoctorCommand { offline: true }));
     }
 
     #[test]
@@ -198,8 +195,8 @@ mod tests {
 
     #[test]
     fn parser_rejects_unscoped_network_arguments() {
-        let error = parse_cli(["haze-sync", "status", "--server", "https://example.test"])
-            .unwrap_err();
+        let error =
+            parse_cli(["haze-sync", "status", "--server", "https://example.test"]).unwrap_err();
 
         assert_eq!(error, CliParseError::UnexpectedArgument);
     }
