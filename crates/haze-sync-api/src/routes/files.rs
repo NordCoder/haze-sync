@@ -377,7 +377,10 @@ pub fn ignored_same_content_response(path: VaultPath) -> PutFileResponse {
 }
 
 #[must_use]
-pub fn rejected_upload_response(path: VaultPath, reason: FileRejectedReasonDto) -> PutFileResponse {
+pub fn rejected_upload_response(
+    path: VaultPath,
+    reason: FileRejectedReasonDto,
+) -> PutFileResponse {
     PutFileResponse::Rejected {
         reason,
         path: VaultPathDto::from(path),
@@ -439,7 +442,9 @@ fn parse_required_content_hash(value: Option<&str>) -> Result<ContentHash, FileR
         .map_err(|_| FileRouteError::InvalidContentSha256)
 }
 
-fn parse_required_base_revision(value: Option<&str>) -> Result<Option<RevisionId>, FileRouteError> {
+fn parse_required_base_revision(
+    value: Option<&str>,
+) -> Result<Option<RevisionId>, FileRouteError> {
     let value = value.ok_or(FileRouteError::MissingRequiredHeader {
         header: X_BASE_REVISION_ID_HEADER,
     })?;
@@ -468,7 +473,7 @@ fn detail(field: impl Into<String>, value: impl Into<String>) -> SafeErrorDetail
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::auth::{AdapterRole, AdapterPrincipal};
+    use crate::auth::{AdapterPrincipal, AdapterRole};
 
     fn principal() -> AdapterPrincipal {
         AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap()
