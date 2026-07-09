@@ -116,6 +116,11 @@ fn id_fixtures_have_required_prefixes() {
 }
 
 #[test]
+fn body_content_hash_matches_core_hash() {
+    assert_eq!(body_content_hash(b"hello"), compute_content_hash(b"hello"));
+}
+
+#[test]
 fn put_new_file_accepted_and_get_latest_returns_same_bytes_hash() {
     let (store, root) = temp_store("new-file");
     let request = parsed_request_with_body("Notes/a.md", None, b"hello");
@@ -451,7 +456,7 @@ fn invalid_headers_or_paths_map_to_safe_errors() {
 }
 
 #[test]
-fn request_fingerprint_uses_safe_metadata_not_body() {
+fn request_fingerprint_changes_when_body_differs_from_declared_hash() {
     let hash = compute_content_hash(b"hello").to_string();
     let first = parsed_request("Notes/a.md", Some("rev_current"), &hash);
     let second = parse_put_file_request(PutFileRouteRequestParts {
@@ -459,13 +464,13 @@ fn request_fingerprint_uses_safe_metadata_not_body() {
         idempotency_key: Some("test-key"),
         content_sha256: Some(&hash),
         base_revision_id: Some("rev_current"),
-        body: b"different body would already fail hash verification".to_vec(),
+        body: b"different body would fail hash verification".to_vec(),
         max_upload_bytes: Some(MAX_UPLOAD_BYTES),
     })
     .unwrap();
     let principal = AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap();
 
-    assert_eq!(
+    assert_ne!(
         request_fingerprint(&first, &principal),
         request_fingerprint(&second, &principal)
     );
