@@ -247,14 +247,67 @@ mod tests {
     }
 
     #[test]
+    fn typed_ids_reject_missing_wrong_or_case_mismatched_prefixes() {
+        for input in ["01JTEST", "op_01JTEST", "conf_01JTEST", "REV_01JTEST"] {
+            assert_eq!(
+                RevisionId::parse(input).unwrap_err(),
+                ValidationError::InvalidIdentifierPrefix,
+                "input={input:?}"
+            );
+        }
+
+        for input in ["01JTEST", "rev_01JTEST", "conf_01JTEST", "OP_01JTEST"] {
+            assert_eq!(
+                OperationId::parse(input).unwrap_err(),
+                ValidationError::InvalidIdentifierPrefix,
+                "input={input:?}"
+            );
+        }
+
+        for input in ["01JTEST", "rev_01JTEST", "op_01JTEST", "CONF_01JTEST"] {
+            assert_eq!(
+                ConflictId::parse(input).unwrap_err(),
+                ValidationError::InvalidIdentifierPrefix,
+                "input={input:?}"
+            );
+        }
+    }
+
+    #[test]
     fn identifiers_accept_documented_safe_characters() {
         let adapter_id = AdapterId::parse("worktree-adapter_01.alpha").unwrap();
         assert_eq!(adapter_id.as_str(), "worktree-adapter_01.alpha");
+
+        let revision_id = RevisionId::parse("rev_ABC-xyz.012_345").unwrap();
+        assert_eq!(revision_id.as_str(), "rev_ABC-xyz.012_345");
+        let operation_id = OperationId::parse("op_ABC-xyz.012_345").unwrap();
+        assert_eq!(operation_id.as_str(), "op_ABC-xyz.012_345");
+        let conflict_id = ConflictId::parse("conf_ABC-xyz.012_345").unwrap();
+        assert_eq!(conflict_id.as_str(), "conf_ABC-xyz.012_345");
+    }
+
+    #[test]
+    fn adapter_id_can_carry_configured_names_that_resemble_typed_ids() {
+        for input in ["rev_01JTEST", "op_01JTEST", "conf_01JTEST"] {
+            let adapter_id = AdapterId::parse(input).unwrap();
+            assert_eq!(adapter_id.as_str(), input);
+        }
     }
 
     #[test]
     fn identifiers_reject_unsafe_values() {
-        let invalid_cases = ["", "bad/path", "bad id", "bad:id", "bad\0id", "ümlaut"];
+        let invalid_cases = [
+            "",
+            "bad/path",
+            "bad id",
+            "bad:id",
+            "bad id",
+            "ümlaut",
+            "bad@id",
+            "bad#id",
+            "bad?id",
+            "bad%id",
+        ];
 
         for input in invalid_cases {
             assert_eq!(
@@ -266,13 +319,53 @@ mod tests {
     }
 
     #[test]
-    fn identifiers_reject_values_over_maximum_length() {
-        let max_len = "a".repeat(MAX_IDENTIFIER_LEN);
-        let too_long = "a".repeat(MAX_IDENTIFIER_LEN + 1);
+    fn typed_ids_reject_unsafe_values_before_prefix_classification() {
+        for input in ["rev_bad/id", "op_bad id", "conf_bad id"] {
+            let error = if input.starts_with("rev_") {
+                RevisionId::parse(input).unwrap_err()
+            } else if input.starts_with("op_") {
+                OperationId::parse(input).unwrap_err()
+            } else {
+                ConflictId::parse(input).unwrap_err()
+            };
+            assert_eq!(error, ValidationError::InvalidIdentifier, "input={input:?}");
+        }
+    }
 
-        assert!(AdapterId::parse(&max_len).is_ok());
+    #[test]
+    fn identifiers_enforce_total_maximum_length() {
+        let adapter_max = "a".repeat(MAX_IDENTIFIER_LEN);
+        let adapter_too_long = "a".repeat(MAX_IDENTIFIER_LEN + 1);
+        assert!(AdapterId::parse(&adapter_max).is_ok());
         assert_eq!(
-            AdapterId::parse(&too_long).unwrap_err(),
+            AdapterId::parse(&adapter_too_long).unwrap_err(),
+            ValidationError::InvalidIdentifier
+        );
+
+        let revision_max = format!("rev_{}", "a".repeat(MAX_IDENTIFIER_LEN - "rev_".len()));
+        let revision_too_long = format!("rev_{}", "a".repeat(MAX_IDENTIFIER_LEN + 1 - "rev_".len()));
+        assert_eq!(revision_max.len(), MAX_IDENTIFIER_LEN);
+        assert!(RevisionId::parse(&revision_max).is_ok());
+        assert_eq!(
+            RevisionId::parse(&revision_too_long).unwrap_err(),
+            ValidationError::InvalidIdentifier
+        );
+
+        let operation_max = format!("op_{}", "a".repeat(MAX_IDENTIFIER_LEN - "op_".len()));
+        let operation_too_long = format!("op_{}", "a".repeat(MAX_IDENTIFIER_LEN + 1 - "op_".len()));
+        assert_eq!(operation_max.len(), MAX_IDENTIFIER_LEN);
+        assert!(OperationId::parse(&operation_max).is_ok());
+        assert_eq!(
+            OperationId::parse(&operation_too_long).unwrap_err(),
+            ValidationError::InvalidIdentifier
+        );
+
+        let conflict_max = format!("conf_{}", "a".repeat(MAX_IDENTIFIER_LEN - "conf_".len()));
+        let conflict_too_long = format!("conf_{}", "a".repeat(MAX_IDENTIFIER_LEN + 1 - "conf_".len()));
+        assert_eq!(conflict_max.len(), MAX_IDENTIFIER_LEN);
+        assert!(ConflictId::parse(&conflict_max).is_ok());
+        assert_eq!(
+            ConflictId::parse(&conflict_too_long).unwrap_err(),
             ValidationError::InvalidIdentifier
         );
     }
@@ -316,5 +409,7 @@ mod tests {
     fn serde_rejects_invalid_identifier_values() {
         assert!(serde_json::from_str::<AdapterId>("\"bad/path\"").is_err());
         assert!(serde_json::from_str::<RevisionId>("\"01JTEST\"").is_err());
+        assert!(serde_json::from_str::<OperationId>("\"rev_01JTEST\"").is_err());
+        assert!(serde_json::from_str::<ConflictId>("\"op_01JTEST\"").is_err());
     }
 }
