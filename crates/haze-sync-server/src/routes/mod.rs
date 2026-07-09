@@ -394,16 +394,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn conflict_list_route_is_wired_without_storage_mutation() {
+    async fn conflict_list_route_reports_missing_storage_without_mutation() {
         let state = static_principal_state();
         let (status, json) =
             request_json_with_state(state, "GET", "/v1/conflicts?status=open", Body::empty()).await;
 
-        assert_eq!(status, StatusCode::OK);
-        assert_eq!(json["conflicts"], serde_json::json!([]));
-        assert!(!json.to_string().contains("postgres://"));
-        assert!(!json.to_string().contains("secret"));
-        assert!(!json.to_string().contains("/srv/"));
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(json["error"]["code"], "internal_error");
+        assert_no_sensitive_route_output(&json, &[]);
     }
 
     #[tokio::test]
