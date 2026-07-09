@@ -48,6 +48,7 @@ export interface RemotePullOptions {
 
 export class RemoteEchoSuppressor {
   private readonly suppressedPaths = new Set<string>();
+  private readonly cleanupTimers = new Map<string, number>();
 
   isSuppressed(path: string): boolean {
     return this.suppressedPaths.has(path);
@@ -55,12 +56,32 @@ export class RemoteEchoSuppressor {
 
   async suppressWhile<T>(path: string, action: () => Promise<T>): Promise<T> {
     this.suppressedPaths.add(path);
+    this.clearCleanupTimer(path);
+
     try {
       return await action();
     } finally {
-      setTimeout(() => {
+      const timer = window.setTimeout(() => {
         this.suppressedPaths.delete(path);
-      }, 0);
+        this.cleanupTimers.delete(path);
+      }, 5_000);
+      this.cleanupTimers.set(path, timer);
+    }
+  }
+
+  dispose(): void {
+    for (const timer of this.cleanupTimers.values()) {
+      window.clearTimeout(timer);
+    }
+    this.cleanupTimers.clear();
+    this.suppressedPaths.clear();
+  }
+
+  private clearCleanupTimer(path: string): void {
+    const existingTimer = this.cleanupTimers.get(path);
+    if (existingTimer !== undefined) {
+      window.clearTimeout(existingTimer);
+      this.cleanupTimers.delete(path);
     }
   }
 }
@@ -78,6 +99,10 @@ export async function fetchRemoteChangePage(
 
 export function markRemotePullStarted(state: RemoteSyncState, observedAt: string): RemoteSyncState {
   return markRemotePullAttempt(state, observedAt);
+}
+
+export function remoteChangeNeedsDownload(change: ChangeDto): boolean {
+  return change.kind === "upsert" && classifyVaultPath(change.path).included;
 }
 
 export async function materializeRemoteChange(input: RemoteMaterializationInput): Promise<RemoteMaterializationResult> {
