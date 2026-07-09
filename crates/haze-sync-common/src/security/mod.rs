@@ -113,6 +113,9 @@ mod tests {
 
         assert!(secret.is_empty());
         assert_eq!(secret.to_string(), REDACTED);
-        assert_eq!(format!("{secret:?}"), format!("SecretString(\"{REDACTED}\")"));
+        assert_eq!(
+            format!("{secret:?}"),
+            format!("SecretString(\"{REDACTED}\")")
+        );
     }
 }
