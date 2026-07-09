@@ -56,6 +56,35 @@ Affected contracts:
 - CLI adapter commands;
 - Worktree/GDrive/Obsidian adapter behavior.
 
+## 2026-07-09 — ReadonlyAgent remains a V1 adapter role
+
+Decision:
+
+`readonly_agent` remains in the V1 `AdapterRole` vocabulary. It represents non-mutating agent/client integrations that need a stable shared role label, but it does not grant permissions by itself.
+
+Rationale:
+
+Several runtime surfaces may need to identify read-only agent-like clients without duplicating role strings. Removing or renaming the role during common hardening would be a breaking role-vocabulary change and would not improve runtime authorization, because enforcement is not owned by `common`.
+
+Alternatives:
+
+- Remove `readonly_agent` until a concrete runtime integration requires it.
+- Rename it to `read_only_agent`.
+- Move agent roles out of common and into Server/API.
+
+Consequences:
+
+- Server/API/adapters may map `readonly_agent` to their own non-mutating permissions.
+- Any future rename or removal requires an explicit contract change and downstream compatibility review.
+- Common continues to validate and carry the role only; it does not enforce authorization.
+
+Affected contracts:
+
+- API auth/header contracts;
+- Server runtime auth;
+- CLI adapter commands;
+- agent/client integrations.
+
 ## 2026-07-05 — Common validates paths but does not own provider normalization
 
 Decision:
@@ -204,6 +233,36 @@ Affected contracts:
 - Server auth;
 - API auth helpers;
 - CLI token-related commands;
+- GDrive/Obsidian token handling.
+
+## 2026-07-09 — No additional redaction wrappers during CMM-P5
+
+Decision:
+
+`common` does not add separate token-hash, public-label, or operational-redaction wrappers during CMM-P5. `SecretString` remains the only common-owned security wrapper.
+
+Rationale:
+
+Additional wrappers need concrete downstream semantics: whether the value is secret, public-safe, irreversible, user-facing, log-safe, or suitable for API output. Adding speculative wrappers would blur ownership between Common, Server/API security code, CLI display code, and storage/audit components.
+
+Alternatives:
+
+- Add a token-hash wrapper to common.
+- Add a generic redacted display wrapper for public labels.
+- Move `SecretString` out of common.
+
+Consequences:
+
+- Downstream components may define component-local wrappers when their semantics are local.
+- A future shared wrapper can be added by explicit contract change once multiple components require the same behavior.
+- Common remains limited to in-memory redaction-by-formatting and explicit sensitive accessors.
+
+Affected contracts:
+
+- Server auth;
+- API auth helpers;
+- CLI token-related commands;
+- audit/log display code;
 - GDrive/Obsidian token handling.
 
 ## 2026-07-05 — ID generation remains outside common
