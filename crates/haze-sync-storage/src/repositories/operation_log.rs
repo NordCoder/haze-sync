@@ -231,7 +231,7 @@ impl OperationLogRepository {
         validate_sequence(since)?;
         validate_limit(limit)?;
 
-        let mut rows = sqlx::query(
+        let rows = sqlx::query(
             "select \
                  operation_log.seq, \
                  operation_log.op_id, \
@@ -257,19 +257,27 @@ impl OperationLogRepository {
         .await
         .map_err(map_sqlx_error)?;
 
-        let has_more = rows.len() > limit as usize;
-        if has_more {
-            rows.truncate(limit as usize);
-        }
+        Ok(change_feed_page_from_rows(since, limit, rows))
+    }
+}
 
-        let to_seq = rows.last().map_or(since, |row| row.seq);
+fn change_feed_page_from_rows(
+    since: i64,
+    limit: u32,
+    mut rows: Vec<ChangeFeedRow>,
+) -> ChangeFeedPage {
+    let has_more = rows.len() > limit as usize;
+    if has_more {
+        rows.truncate(limit as usize);
+    }
 
-        Ok(ChangeFeedPage {
-            from_seq: since,
-            to_seq,
-            has_more,
-            changes: rows,
-        })
+    let to_seq = rows.last().map_or(since, |row| row.seq);
+
+    ChangeFeedPage {
+        from_seq: since,
+        to_seq,
+        has_more,
+        changes: rows,
     }
 }
 
@@ -335,5 +343,241 @@ mod tests {
             OperationKindName::from_str("overwrite_file"),
             Err(RepositoryError::InvalidOperationKind)
         );
+    }
+
+    #[test]
+    fn append_entry_carries_revision_metadata_without_policy_outcome() {
+        let path = VaultPath::parse("Notes/today.md").unwrap();
+        let revision_id = RevisionId::parse("rev_01JSTORP5").unwrap();
+        let entry = AppendOperationLogEntry {
+            op_id: OperationId::parse("op_01JSTORP5").unwrap(),
+            adapter_id: AdapterId::parse("worktree-adapter").unwrap(),
+            kind: OperationKindName::UpsertFile,
+            path: path.clone(),
+            revision_id: Some(revision_id.clone()),
+            tombstone_id: None,
+            conflict_id: None,
+        };
+
+        assert_eq!(entry.kind.as_str(), "upsert_file");
+        assert_eq!(entry.path, path);
+        assert_eq!(entry.revision_id.as_ref(), Some(&revision_id));
+        assert!(entry.tombstone_id.is_none());
+        assert!(entry.conflict_id.is_none());
+    }
+
+    #[test]
+    fn change_feed_page_uses_one_sentinel_row_for_has_more() {
+        let page = change_feed_page_from_rows(10, 2, vec![change(11), change(12), change(13)]);
+
+        assert_eq!(page.from_seq, 10);
+        assert_eq!(page.to_seq, 12);
+        assert!(page.has_more);
+        assert_eq!(page.changes.len(), 2);
+        assert_eq!(page.changes[0].seq, 11);
+        assert_eq!(page.changes[1].seq, 12);
+    }
+
+    #[test]
+    fn empty_change_feed_page_keeps_cursor_at_requested_sequence() {
+        let page = change_feed_page_from_rows(10, 5, Vec::new());
+
+        assert_eq!(page.from_seq, 10);
+        assert_eq!(page.to_seq, 10);
+        assert!(!page.has_more);
+        assert!(page.changes.is_empty());
+    }
+
+    fn change(seq: i64) -> ChangeFeedRow {
+        ChangeFeedRow {
+            seq,
+            op_id: format!("op_01JSTORP5{seq}"),
+            adapter_id: "worktree-adapter".to_owned(),
+            kind: OperationKindName::UpsertFile.as_str().to_owned(),
+            path: "Notes/today.md".to_owned(),
+            revision_id: Some(format!("rev_01JSTORP5{seq}")),
+            content_sha256: Some("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_owned()),
+            size_bytes: Some(42),
+            tombstone_id: None,
+            conflict_id: None,
+            created_at: DateTime::<Utc>::from(std::time::UNIX_EPOCH),
+        }
+    }
+}
+
+#[cfg(all(test, feature = "test-support"))]
+mod postgres_tests {
+    use super::*;
+    use crate::locks::{lock_vault_path, path_lock_key};
+    use crate::repositories::content_blobs::{
+        create_or_get_content_blob, get_content_blob_by_hash, NewContentBlob,
+    };
+    use crate::repositories::objects::{
+        create_or_find_sync_object_by_path, get_sync_object_by_path, set_current_revision_by_path,
+        NewSyncObject, SyncObjectKind,
+    };
+    use crate::repositories::revisions::{
+        get_current_revision_by_path, get_file_revision_by_id, insert_file_revision,
+        NewFileRevision,
+    };
+    use crate::test_support::connect_test_database_from_env;
+    use haze_sync_common::ContentHash;
+    use sqlx::Acquire;
+
+    #[tokio::test]
+    async fn normal_file_flow_roundtrips_under_caller_owned_transaction() {
+        let Some(context) = connect_test_database_from_env().await.unwrap() else {
+            return;
+        };
+        context.apply_migrations().await.unwrap();
+        context.clean_storage_tables().await.unwrap();
+
+        let adapter_id = AdapterId::parse("worktree-adapter").unwrap();
+        let path = VaultPath::parse("Notes/today.md").unwrap();
+        let content_hash = ContentHash::parse(&"a".repeat(64)).unwrap();
+        let revision_id = RevisionId::parse("rev_01JSTORP5").unwrap();
+        let op_id = OperationId::parse("op_01JSTORP5").unwrap();
+        let operation_log = OperationLogRepository::new();
+
+        let mut tx = context.pool().begin().await.unwrap();
+        sqlx::query(
+            "insert into sync_adapters (adapter_id, display_name, role, token_hash) \
+             values ($1, $2, $3, $4)",
+        )
+        .bind(adapter_id.as_str())
+        .bind("Worktree Adapter")
+        .bind("worktree")
+        .bind("sha256:test-token-hash")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+
+        let lock_key = lock_vault_path(&mut *tx, &path).await.unwrap();
+        assert_eq!(lock_key, path_lock_key(&path));
+
+        let blob = create_or_get_content_blob(
+            &mut *tx,
+            &NewContentBlob {
+                sha256: content_hash,
+                size_bytes: 42,
+                object_store_path:
+                    "sha256/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            },
+        )
+        .await
+        .unwrap();
+        let duplicate_blob = create_or_get_content_blob(
+            &mut *tx,
+            &NewContentBlob {
+                sha256: content_hash,
+                size_bytes: 999,
+                object_store_path: "sha256/aa/ignored-on-duplicate",
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(duplicate_blob, blob);
+
+        let object = create_or_find_sync_object_by_path(
+            &mut *tx,
+            NewSyncObject {
+                object_id: "obj_01JSTORP5",
+                path: &path,
+                kind: SyncObjectKind::File,
+                updated_by: &adapter_id,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(object.path, path.as_str());
+        assert!(object.current_revision_id.is_none());
+
+        let revision = insert_file_revision(
+            &mut *tx,
+            NewFileRevision {
+                revision_id: &revision_id,
+                object_id: "obj_01JSTORP5",
+                path: &path,
+                parent_revision_id: None,
+                content_hash,
+                size_bytes: 42,
+                created_by: &adapter_id,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(revision.revision_id, revision_id.as_str());
+        assert_eq!(revision.content_sha256, content_hash.to_prefixed_string());
+
+        let updated_object = set_current_revision_by_path(
+            &mut *tx,
+            &path,
+            Some(&revision_id),
+            &adapter_id,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            updated_object.current_revision_id.as_deref(),
+            Some(revision_id.as_str())
+        );
+
+        let operation = operation_log
+            .append(
+                &mut *tx,
+                &AppendOperationLogEntry {
+                    op_id: op_id.clone(),
+                    adapter_id: adapter_id.clone(),
+                    kind: OperationKindName::UpsertFile,
+                    path: path.clone(),
+                    revision_id: Some(revision_id.clone()),
+                    tombstone_id: None,
+                    conflict_id: None,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(operation.seq, 1);
+        assert_eq!(operation.kind, OperationKindName::UpsertFile.as_str());
+
+        let loaded_blob = get_content_blob_by_hash(&mut *tx, content_hash)
+            .await
+            .unwrap()
+            .unwrap();
+        let loaded_object = get_sync_object_by_path(&mut *tx, &path).await.unwrap().unwrap();
+        let loaded_revision = get_file_revision_by_id(&mut *tx, &revision_id)
+            .await
+            .unwrap()
+            .unwrap();
+        let current_revision = get_current_revision_by_path(&mut *tx, &path)
+            .await
+            .unwrap()
+            .unwrap();
+        let loaded_operation = operation_log
+            .get_by_operation_id(&mut *tx, &op_id)
+            .await
+            .unwrap()
+            .unwrap();
+        let changes = operation_log.changes_since(&mut *tx, 0, 1).await.unwrap();
+
+        assert_eq!(loaded_blob, blob);
+        assert_eq!(loaded_object.current_revision_id, updated_object.current_revision_id);
+        assert_eq!(loaded_revision, revision);
+        assert_eq!(current_revision, revision);
+        assert_eq!(loaded_operation.seq, operation.seq);
+        assert_eq!(changes.from_seq, 0);
+        assert_eq!(changes.to_seq, operation.seq);
+        assert!(!changes.has_more);
+        assert_eq!(changes.changes.len(), 1);
+        assert_eq!(changes.changes[0].op_id, op_id.as_str());
+        assert_eq!(
+            changes.changes[0].content_sha256.as_deref(),
+            Some(content_hash.to_prefixed_string().as_str())
+        );
+        assert_eq!(changes.changes[0].size_bytes, Some(42));
+
+        tx.commit().await.unwrap();
+        context.clean_storage_tables().await.unwrap();
     }
 }
