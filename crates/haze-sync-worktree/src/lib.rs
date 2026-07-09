@@ -4,9 +4,18 @@
 //! the sync source of truth; later phases add scanning, importing, writing, and
 //! runtime behavior on top of these safe path-mapping primitives.
 
+mod import_planner;
 mod path_mapping;
 mod scanner;
 
+pub use import_planner::{
+    WorktreeAcceptedImport, WorktreeAppliedFileState, WorktreeAppliedPathState,
+    WorktreeBaseRevision, WorktreeDeleteImport, WorktreeImportAction, WorktreeImportClient,
+    WorktreeImportFile, WorktreeImportOutcome, WorktreeImportPlan, WorktreeImportPlanError,
+    WorktreeImportPlanner, WorktreeImportRejection, WorktreeImportRunner,
+    WorktreeImportSubmission, WorktreeImportSubmissionReport, WorktreePutImport,
+    WorktreeStateSnapshot, WorktreeTombstoneState, WorktreeUnchangedFile,
+};
 pub use path_mapping::{
     WorktreeConfig, WorktreePathError, ECHO_DIR_NAME, METADATA_DIR_NAME, TEMP_DIR_NAME,
     TRASH_DIR_NAME, WORKTREE_RUNTIME_DIR_NAME,
