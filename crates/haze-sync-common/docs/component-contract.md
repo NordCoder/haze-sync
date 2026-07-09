@@ -70,6 +70,8 @@ Required behavior:
 
 `VaultPath` must not preserve local absolute paths, OS-specific prefixes, or raw unsafe input.
 
+The reserved runtime/state path set currently includes first path segments `_haze_runtime`, `_haze_tmp`, `state`, `logs`, and `trash`, plus temporary file suffixes `.tmp`, `.part`, and `.swp`. `_haze_conflicts/**` and `_haze_agent_outbox/**` are not reserved by `common`; they remain valid vault paths unless a higher-level runtime component ignores or reserves them in its own scope.
+
 ### IDs
 
 Owned identifier types:
@@ -300,6 +302,7 @@ Required test coverage:
 - valid and invalid `VaultPath` cases;
 - percent-decoding safety for paths;
 - reserved runtime path rejection;
+- explicit coverage that `_haze_conflicts/**` remains representable as a syncable vault path;
 - ID parsing, prefix enforcement, unsafe value rejection, serde roundtrips;
 - hash parsing, canonical formatting, case normalization, invalid length/character rejection, serde roundtrips;
 - adapter role/mode wire values, parsing, capability helpers, serde roundtrips;
