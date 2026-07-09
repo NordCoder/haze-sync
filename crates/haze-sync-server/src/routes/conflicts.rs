@@ -60,11 +60,7 @@ pub(super) async fn list_conflicts_route(
     })?;
 
     let Some(pool) = state.db_pool() else {
-        return Ok((
-            StatusCode::OK,
-            Json(conflict_list_response_from_parts(Vec::new())),
-        )
-            .into_response());
+        return Err(ApiError::storage_unavailable());
     };
 
     let status = match request.status {
@@ -339,6 +335,14 @@ impl ApiError {
             StatusCode::FORBIDDEN,
             PublicErrorCode::ForbiddenRole,
             "Authenticated adapter role is not allowed for this operation",
+        )
+    }
+
+    fn storage_unavailable() -> Self {
+        Self::new(
+            StatusCode::SERVICE_UNAVAILABLE,
+            PublicErrorCode::InternalError,
+            "Core conflict storage dependencies are not configured",
         )
     }
 
