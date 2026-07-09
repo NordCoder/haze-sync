@@ -57,6 +57,17 @@ Summary: Reviewed the existing SRV-P4 file PUT/GET/changes fan-in and hardened P
 Status: SELF_ACCEPT_PENDING_CI
 Follow-ups: Run `cargo fmt --check`, `cargo check -p haze-sync-server`, `cargo test -p haze-sync-server`, and `cargo clippy -p haze-sync-server --all-targets -- -D warnings` in CI or a shell-capable environment. Clean-code review should verify the idempotency fingerprint compatibility and body-hash hardening.
 
+### 2026-07-09 — W1/SRV-P5
+
+Agent: implementation-worker
+Branch: component/server
+Prompt: crates/haze-sync-server/control/prompt.md
+Report: crates/haze-sync-server/control/report.md
+Commit(s): component/server SRV-P5 conflict/delete hardening commits
+Summary: Reviewed conflict-saved preservation, conflict list/status filtering, metadata-only conflict resolution, DELETE tombstone fan-in, path locking, Core delete guard evaluation, operation-log writes, and durable delete idempotency. Existing route fan-in already covered most SRV-P5 requirements. This pass hardened conflict listing so authenticated requests without configured Storage no longer return an empty success response that could mask a missing runtime dependency; they now return a sanitized service-unavailable error. Updated route tests to cover the new safe unavailable response and secrecy expectations.
+Status: SELF_ACCEPT_PENDING_CI
+Follow-ups: Run `cargo fmt --check`, `cargo check -p haze-sync-server`, `cargo test -p haze-sync-server`, and `cargo clippy -p haze-sync-server --all-targets -- -D warnings` in CI or a shell-capable environment. Clean-code review should verify the storage-unavailable semantics and that existing conflict/delete/idempotency behavior remains intact.
+
 ---
 
 Use this format for future entries:
