@@ -38,7 +38,7 @@ export function factFromEventPath(rawPath: string): IncludedVaultPath | Excluded
   return classifyVaultPath(rawPath);
 }
 
-async function sha256Hex(body: ArrayBuffer): Promise<string> {
+export async function sha256Hex(body: ArrayBuffer): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", body);
   const bytes = new Uint8Array(digest);
 
