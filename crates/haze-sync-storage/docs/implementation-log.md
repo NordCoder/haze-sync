@@ -2,6 +2,34 @@
 
 ## Entries
 
+### 2026-07-09 — W1/STOR-P5 normal file flow repository support
+
+Agent:
+Implementation Worker
+
+Branch:
+component/storage
+
+Prompt:
+crates/haze-sync-storage/control/prompt.md
+
+Report:
+crates/haze-sync-storage/control/report.md
+
+Commit(s):
+See component/storage branch history for the implementation commits.
+
+Summary:
+Verified the normal file flow repository surface while keeping Storage passive and policy-free. Added content blob metadata input tests, sync object/current-revision input tests, operation-log append metadata tests, changes-page sentinel behavior tests, and a feature-gated PostgreSQL roundtrip covering caller-owned transaction composition with path advisory lock, content blob create/read, sync object create/read/current-revision update, immutable file revision insert/read/current lookup, operation-log append/read, and changes-page output. Documented that normal file flow is caller-composed repository work under Server/Core transaction orchestration.
+
+Status:
+SELF_ACCEPT_PENDING_CI
+
+Follow-ups:
+Run cargo fmt/check/test/clippy through CI or an environment with shell execution. Next storage phase should proceed through clean-code review before final CI merge readiness.
+
+---
+
 ### 2026-07-09 — W1/STOR-P4 repository validation and safe error boundary hardening
 
 Agent:
