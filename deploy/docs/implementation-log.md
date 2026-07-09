@@ -2,6 +2,38 @@
 
 ## Entries
 
+### 2026-07-09 — W1/DEP-P3 server packaging and service wiring
+
+Agent:
+Implementation Worker
+
+Branch:
+component/deployment
+
+Prompt:
+deploy/control/prompt.md
+
+Report:
+deploy/control/report.md
+
+Commit(s):
+
+- 902d3beb36609dc94ffacdd5fb6f31b07c6c4eae — Wire local server service in deployment compose
+- 362ae0f57757b3b30c313bf05b8e7ddfa32cce8a — Add server container packaging scaffold
+- 6eb4a3925037734cdefaf1fb51aa623e82ef41c4 — Document local server compose workflow
+- 87d5f11a3b92affb1af398263bb527441d0c669c — Add server compose runbook
+
+Summary:
+Implemented DEP-P3 using Deployment-owned container packaging and local Compose server wiring after the Server startup/config/readiness dependency baseline was accepted. Added `deploy/server.Dockerfile` to build and run `haze-sync-server` without secrets or migration execution. Updated `deploy/docker-compose.yml` to start PostgreSQL plus the server with documented Server env vars, local-only host port binds, a named object-store volume, PostgreSQL health dependency, and `/health` liveness. Updated local compose docs and added `deploy/docs/server-compose.md` documenting packaging decision, environment, volumes, startup, `/health` versus `/ready`, shutdown, destructive local reset, and deferred production behavior.
+
+Status:
+SELF_ACCEPT_PENDING_CI
+
+Follow-ups:
+Run `docker compose -f deploy/docker-compose.yml config` and, if Docker is available, `docker compose -f deploy/docker-compose.yml up --build -d postgres server` followed by local `/health` and `/ready` smoke checks. Continue with clean-code review before treating DEP-P3 as merge-ready. Migration execution, host directory permissions, reverse proxy/TLS, Worktree runtime, GDrive service wiring, and production rollout remain deferred.
+
+---
+
 ### 2026-07-06 — W1/DEP-P2 local development compose hardening
 
 Agent:
