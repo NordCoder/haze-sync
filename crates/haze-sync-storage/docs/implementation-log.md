@@ -2,6 +2,34 @@
 
 ## Entries
 
+### 2026-07-09 — W1/STOR-P4 repository validation and safe error boundary hardening
+
+Agent:
+Implementation Worker
+
+Branch:
+component/storage
+
+Prompt:
+crates/haze-sync-storage/control/prompt.md
+
+Report:
+crates/haze-sync-storage/control/report.md
+
+Commit(s):
+See component/storage branch history for the implementation commits.
+
+Summary:
+Audited repository helpers for caller-owned executor/transaction boundaries and strengthened storage-level validation coverage. Revision list helpers now use the shared repository limit validator before querying. Repository boundary tests cover list-limit bounds, non-negative sequence validation, representable `size_bytes` conversion, stable safe error codes/messages/display, and mapping raw SQLx errors to a path-free/secret-free repository error. Documented transaction-sensitive repository helper groups and preserved Storage/Core/API/Server boundaries.
+
+Status:
+SELF_ACCEPT_PENDING_CI
+
+Follow-ups:
+Run cargo fmt/check/test/clippy through CI or an environment with shell execution. Next storage phase should proceed through clean-code review before final CI merge readiness.
+
+---
+
 ### 2026-07-09 — W1/STOR-P3 object-store hardening
 
 Agent:
