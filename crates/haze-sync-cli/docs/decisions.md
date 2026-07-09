@@ -212,3 +212,34 @@ Affected contracts:
 - parser command model;
 - output and error contracts;
 - future config/live/admin CLI phases.
+
+## 2026-07-09 — CLI-P3 models secret sources, not inline token values
+
+Decision:
+
+CLI-P3 introduces config and secret-source primitives as local models only. Server URL, profile, output format, and token source precedence is explicit. Token handling accepts source descriptors such as `env:<name>`, `file:<path>`, `stdin`, `os-secret:<service>:<account>`, or `none`; it rejects inline token values. Debug and summary output redact server URLs, file paths, OS-secret references, and token-source values.
+
+Rationale:
+
+Network-backed commands need a safe configuration foundation before they can be implemented. Accepting raw token values on the command line would encourage shell-history and ticket/log leakage. Modeling source descriptors now makes future live commands possible without introducing IO, OS keychain dependencies, server calls, or provider calls in this phase.
+
+Alternatives:
+
+- Accept a raw token flag directly.
+- Add a config-loading dependency and read files/env immediately.
+- Defer all config modeling until live commands are implemented.
+- Print full config paths and URLs in debug output for convenience.
+
+Consequences:
+
+- Future live commands can use a typed source model and source precedence.
+- This phase still performs no file/env/stdin/keychain/server/provider IO.
+- Any future OS-secret integration remains an explicit later dependency decision.
+- Config debug/errors are safe for copied reports by default.
+
+Affected contracts:
+
+- config/source-loading boundaries;
+- token-source handling;
+- output and error safety;
+- future live Server/API command phases.
