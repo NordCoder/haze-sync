@@ -396,7 +396,9 @@ mod tests {
             kind: OperationKindName::UpsertFile.as_str().to_owned(),
             path: "Notes/today.md".to_owned(),
             revision_id: Some(format!("rev_01JSTORP5{seq}")),
-            content_sha256: Some("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_owned()),
+            content_sha256: Some(
+                "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_owned(),
+            ),
             size_bytes: Some(42),
             tombstone_id: None,
             conflict_id: None,
@@ -560,6 +562,7 @@ mod postgres_tests {
             .unwrap()
             .unwrap();
         let changes = operation_log.changes_since(&mut *tx, 0, 1).await.unwrap();
+        let expected_hash = content_hash.to_prefixed_string();
 
         assert_eq!(loaded_blob, blob);
         assert_eq!(loaded_object.current_revision_id, updated_object.current_revision_id);
@@ -573,7 +576,7 @@ mod postgres_tests {
         assert_eq!(changes.changes[0].op_id, op_id.as_str());
         assert_eq!(
             changes.changes[0].content_sha256.as_deref(),
-            Some(content_hash.to_prefixed_string().as_str())
+            Some(expected_hash.as_str())
         );
         assert_eq!(changes.changes[0].size_bytes, Some(42));
 
