@@ -6,8 +6,8 @@ FIX_COMPLETE_PENDING_CI
 
 AGENT:
 role: fixer-worker
-agent_execution_id: cli-W1-FIX-CLI-P4-CI
-chat_name: cli — W1 FIX-CLI-P4-CI CI Fix
+agent_execution_id: cli-W1-FIX-CLI-P4-CI-2
+chat_name: cli — W1 FIX-CLI-P4-CI-2 Follow-up CI Fix
 
 COMPONENT:
 name: cli
@@ -21,11 +21,11 @@ control_report_path: crates/haze-sync-cli/control/report.md
 
 WAVE:
 id: W1
-phase_id: FIX-CLI-P4-CI
-dependency_status: CLI-P4 implementation completed with SELF_ACCEPT_PENDING_CI; Component CI run 29028358662 was red and diagnostics artifact 8202662299 was available and readable
+phase_id: FIX-CLI-P4-CI-2
+dependency_status: first CLI-P4 fixer completed; post-fix Component CI run 29034837249 was red and diagnostics artifact 8205459786 was available and readable
 
 SUMMARY:
-Fixed the minimum CLI-P4 CI failure inside cli scope. The diagnostics artifact showed only cargo-test failed, with two failing haze-sync-cli smoke tests that still asserted the prior placeholder substrings for `status` and `adapters list`. The source fix preserves the new not-configured/offline CLI-P4 output while restoring the existing smoke-compatible summary lines: `status command parsed; live server calls remain unavailable` and `adapters list command parsed; live server calls remain unavailable`. No tests were edited, and no admin mutations, direct DB reads, provider calls, route changes, token rotation, sibling component changes, workflow changes, concrete HTTP transport, or dependency changes were added.
+Fixed the minimum follow-up CLI-P4 CI failure inside cli scope. The diagnostics artifact for run 29034837249 showed only rust-fmt failed. The failure was a rustfmt diff in crates/haze-sync-cli/src/main.rs for the `annotate_legacy_smoke_summary` condition introduced by the previous smoke-compatibility fix. The source fix applies the exact formatting expected by rustfmt without changing behavior. No tests were edited, and no admin mutations, direct DB reads, provider calls, route changes, token rotation, sibling component changes, workflow changes, concrete HTTP transport, or dependency changes were added.
 
 CHANGED_FILES:
 - crates/haze-sync-cli/src/main.rs
@@ -34,15 +34,15 @@ CHANGED_FILES:
 BRANCH_AND_CONTROL:
 current_branch: component/cli
 base_branch: main
-base_sha: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2 from PR #48 metadata during CLI-P4 implementation
-head_sha: 4755faef7b7d7cc6b2872657bea59ea131b025ca before report-only commit; report write creates final head commit
+base_sha: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2 from PR #48 metadata
+head_sha: 0262c5d5ec6cd0ecd695205ebf4d5d2e5c349249 before report-only commit; report write creates final head commit
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
 ci_skip_used: yes, for this final control/report.md-only commit only
-ci_skip_reason: final report update is strictly control/report-only and cannot change executable behavior or validation outcome; the source-fix commit did not use CI skip
+ci_skip_reason: final report update is strictly control/report-only and cannot change executable behavior or validation outcome; the source format-fix commit did not use CI skip
 
 SCOPE:
 allowed_files_only: yes
@@ -60,33 +60,25 @@ affected_components: cli only
 
 IMPLEMENTATION_OR_REVIEW:
 completed:
-- Read current control state and active fixer prompt from component/cli.
+- Read current control state and active follow-up fixer prompt from component/cli.
 - Read previous control report.
-- Fetched diagnostics artifact metadata for run 29028358662 and verified artifact 8202662299 was present and not expired.
-- Downloaded diagnostics artifact ci-diag__component-cli__wf-component-ci__run-29028358662__attempt-1.
-- Read summary.md, manifest.json, failures/cargo-test.txt, and logs/cargo-test.log.
-- Read the failing smoke test file to understand the exact compatibility assertions.
-- Updated src/main.rs only, adding a small stdout annotation helper for status/adapters successful output.
-- Preserved the CLI-P4 not-configured/offline summaries and safe output behavior while restoring legacy smoke-test substrings.
+- Fetched diagnostics artifact metadata for run 29034837249 and verified artifact 8205459786 was present and not expired.
+- Downloaded diagnostics artifact ci-diag__component-cli__wf-component-ci__run-29034837249__attempt-1.
+- Read summary.md, manifest.json, failures/rust-fmt.txt, and logs/rust-fmt.log.
+- Updated src/main.rs only with the rustfmt-required multi-line `if` condition in `annotate_legacy_smoke_summary`.
 main_findings:
 - Diagnostics artifact schema was haze-ci-diagnostics-v1.
-- Failed check was cargo-test with exit code 101.
-- cargo-test log showed the workspace compiled and all CLI unit tests passed.
-- The only failing tests were crates/haze-sync-cli/tests/smoke.rs tests `status_command_smoke_is_safe` and `adapters_list_command_smoke_is_safe`.
-- status smoke expected stdout to contain `status command parsed` and `remain unavailable`.
-- adapters smoke expected stdout to contain `adapters list command parsed` and `remain unavailable`.
-- The CLI-P4 implementation had replaced those exact compatibility substrings with newer not-configured output.
+- Failed check was rust-fmt with exit code 1.
+- rust-fmt log showed a single diff in crates/haze-sync-cli/src/main.rs around the `annotate_legacy_smoke_summary` condition.
+- The expected formatting split the condition across multiple lines.
 behavior_changes:
-- Successful `haze-sync status` output now includes the old parser-smoke compatibility line before the CLI-P4 not-configured/offline summary.
-- Successful `haze-sync adapters list` output now includes the old parser-smoke compatibility line before the CLI-P4 not-configured/offline summary.
-- Runtime-error and parse-error behavior is unchanged.
-- CLI-P4 not-configured/offline safety labels remain present.
+- none; formatting-only source change
 bugs_found:
-- CLI-P4 changed successful status/adapters stdout in a way that broke existing smoke tests.
+- Previous fixer source change was not rustfmt-compliant.
 bugs_fixed:
-- Restored compatibility substrings without editing tests or weakening safety assertions.
+- Applied rustfmt-compatible formatting in src/main.rs.
 cleanups_made:
-- Added `annotate_legacy_smoke_summary` helper in src/main.rs to centralize the compatibility prefix behavior.
+- none beyond required formatting
 non_goals_preserved:
 - no admin mutations
 - no direct DB reads
@@ -100,15 +92,15 @@ non_goals_preserved:
 - no JSON output contract added
 - no test deletion or weakening
 deferred_work:
-- Orchestrator should observe source-fix CI run 29034837249 for commit 4755faef7b7d7cc6b2872657bea59ea131b025ca.
+- Orchestrator should observe source-fix CI run 29038501230 for commit 0262c5d5ec6cd0ecd695205ebf4d5d2e5c349249.
 
 TESTS_AND_CHECKS:
 checks_run:
-- GitHub fetches for control state, active fixer prompt, previous report, current source, and failing smoke test file.
-- GitHub artifact listing for run 29028358662 filtered to ci-diag__component-cli__wf-component-ci__run-29028358662__attempt-1.
-- GitHub artifact download for artifact 8202662299.
-- Read diagnostics artifact summary.md, manifest.json, failures/cargo-test.txt, and logs/cargo-test.log.
-- Observed new Component CI run 29034837249 for source-fix head 4755faef7b7d7cc6b2872657bea59ea131b025ca as queued.
+- GitHub fetches for control state, active follow-up fixer prompt, previous report, and current source.
+- GitHub artifact listing for run 29034837249 filtered to ci-diag__component-cli__wf-component-ci__run-29034837249__attempt-1.
+- GitHub artifact download for artifact 8205459786.
+- Read diagnostics artifact summary.md, manifest.json, failures/rust-fmt.txt, and logs/rust-fmt.log.
+- Observed new Component CI run 29038501230 for source-fix head 0262c5d5ec6cd0ecd695205ebf4d5d2e5c349249 as in_progress.
 checks_not_run:
 - cargo fmt --all --check: not run locally; GitHub connector does not provide shell execution.
 - cargo check -p haze-sync-cli: not run locally; GitHub connector does not provide shell execution.
@@ -116,22 +108,22 @@ checks_not_run:
 - cargo clippy -p haze-sync-cli --all-targets -- -D warnings: not run locally; GitHub connector does not provide shell execution.
 ci_status: CI_PENDING
 workflow_urls:
-- Component CI run 29034837249 for source-fix head 4755faef7b7d7cc6b2872657bea59ea131b025ca observed as queued
+- Component CI run 29038501230 for source-fix head 0262c5d5ec6cd0ecd695205ebf4d5d2e5c349249 observed as in_progress
 known_failures:
-- Previous run 29028358662 failed cargo-test due to two CLI smoke-test output assertions.
+- Previous run 29034837249 failed rust-fmt due to formatting in src/main.rs.
 
 CI_DIAGNOSTICS:
 artifact_based_logs: yes
-artifact_name: ci-diag__component-cli__wf-component-ci__run-29028358662__attempt-1
-artifact_id: 8202662299
-workflow_run_id: 29028358662
+artifact_name: ci-diag__component-cli__wf-component-ci__run-29034837249__attempt-1
+artifact_id: 8205459786
+workflow_run_id: 29034837249
 workflow_run_attempt: 1
 artifact_status: present, not expired, downloaded, readable
 summary_read: yes
 manifest_read: yes
 logs_read:
-- failures/cargo-test.txt
-- logs/cargo-test.log
+- failures/rust-fmt.txt
+- logs/rust-fmt.log
 raw_job_logs_used: no
 diagnostics_failure: none
 
@@ -146,7 +138,7 @@ background_jobs_added: no
 ISSUES_FOUND:
 - Local shell commands cannot be run through the GitHub connector.
 - The final report-only commit uses CI skip and is not CI evidence.
-- Source-fix CI was only queued at report time.
+- Source-fix CI was in_progress at report time.
 
 BLOCKERS:
 none
@@ -155,7 +147,7 @@ NEXT_RECOMMENDED_AGENT:
 orchestrator
 
 FINAL_VERDICT:
-FIX_COMPLETE_PENDING_CI. The artifact-proven cargo-test failure was fixed inside cli scope with a minimal src/main.rs compatibility change. Source-fix CI is pending and must be observed by Orchestrator.
+FIX_COMPLETE_PENDING_CI. The artifact-proven rust-fmt failure was fixed inside cli scope with a minimal formatting-only src/main.rs change. Source-fix CI is pending and must be observed by Orchestrator.
 
 PUSHED:
 yes
