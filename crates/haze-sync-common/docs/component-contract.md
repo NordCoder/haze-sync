@@ -136,10 +136,11 @@ readonly_agent
 
 Required behavior:
 
-- stable snake_case wire values;
+- stable exact lowercase snake_case wire values;
 - serde roundtrips with wire values;
-- `Display` and `FromStr` use the same wire values;
-- unknown roles are rejected safely.
+- `Display`, `as_str`, `FromStr`, and `TryFrom<&str>` use the same wire values;
+- unknown, case-mismatched, hyphenated, or otherwise non-exact role strings are rejected safely;
+- `readonly_agent` remains a V1 role for non-mutating agent/client integrations until a future contract change explicitly renames or removes it.
 
 Role enforcement is not owned by `common`; Server/API use these values to enforce authorization.
 
@@ -160,11 +161,14 @@ dry_run
 
 Required behavior:
 
-- stable snake_case wire values;
+- stable exact lowercase snake_case wire values;
 - serde roundtrips with wire values;
-- `Display` and `FromStr` use the same wire values;
-- unknown modes are rejected safely;
-- helper methods may expose purely declarative capability flags such as whether a mode may read from or write to Core.
+- `Display`, `as_str`, `FromStr`, and `TryFrom<&str>` use the same wire values;
+- unknown, case-mismatched, hyphenated, camelCase, or otherwise non-exact mode strings are rejected safely;
+- helper methods may expose purely declarative capability flags such as whether a mode may read from or write to Core;
+- current declarative Core capability helpers are:
+  - `allows_core_reads`: true for `read_only`, `export_only`, `bidirectional`, and `dry_run`;
+  - `allows_core_writes`: true for `import_only` and `bidirectional`.
 
 Mode enforcement is not owned by `common`; adapters, Server, API, and CLI must apply mode rules in their own runtime scopes.
 
@@ -186,10 +190,12 @@ Required behavior:
 
 Required behavior:
 
-- formatting through `Debug` and `Display` must redact the wrapped value;
+- formatting through `Debug`, alternate `Debug`, and `Display` must redact the wrapped value;
+- cloned values must preserve redaction behavior;
 - access to the wrapped value must use explicitly named sensitive accessors;
 - no serialization should be added unless a future contract explicitly defines safe behavior;
-- no hashing, verification, token loading, token generation, or persistence behavior belongs here.
+- no hashing, verification, token loading, token generation, or persistence behavior belongs here;
+- additional wrappers for token hashes, public labels, or other redaction classes are not owned by `common` unless a future contract proves stable cross-component demand.
 
 ## Input contracts
 
@@ -312,9 +318,9 @@ Required test coverage:
 - explicit coverage that `_haze_conflicts/**` remains representable as a syncable vault path;
 - ID parsing, prefix enforcement, unsafe value rejection, max length, allowed character set, and serde roundtrips;
 - hash parsing, canonical formatting, case normalization, exact lowercase prefix behavior, invalid length/character rejection, byte access, and serde roundtrips;
-- adapter role/mode wire values, parsing, capability helpers, serde roundtrips;
+- adapter role/mode exact wire values, non-exact rejection, parsing, declarative capability helpers, and serde roundtrips;
 - validation error code/message safety;
-- secret wrapper redaction for `Debug` and `Display`.
+- secret wrapper redaction for `Debug`, alternate `Debug`, `Display`, formatting contexts, and cloned values.
 
 Tests must not require secrets, production configuration, live providers, a database, or the filesystem.
 
