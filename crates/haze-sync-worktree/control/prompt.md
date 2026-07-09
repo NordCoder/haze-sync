@@ -1,88 +1,77 @@
-# W1-FIX-WORKTREE-CI — Worktree CI fix
+# W1-WT-P3 — Worktree scanner, ignore rules, and stable-file detection
 
 Component: worktree
 Path: crates/haze-sync-worktree
 Branch: component/worktree
 PR: #49
-Role: fixer-worker
+Role: implementation-worker
 
-Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review.
+Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-Component CI completed with failure for the current PR head.
+WT-P2 and its CI fixer loop are complete. Current Component CI is green for the current PR head.
 
 - workflow: Component CI
-- workflow_run_id: 29003647139
-- run_number: 410
-- run_attempt: 1
-- artifact_id: 8192611692
-- artifact_name: ci-diag__component-worktree__wf-component-ci__run-29003647139__attempt-1
-- known failed check: rust-fmt
+- workflow_run_id: 29006835773
+- run_number: 450
+- conclusion: success
+
+The next implementation phase is WT-P3 from crates/haze-sync-worktree/docs/implementation-plan.md.
 
 ## Read
 
-Read all required sources before editing:
+Read before editing:
 
 - implementation-manifest.md from ChatGPT Project Sources
 - report-template.md from ChatGPT Project Sources
+- implementation-worker-prompt.md from ChatGPT Project Sources
+- chatgpt-gh-connector.md from ChatGPT Project Sources
 - crates/haze-sync-worktree/docs/component-contract.md
 - crates/haze-sync-worktree/docs/implementation-plan.md
+- crates/haze-sync-worktree/docs/implementation-log.md
 - crates/haze-sync-worktree/docs/dependency-map.md
 - crates/haze-sync-worktree/control/prompt.md
 - crates/haze-sync-worktree/control/report.md
-- current PR diff and relevant current repository code
+- relevant current repository code and PR diff
 
-Use the GitHub connector to download and read the diagnostics artifact listed above.
-
-Read inside the artifact:
-
-- ci-diagnostics/summary.md
-- ci-diagnostics/manifest.json
-- every log listed in failed_checks
-
-Do not ask Orchestrator to paste raw logs. If the artifact is missing, expired, or malformed, report FIX_BLOCKED_BY_LOGS.
+Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
 
 ## Task
 
-Fix the minimum cause of the CI failure.
+Implement WT-P3: Scanner, ignore rules, and stable-file detection.
 
-Expected scope is rustfmt-equivalent formatting only in worktree-owned Rust files.
+Follow the implementation plan:
+
+- walk the configured worktree root without escaping it;
+- ignore reserved runtime directories, temp files, trash, and unsafe entries;
+- represent local file facts with VaultPath, size, mtime or equivalent metadata, content hash, and stability metadata;
+- detect stable files using a deterministic accepted heuristic;
+- classify unsafe filesystem entries without panicking;
+- add tests using temp directories or pure helper seams where practical.
 
 ## Allowed files
 
-- crates/haze-sync-worktree/**/*.rs
+- crates/haze-sync-worktree/src/**
+- crates/haze-sync-worktree/docs/**
 - crates/haze-sync-worktree/control/report.md
 
-## Forbidden changes
+## Non-goals
 
-- Do not change behavior.
-- Do not change public API semantics.
-- Do not change component docs or contracts.
-- Do not change workflow files.
-- Do not change sibling components.
-- Do not delete tests.
+- No watcher reliance for correctness.
+- No Core/API import calls.
+- No materialization writer.
+- No delete propagation.
+- No provider behavior.
+- No sibling component changes.
+- No workflow changes.
 
-If the diagnostics reveal a non-formatting issue, fix it only if it is inside worktree scope and required for CI. Otherwise report the appropriate blocker.
+## CI trigger policy
 
-## Checks
-
-Run or observe the failing check again if possible through available tooling.
-
-If you cannot run shell commands, say so in the report. Do not claim checks passed unless you actually ran them or observed CI metadata.
+Follow the CI skip policy in implementation-manifest.md and the relevant Project Source worker prompt. Product, test, dependency, contract, workflow, and implementation commits must not skip CI.
 
 ## Report
 
 Write only the report to crates/haze-sync-worktree/control/report.md.
 
-Use report-template.md.
-
-Set REPORT_TYPE to FIX.
-
-Use one of:
-
-- FIX_COMPLETE
-- FIX_NEEDS_MORE
-- FIX_BLOCKED_BY_LOGS
-- FIX_BLOCKED_BY_CONTRACT
-- FIX_BLOCKED_BY_TOOLING
+Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION.
