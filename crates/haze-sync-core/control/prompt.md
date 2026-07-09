@@ -1,23 +1,24 @@
-# W1-CORE-P3 — Revision service safety hardening
+# W1-FIX-CORE-P3-CI — Core CORE-P3 CI fix
 
 Component: core
 Path: crates/haze-sync-core
 Branch: component/core
 PR: #43
-Role: implementation-worker
+Role: fixer-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-CORE-P2 and its CI fixer loop are complete. Current Component CI is green for the current PR head.
+CORE-P3 implementation completed with SELF_ACCEPT_PENDING_CI. Product-code CI completed red.
 
 - workflow: Component CI
-- workflow_run_id: 29006893977
-- run_number: 456
-- conclusion: success
-
-The next implementation phase is CORE-P3 from crates/haze-sync-core/docs/implementation-plan.md.
+- workflow_run_id: 29009453634
+- run_number: 493
+- run_attempt: 1
+- artifact_id: 8194962355
+- artifact_name: ci-diag__component-core__wf-component-ci__run-29009453634__attempt-1
+- known failed check: rust-fmt
 
 ## Read
 
@@ -25,7 +26,7 @@ Read before editing:
 
 - implementation-manifest.md from ChatGPT Project Sources
 - report-template.md from ChatGPT Project Sources
-- implementation-worker-prompt.md from ChatGPT Project Sources
+- fixer-worker-prompt.md from ChatGPT Project Sources
 - chatgpt-gh-connector.md from ChatGPT Project Sources
 - crates/haze-sync-core/docs/component-contract.md
 - crates/haze-sync-core/docs/implementation-plan.md
@@ -35,44 +36,38 @@ Read before editing:
 - crates/haze-sync-core/control/report.md
 - relevant current repository code and PR diff
 
-Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
+Use the GitHub connector to download and read the diagnostics artifact listed above.
+
+Read summary.md, manifest.json, and every log listed in failed_checks.
+
+If the artifact is missing, expired, malformed, or unreadable, report FIX_BLOCKED_BY_LOGS.
 
 ## Task
 
-Implement CORE-P3: Revision service safety hardening.
+Fix the minimum cause of the CORE-P3 CI failure inside core scope.
 
-Follow the implementation plan:
-
-- complete tests for the base revision and content matrix;
-- preserve file-missing/current-base/same-content/stale/null-base/conflict-saved semantics;
-- verify hash-mismatch rejection remains safe;
-- clarify public status naming in docs/tests where needed;
-- preserve storage-agnostic repository/content-store/operation-log trait boundaries;
-- ensure unsafe stale overwrite paths do not insert accepted revisions or append accepted operations.
+Expected scope from triage: rustfmt formatting in crates/haze-sync-core/src/revision_service/mod.rs.
 
 ## Allowed files
 
-- crates/haze-sync-core/src/revision_service/**
-- crates/haze-sync-core/src/conflict_saved_planner/**
-- crates/haze-sync-core/docs/**
+- crates/haze-sync-core/src/**
 - crates/haze-sync-core/control/report.md
 
-## Non-goals
+## Forbidden changes
 
-- No downstream wiring.
-- No Storage transaction or lock ownership.
-- No API DTO ownership.
-- No Server runtime behavior.
-- No provider or filesystem behavior.
-- No sibling component changes.
-- No workflow changes.
+- Do not change behavior.
+- Do not change public API semantics.
+- Do not change docs or contracts.
+- Do not change workflow files.
+- Do not change sibling components.
+- Do not delete tests.
 
 ## CI trigger policy
 
-Follow the CI skip policy in implementation-manifest.md and the relevant Project Source worker prompt. Product, test, dependency, contract, workflow, and implementation commits must not skip CI.
+Follow the CI skip policy in implementation-manifest.md and fixer-worker-prompt.md. Product/source fixer commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
 Write only the report to crates/haze-sync-core/control/report.md.
 
-Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION.
+Use report-template.md. Set REPORT_TYPE to FIX.
