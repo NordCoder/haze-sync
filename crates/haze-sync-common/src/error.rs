@@ -85,7 +85,11 @@ mod tests {
     use super::*;
 
     const ERROR_CASES: &[(ValidationError, &str, &str)] = &[
-        (ValidationError::EmptyPath, "empty_path", "path must not be empty"),
+        (
+            ValidationError::EmptyPath,
+            "empty_path",
+            "path must not be empty",
+        ),
         (
             ValidationError::AbsolutePath,
             "absolute_path",
@@ -169,7 +173,10 @@ mod tests {
     fn errors_deserialize_from_stable_codes() {
         for (error, code, _) in ERROR_CASES {
             let json = format!("\"{code}\"");
-            assert_eq!(serde_json::from_str::<ValidationError>(&json).unwrap(), *error);
+            assert_eq!(
+                serde_json::from_str::<ValidationError>(&json).unwrap(),
+                *error
+            );
         }
 
         assert!(serde_json::from_str::<ValidationError>("\"raw_secret_token\"").is_err());
