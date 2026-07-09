@@ -122,6 +122,17 @@ pub(crate) fn size_bytes_to_i64(size_bytes: u64) -> RepositoryResult<i64> {
 mod tests {
     use super::*;
 
+    const UNSAFE_ERROR_FRAGMENTS: &[&str] = &[
+        "postgres://",
+        "password",
+        "secret",
+        "select ",
+        "/srv/",
+        "idempotency-key",
+        "oauth",
+        "stack backtrace",
+    ];
+
     #[test]
     fn validates_changes_limits() {
         assert_eq!(validate_limit(1), Ok(()));
@@ -148,11 +159,82 @@ mod tests {
     }
 
     #[test]
+    fn validates_size_bytes_schema_range() {
+        assert_eq!(size_bytes_to_i64(0), Ok(0));
+        assert_eq!(size_bytes_to_i64(i64::MAX as u64), Ok(i64::MAX));
+        assert_eq!(
+            size_bytes_to_i64(i64::MAX as u64 + 1),
+            Err(RepositoryError::InvalidSizeBytes)
+        );
+    }
+
+    #[test]
+    fn repository_error_codes_messages_and_display_are_stable_and_safe() {
+        let errors = [
+            RepositoryError::InvalidSequence,
+            RepositoryError::InvalidLimit {
+                max: MAX_CHANGES_LIMIT,
+            },
+            RepositoryError::InvalidOperationKind,
+            RepositoryError::InvalidConflictStatus,
+            RepositoryError::CursorRegression,
+            RepositoryError::DatabaseOperationFailed,
+            RepositoryError::InvalidSizeBytes,
+        ];
+
+        let codes = errors.map(RepositoryError::code);
+        assert_eq!(
+            codes,
+            [
+                "invalid_sequence",
+                "invalid_limit",
+                "invalid_operation_kind",
+                "invalid_conflict_status",
+                "cursor_regression",
+                "storage_database_operation_failed",
+                "invalid_size_bytes",
+            ]
+        );
+
+        for error in errors {
+            assert_safe_error_text(error.code());
+            assert_safe_error_text(error.message());
+            assert_safe_error_text(&error.to_string());
+            assert!(std::error::Error::source(&error).is_none());
+        }
+    }
+
+    #[test]
+    fn mapped_sqlx_error_discards_raw_database_details() {
+        let raw = sqlx::Error::Io(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "postgres://user:secret@db/prod select * from tokens /srv/prod Idempotency-Key",
+        ));
+
+        let error = map_sqlx_error(raw);
+
+        assert_eq!(error, RepositoryError::DatabaseOperationFailed);
+        assert_eq!(error.code(), "storage_database_operation_failed");
+        assert_safe_error_text(error.message());
+        assert_safe_error_text(&error.to_string());
+        assert!(std::error::Error::source(&error).is_none());
+    }
+
+    #[test]
     fn conflict_status_error_is_safe() {
         let error = RepositoryError::InvalidConflictStatus;
         assert_eq!(error.code(), "invalid_conflict_status");
-        assert!(!error.message().contains("postgres://"));
-        assert!(!error.message().contains("/srv/"));
-        assert!(!error.message().contains("secret"));
+        assert_safe_error_text(error.message());
+        assert_safe_error_text(&error.to_string());
+    }
+
+    fn assert_safe_error_text(text: &str) {
+        let lowered = text.to_ascii_lowercase();
+        for fragment in UNSAFE_ERROR_FRAGMENTS {
+            assert!(
+                !lowered.contains(fragment),
+                "repository error text leaked unsafe fragment `{fragment}` in `{text}`"
+            );
+        }
     }
 }
