@@ -25,6 +25,8 @@ provider credential flows
 
 Compose syntax validation or successful local service startup is not production readiness evidence.
 
+Use `deploy/docs/migrations-backup-restore.md` for explicit migration, backup, and restore sequencing. Compose does not run migrations automatically.
+
 ## Local safety boundary
 
 PostgreSQL and server HTTP ports bind to `127.0.0.1` on the host only. Do not widen those bind addresses in the local scaffold. Public or remote exposure belongs to a later reverse-proxy/TLS deployment phase after Server auth and production access boundaries are accepted.
@@ -72,7 +74,7 @@ deploy/server.Dockerfile
 
 The image builds the `haze-sync-server` binary from the Rust workspace, installs only minimal runtime support required for TLS roots and the local HTTP healthcheck, runs as a non-root `haze-sync` user, and does not bake secrets into the image.
 
-Migrations are not run by the image or compose service. Migration execution remains an explicit operator action for a later deployment phase.
+Migrations are not run by the image or compose service. Migration execution remains an explicit operator action documented in `deploy/docs/migrations-backup-restore.md`.
 
 ## Syntax validation
 
