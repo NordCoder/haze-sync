@@ -1,13 +1,13 @@
 REPORT_TYPE:
-FIX
+IMPLEMENTATION
 
 STATUS:
-FIX_COMPLETE
+SELF_ACCEPT_PENDING_CI
 
 AGENT:
-role: fixer-worker
-agent_execution_id: cli-W1-FIX-CLI-CI
-chat_name: cli — W1 FIX-CLI-CI CI Fix
+role: implementation-worker
+agent_execution_id: cli-W1-CLI-P3
+chat_name: cli — W1 CLI-P3 Implementation
 
 COMPONENT:
 name: cli
@@ -21,29 +21,31 @@ control_report_path: crates/haze-sync-cli/control/report.md
 
 WAVE:
 id: W1
-phase_id: FIX-CLI-CI
-dependency_status: CI diagnostics artifact identified a formatting-only rust-fmt failure inside cli-owned Rust source files
+phase_id: CLI-P3
+dependency_status: CLI-P2 and CI fixer loop were complete; active prompt reported Component CI green for prior PR head
 
 SUMMARY:
-Fixed the minimum cause of the CLI Component CI failure. The diagnostics artifact for run 29003636467 attempt 1 reported that `cargo fmt --all --check` failed only on rustfmt diffs in crates/haze-sync-cli/src/commands.rs and crates/haze-sync-cli/src/doctor.rs. Applied the exact rustfmt-equivalent formatting changes in those two files. No behavior, public API semantics, docs, contracts, workflows, sibling components, or tests were changed.
+Implemented CLI-P3 config and secret-source foundation inside cli scope. Added CLI-local configuration primitives for source precedence, server URL, profile, output format, and token source descriptors. The implementation models safe token sources without reading env/files/stdin, calling OS keychains, contacting the server, creating tokens, rotating tokens, provisioning deployment secrets, or provider calls. It rejects inline token values and keeps server URLs, token file paths, OS-secret references, and token-source values redacted in Debug/report summaries and safe error messages.
 
 CHANGED_FILES:
-- crates/haze-sync-cli/src/commands.rs
-- crates/haze-sync-cli/src/doctor.rs
+- crates/haze-sync-cli/src/config.rs
+- crates/haze-sync-cli/src/main.rs
+- crates/haze-sync-cli/docs/decisions.md
+- crates/haze-sync-cli/docs/implementation-log.md
 - crates/haze-sync-cli/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/cli
 base_branch: main
 base_sha: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2 from PR #48 metadata
-head_sha: 936efcc3a306a52980d2af7272965814361ae9be before report write; report write creates final head commit
+head_sha: 6d7663f65102459345ad53e9424f8f21aad5eaff before report-only commit; report write creates final head commit
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
-ci_skip_used: yes, for the report-only control/report.md commit only
-ci_skip_reason: final report update is strictly control/report-only and cannot change executable behavior or validation outcome
+ci_skip_used: yes, for this final control/report.md-only commit only
+ci_skip_reason: final report update is strictly control/report-only and cannot change executable behavior or validation outcome; product/code/docs commits did not use CI skip
 
 SCOPE:
 allowed_files_only: yes
@@ -61,65 +63,72 @@ affected_components: cli only
 
 IMPLEMENTATION_OR_REVIEW:
 completed:
-- Read active control state and prompt.
+- Read current control state and active prompt from component/cli.
 - Read previous control report.
-- Read CLI component contract, implementation plan, implementation log, and dependency map.
-- Read PR #48 metadata and PR diff.
-- Downloaded and read the CI diagnostics artifact for workflow run 29003636467 attempt 1.
-- Read summary.md, manifest.json, and the failed rust-fmt log listed in failed_checks.
-- Applied rustfmt-equivalent formatting fixes in commands.rs and doctor.rs.
+- Read CLI component contract, implementation plan, implementation log, dependency map, and decisions.
+- Read relevant current CLI source files and PR #48 diff/metadata.
+- Added a CLI-local config module and wired it through main.rs.
+- Added tests for precedence, safe token-source descriptors, inline-token rejection, redaction, and invalid config errors without raw-value echo.
+- Updated CLI decisions and implementation log for CLI-P3.
 main_changes:
-- Collapsed the DoctorCommand assert in commands.rs onto the rustfmt-expected single-line assertion.
-- Reflowed the long parse_cli unwrap_err expression in commands.rs to rustfmt-expected layout.
-- Expanded the DoctorCliCommand::Help assert in doctor.rs to rustfmt-expected multiline layout.
+- Added ConfigField and ConfigSource with explicit precedence for server URL, profile, output format, and token source.
+- Added OutputFormat, ProfileName, ServerUrl, EnvVarName, SecretFile, OsSecretRef, TokenSource, CliConfig, SafeConfigSummary, and ConfigError.
+- Added safe parsing/validation for config descriptors without IO.
+- Added redacted Debug/summary behavior for server URLs, token file paths, OS-secret refs, and token-source values.
+- Rejected inline token descriptors such as literal, bearer, and token forms.
 behavior_changes:
-- none
+- No runtime command behavior changed. Existing commands still parse/render as before.
+- New config foundation exists for future phases but performs no live loading or network behavior.
 bugs_found:
-- CI rust-fmt failure caused by formatting drift in commands.rs and doctor.rs.
+- none
 bugs_fixed:
-- Fixed the rustfmt diffs reported by CI diagnostics.
+- none
 cleanups_made:
-- formatting-only cleanup in cli Rust source files
+- Added focused tests and documentation entries for config/secret-source boundaries.
 non_goals_preserved:
-- no behavior change
-- no public API semantic change
-- no docs/contract change
-- no workflow change
-- no sibling component change
-- no test deletion
+- No token creation or rotation.
+- No live server calls.
+- No deployment secret provisioning.
+- No provider tokens or provider calls.
+- No sibling component changes.
+- No workflow changes.
+- No config/env/file/stdin/keychain IO.
 deferred_work:
-- Observe the new Component CI run for head 936efcc3a306a52980d2af7272965814361ae9be.
+- Actual config loading from env/files/stdin or OS-secret backends.
+- HTTP client wiring and live Server/API-backed status/adapters commands.
+- Live doctor behavior.
+- Token creation/rotation, if ever accepted by a future contract.
+- Clean-code review and CI result observation for this phase.
 
 TESTS_AND_CHECKS:
 checks_run:
-- Fetched/listed workflow artifact metadata for run 29003636467.
-- Downloaded diagnostics artifact 8192614016.
-- Read diagnostics summary, manifest, and failed rust-fmt log from the downloaded artifact.
-- Verified current file snippets after formatting updates through GitHub fetch_file.
-- Observed PR #48 head after code fixes as 936efcc3a306a52980d2af7272965814361ae9be.
-- Observed a new Component CI workflow run for fixed head 936efcc3a306a52980d2af7272965814361ae9be: run 29006131118, status pending.
+- Read control state and active prompt.
+- Read previous control report.
+- Read component contract, implementation plan, implementation log, dependency map, and decisions.
+- Read current CLI source files and PR #48 diff/metadata.
+- Verified updated config.rs snippets through GitHub fetch_file.
+- Observed Component CI run 29009634703 for code/docs head 6d7663f65102459345ad53e9424f8f21aad5eaff as in_progress.
 checks_not_run:
-- cargo fmt --all --check: not run locally; GitHub connector does not provide shell execution.
+- cargo fmt --check: not run locally; GitHub connector does not provide shell execution.
 - cargo check -p haze-sync-cli: not run locally; GitHub connector does not provide shell execution.
 - cargo test -p haze-sync-cli: not run locally; GitHub connector does not provide shell execution.
 - cargo clippy -p haze-sync-cli --all-targets -- -D warnings: not run locally; GitHub connector does not provide shell execution.
 ci_status: CI_PENDING
 workflow_urls:
-- Component CI run 29006131118 for head 936efcc3a306a52980d2af7272965814361ae9be is pending
+- Component CI run 29009634703 for head 6d7663f65102459345ad53e9424f8f21aad5eaff was observed as in_progress
 known_failures:
-- Previous run 29003636467 attempt 1 failed rust-fmt; fixed by formatting-only source changes.
+- none observed for CLI-P3 at report time
 
 CI_DIAGNOSTICS:
-artifact_based_logs: yes
-artifact_name: ci-diag__component-cli__wf-component-ci__run-29003636467__attempt-1
-artifact_id: 8192614016
-workflow_run_id: 29003636467
-workflow_run_attempt: 1
-artifact_status: found, not expired, downloaded and readable
-summary_read: yes, summary.md read
-manifest_read: yes, manifest.json read
-logs_read:
-- logs/rust-fmt.log
+artifact_based_logs: no
+artifact_name: none
+artifact_id: none
+workflow_run_id: none
+workflow_run_attempt: none
+artifact_status: not applicable; active role is implementation-worker and prompt explicitly prohibited CI diagnostics artifact reading
+summary_read: no
+manifest_read: no
+logs_read: none
 raw_job_logs_used: no
 diagnostics_failure: none
 
@@ -132,17 +141,18 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- Local shell commands cannot be run through the GitHub connector.
-- The new Component CI run for the fixed head was only observed as pending; final green/red result is not yet available in this worker run.
+- Local shell commands are unavailable through the GitHub connector.
+- CI for the CLI-P3 code/docs head was still in progress when this report was written.
+- The final report-only commit uses CI skip and is not CI evidence.
 
 BLOCKERS:
-none for the formatting fix
+none for implementation; clean-code review and CI completion remain pending
 
 NEXT_RECOMMENDED_AGENT:
-orchestrator
+clean-code-reviewer
 
 FINAL_VERDICT:
-FIX_COMPLETE. The artifact-based CI diagnostics identified a formatting-only failure in cli Rust source files, and the minimum rustfmt-equivalent changes were applied within allowed scope. New CI is pending and must be observed by Orchestrator.
+SELF_ACCEPT_PENDING_CI. CLI-P3 was implemented within allowed cli scope with no runtime behavior changes, no forbidden dependencies, and no secret-source IO. Await clean-code review and CI completion.
 
 PUSHED:
 yes
