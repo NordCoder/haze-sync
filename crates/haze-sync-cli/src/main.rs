@@ -34,17 +34,33 @@ fn render_command(command: commands::CliCommand) -> output::CliOutput {
         commands::CliCommand::Help(commands::HelpTopic::Doctor) => {
             output::CliOutput::success(doctor::usage())
         }
-        commands::CliCommand::Status(command) => {
-            server_api::render_status_command(&config, command.mode, &client)
-        }
+        commands::CliCommand::Status(command) => annotate_legacy_smoke_summary(
+            server_api::render_status_command(&config, command.mode, &client),
+            "status command parsed; live server calls remain unavailable",
+        ),
         commands::CliCommand::Adapters(commands::AdaptersCommand::List { mode }) => {
-            server_api::render_adapters_command(&config, mode, &client)
+            annotate_legacy_smoke_summary(
+                server_api::render_adapters_command(&config, mode, &client),
+                "adapters list command parsed; live server calls remain unavailable",
+            )
         }
         commands::CliCommand::Doctor(command) => {
             let report = command.build_offline_report();
             output::CliOutput::success(doctor::render_text_summary(&report))
         }
     }
+}
+
+fn annotate_legacy_smoke_summary(
+    mut output: output::CliOutput,
+    compatibility_line: &'static str,
+) -> output::CliOutput {
+    if output.exit_code == output::CliExitCode::Success && !output.stdout.contains(compatibility_line)
+    {
+        output.stdout = format!("{}\n{}", compatibility_line, output.stdout);
+    }
+
+    output
 }
 
 fn write_output(output: &output::CliOutput) {
@@ -67,6 +83,8 @@ mod tests {
         let output = run_from_args(["haze-sync", "status"]);
 
         assert_eq!(output.exit_code, CliExitCode::Success);
+        assert!(output.stdout.contains("status command parsed"));
+        assert!(output.stdout.contains("remain unavailable"));
         assert!(output.stdout.contains("status: not_configured"));
         assert!(output.stdout.contains("server_url: unset"));
         assert!(output.stdout.contains("live server calls: not attempted"));
@@ -88,6 +106,8 @@ mod tests {
         let output = run_from_args(["haze-sync", "adapters", "list"]);
 
         assert_eq!(output.exit_code, CliExitCode::Success);
+        assert!(output.stdout.contains("adapters list command parsed"));
+        assert!(output.stdout.contains("remain unavailable"));
         assert!(output.stdout.contains("adapters: not_configured"));
         assert!(output.stdout.contains("server_url: unset"));
         assert!(output.stdout.contains("live server calls: not attempted"));
