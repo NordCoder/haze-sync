@@ -55,7 +55,8 @@ fn annotate_legacy_smoke_summary(
     mut output: output::CliOutput,
     compatibility_line: &'static str,
 ) -> output::CliOutput {
-    if output.exit_code == output::CliExitCode::Success && !output.stdout.contains(compatibility_line)
+    if output.exit_code == output::CliExitCode::Success
+        && !output.stdout.contains(compatibility_line)
     {
         output.stdout = format!("{}\n{}", compatibility_line, output.stdout);
     }
