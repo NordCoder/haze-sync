@@ -9,7 +9,7 @@ active_report: deploy/control/report.md
 active_agent_role: clean-code-reviewer
 
 wave: W1
-phase: DEP-P3C
+phase: DEP-P3C-RERUN
 
 implementation_status: SELF_ACCEPT_PENDING_CI
 clean_review_status: PENDING
@@ -20,3 +20,4 @@ ci_run_number: unknown
 ci_run_attempt: unknown
 known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
+rerun_reason: previous deployment persistent worker did not write a DEP-P3C clean-code report
