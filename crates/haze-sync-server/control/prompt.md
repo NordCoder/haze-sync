@@ -1,21 +1,23 @@
-# W1-SRV-P5C — Server conflict/delete fan-in clean-code review
+# W1-SRV-P6 — Admin/status, readiness, doctor, and observability hardening
 
 Component: server
 Path: crates/haze-sync-server
 Branch: component/server
 PR: #45
-Role: clean-code-reviewer
+Role: implementation-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-SRV-P5 implementation and CI fixer are complete. Post-fix Component CI is green.
+SRV-P5 implementation, CI fixer, and clean-code review are accepted. Component CI evidence for the accepted product-code state is green.
 
 - workflow: Component CI
 - workflow_run_id: 29028061038
 - run_number: 619
 - conclusion: success
+
+The next implementation phase is SRV-P6 from crates/haze-sync-server/docs/implementation-plan.md.
 
 ## Read
 
@@ -23,7 +25,7 @@ Read before editing:
 
 - implementation-manifest.md from ChatGPT Project Sources
 - report-template.md from ChatGPT Project Sources
-- clean-code-reviewer-prompt.md from ChatGPT Project Sources
+- implementation-worker-prompt.md from ChatGPT Project Sources
 - chatgpt-gh-connector.md from ChatGPT Project Sources
 - crates/haze-sync-server/docs/component-contract.md
 - crates/haze-sync-server/docs/implementation-plan.md
@@ -37,42 +39,42 @@ Do not read CI diagnostics artifacts unless a future active prompt explicitly in
 
 ## Task
 
-Review SRV-P5 conflict, delete, and idempotency fan-in plus the CI fixer.
+Implement SRV-P6: Admin/status, readiness, doctor, and observability hardening.
 
-Focus areas:
+Follow the implementation plan:
 
-- conflict list missing-storage behavior and safe public error mapping;
-- metadata-only conflict resolution behavior preservation;
-- DELETE base/null-base and idempotency handling;
-- path locks and Core delete guard integration;
-- tombstone/current-state/operation-log/idempotency atomicity where accepted dependencies allow it;
-- stale shell-router test update from fixer;
-- preservation of non-goals: no hard delete, no provider/worktree trash side effects, no new conflict policy, no workflow changes, no sibling changes.
+- harden `/ready` and DB/object-store readiness checks;
+- map adapter summaries, cursor presence, pause support, and mode/status summaries safely;
+- add doctor route or server-side doctor inputs only when Core/API contracts exist;
+- ensure skipped/not-run checks are represented honestly;
+- add structured logs/tracing with redaction guarantees if scoped;
+- add metrics endpoint only if system scope accepts it.
 
 ## Allowed files
 
-- crates/haze-sync-server/src/routes/conflicts.rs
-- crates/haze-sync-server/src/routes/conflicts/**
-- crates/haze-sync-server/src/routes/delete/**
-- crates/haze-sync-server/src/routes/v1/**
-- crates/haze-sync-server/src/routes/mod.rs
+- crates/haze-sync-server/src/routes/admin/**
+- crates/haze-sync-server/src/readiness/**
+- crates/haze-sync-server/src/db/**
+- crates/haze-sync-server/src/http/**
 - crates/haze-sync-server/docs/**
 - crates/haze-sync-server/control/report.md
 
-## Forbidden changes
+## Non-goals
 
-- Do not change API/Core/Storage contracts.
-- Do not add provider/worktree behavior.
-- Do not add hard delete or new conflict policy.
-- Do not change workflow files.
-- Do not change sibling components.
+- No admin mutations by default.
+- No repair execution.
+- No token rotation.
+- No provider calls unless a provider component contract supplies safe checks.
+- No raw cursor/status payload exposure.
+- No sibling component changes.
+- No workflow changes.
 
 ## CI trigger policy
 
-Follow the CI skip policy in implementation-manifest.md and clean-code-reviewer-prompt.md. Source/doc clean-code commits must not skip CI. A final report-only commit may skip CI.
+Follow the CI skip policy in implementation-manifest.md and implementation-worker-prompt.md. Product/source/docs commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
 Write only the report to crates/haze-sync-server/control/report.md.
 
-Use report-template.md. Set REPORT_TYPE to CLEAN_CODE_REVIEW.
+Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION.
