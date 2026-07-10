@@ -135,9 +135,11 @@ export class HazeSyncApiClient {
   }
 
   async getConflicts(request: ConflictListRequest = {}): Promise<ConflictsResponseDto> {
-    return this.requestJson("GET", this.apiUrl("/v1/conflicts", request), {
-      validate: isConflictsResponseDto,
-    });
+    return this.requestJson(
+      "GET",
+      this.apiUrl("/v1/conflicts", { status: request.status }),
+      { validate: isConflictsResponseDto },
+    );
   }
 
   async resolveConflict(request: ResolveConflictRequest): Promise<ResolveConflictResponseDto> {
@@ -219,7 +221,12 @@ export class HazeSyncApiClient {
     }
 
     if (!response.ok) {
-      throw createHttpError(response.status, endpointForReport(url), await readJsonPayload(response));
+      throw createHttpError(
+        response.status,
+        endpointForReport(url),
+        await readJsonPayload(response),
+        [this.config.authToken],
+      );
     }
 
     return response;
