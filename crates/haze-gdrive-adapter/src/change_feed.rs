@@ -305,6 +305,13 @@ impl ChangeWorkBatch {
             .iter()
             .any(|item| matches!(item, ChangeWorkItem::FullScan { .. }))
     }
+
+    fn retain_only_full_scan_work_if_required(&mut self) {
+        if self.requires_full_scan() {
+            self.items
+                .retain(|item| matches!(item, ChangeWorkItem::FullScan { .. }));
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -334,6 +341,10 @@ impl fmt::Display for ChangeProcessingError {
 
 impl Error for ChangeProcessingError {}
 
+/// Processes one replayable unit of change-feed work.
+///
+/// Implementations must be idempotent because successful processing can be
+/// delivered again when cursor persistence fails afterward.
 pub trait ChangeWorkProcessor {
     fn process(&mut self, batch: &ChangeWorkBatch) -> Result<(), ChangeProcessingError>;
 }
@@ -664,6 +675,7 @@ pub fn classify_drive_changes(
         let change = unique_changes.pop().expect("one unique change");
         classify_single_change(change, mode, dry_run, echo_guard, &mut batch);
     }
+    batch.retain_only_full_scan_work_if_required();
     batch
 }
 
@@ -818,8 +830,8 @@ fn classify_single_change(
     }
 
     let normalized = normalize_drive_metadata(&metadata);
-    let file_type = match normalized.classification {
-        DriveEntryClassification::Supported(file_type) => file_type,
+    match normalized.classification {
+        DriveEntryClassification::Supported(_) => {}
         DriveEntryClassification::Unsupported(reason) => {
             batch.items.push(ChangeWorkItem::SkipUnsupported {
                 provider_id,
@@ -827,8 +839,7 @@ fn classify_single_change(
             });
             return;
         }
-    };
-    let _ = file_type;
+    }
 
     if let Some(observation) = echo_observation(&metadata, change.drive_version.as_deref()) {
         if echo_guard.decision_for(&observation) == EchoDecision::SuppressAdapterEcho {
