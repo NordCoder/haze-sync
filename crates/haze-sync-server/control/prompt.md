@@ -1,29 +1,51 @@
-# W1-SRV-P7-BLOCKED — Worktree runtime acceptance gate
+# W1-SRV-STOR-TEST-SUPPORT-FAN-IN — Restore Storage production feature isolation
 
 Component: server
 Path: crates/haze-sync-server
 Branch: component/server
 PR: #45
-Role: none
+Role: implementation-worker
 
-This is a hold notice, not an executable worker prompt.
+Work only through the GitHub connector. Do not merge the PR or change its lifecycle state.
 
-## Accepted state
+## Context
 
-SRV-P6 implementation, clean-code review, and CI correction are accepted with green CI.
+Storage STOR-P9C completed its in-scope review with green CI, but found a Server-owned dependency-contract violation.
 
-Worktree WT-P8 runtime implementation and its artifact-based CI correction are now green. WT-P8C clean-code review is queued, so the runtime lifecycle, cancellation, mode, status, and hosting surface are not yet finally accepted for Server composition.
+- Storage review head: aa59064d641f4850f7c70fa615e638b52613dd95
+- Storage CI run: 29124956486
+- Storage verdict: CLEAN_BLOCKED_BY_CONTRACT
+- Server manifest evidence: crates/haze-sync-server/Cargo.toml currently enables `haze-sync-storage` feature `test-support` under normal dependencies
 
-## Blocked next phase
+This task is an explicit cross-component fan-in correction within Server ownership. It does not unblock or begin SRV-P7 runtime composition.
 
-The next Server phase is SRV-P7: Worktree runtime composition fan-in.
+## Read
 
-Server must not mount or duplicate Worktree runtime behavior until:
+Read the project process files, current Server control files, crates/haze-sync-server/Cargo.toml, Server tests and any use of Storage test-support, Storage STOR-P9C report and test-support documentation, Cargo feature/resolver configuration, and PR diff.
 
-- WT-P8C is clean-code accepted with green CI;
-- Worktree config, lifecycle, cancellation, mode, status, and hosting contracts are final;
-- WT-P9 provides the explicit Server-hosted doctor/fan-in boundary, or a dedicated equivalent contract is approved.
+## Task
 
-## Unblock condition
+Restore the accepted Storage production-isolation boundary while preserving Server tests.
 
-WT-P8C acceptance plus the required WT-P9 or dedicated Worktree/Server fan-in contract. Until then, do not launch a worker from this hold notice.
+- keep Server's normal `haze-sync-storage` dependency free of `test-support`;
+- enable `test-support` only for Server dev/test targets or a dedicated test harness;
+- ensure normal Server production compilation does not export or require Storage test-support APIs;
+- preserve existing Server test behavior and optional/required database-test semantics;
+- make only the minimum Cargo/test-boundary changes needed;
+- run normal Component CI and report the final code-bearing SHA and run.
+
+## Allowed files
+
+- crates/haze-sync-server/Cargo.toml
+- crates/haze-sync-server/src/** only if a test-only cfg/import adjustment is directly required
+- crates/haze-sync-server/tests/** only if directly required
+- crates/haze-sync-server/docs/** only if dependency placement needs documentation
+- crates/haze-sync-server/control/report.md
+
+## Boundaries
+
+No SRV-P7 runtime composition, Worktree hosting, new endpoints, Storage source changes, schema/migration changes, provider behavior, workflow changes, unrelated dependency upgrades, sibling changes, test deletion, or assertion weakening.
+
+Product/Cargo/test changes must run CI normally. A final report-only commit may skip CI.
+
+Write only crates/haze-sync-server/control/report.md using REPORT_TYPE IMPLEMENTATION and phase_id SRV-STOR-TEST-SUPPORT-FAN-IN.
