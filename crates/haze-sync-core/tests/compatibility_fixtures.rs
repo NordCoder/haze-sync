@@ -252,10 +252,7 @@ fn idempotency_fixtures_match_fingerprint_and_replay_semantics() {
 
     let mut headers = BTreeMap::new();
     headers.insert("Content-Type".to_owned(), "application/json".to_owned());
-    headers.insert(
-        "X-Revision-Id".to_owned(),
-        "rev_01JACCEPTED".to_owned(),
-    );
+    headers.insert("X-Revision-Id".to_owned(), "rev_01JACCEPTED".to_owned());
     let response = StoredIdempotencyResponse::new(
         200,
         json!({
