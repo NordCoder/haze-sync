@@ -116,6 +116,10 @@ export function remoteChangeNeedsDownload(change: ChangeDto): boolean {
 }
 
 export async function materializeRemoteChange(input: RemoteMaterializationInput): Promise<RemoteMaterializationResult> {
+  if (input.change.kind === "conflict_resolved" || input.change.kind === "backup_created") {
+    return metadataOnlyChangeApplied(input, input.change.path);
+  }
+
   const classification = classifyVaultPath(input.change.path);
   if (!classification.included) {
     return queueConflict(input, "unsupported_path");
