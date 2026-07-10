@@ -114,7 +114,10 @@ export async function pushPendingChanges(input: {
 
   for (const mutation of plan.planned) {
     assertNotAborted(input.signal);
-    if (mutation.kind === "delete" && !input.allowDeletes) {
+    if (
+      mutation.kind === "delete" &&
+      (!input.allowDeletes || input.vault.getAbstractFileByPath(mutation.path) !== null)
+    ) {
       result.skipped += 1;
       continue;
     }
