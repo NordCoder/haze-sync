@@ -1,46 +1,31 @@
-# W1-OBS-P8C — Obsidian sync-runner clean-code review
+# W1-OBS-P9-BLOCKED — API compatibility fixture dependency gate
 
 Component: obsidian-plugin
 Path: apps/haze-obsidian-plugin
 Branch: component/obsidian-plugin
 PR: #51
-Role: clean-code-reviewer
+Role: none
 
-Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
+This is a hold notice, not an executable worker prompt.
 
-## Context
+## Accepted state
 
-OBS-P8 implementation is complete and its final code-bearing Component CI is green.
+OBS-P8 implementation and clean-code review are accepted. Clean-code source CI is green.
 
-- code_bearing_sha: 87801f93c34f7ef14411af3c8d9b071462676f96
-- workflow_run_id: 29082606406
-- run_number: 995
+- code_bearing_sha: f54a79b4a35c38d7b818cc323af0e166aa47b2c2
+- workflow: Component CI
+- workflow_run_id: 29084771114
+- run_number: 1058
 - conclusion: success
 
-## Read
+## Blocked next phase
 
-Read process sources, component docs/control files, current source/docs, accepted API/Server contracts, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt instructs it.
+The next plan phase is OBS-P9: compatibility, packaging, and E2E readiness.
 
-## Task
+OBS-P9 requires stable API fixture examples for downstream DTO compatibility checks. The corresponding API compatibility phase is API-P7, which has not yet been accepted. Starting OBS-P9 now would force the plugin to invent fixture ownership or duplicate unstable API examples.
 
-Review OBS-P8 explicit sync runner, offline/backoff state, optional automation, and sanitized status UX.
+## Unblock condition
 
-Focus on serialized execution, trigger coalescing, timer ownership, unload cancellation, mode/dry-run behavior, safe progress persistence, unreadable-file handling, delete absence checks, conflict-stop behavior, sanitized status output, and honest mobile/background limitations.
+Unblock when API-P7 compatibility fixtures are accepted with green CI, or when an explicit cross-component fixture contract provides equivalent stable examples.
 
-## Allowed files
-
-- apps/haze-obsidian-plugin/src/**
-- apps/haze-obsidian-plugin/docs/**
-- apps/haze-obsidian-plugin/control/report.md
-
-## Boundaries
-
-No provider integration, Server runtime changes, hard deletion, destructive repair automation, workflow/dependency changes, or sibling changes.
-
-## CI trigger policy
-
-Source/docs clean-code commits must not skip CI. A final report-only commit may skip CI.
-
-## Report
-
-Write only apps/haze-obsidian-plugin/control/report.md. Use REPORT_TYPE CLEAN_CODE_REVIEW and phase_id OBS-P8C.
+Until then, do not run a worker for this component and do not modify product files.
