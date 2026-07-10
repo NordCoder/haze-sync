@@ -2,12 +2,12 @@ REPORT_TYPE:
 IMPLEMENTATION
 
 STATUS:
-SELF_ACCEPT_PENDING_CI
+SELF_ACCEPT
 
 AGENT:
 role: implementation-worker
-agent_execution_id: W1-CMM-P5-common-adapter-security-hardening
-chat_name: common — W1 CMM-P5 Implementation
+agent_execution_id: W1-CMM-P5-RERUN-common-adapter-security-hardening
+chat_name: common — W1 CMM-P5-RERUN Implementation
 
 COMPONENT:
 name: common
@@ -21,31 +21,27 @@ control_report_path: crates/haze-sync-common/control/report.md
 
 WAVE:
 id: W1
-phase_id: CMM-P5
-dependency_status: CMM-P4 implementation, CI fixer, and clean-code review accepted; active state reported Component CI GREEN for prior accepted source state
+phase_id: CMM-P5-RERUN
+dependency_status: CMM-P4 implementation, CI fixer, and clean-code review accepted; refreshed CMM-P5 prompt explicitly required rerun closure; CMM-P5 code-bearing commit b09833e2129cdb1c756a66c6da150a051d1dc6e2 has successful Component CI evidence from run 29038641448
 
 SUMMARY:
-Implemented CMM-P5 Adapter mode, role, and security primitive hardening inside common scope. Expanded adapter role/mode tests for exact stable wire values, case/hyphen/camelCase/non-exact rejection, serde roundtrips, serde rejection, and declarative mode capability helpers. Expanded `SecretString` tests for redaction in Display, Debug, alternate Debug, formatting contexts, cloned values, explicit sensitive accessors, and empty values. Documented that `readonly_agent` remains a V1 role, that mode helpers are declarative and policy-free, that `SecretString` remains non-serializing and non-runtime, and that additional redaction wrappers are not added without a future contract. No permission enforcement, runtime/provider behavior, token hashing/verification/loading/persistence/generation, workflow changes, or sibling component changes were made.
+Completed the explicit CMM-P5-RERUN by reloading the refreshed control slot and verifying the current common implementation against the active adapter mode, role, and security primitive hardening prompt. The required CMM-P5 source/docs work was already present on component/common: exact AdapterRole/AdapterMode wire-value and rejection tests, policy-free mode capability tests, SecretString non-leak tests, the ReadonlyAgent V1 decision, and the decision not to add speculative redaction wrappers. No additional source or documentation changes were necessary during this rerun. Component CI run 29038641448 completed successfully for the CMM-P5 code-bearing commit.
 
 CHANGED_FILES:
-- crates/haze-sync-common/src/adapter.rs
-- crates/haze-sync-common/src/security/mod.rs
-- crates/haze-sync-common/docs/component-contract.md
-- crates/haze-sync-common/docs/decisions.md
 - crates/haze-sync-common/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/common
 base_branch: main
 base_sha: PR metadata reports base_sha 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2; compare_commits currently reports main at c1e69a664388b0cba028170e8398b9088218957d with merge base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
-head_sha: b09833e2129cdb1c756a66c6da150a051d1dc6e2 before this report-only commit; final head is the report update commit returned by GitHub contents API
+head_sha: 5bf480848e39dc4710502a1c4755ea351c178fbb before this report-only commit; CMM-P5 code-bearing source/docs head is b09833e2129cdb1c756a66c6da150a051d1dc6e2; final branch head is the report update commit returned by GitHub contents API
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
 ci_skip_used: yes
-ci_skip_reason: final commit updates only crates/haze-sync-common/control/report.md after source/docs changes were already committed without CI skip; skipped report-only workflow is not CI evidence
+ci_skip_reason: this rerun required no additional source/docs changes and the only write is crates/haze-sync-common/control/report.md; skipped report-only workflow is not CI evidence
 
 SCOPE:
 allowed_files_only: yes
@@ -64,53 +60,55 @@ affected_components: none
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- read Project Sources for implementation manifest, report template, implementation-worker prompt, GitHub connector guide, and wave-plan background as applicable
-- read active common control state and active CMM-P5 prompt from component/common
-- read previous CMM-P4C clean-code report, component contract, implementation plan, implementation log, dependency map, decisions, and relevant adapter/security source
-- inspected PR #46 metadata and compare_commits for current branch context
-- expanded AdapterRole tests to verify all scoped roles parse, format, expose `as_str`, and use stable serde wire values
-- expanded AdapterRole negative tests for unknown, hyphenated, case-mismatched, and non-exact role wire values
-- expanded AdapterMode tests to verify all scoped modes parse, format, expose `as_str`, and use stable serde wire values
-- expanded AdapterMode negative tests for unknown, hyphenated, camelCase, case-mismatched, and non-exact mode wire values
-- preserved declarative mode capability helpers and verified rollout boundaries for `allows_core_reads` and `allows_core_writes`
-- expanded SecretString tests for redaction in formatting contexts, alternate Debug, cloned values, explicit sensitive accessors, and empty values
-- clarified AdapterRole contract that `readonly_agent` remains a V1 role unless a future contract change renames or removes it
-- clarified AdapterMode contract around exact wire values and declarative Core read/write helper behavior
-- clarified SecretString contract around Debug/alternate Debug/Display redaction, clone redaction, no serialization, no lifecycle behavior, and no additional common-owned redaction wrappers for now
-- documented decisions for keeping `readonly_agent` in V1 and not adding token-hash/public-label redaction wrappers during CMM-P5
-behavior_changes: none intended; adapter/security production behavior was not changed
-bugs_found: none; CMM-P5 was contract/test/doc hardening only
-bugs_fixed: none
-cleanups_made: none beyond hardening tests/docs in allowed files
-non_goals_preserved: no storage behavior, no Core behavior, no runtime/provider behavior, no sibling component edits, no workflow changes, no permission enforcement in common, no token verification/hashing/loading/persistence/generation
-deferred_work: clean-code review for CMM-P5 and CI completion/observation for the source/docs commit
+- read Project Sources for implementation manifest, report template, implementation-worker prompt, and GitHub connector protocol
+- reloaded active common state and explicit refreshed CMM-P5-RERUN prompt from component/common
+- read current control report, component contract, implementation plan, implementation log, dependency map, decisions, adapter source, and security source
+- verified AdapterRole contains the accepted V1 roles including `readonly_agent` and preserves exact lowercase snake_case wire values
+- verified AdapterRole tests cover parsing, formatting, `as_str`, `TryFrom`, serde roundtrips, and rejection of unknown, hyphenated, case-mismatched, and non-exact values
+- verified AdapterMode contains the accepted rollout vocabulary and preserves exact lowercase snake_case wire values
+- verified AdapterMode tests cover parsing, formatting, serde roundtrips, non-exact rejection, and declarative `allows_core_reads`/`allows_core_writes` boundaries
+- verified mode capability helpers remain declarative facts and do not implement authorization or runtime policy
+- verified SecretString implements explicit sensitive accessors while redacting Display, Debug, alternate Debug, formatting contexts, cloned values, and empty values
+- verified SecretString still has no serialization, hashing, verification, loading, persistence, rotation, or generation behavior
+- verified component contract and decisions retain `readonly_agent` for V1 and reject speculative token-hash/public-label redaction wrappers without future cross-component demand
+- inspected relevant PR file patches for adapter.rs and security/mod.rs
+- observed PR #46 open and draft with mergeable true at branch head 5bf480848e39dc4710502a1c4755ea351c178fbb before report write
+- observed Component CI run 29038641448 completed successfully for CMM-P5 code-bearing commit b09833e2129cdb1c756a66c6da150a051d1dc6e2
+behavior_changes: none during rerun; verified existing CMM-P5 test/docs hardening with unchanged production behavior
+bugs_found: none during rerun verification
+bugs_fixed: none during rerun; no additional source change was required
+cleanups_made: none
+non_goals_preserved: no storage behavior, no Core behavior, no runtime/provider behavior, no sibling component changes, no workflow changes, no permission enforcement in common, and no token verification/hash/load/persist/generation behavior
+deferred_work: mandatory clean-code review for CMM-P5 after Orchestrator advances the control slot
 
 TESTS_AND_CHECKS:
 checks_run:
 - GitHub connector read of crates/haze-sync-common/control/state.md
-- GitHub connector read of crates/haze-sync-common/control/prompt.md
-- GitHub connector read of previous crates/haze-sync-common/control/report.md
-- GitHub connector read of common component contract, implementation plan, implementation log, dependency map, decisions, and relevant adapter/security source
-- GitHub connector post-edit read of adapter.rs and security/mod.rs snippets for source/rustfmt sanity
-- GitHub connector get_pr_info for PR #46 after CMM-P5 source/docs commits; observed mergeable true at head b09833e2129cdb1c756a66c6da150a051d1dc6e2
+- GitHub connector read of refreshed crates/haze-sync-common/control/prompt.md
+- GitHub connector read of current crates/haze-sync-common/control/report.md
+- GitHub connector read of current component contract, implementation plan, implementation log, dependency map, decisions, adapter.rs, and security/mod.rs
+- GitHub connector list_pr_changed_filenames for PR #46
+- GitHub connector fetch_pr_file_patch for crates/haze-sync-common/src/adapter.rs
+- GitHub connector fetch_pr_file_patch for crates/haze-sync-common/src/security/mod.rs
+- GitHub connector get_pr_info for PR #46; observed open draft PR and mergeable true before report write
 - GitHub connector compare_commits for main...component/common
-- GitHub connector fetch_commit_workflow_runs for source/docs commit b09833e2129cdb1c756a66c6da150a051d1dc6e2; observed Component CI run 29038641448 in_progress before report write
+- GitHub connector fetch_commit_workflow_runs for CMM-P5 code-bearing commit b09833e2129cdb1c756a66c6da150a051d1dc6e2; observed Component CI run 29038641448 completed with conclusion success
 checks_not_run:
 - cargo fmt --check: not run locally because work is restricted to GitHub connector and no shell-capable repository checkout is available
 - cargo check -p haze-sync-common: not run locally because work is restricted to GitHub connector and no shell-capable repository checkout is available
 - cargo test -p haze-sync-common: not run locally because work is restricted to GitHub connector and no shell-capable repository checkout is available
 - cargo clippy -p haze-sync-common --all-targets -- -D warnings: not run locally because work is restricted to GitHub connector and no shell-capable repository checkout is available
-ci_status: CI_PENDING
-workflow_urls: Component CI run 29038641448 in_progress for source/docs commit b09833e2129cdb1c756a66c6da150a051d1dc6e2 before this report-only commit
-known_failures: none observed for CMM-P5 before report write
+ci_status: CI_GREEN
+workflow_urls: Component CI run 29038641448 completed successfully for CMM-P5 code-bearing commit b09833e2129cdb1c756a66c6da150a051d1dc6e2
+known_failures: none observed for the verified CMM-P5 source/docs state
 
 CI_DIAGNOSTICS:
 artifact_based_logs: no
 artifact_name: not applicable
 artifact_id: not applicable
-workflow_run_id: not applicable for this implementation pass
+workflow_run_id: not applicable for this implementation rerun
 workflow_run_attempt: not applicable
-artifact_status: not read; implementation prompt explicitly prohibited CI diagnostics artifact reads unless future prompt instructs it
+artifact_status: not read; active implementation prompt prohibited CI diagnostics artifact reads unless a future prompt explicitly instructs them
 summary_read: no
 manifest_read: no
 logs_read: none
@@ -126,19 +124,19 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
+- The refreshed prompt states that the report present before prompt creation was for CMM-P4C; by execution time, the active report already contained the CMM-P5 implementation result. This rerun therefore verified and closed the refreshed phase without duplicating source/docs changes.
 - Local shell checks could not be run through the GitHub connector.
-- Component CI for the CMM-P5 source/docs commit was observed in progress, not completed, before report write.
-- The final report-only commit uses `[skip ci]`; that skipped commit is not CI evidence and must not be treated as CI green.
+- The final report-only commit uses `[skip ci]`; it is not CI evidence. The CI evidence is Component CI run 29038641448 for code-bearing commit b09833e2129cdb1c756a66c6da150a051d1dc6e2.
 - component/common remains diverged from current main by normal commit graph, but PR metadata reports mergeable true; no merge/rebase/reset was performed.
 
 BLOCKERS:
-none for implementation; CMM-P5 validation is pending CI completion and clean-code review
+none
 
 NEXT_RECOMMENDED_AGENT:
 clean-code-reviewer
 
 FINAL_VERDICT:
-SELF_ACCEPT_PENDING_CI — CMM-P5 implementation is complete inside common scope with adapter role/mode and SecretString contract test/docs hardening and no production behavior change. CI for the source/docs commit is pending/in progress, and the final report-only commit intentionally uses CI skip.
+SELF_ACCEPT — CMM-P5-RERUN is complete. The existing adapter role/mode and SecretString test/docs hardening satisfies the refreshed prompt, no additional source/docs changes were required, and Component CI run 29038641448 is green for the CMM-P5 code-bearing commit. The final report-only commit intentionally uses CI skip and is not CI evidence.
 
 PUSHED:
 yes
