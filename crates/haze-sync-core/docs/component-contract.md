@@ -51,7 +51,7 @@ Required input rules:
 - Tombstone cleanup classification must receive an explicit UTC evaluation timestamp; Core must not read the system clock.
 - Restored tombstone metadata is valid only when restore timestamp, adapter ID, and restore revision ID are all present together.
 - Delete-guard evaluations must include an adapter/run scope and the caller's proposed delete count plus pre-run total file count.
-- Manual delete unlocks must be scoped to the exact adapter/run and threshold category they cover.
+- Manual delete unlocks are considered only when the policy enables manual unlocks; when enabled, they must match the exact adapter/run and threshold category they cover.
 - Conflict resolution planning must receive a validated open conflict record and a Core-owned action name.
 - Doctor inputs must be pre-redacted. Core doctor helpers must receive booleans, counts, hashes, and other safe summaries rather than secrets, database URLs, provider payloads, or local absolute paths.
 
@@ -70,7 +70,7 @@ Required output rules:
 - Tombstone outputs record delete intent and retention metadata only. They do not physically remove revisions, blobs, worktree files, or provider files.
 - Restore eligibility classifies a tombstone as restore-ready or already restored; it does not create a restore revision or mutate metadata.
 - Retention-cleanup eligibility classifies a tombstone as retained, eligible at/after the exact retention boundary, or ineligible because it was restored; it does not delete data.
-- Delete-guard outputs classify whether a proposed delete run is allowed, blocked by count, blocked by ratio, or blocked pending manual unlock.
+- Delete-guard outputs classify whether a proposed delete run is allowed, hard-blocked by count or ratio, or blocked pending a correctly scoped manual unlock. Hard-block policies cannot be bypassed by an unlock value.
 - Operation-log and changes-feed outputs validate sequence ordering and limit bounds but do not query storage.
 - Doctor outputs contain JSON-safe statuses, messages, counts, booleans, and sampled content hashes only.
 - Public serialization must not expose raw file bytes. In particular, in-memory incoming conflict bytes are skipped during serialization.
@@ -162,7 +162,7 @@ Required test categories:
 - conflict policy outcomes and conflict-saved planning;
 - conflict resolution action planning, including metadata-only actions and new-current-revision effects;
 - tombstone ID and metadata validation, restore-ready/already-restored classification, and retention cleanup before/at/after the exact boundary;
-- delete guard zero-total behavior, exact count/ratio boundaries, over-threshold decisions, overflow-safe ratio comparisons, and adapter/run/category-scoped unlock mismatch;
+- delete guard zero-total behavior, exact count/ratio boundaries, over-threshold decisions, overflow-safe ratio comparisons, hard-block unlock rejection, and adapter/run/category-scoped unlock mismatch;
 - idempotency key validation, request fingerprint determinism, replay of same request, and conflict for different request;
 - changes query bounds, monotonic changes pages, operation kind parsing, and cursor regression rejection;
 - passive doctor check status derivation and redaction-oriented detail payloads;
