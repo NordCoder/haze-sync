@@ -1,6 +1,9 @@
 import { TFile, Vault } from "obsidian";
 
+import { sha256ContentHash } from "./content-hash";
 import { ExcludedVaultPath, IncludedVaultPath, classifyVaultPath } from "./vault-paths";
+
+export { sha256ContentHash } from "./content-hash";
 
 export interface LocalFileFact {
   path: string;
@@ -36,11 +39,4 @@ export async function readLocalFileFact(vault: Vault, file: TFile): Promise<Loca
 
 export function factFromEventPath(rawPath: string): IncludedVaultPath | ExcludedVaultPath {
   return classifyVaultPath(rawPath);
-}
-
-export async function sha256ContentHash(body: ArrayBuffer): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", body);
-  const bytes = new Uint8Array(digest);
-  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-  return `sha256:${hex}`;
 }
