@@ -14,6 +14,7 @@ use std::fmt;
 pub enum StateError {
     EmptyField(&'static str),
     InvalidVaultPath(&'static str),
+    DriveFileIdMismatch,
     CursorRegression { current: u64, attempted: u64 },
     DirectDatabaseAccessNotAccepted,
 }
@@ -29,6 +30,9 @@ impl fmt::Display for StateError {
         match self {
             Self::EmptyField(field) => write!(formatter, "state field {field} must not be empty"),
             Self::InvalidVaultPath(reason) => write!(formatter, "invalid vault path: {reason}"),
+            Self::DriveFileIdMismatch => {
+                formatter.write_str("Drive observation does not match mapping identity")
+            }
             Self::CursorRegression { current, attempted } => write!(
                 formatter,
                 "cursor regression rejected: current={current}, attempted={attempted}"
@@ -217,14 +221,21 @@ impl GDriveMapping {
         })
     }
 
-    pub fn record_drive_observation(&mut self, observation: DriveStateObservation) {
-        self.drive_file_id = observation.drive_file_id;
+    pub fn record_drive_observation(
+        &mut self,
+        observation: DriveStateObservation,
+    ) -> Result<(), StateError> {
+        if self.drive_file_id != observation.drive_file_id {
+            return Err(StateError::DriveFileIdMismatch);
+        }
+
         self.parent_id = observation.parent_id;
         self.name = observation.name;
         self.checksum = observation.checksum;
         self.drive_version = observation.drive_version;
         self.drive_modified_time = observation.drive_modified_time;
         self.last_seen_at = Some(observation.observed_at);
+        Ok(())
     }
 
     pub fn record_import(&mut self, core: CoreStateObservation, imported_at: SafeTimestamp) {
@@ -425,9 +436,7 @@ impl EchoGuard {
             return EchoDecision::AcceptRemoteChange;
         };
 
-        if matching_optional_value(&entry.checksum, &observation.checksum)
-            || matching_optional_value(&entry.drive_version, &observation.drive_version)
-        {
+        if echo_fingerprint_matches(entry, observation) {
             EchoDecision::SuppressAdapterEcho
         } else {
             EchoDecision::AcceptRemoteChange
@@ -461,6 +470,7 @@ impl EchoGuard {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MappingPersistenceBoundary {
+    Unresolved,
     ServerApiMediated,
     StorageRepositoryMediated,
 }
@@ -471,6 +481,12 @@ pub struct StatePersistencePolicy {
 }
 
 impl StatePersistencePolicy {
+    pub const fn unresolved() -> Self {
+        Self {
+            boundary: MappingPersistenceBoundary::Unresolved,
+        }
+    }
+
     pub const fn server_api_mediated() -> Self {
         Self {
             boundary: MappingPersistenceBoundary::ServerApiMediated,
@@ -481,6 +497,10 @@ impl StatePersistencePolicy {
         Self {
             boundary: MappingPersistenceBoundary::StorageRepositoryMediated,
         }
+    }
+
+    pub const fn is_resolved(self) -> bool {
+        !matches!(self.boundary, MappingPersistenceBoundary::Unresolved)
     }
 
     pub const fn direct_database_access_allowed(self) -> bool {
@@ -494,7 +514,7 @@ impl StatePersistencePolicy {
 
 impl Default for StatePersistencePolicy {
     fn default() -> Self {
-        Self::server_api_mediated()
+        Self::unresolved()
     }
 }
 
@@ -507,11 +527,22 @@ fn required_string(field: &'static str, raw: impl Into<String>) -> Result<String
     Ok(trimmed.to_owned())
 }
 
-fn matching_optional_value(expected: &Option<String>, observed: &Option<String>) -> bool {
-    match (expected.as_deref(), observed.as_deref()) {
-        (Some(expected), Some(observed)) => expected == observed,
-        _ => false,
+fn echo_fingerprint_matches(
+    entry: &EchoGuardEntry,
+    observation: &DriveEchoObservation,
+) -> bool {
+    let mut compared_field = false;
+    for (expected, observed) in [
+        (&entry.checksum, &observation.checksum),
+        (&entry.drive_version, &observation.drive_version),
+    ] {
+        match (expected.as_deref(), observed.as_deref()) {
+            (Some(expected), Some(observed)) if expected != observed => return false,
+            (Some(_), Some(_)) => compared_field = true,
+            _ => {}
+        }
     }
+    compared_field
 }
 
 #[cfg(test)]
@@ -522,15 +553,19 @@ mod tests {
         SafeTimestamp::new(value).expect("timestamp")
     }
 
-    #[test]
-    fn mapping_tracks_drive_core_and_delete_candidate_state() {
-        let mut mapping = GDriveMapping::new(
+    fn mapping() -> GDriveMapping {
+        GDriveMapping::new(
             VaultPath::new("notes/plan.md").expect("path"),
             "drive-1",
             "root",
             "plan.md",
         )
-        .expect("mapping");
+        .expect("mapping")
+    }
+
+    #[test]
+    fn mapping_tracks_drive_core_and_delete_candidate_state() {
+        let mut mapping = mapping();
         let drive_observation =
             DriveStateObservation::new("drive-1", "root", "plan.md", ts("2026-07-09T12:00:00Z"))
                 .expect("drive observation")
@@ -540,7 +575,9 @@ mod tests {
                 .expect("drive version")
                 .with_drive_modified_time(ts("2026-07-09T11:59:00Z"));
 
-        mapping.record_drive_observation(drive_observation);
+        mapping
+            .record_drive_observation(drive_observation)
+            .expect("record drive observation");
         mapping.record_import(
             CoreStateObservation::new("core-rev-1", 7).expect("core observation"),
             ts("2026-07-09T12:01:00Z"),
@@ -557,6 +594,26 @@ mod tests {
         mapping.clear_delete_candidate();
 
         assert!(!mapping.is_delete_candidate());
+    }
+
+    #[test]
+    fn mapping_rejects_observation_for_different_drive_file() {
+        let mut mapping = mapping();
+        let observation = DriveStateObservation::new(
+            "drive-2",
+            "root",
+            "other.md",
+            ts("2026-07-09T12:00:00Z"),
+        )
+        .expect("drive observation");
+
+        assert_eq!(
+            mapping.record_drive_observation(observation),
+            Err(StateError::DriveFileIdMismatch)
+        );
+        assert_eq!(mapping.drive_file_id, "drive-1");
+        assert_eq!(mapping.name, "plan.md");
+        assert_eq!(mapping.last_seen_at, None);
     }
 
     #[test]
@@ -609,14 +666,8 @@ mod tests {
     }
 
     #[test]
-    fn echo_guard_suppresses_adapter_echo_and_accepts_real_remote_change() {
-        let mut mapping = GDriveMapping::new(
-            VaultPath::new("notes/plan.md").expect("path"),
-            "drive-1",
-            "root",
-            "plan.md",
-        )
-        .expect("mapping");
+    fn echo_guard_suppresses_only_consistent_adapter_fingerprint() {
+        let mut mapping = mapping();
         mapping.checksum = Some("exported-checksum".to_owned());
         mapping.drive_version = Some("exported-version".to_owned());
         mapping.record_export(
@@ -626,24 +677,39 @@ mod tests {
 
         let mut guard = EchoGuard::new();
         guard.record_exported_write(
-            EchoGuardEntry::from_mapping(&mapping, ts("2026-07-09T12:00:00Z")).expect("echo entry"),
+            EchoGuardEntry::from_mapping(&mapping, ts("2026-07-09T12:00:00Z"))
+                .expect("echo entry"),
         );
 
         let adapter_echo = DriveEchoObservation::new("drive-1")
             .expect("observation")
             .with_checksum("exported-checksum")
-            .expect("checksum");
-        let remote_change = DriveEchoObservation::new("drive-1")
+            .expect("checksum")
+            .with_drive_version("exported-version")
+            .expect("drive version");
+        let checksum_conflict = DriveEchoObservation::new("drive-1")
             .expect("observation")
             .with_checksum("remote-checksum")
-            .expect("checksum");
+            .expect("checksum")
+            .with_drive_version("exported-version")
+            .expect("drive version");
+        let version_conflict = DriveEchoObservation::new("drive-1")
+            .expect("observation")
+            .with_checksum("exported-checksum")
+            .expect("checksum")
+            .with_drive_version("remote-version")
+            .expect("drive version");
 
         assert_eq!(
             guard.decision_for(&adapter_echo),
             EchoDecision::SuppressAdapterEcho
         );
         assert_eq!(
-            guard.decision_for(&remote_change),
+            guard.decision_for(&checksum_conflict),
+            EchoDecision::AcceptRemoteChange
+        );
+        assert_eq!(
+            guard.decision_for(&version_conflict),
             EchoDecision::AcceptRemoteChange
         );
         assert!(guard.acknowledge_observed_echo(&adapter_echo));
@@ -651,16 +717,40 @@ mod tests {
     }
 
     #[test]
-    fn persistence_policy_documents_no_direct_database_access() {
-        let policy = StatePersistencePolicy::server_api_mediated();
+    fn echo_guard_can_match_single_available_fingerprint() {
+        let mut mapping = mapping();
+        mapping.checksum = Some("exported-checksum".to_owned());
+
+        let mut guard = EchoGuard::new();
+        guard.record_exported_write(
+            EchoGuardEntry::from_mapping(&mapping, ts("2026-07-09T12:00:00Z"))
+                .expect("echo entry"),
+        );
+        let adapter_echo = DriveEchoObservation::new("drive-1")
+            .expect("observation")
+            .with_checksum("exported-checksum")
+            .expect("checksum");
 
         assert_eq!(
-            policy.boundary,
-            MappingPersistenceBoundary::ServerApiMediated
+            guard.decision_for(&adapter_echo),
+            EchoDecision::SuppressAdapterEcho
         );
-        assert!(!policy.direct_database_access_allowed());
+    }
+
+    #[test]
+    fn persistence_policy_defaults_to_unresolved_boundary() {
+        let unresolved = StatePersistencePolicy::default();
+        let server_api = StatePersistencePolicy::server_api_mediated();
+
         assert_eq!(
-            policy.reject_direct_database_access(),
+            unresolved.boundary,
+            MappingPersistenceBoundary::Unresolved
+        );
+        assert!(!unresolved.is_resolved());
+        assert!(server_api.is_resolved());
+        assert!(!unresolved.direct_database_access_allowed());
+        assert_eq!(
+            unresolved.reject_direct_database_access(),
             Err(StateError::DirectDatabaseAccessNotAccepted)
         );
     }
