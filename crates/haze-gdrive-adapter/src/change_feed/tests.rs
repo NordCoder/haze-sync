@@ -122,7 +122,7 @@ fn provider_cursor_invalidation_falls_back_to_full_scan() {
 }
 
 #[test]
-fn duplicate_entries_coalesce_and_conflicting_reordered_entries_require_scan() {
+fn duplicate_entries_coalesce_and_conflicting_history_supersedes_incremental_work() {
     let duplicate = markdown_change("file-a", "checksum-a");
     let old = markdown_change("file-b", "checksum-old");
     let new = markdown_change("file-b", "checksum-new");
@@ -140,18 +140,14 @@ fn duplicate_entries_coalesce_and_conflicting_reordered_entries_require_scan() {
         classify_drive_changes(reverse, AdapterMode::ImportOnly, false, &EchoGuard::new());
 
     assert_eq!(forward_batch, reverse_batch);
-    assert_eq!(forward_batch.items.len(), 2);
-    assert!(forward_batch.items.iter().any(|item| matches!(
-        item,
-        ChangeWorkItem::Import { metadata, .. } if metadata.id == "file-a"
-    )));
-    assert!(forward_batch.items.iter().any(|item| matches!(
-        item,
+    assert_eq!(forward_batch.items.len(), 1);
+    assert!(matches!(
+        &forward_batch.items[0],
         ChangeWorkItem::FullScan {
             reason: FullScanFallbackReason::ConflictingChangeHistory,
             provider_id: Some(provider_id),
         } if provider_id == "file-b"
-    )));
+    ));
 }
 
 #[test]
@@ -248,6 +244,46 @@ fn failed_processing_does_not_advance_cursor() {
 }
 
 #[test]
+fn cursor_save_failure_leaves_processed_batch_replayable() {
+    let provider = FakeDriveChangeFeedProvider::new("unused")
+        .expect("provider")
+        .with_poll(
+            "sync-1",
+            DriveChangePoll::Page(
+                DriveChangePage::final_page(
+                    vec![markdown_change("file-a", "checksum-a")],
+                    "sync-2",
+                )
+                .expect("page"),
+            ),
+        );
+    let mut store = InMemoryDriveCursorStore::new(Some(synced_cursor("sync-1"))).with_save_error(
+        CursorStoreError::new("save_cursor", "injected persistence failure"),
+    );
+    let mut processor = RecordingProcessor::default();
+
+    let error = run_change_feed_cycle(
+        &provider,
+        &mut store,
+        &mut processor,
+        &EchoGuard::new(),
+        &ProviderBackoffPolicy::default(),
+        cycle_input(),
+    )
+    .expect_err("cursor save failure");
+
+    assert!(matches!(error, ChangeFeedError::CursorStore(_)));
+    assert_eq!(processor.batches.len(), 1);
+    assert_eq!(store.save_count(), 0);
+    assert_eq!(
+        store
+            .cursor()
+            .and_then(|cursor| cursor.sync_token.as_deref()),
+        Some("sync-1")
+    );
+}
+
+#[test]
 fn matching_echo_is_classified_as_export_confirmation() {
     let mut echo_guard = EchoGuard::new();
     echo_guard.record_exported_write(EchoGuardEntry {
@@ -269,6 +305,40 @@ fn matching_echo_is_classified_as_export_confirmation() {
         &batch.items[0],
         ChangeWorkItem::ConfirmExportEcho { observation }
             if observation.drive_file_id == "file-a"
+    ));
+}
+
+#[test]
+fn full_scan_fallback_supersedes_import_and_echo_work() {
+    let mut echo_guard = EchoGuard::new();
+    echo_guard.record_exported_write(EchoGuardEntry {
+        drive_file_id: "echo".to_owned(),
+        checksum: Some("checksum-echo".to_owned()),
+        drive_version: Some("version-2".to_owned()),
+        core_revision: Some("revision-2".to_owned()),
+        core_sequence: Some(2),
+        exported_at: timestamp("2026-07-10T11:30:00Z"),
+    });
+    let echo = markdown_change("echo", "checksum-echo")
+        .with_drive_version("version-2")
+        .expect("version");
+    let import = markdown_change("import", "checksum-import");
+    let removed = DriveChangeEntry::removed("removed").expect("removed");
+
+    let batch = classify_drive_changes(
+        vec![echo, import, removed],
+        AdapterMode::Bidirectional,
+        false,
+        &echo_guard,
+    );
+
+    assert_eq!(batch.items.len(), 1);
+    assert!(matches!(
+        &batch.items[0],
+        ChangeWorkItem::FullScan {
+            reason: FullScanFallbackReason::RemovedEntry,
+            provider_id: Some(provider_id),
+        } if provider_id == "removed"
     ));
 }
 
