@@ -1,58 +1,50 @@
-# W1-WT-P5C — Worktree materializer clean-code review
+# W1-FIX-WT-P5C-CI — Worktree clean-code CI correction
 
 Component: worktree
 Path: crates/haze-sync-worktree
 Branch: component/worktree
 PR: #49
-Role: clean-code-reviewer
+Role: fixer-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-WT-P5 implementation and CI fixer are complete. Post-fix Component CI is green.
+WT-P5C clean-code review made component source and test changes. Its final code-bearing Component CI run failed.
 
-- code_bearing_sha: fe568904f82d2ea772249fae31c4e9800f20798a
+- code_bearing_sha: 6fbb047ded2082f37f2168ddd0e2b0f50ddc5d80
 - workflow: Component CI
-- workflow_run_id: 29079896125
-- run_number: 896
-- conclusion: success
+- workflow_run_id: 29082119591
+- run_number: 982
+- run_attempt: 1
+- artifact_id: 8223221488
+- artifact_name: ci-diag__component-worktree__wf-component-ci__run-29082119591__attempt-1
+- artifact_expires_at: 2026-07-11T09:11:24Z
+
+Use the diagnostics artifact as source of truth.
 
 ## Read
 
-Read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, chatgpt-gh-connector.md, component docs/control files, current source, and PR diff. Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
+Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current source/tests, and PR diff. Download artifact 8223221488 and read summary.md, manifest.json, and every failed-check log. If unavailable or unreadable, report FIX_BLOCKED_BY_LOGS.
 
 ## Task
 
-Review WT-P5 materializer and atomic writer plus the formatting fixer.
-
-Focus areas:
-
-- authoritative materialization request boundaries;
-- incoming hash verification before filesystem mutation;
-- dirty, missing, untracked, already-current, and tombstoned local-state handling;
-- deferred import plans instead of silent overwrite;
-- reserved temp staging, sync, rename, cleanup, and destination revalidation;
-- root/parent path and symlink safety;
-- state advancement only after successful or already-current outcomes;
-- echo-marker behavior and ownership;
-- clear separation between filesystem mechanics and Core conflict policy;
-- preservation of no-hard-delete and other WT-P5 non-goals.
+Apply only the minimum artifact-proven correction for the WT-P5C CI failure. Preserve the accepted path-boundary checks, materializer behavior, regression coverage, and component boundaries.
 
 ## Allowed files
 
 - crates/haze-sync-worktree/src/**
-- crates/haze-sync-worktree/docs/**
+- crates/haze-sync-worktree/docs/** only if diagnostics prove a documentation issue
 - crates/haze-sync-worktree/control/report.md
 
-## Forbidden changes
+## Boundaries
 
-No Core conflict policy, API DTO redesign, provider behavior, watcher/runtime service work, hard delete, workflow changes, dependency changes, or sibling component changes.
+No Core policy changes, API contract redesign, provider behavior, watcher/runtime phase work, deletion policy changes, workflow/dependency changes, sibling changes, test deletion, or assertion weakening.
 
 ## CI trigger policy
 
-Source/doc clean-code commits must not skip CI. A final report-only commit may skip CI.
+Source/test/docs fixer commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only the report to crates/haze-sync-worktree/control/report.md. Use report-template.md. Set REPORT_TYPE to CLEAN_CODE_REVIEW and phase_id to WT-P5C.
+Write only crates/haze-sync-worktree/control/report.md. Use report-template.md, REPORT_TYPE FIX, phase_id FIX-WT-P5C-CI.
