@@ -43,6 +43,19 @@ A downstream component may embed these primitive strings inside its own DTOs, bu
 
 The examples are deterministic fixtures. They are not production identifiers, credentials, server URLs, user vault data, or environment-specific paths.
 
+## Verification rules
+
+The Rust verifier treats the fixture shape as strict:
+
+- `schema_version` must be recognized;
+- unknown object fields are rejected so misspelled or silently added fields cannot bypass compatibility checks;
+- adapter role, adapter mode, and validation-error wire values must be complete and unique;
+- array ordering is for readability only and is not part of the wire contract;
+- every represented primitive must serialize to the documented wire value and deserialize back to the same value;
+- accepted non-canonical path/hash inputs must normalize to their documented canonical outputs.
+
+Downstream fixture consumers should apply the same principles instead of treating successful JSON parsing alone as compatibility evidence.
+
 ## Rust consumers
 
 Rust components should use the public `haze-sync-common` types directly. They may load the JSON fixture in compatibility or integration tests when they need a language-neutral reference.
@@ -55,7 +68,9 @@ TypeScript clients may mirror the fixture in tests or use it to verify local lit
 
 Recommended rules:
 
+- validate `schema_version` before consuming fixture entries;
 - treat `adapter_roles` and each `adapter_modes[].wire` value as exact lowercase string literals;
+- treat vocabulary arrays as unordered sets and reject duplicate wire values;
 - serialize hashes only in canonical lowercase `sha256:<hex>` form;
 - expect normalized vault-relative path output, not local absolute paths;
 - treat validation error `wire` values as primitive codes, not as a complete API error envelope;
