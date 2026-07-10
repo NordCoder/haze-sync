@@ -4,12 +4,15 @@
 
 This runbook documents the DEP-P3 local server service wiring in `deploy/docker-compose.yml`.
 
-The server service is intended for local and prod-like smoke workflows only. It is not a full production deployment and must not be used as evidence that provider sync, Worktree runtime, reverse proxy/TLS, migrations, backups, host permissions, or real-vault rollout are ready.
+The server service is intended for local and prod-like smoke workflows only. It is not a full production deployment and must not be used as evidence that provider sync, Worktree runtime, public TLS rollout, migrations, backups, host permissions, or real-vault rollout are ready.
 
 Use:
 
 - `deploy/docs/migrations-backup-restore.md` for database migration, backup, and restore sequencing;
-- `deploy/docs/host-directory-layout.md` for production-style path, ownership, permission, and backup boundaries.
+- `deploy/docs/host-directory-layout.md` for production-style path, ownership, permission, and backup boundaries;
+- `deploy/docs/public-access.md` for the placeholder Caddy/TLS/firewall boundary.
+
+The tracked Caddyfile is not started by Compose.
 
 ## Packaging decision
 
@@ -25,7 +28,7 @@ Rationale:
 - the Server binary owns listener startup, object-store root preparation, PostgreSQL pool creation, router construction, and graceful shutdown;
 - Docker Compose can wire PostgreSQL and Server without changing Server code;
 - container health checks can use the accepted `/health` route;
-- production binary/systemd and reverse-proxy/TLS examples remain separate future deployment phases.
+- production binary/systemd and running reverse-proxy/TLS services remain separate deployment work.
 
 The Docker build uses the repository `Cargo.lock` through `cargo build --release --locked -p haze-sync-server` so dependency resolution cannot silently change during image builds.
 
@@ -45,6 +48,14 @@ server -> server_objects named volume at /var/lib/haze-sync/objects
 ```
 
 The Server listens on `0.0.0.0:8080` inside the container only. The host-side port mapping is fixed to `127.0.0.1`.
+
+The DEP-P6 production-style public topology keeps the same loopback host boundary:
+
+```text
+public TCP 443 -> Caddy -> 127.0.0.1:8080 Server
+```
+
+Do not widen the Compose Server port bind to make the proxy work.
 
 ## Server environment
 
@@ -82,7 +93,7 @@ server_objects
 
 `postgres_data` stores local PostgreSQL state. `server_objects` stores local server object-store data.
 
-These are local Docker named volumes, not production host directories. DEP-P5 now documents production-style host layout and permissions, but it intentionally does not replace the named volumes or add Worktree bind mounts.
+These are local Docker named volumes, not production host directories. DEP-P5 documents production-style host layout and permissions, but it intentionally does not replace the named volumes or add Worktree bind mounts.
 
 ## Startup
 
@@ -98,13 +109,13 @@ The server image and compose service do not run migrations. Apply migrations thr
 
 ## Health and readiness
 
-Process/router health:
+Trusted local process/router health:
 
 ```bash
 curl -fsS http://127.0.0.1:8080/health
 ```
 
-Runtime readiness:
+Trusted local runtime readiness:
 
 ```bash
 curl -fsS http://127.0.0.1:8080/ready
@@ -114,9 +125,11 @@ Expected meaning:
 
 - `/health` means the local HTTP process/router responds.
 - `/ready` means the Server's sanitized readiness check sees required configured runtime dependencies as ready.
-- Neither endpoint proves migrations, schema state, route-level write readiness, adapter credentials, Worktree runtime, reverse proxy/TLS, backup readiness, host permission correctness, or production sync readiness.
+- Neither endpoint proves migrations, schema state, route-level write readiness, adapter credentials, Worktree runtime, public TLS rollout, backup readiness, host permission correctness, or production sync readiness.
 
 The compose healthcheck uses `/health` so it verifies server process liveness without requiring migrations or provider/runtime sync.
+
+The tracked public Caddy example blocks both `/health` and `/ready` from public clients while using loopback `/health` for active upstream checks.
 
 ## Shutdown
 
@@ -142,7 +155,7 @@ Current deployment intentionally does not add:
 GDrive adapter service
 Worktree runtime service or bind mount
 Obsidian plugin runtime
-reverse proxy / TLS
+running reverse-proxy service or certificate provisioning
 migration runner
 automatic backups
 provider credential flows
@@ -150,4 +163,4 @@ remote deployment automation
 host mutation/provisioning scripts
 ```
 
-Those surfaces require later component contracts and Deployment phases.
+The repository now contains a placeholder-only Caddy configuration and public-access runbook. Starting it, provisioning DNS/certificates, and changing firewall rules remain operator-owned future rollout work.
