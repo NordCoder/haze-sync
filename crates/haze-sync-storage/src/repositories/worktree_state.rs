@@ -15,8 +15,7 @@ const SELECT_BY_PATH_SQL: &str =
      dirty, last_scanned_at, last_written_by_adapter \
      from worktree_state where path = $1";
 
-const UPSERT_SQL: &str =
-    "insert into worktree_state ( \
+const UPSERT_SQL: &str = "insert into worktree_state ( \
          path, last_applied_revision_id, last_seen_sha256, last_seen_mtime, \
          dirty, last_scanned_at, last_written_by_adapter \
      ) values ($1, $2, $3, $4, $5, $6, $7) \
@@ -56,9 +55,7 @@ pub async fn upsert_worktree_state<'executor, ExecutorType>(
 where
     ExecutorType: Executor<'executor, Database = Postgres>,
 {
-    let revision_id = input
-        .last_applied_revision_id
-        .map(RevisionId::as_str);
+    let revision_id = input.last_applied_revision_id.map(RevisionId::as_str);
     let last_seen_sha256 = input.last_seen_sha256.map(Sha256::to_string);
 
     let row = sqlx::query(UPSERT_SQL)
@@ -112,8 +109,7 @@ fn worktree_state_from_pg(row: &PgRow) -> RepositoryResult<WorktreeStateRow> {
 }
 
 fn validate_worktree_state_row(row: WorktreeStateRow) -> RepositoryResult<WorktreeStateRow> {
-    let normalized_path =
-        VaultPath::parse(&row.path).map_err(|_| RepositoryError::InvalidPath)?;
+    let normalized_path = VaultPath::parse(&row.path).map_err(|_| RepositoryError::InvalidPath)?;
     if normalized_path.as_str() != row.path {
         return Err(RepositoryError::InvalidPath);
     }
