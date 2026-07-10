@@ -5,7 +5,6 @@ import {
   isRetryableSyncCategory,
   markSyncFailed,
   markSyncStarted,
-  markSyncStopped,
   markSyncSucceeded,
   syncBackoffRemainingMs,
 } from "./sync-runtime-state";
@@ -40,6 +39,7 @@ export class SyncRunner {
   private readonly onStateChange: SyncRunnerOptions["onStateChange"];
   private automation: SyncAutomationConfig = { intervalMs: null, eventDelayMs: null };
   private runningPromise?: Promise<SyncRequestResult>;
+  private stateBeforeRun?: SyncRuntimeState;
   private abortController?: AbortController;
   private intervalTimer?: number;
   private eventTimer?: number;
@@ -115,10 +115,16 @@ export class SyncRunner {
     this.clearRetryTimer();
     this.clearEventTimer();
     const controller = new AbortController();
+    const stateBeforeRun = this.state;
     this.abortController = controller;
-    this.updateState(markSyncStarted(this.state, trigger, new Date().toISOString()));
+    this.stateBeforeRun = stateBeforeRun;
+    this.updateState(
+      scope === "scan_only"
+        ? markMaintenanceStarted(stateBeforeRun, trigger, new Date().toISOString())
+        : markSyncStarted(stateBeforeRun, trigger, new Date().toISOString()),
+    );
 
-    const run = this.executeRun(trigger, scope, controller.signal);
+    const run = this.executeRun(trigger, scope, controller.signal, stateBeforeRun);
     this.runningPromise = run;
 
     try {
@@ -129,6 +135,9 @@ export class SyncRunner {
       }
       if (this.abortController === controller) {
         this.abortController = undefined;
+      }
+      if (this.stateBeforeRun === stateBeforeRun) {
+        this.stateBeforeRun = undefined;
       }
 
       const hadPendingAutoTrigger = this.pendingAutoTrigger;
@@ -161,13 +170,17 @@ export class SyncRunner {
     this.clearFollowUpTimer();
     this.abortController?.abort();
     this.abortController = undefined;
-    this.updateState(markSyncStopped(this.state, new Date().toISOString()));
+
+    if (this.runningPromise !== undefined && this.stateBeforeRun !== undefined) {
+      this.updateState(markRunInterrupted(this.stateBeforeRun, new Date().toISOString()));
+    }
   }
 
   private async executeRun(
     trigger: SyncTrigger,
     scope: SyncRunScope,
     signal: AbortSignal,
+    stateBeforeRun: SyncRuntimeState,
   ): Promise<SyncRequestResult> {
     try {
       const result = await this.execute(trigger, scope, signal);
@@ -175,11 +188,22 @@ export class SyncRunner {
         return { status: "stopped", state: this.state };
       }
 
-      this.updateState(markSyncSucceeded(this.state, new Date().toISOString(), result.summary));
+      if (scope === "scan_only") {
+        this.updateState(markMaintenanceCompleted(stateBeforeRun, new Date().toISOString(), result.summary));
+        this.scheduleRetryIfNeeded();
+      } else {
+        this.updateState(markSyncSucceeded(this.state, new Date().toISOString(), result.summary));
+      }
       return { status: "completed", state: this.state };
     } catch (error) {
       if (signal.aborted || this.disposed || isAbortError(error)) {
         return { status: "stopped", state: this.state };
+      }
+
+      if (scope === "scan_only") {
+        this.updateState(markMaintenanceCompleted(stateBeforeRun, new Date().toISOString(), "Vault scan failed safely."));
+        this.scheduleRetryIfNeeded();
+        return { status: "failed", state: this.state };
       }
 
       const category = errorCategory(error);
@@ -246,6 +270,41 @@ export class SyncRunner {
       this.followUpTimer = undefined;
     }
   }
+}
+
+function markMaintenanceStarted(
+  state: SyncRuntimeState,
+  trigger: SyncTrigger,
+  startedAt: string,
+): SyncRuntimeState {
+  return {
+    ...state,
+    phase: "running",
+    lastTrigger: trigger,
+    lastStartedAt: startedAt,
+    lastCompletedAt: undefined,
+    summary: "Vault scan started.",
+  };
+}
+
+function markMaintenanceCompleted(
+  state: SyncRuntimeState,
+  completedAt: string,
+  summary: string,
+): SyncRuntimeState {
+  return {
+    ...state,
+    lastCompletedAt: completedAt,
+    summary,
+  };
+}
+
+function markRunInterrupted(state: SyncRuntimeState, interruptedAt: string): SyncRuntimeState {
+  return {
+    ...state,
+    lastCompletedAt: interruptedAt,
+    summary: "Sync run was interrupted because the plugin unloaded.",
+  };
 }
 
 function normalizeAutomationConfig(config: SyncAutomationConfig): SyncAutomationConfig {
