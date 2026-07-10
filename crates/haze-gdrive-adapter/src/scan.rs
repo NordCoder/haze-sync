@@ -48,6 +48,7 @@ impl CoreUploadRequest {
 pub struct PlannedImport {
     pub change: ImportChangeKind,
     pub execution: ImportExecution,
+    pub file_type: SupportedFileType,
     pub provider_id: String,
     pub parent_id: String,
     pub provider_name: String,
@@ -293,7 +294,7 @@ fn collect_folder(
             if !folder_path_valid {
                 collection.unsupported.push(SkippedScanEntry {
                     provider_id: metadata.id.clone(),
-                    path: normalized_path,
+                    path: normalized_path.clone(),
                     reason: ScanSkipReason::InvalidVaultPath,
                 });
             }
@@ -377,7 +378,9 @@ fn plan_supported_files(
             continue;
         }
 
-        let file = path_files.pop().expect("path group contains one file");
+        let Some(file) = path_files.pop() else {
+            continue;
+        };
         let mapping = indexes.by_provider_id(&file.metadata.id);
         let change = match mapping {
             None => Some(ImportChangeKind::New),
@@ -386,7 +389,9 @@ fn plan_supported_files(
         };
 
         let Some(change) = change else {
-            let mapping = mapping.expect("unchanged file has mapping");
+            let Some(mapping) = mapping else {
+                continue;
+            };
             plan.unchanged.push(UnchangedDriveEntry {
                 provider_id: file.metadata.id,
                 path,
@@ -427,6 +432,7 @@ fn plan_supported_files(
         plan.imports.push(PlannedImport {
             change,
             execution,
+            file_type: file.file_type,
             provider_id: file.metadata.id,
             parent_id: file.parent_id,
             provider_name: file.metadata.name,
@@ -551,7 +557,7 @@ fn normalize_common_compatible_path(segments: &[String]) -> Result<VaultPath, ()
         return Err(());
     }
 
-    Ok(VaultPath::from_common_normalized(normalized))
+    VaultPath::new(normalized).map_err(|_| ())
 }
 
 fn decode_percent_sequences(input: &str) -> Result<Cow<'_, str>, ()> {
@@ -713,6 +719,7 @@ mod tests {
             .find(|import| import.change == ImportChangeKind::New)
             .expect("new import");
         assert_eq!(new_import.execution, ImportExecution::Submit);
+        assert_eq!(new_import.file_type, SupportedFileType::Markdown);
         assert_eq!(new_import.request.path.as_str(), "Notes/new.md");
         assert_eq!(new_import.request.base_revision_id, None);
         assert!(new_import.request.verifies_content());
@@ -798,7 +805,7 @@ mod tests {
         assert_eq!(plan.imports[0].execution, ImportExecution::DryRun);
         assert_eq!(
             plan.imports[0].request.content_sha256.to_string(),
-            "sha256:2ca02c68a5b77e0808d3b7b8288dffbfa3d60f21bec42d7d0c6a2134a11c15e2"
+            "sha256:5975cf1bba432391c94667f5886225f69377c0aa8b9fa21fddfb21c89bcf9092"
         );
         assert!(plan.imports[0].request.verifies_content());
     }
