@@ -1,12 +1,12 @@
 REPORT_TYPE:
-IMPLEMENTATION
+FIX
 
 STATUS:
-BLOCKED_BY_TOOLING
+FIX_COMPLETE
 
 AGENT:
-role: implementation-worker
-agent_execution_id: W1-WT-P8-worktree-implementation-20260710
+role: fixer-worker
+agent_execution_id: W1-FIX-WT-P8-CI-worktree-fixer-20260710
 chat_name: worktree persistent component worker
 
 COMPONENT:
@@ -21,31 +21,29 @@ control_report_path: crates/haze-sync-worktree/control/report.md
 
 WAVE:
 id: W1
-phase_id: WT-P8
-dependency_status: control state was PROMPT_READY; active role was implementation-worker; WT-P7 implementation, clean-code review, and artifact-based correction were accepted; source head a3ee10b47ae55878d6d27461774775a0febf4425 had green Component CI run 29113546394 before WT-P8 began.
+phase_id: FIX-WT-P8-CI
+dependency_status: control state was PROMPT_READY; active role was fixer-worker; WT-P8 implementation was complete; exact failing Component CI run 29116232313 and diagnostics artifact 8236750926 were available, unexpired, and matched code-bearing head 6d342f9d89fff8123a4bb5458390a24a587eb812.
 
 SUMMARY:
-Implemented WT-P8 as a host-driven Worktree runtime state machine with no Server startup wiring and no hidden background tasks. The runtime exposes explicit start, poll, cancellation, and shutdown lifecycle methods; uses watcher events only as path-free debounce/scheduling hints; schedules startup and periodic correctness cycles independently from watcher delivery; requires full scans for every local-importing mode; runs at most one synchronous cycle per host poll; communicates explicit import/delete/export budgets; validates executor results against scan, mode, and budget contracts; and exposes safe count-only runtime status. Added fake-clock/fake-watcher tests for debounce, missed/duplicate/reordered hints, bounded hint consumption, periodic recovery, cancellation, shutdown, mode behavior, watcher degradation, lifecycle misuse, and executor contract rejection. Final code/docs Component CI run 29116232313 reported cargo fmt/check/test/clippy success but overall failure at Finalize CI diagnostics. This implementation-worker role did not read the diagnostics artifact, so an artifact-based fixer-worker pass is required.
+Applied the complete minimum artifact-proven WT-P8 CI correction. The diagnostics artifact identified exactly two failed checks: rust-fmt and cargo-clippy. Applied all four rustfmt changes in runtime.rs and runtime_tests.rs, and replaced the artifact-flagged FakeWatcher default-then-field-reassignment test setup with an equivalent struct initializer. Runtime lifecycle, watcher hint semantics, authoritative scan requirements, adapter modes, bounded work accounting, cancellation/shutdown behavior, status output, tests, assertions, documentation, and ownership boundaries remain unchanged. Post-fix Component CI run 29120582304 completed successfully across cargo fmt, cargo check, cargo test, cargo clippy, and diagnostics finalization.
 
 CHANGED_FILES:
 - crates/haze-sync-worktree/src/runtime.rs
 - crates/haze-sync-worktree/src/runtime_tests.rs
-- crates/haze-sync-worktree/src/lib.rs
-- crates/haze-sync-worktree/docs/runtime-service.md
 - crates/haze-sync-worktree/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/worktree
 base_branch: main
-base_sha: GitHub compare_commits after WT-P8 observed base c1e69a664388b0cba028170e8398b9088218957d and merge base 1a82bea5c87953db378e5e03429326df38320ee8.
-head_sha: 6d342f9d89fff8123a4bb5458390a24a587eb812 before this report-only commit; this report write creates a later control-only commit.
+base_sha: GitHub compare_commits after the fix observed base c1e69a664388b0cba028170e8398b9088218957d and merge base 1a82bea5c87953db378e5e03429326df38320ee8.
+head_sha: a300fc1e179ba2358f27ffec91778b6a52138720 before this report-only commit; this report write creates a later control-only commit.
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes; crates/haze-sync-worktree/control/prompt.md on component/worktree
-control_report_written: yes; crates/haze-sync-worktree/control/report.md replaced with this IMPLEMENTATION report
+control_report_written: yes; crates/haze-sync-worktree/control/report.md replaced with this FIX report
 control_files_archived_by_worker: no
-ci_skip_used: yes for this final report-only commit; no for WT-P8 source/test/docs commits
-ci_skip_reason: this final commit changes only crates/haze-sync-worktree/control/report.md and cannot affect executable behavior or validation outcome; every source/test/docs commit triggered Component CI without skip
+ci_skip_used: yes for this final report-only commit; no for either source/test fixer commit
+ci_skip_reason: this final commit changes only crates/haze-sync-worktree/control/report.md and cannot affect executable behavior or validation outcome; both source/test fixer commits triggered Component CI without skip
 
 SCOPE:
 allowed_files_only: yes
@@ -56,99 +54,97 @@ forbidden_files_touched: no
 
 CONTRACT:
 contract_read: yes
-contract_satisfied: yes; Worktree owns runtime scheduling semantics while Server remains the future lifecycle host; watchers are latency hints only; scans remain correctness; Core/API remain import/export authority; no direct Storage/DB, provider, Server startup, workflow, dependency, or sibling ownership was added
+contract_satisfied: yes; fixes preserve the host-driven runtime lifecycle, no hidden background tasks, latency-only path-free watcher hints, scan-based correctness, mode enforcement, bounded work budgets, explicit cancellation/shutdown, safe count-only status, and Worktree/Server/Core ownership boundaries
 contract_changes_requested: no
 contract_change_rationale: none
 affected_components: worktree only
 
 IMPLEMENTATION_OR_REVIEW:
-completed: yes for WT-P8 source, tests, and runtime documentation; blocked only on CI diagnostics finalization
+completed: yes
 main_changes:
-- Added WorktreeMode with disabled, read-only, import-only, export-only, and bidirectional capabilities.
-- Aligned read-only with the accepted project adapter contract: it may read Core/apply exports but may not watch/import local facts or write Core.
-- Added WorktreeRuntimeClock and WorktreeWatcher abstractions suitable for fake clocks/watchers and later Server composition.
-- Made watcher hints path-free and sequence-agnostic; duplicate, missing, coalesced, and reordered hints do not affect correctness.
-- Added WorktreeRuntimeService as an explicitly host-polled synchronous state machine; it spawns no tasks and performs at most one cycle per poll.
-- Added explicit Created, Running, Cancelling, and Shutdown lifecycle states.
-- Added explicit start, cooperative cancellation, and permanent shutdown operations.
-- Added startup cycles and periodic correctness cycles independent from watcher delivery.
-- Added debounce scheduling for watcher hints and bounded watcher hint consumption per host poll.
-- Added WorktreeRuntimeCycleRequest so importing modes require an authoritative full scan before local facts are derived.
-- Added explicit per-cycle budgets for put/import actions, guarded delete candidates, and export/materialization actions.
-- Added validation that rejects missing required scans, mode-incompatible work, budget overflow, and submitted-import counts larger than planned counts.
-- Added safe cycle/watcher failure categories and count-only status summaries without local absolute paths.
-- Ensured watcher startup/poll failures degrade latency while startup/periodic cycles continue to provide correctness.
-- Prevented failed/rejected startup cycles from creating immediate tight retry loops; the next automatic attempt is periodic.
-- Added runtime-service documentation describing ownership, modes, lifecycle, safety, budgets, and status output.
-behavior_changes: Worktree now exposes a hostable runtime scheduler and mode contract; no Server composition is activated and no filesystem watcher implementation is selected automatically
-bugs_found:
-- the initial WT-P8 draft interpreted read-only as local observation-only, but the accepted Project Source defines read-only as Core-readable/Core-write-disabled; mode capabilities and tests were corrected
-- failed or rejected startup cycles in the initial draft could retry on every host poll; attempts now clear immediate triggers and schedule the next periodic retry
-bugs_fixed: both WT-P8 self-review findings were corrected with focused mode and retry tests
-cleanups_made: separated safe scheduling/status contracts from future concrete watcher and cycle-executor implementations
-non_goals_preserved: yes; no Server startup/composition, provider behavior, watcher-only correctness, unmanaged task spawning, direct DB mutation, Core policy, workflow/dependency change, sibling change, test deletion, assertion weakening, or PR lifecycle action
+- Read the active FIX-WT-P8-CI prompt, prior implementation report, required process sources, component contract/plan/dependency map/decisions, current WT-P8 implementation/tests/docs, and phase/branch diff.
+- Fetched exact artifact metadata for workflow run 29116232313 and artifact 8236750926.
+- Downloaded and read summary.md and manifest.json.
+- Read every failed-check marker and log listed by manifest.json: failures/cargo-clippy.txt, logs/cargo-clippy.log, failures/rust-fmt.txt, and logs/rust-fmt.log.
+- Applied the artifact-specified multiline formatting for WorktreeMode::exports_core.
+- Applied the artifact-specified single-line formatting for the periodic-cycle deadline assignment.
+- Applied the artifact-specified multiline formatting for the runtime test service constructor.
+- Applied the artifact-specified multiline formatting for the shutdown lifecycle assertion.
+- Replaced FakeWatcher::default followed by start_failure reassignment with an equivalent struct initializer using ..FakeWatcher::default(), resolving clippy::field_reassign_with_default.
+- Verified the two fixer commit diffs contain only the artifact-proven formatting and test-initializer changes.
+- Observed post-fix Component CI run 29120582304 complete successfully.
+behavior_changes: none; formatting and equivalent test fixture initialization only
+bugs_found: none beyond the artifact-proven formatting and clippy failures
+bugs_fixed: rustfmt mismatches in runtime.rs/runtime_tests.rs and clippy field_reassign_with_default in the watcher-start-failure test
+cleanups_made: artifact-prescribed formatting and idiomatic test fixture construction only
+non_goals_preserved: yes; no Server startup/composition, provider behavior, watcher-only correctness, unmanaged task spawning, direct DB mutation, Core policy, workflow/dependency change, sibling component change, test deletion, assertion weakening, or PR lifecycle action
 deferred_work:
-- A concrete runtime cycle executor that composes WorktreeScanner, import/delete planners, Core/API clients, export feeds, materialization, and persisted state remains a later same-component/fan-in task.
-- A concrete OS watcher implementation remains deferred; WT-P8 defines and tests its safe abstraction.
-- Server mounting remains WT-P9 or a dedicated Server/Worktree fan-in prompt.
-- Clean-code review should inspect the rare watcher-poll-failure resource cleanup path and may simplify the large runtime module while preserving behavior.
-- CI diagnostics for run 29116232313 must be inspected by the next fixer-worker.
+- Clean-code review remains the next normal lifecycle gate for WT-P8.
+- Concrete OS watcher implementation and concrete scanner/import/export cycle composition remain deferred as recorded by WT-P8.
+- Server mounting remains a later WT-P9 or dedicated fan-in task.
 
 TESTS_AND_CHECKS:
 checks_run:
-- Read Project Source implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, config adapter-mode documentation, Worktree adapter documentation, and sync algorithm documentation from the available /mnt/data project sources.
-- Read active WT-P8 control state/prompt, prior report, component contract/plan/dependency map/decisions, current Worktree exports, scanner surface, PR/branch scope, and accepted source CI metadata through the GitHub connector.
-- Added fake-clock/fake-watcher tests for startup, debounce, duplicate/reordered hints, missed hints, periodic recovery, bounded hint consumption, cancellation, shutdown, mode behavior, watcher startup failure, scan/mode/budget violations, retry timing, and lifecycle misuse.
-- Component CI run 29116232313 for final source/docs head 6d342f9d89fff8123a4bb5458390a24a587eb812.
+- Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, and chatgpt-gh-connector.md from available /mnt/data project sources.
+- GitHub connector reads of active control state/prompt/report, component docs, current WT-P8 source/tests/docs, exact fixer commit diffs, and branch scope.
+- Diagnostics artifact 8236750926 inspection.
+- Read summary.md and manifest.json.
+- Read failures/cargo-clippy.txt and logs/cargo-clippy.log.
+- Read failures/rust-fmt.txt and logs/rust-fmt.log.
+- Component CI run 29120582304 for source head a300fc1e179ba2358f27ffec91778b6a52138720.
 - Observed cargo fmt success.
 - Observed cargo check success.
 - Observed cargo test success.
 - Observed cargo clippy success.
+- Observed Finalize CI diagnostics success.
 checks_not_run:
-- local cargo fmt/check/test/clippy: not run; repository operations are restricted to the GitHub connector and no local repository checkout was used.
-- diagnostics artifact for run 29116232313: not read; the active implementation-worker prompt prohibits diagnostics artifact inspection.
-ci_status: CI_RED; final code-bearing run 29116232313 failed at Finalize CI diagnostics despite visible cargo fmt/check/test/clippy success
+- local cargo fmt/check/test/clippy: not run; repository operations were restricted to the GitHub connector and no local repository checkout was used.
+ci_status: CI_GREEN; Component CI run 29120582304 completed with conclusion success
 workflow_urls:
 - https://github.com/NordCoder/haze-sync/actions/runs/29116232313
+- https://github.com/NordCoder/haze-sync/actions/runs/29120582304
 known_failures:
-- run 29116232313: overall workflow failure at Finalize CI diagnostics; exact failed check must be determined from the diagnostics artifact by a fixer-worker
+- original run 29116232313: rustfmt diffs in runtime.rs and runtime_tests.rs
+- original run 29116232313: cargo clippy field_reassign_with_default in watcher_failure_degrades_to_periodic_full_scans
 
 CI_DIAGNOSTICS:
-artifact_based_logs: no
-artifact_name: not read
-artifact_id: not read
-workflow_run_id: 29116232313 for workflow/job metadata only
-workflow_run_attempt: not read
-artifact_status: not read; active implementation-worker prompt prohibits diagnostics artifact inspection
-summary_read: no
-manifest_read: no
-logs_read: none
+artifact_based_logs: yes
+artifact_name: ci-diag__component-worktree__wf-component-ci__run-29116232313__attempt-1
+artifact_id: 8236750926
+workflow_run_id: 29116232313
+workflow_run_attempt: 1
+artifact_status: available, not expired, downloaded, extracted, and readable; artifact head matched 6d342f9d89fff8123a4bb5458390a24a587eb812
+summary_read: yes; summary.md read
+manifest_read: yes; manifest.json read
+logs_read:
+- failures/cargo-clippy.txt
+- logs/cargo-clippy.log
+- failures/rust-fmt.txt
+- logs/rust-fmt.log
 raw_job_logs_used: no
-diagnostics_failure: Finalize CI diagnostics failed according to workflow metadata; detailed cause requires the next fixer-worker artifact pass
+diagnostics_failure: none; artifact was complete and every failed-check marker/log listed by manifest.json was readable
 
 SAFETY_AND_SECRECY:
 secrets_committed: no
-unsafe_public_output: no; watcher hints carry no paths and runtime status exposes only enums and counts
+unsafe_public_output: no; runtime status and watcher hints remain path-free/count-only
 raw_errors_exposed: no
 provider_calls_added: no
 hard_delete_added: no
-background_jobs_added: no; the runtime is host-driven and never spawns an unmanaged task
+background_jobs_added: no
 
 ISSUES_FOUND:
-- Watcher hints must remain scheduling hints only; the cycle request explicitly requires full scans for local-importing modes.
-- Adapter mode direction must be defined relative to Core writes/reads, not merely local filesystem observation.
-- Failed cycles need bounded retry scheduling to avoid a host-driven busy loop.
-- Future clean-code review should inspect watcher resource cleanup after a poll failure and module decomposition, without adding Server wiring.
+- The only artifact-proven failures were formatting and idiomatic test fixture construction; no runtime behavior or test expectation correction was required.
+- All artifact-proven failures are resolved on the post-fix source head.
 - Branch remains diverged from main according to compare_commits; no merge, rebase, reset, history rewrite, PR readiness decision, workflow edit, or main/sibling branch modification was performed.
 
 BLOCKERS:
-- BLOCKED_BY_TOOLING: WT-P8 implementation and focused tests are complete, and visible cargo fmt/check/test/clippy steps pass, but Component CI run 29116232313 is red and requires a fixer-worker to read the diagnostics artifact and apply only the artifact-proven correction.
+- None.
 
 NEXT_RECOMMENDED_AGENT:
-fixer-worker
+orchestrator
 
 FINAL_VERDICT:
-BLOCKED_BY_TOOLING. WT-P8 now provides an explicit hostable runtime lifecycle, latency-only watcher hints, authoritative periodic/full-scan contracts, bounded cycle scheduling, mode enforcement, safe status summaries, and focused deterministic tests without Server wiring or hidden tasks. Final source CI passes visible cargo fmt, cargo check, cargo test, and cargo clippy steps, but workflow run 29116232313 failed at diagnostics finalization and requires an artifact-based fixer pass.
+FIX_COMPLETE. The exact artifact-proven rustfmt and clippy failures were corrected without semantic changes, assertion weakening, lifecycle changes, or component-boundary expansion. Post-fix Component CI run 29120582304 completed successfully across cargo fmt, cargo check, cargo test, cargo clippy, and diagnostics finalization.
 
 PUSHED:
 yes
