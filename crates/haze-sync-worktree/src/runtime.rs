@@ -103,6 +103,9 @@ impl WorktreeWatcherFailure {
 }
 
 /// Optional watcher integration owned by a future host/composition layer.
+///
+/// The runtime normalizes an error to the operation that observed it, so public
+/// status remains correct even if an implementation returns the wrong variant.
 pub trait WorktreeWatcher {
     /// Start watcher resources.
     fn start(&mut self) -> Result<(), WorktreeWatcherFailure>;
@@ -552,7 +555,7 @@ where
         self.watcher_state = if self.mode.observes_local() {
             match self.watcher.start() {
                 Ok(()) => WorktreeRuntimeWatcherState::Running,
-                Err(failure) => WorktreeRuntimeWatcherState::Failed(failure),
+                Err(_) => WorktreeRuntimeWatcherState::Failed(WorktreeWatcherFailure::Start),
             }
         } else {
             WorktreeRuntimeWatcherState::Disabled
@@ -612,13 +615,19 @@ where
         }
 
         let watcher = match self.watcher_state {
-            WorktreeRuntimeWatcherState::Running => match self.watcher.shutdown() {
-                Ok(()) => WorktreeRuntimeWatcherState::Stopped,
-                Err(failure) => WorktreeRuntimeWatcherState::Failed(failure),
-            },
-            WorktreeRuntimeWatcherState::Disabled
+            WorktreeRuntimeWatcherState::Running
             | WorktreeRuntimeWatcherState::Closed
-            | WorktreeRuntimeWatcherState::Failed(_)
+            | WorktreeRuntimeWatcherState::Failed(WorktreeWatcherFailure::Poll) => {
+                match self.watcher.shutdown() {
+                    Ok(()) => WorktreeRuntimeWatcherState::Stopped,
+                    Err(_) => {
+                        WorktreeRuntimeWatcherState::Failed(WorktreeWatcherFailure::Shutdown)
+                    }
+                }
+            }
+            WorktreeRuntimeWatcherState::Disabled
+            | WorktreeRuntimeWatcherState::Failed(WorktreeWatcherFailure::Start)
+            | WorktreeRuntimeWatcherState::Failed(WorktreeWatcherFailure::Shutdown)
             | WorktreeRuntimeWatcherState::Stopped => WorktreeRuntimeWatcherState::Stopped,
         };
         self.watcher_state = watcher;
@@ -687,8 +696,9 @@ where
                     self.watcher_state = WorktreeRuntimeWatcherState::Closed;
                     break;
                 }
-                Err(failure) => {
-                    self.watcher_state = WorktreeRuntimeWatcherState::Failed(failure);
+                Err(_) => {
+                    self.watcher_state =
+                        WorktreeRuntimeWatcherState::Failed(WorktreeWatcherFailure::Poll);
                     break;
                 }
             }
