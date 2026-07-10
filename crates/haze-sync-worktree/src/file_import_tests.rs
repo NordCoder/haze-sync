@@ -85,6 +85,42 @@ fn file_imports_preserve_known_null_and_tombstone_base_semantics() {
 }
 
 #[test]
+fn file_import_planning_rejects_unstable_and_duplicate_facts() {
+    let unstable = WorktreeImportFile::new(
+        WorktreeFileSnapshot {
+            vault_path: path("unstable.md"),
+            size: 3,
+            modified: None,
+            content_hash: hash(1),
+            stability: StableFileState::unstable(),
+        },
+        b"bad".to_vec(),
+    )
+    .unwrap_err();
+    assert_eq!(
+        unstable,
+        WorktreeImportPlanError::UnstableLocalFile {
+            vault_path: path("unstable.md")
+        }
+    );
+
+    let duplicate = WorktreeImportPlanner::plan(
+        &WorktreeStateSnapshot::new(),
+        [
+            stable_file("dup.md", hash(1), b"one"),
+            stable_file("dup.md", hash(2), b"two"),
+        ],
+    )
+    .unwrap_err();
+    assert_eq!(
+        duplicate,
+        WorktreeImportPlanError::DuplicateLocalFile {
+            vault_path: path("dup.md")
+        }
+    );
+}
+
+#[test]
 fn file_import_runner_updates_state_only_for_accepted_put_outcomes() {
     let mut state = WorktreeStateSnapshot::new();
     let plan = WorktreeImportPlanner::plan(
