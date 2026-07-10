@@ -16,11 +16,11 @@ export interface RemoteConflictRecord {
   id: string;
   path: VaultPath;
   sequence: number;
-  kind: string;
+  kind: ChangeDto["kind"];
   reason: RemoteConflictReason;
   detectedAt: string;
-  remoteRevisionId?: RevisionId | null;
-  remoteContentHash?: ContentHash | null;
+  remoteRevisionId?: RevisionId;
+  remoteContentHash?: ContentHash;
 }
 
 export interface RemoteTombstoneRecord {
@@ -87,12 +87,12 @@ export function recordRemoteConflict(
       [id]: {
         id,
         path: change.path,
-        sequence: change.sequence,
+        sequence: change.seq,
         kind: change.kind,
         reason,
         detectedAt: observedAt,
         remoteRevisionId: change.revision_id,
-        remoteContentHash: change.content_hash,
+        remoteContentHash: change.content_sha256,
       },
     },
     lastPullAt: observedAt,
@@ -111,7 +111,7 @@ export function recordRemoteTombstone(
       ...state.tombstones,
       [change.path]: {
         path: change.path,
-        sequence: change.sequence,
+        sequence: change.seq,
         revisionId,
         observedAt,
       },
@@ -121,7 +121,7 @@ export function recordRemoteTombstone(
 }
 
 function conflictIdForChange(change: ChangeDto): string {
-  return `${change.sequence}:${change.path}`;
+  return `${change.seq}:${change.path}`;
 }
 
 function readRecord<T>(value: unknown, predicate: (item: unknown) => item is T): Record<string, T> {
@@ -135,12 +135,11 @@ function readRecord<T>(value: unknown, predicate: (item: unknown) => item is T):
       result[key] = item;
     }
   }
-
   return result;
 }
 
 function readOptionalNumber(value: unknown): number | undefined {
-  return typeof value === "number" ? value : undefined;
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 }
 
 function readOptionalString(value: unknown): string | undefined {
@@ -159,8 +158,8 @@ function isRemoteConflictRecord(value: unknown): value is RemoteConflictRecord {
     typeof value.kind === "string" &&
     isRemoteConflictReason(value.reason) &&
     typeof value.detectedAt === "string" &&
-    (value.remoteRevisionId === undefined || typeof value.remoteRevisionId === "string" || value.remoteRevisionId === null) &&
-    (value.remoteContentHash === undefined || typeof value.remoteContentHash === "string" || value.remoteContentHash === null)
+    (value.remoteRevisionId === undefined || typeof value.remoteRevisionId === "string") &&
+    (value.remoteContentHash === undefined || typeof value.remoteContentHash === "string")
   );
 }
 
