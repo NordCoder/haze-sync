@@ -131,8 +131,11 @@ export class SyncRunner {
         this.abortController = undefined;
       }
 
-      if (!this.disposed && this.pendingAutoTrigger && automationEnabled(this.automation)) {
+      const shouldRunFollowUp = this.state.phase === "idle";
+      if (this.pendingAutoTrigger) {
         this.pendingAutoTrigger = false;
+      }
+      if (!this.disposed && shouldRunFollowUp && automationEnabled(this.automation)) {
         this.clearFollowUpTimer();
         this.followUpTimer = window.setTimeout(() => {
           this.followUpTimer = undefined;
