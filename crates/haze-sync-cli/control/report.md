@@ -59,7 +59,7 @@ contract_read: yes
 contract_satisfied: yes
 contract_changes_requested: none
 contract_change_rationale: no dedicated doctor endpoint or DTO was invented; accepted Server health/readiness/admin-status surfaces were sufficient for bounded aggregation, and unavailable diagnostics are reported as skipped
- affected_components: cli only
+affected_components: cli only
 
 IMPLEMENTATION_OR_REVIEW:
 completed:
@@ -76,7 +76,7 @@ main_changes:
 - Missing server config reports `live checks: not_run` and exit code 1.
 - Partial surface errors preserve safe partial stdout and stable stderr error categories.
 behavior_changes:
-- Offline output now explicitly identifies offline mode and no live calls.
+- Offline output explicitly identifies offline mode and no live calls.
 - Live mode is accepted explicitly.
 - Conflicting `--live` and `--offline` flags fail with usage exit code 2.
 - Completed diagnostics return success; transport/config/auth/response failures return runtime exit code 1.
