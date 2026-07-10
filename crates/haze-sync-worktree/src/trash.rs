@@ -215,9 +215,7 @@ impl WorktreeTrashError {
     #[must_use]
     pub const fn message(&self) -> &'static str {
         match self {
-            Self::InvalidRetention => {
-                "trash retention must be a non-zero whole-second duration"
-            }
+            Self::InvalidRetention => "trash retention must be a non-zero whole-second duration",
             Self::InvalidTimestamp => "trash timestamp could not be represented safely",
             Self::Path(error) => error.message(),
             Self::RootUnavailable => "worktree root is unavailable for trash materialization",
