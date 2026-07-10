@@ -1,13 +1,13 @@
 REPORT_TYPE:
-IMPLEMENTATION
+FIX
 
 STATUS:
-SELF_NEEDS_FIX
+FIX_COMPLETE
 
 AGENT:
-role: implementation-worker
-agent_execution_id: W1-CORE-P7
-chat_name: core — W1 CORE-P7 Implementation
+role: fixer-worker
+agent_execution_id: W1-FIX-CORE-P7-CI
+chat_name: core — W1 FIX-CORE-P7-CI CI Fix
 
 COMPONENT:
 name: core
@@ -21,41 +21,39 @@ control_report_path: crates/haze-sync-core/control/report.md
 
 WAVE:
 id: W1
-phase_id: CORE-P7
-dependency_status: control state was PROMPT_READY for implementation-worker; CORE-P6 implementation, clean-code review, artifact-based fixes, and final Component CI run 29093462297 were accepted and green before CORE-P7 began.
+phase_id: FIX-CORE-P7-CI
+dependency_status: control state was PROMPT_READY for fixer-worker and supplied exact metadata for failed Component CI run 29103013245 attempt 1 and diagnostics artifact 8231629761. A first artifact-directed follow-up run 29107070868 produced a second readable diagnostics artifact 8233274866, which was also treated as source of truth before the final fix.
 
 SUMMARY:
-Implemented passive doctor and safety-report hardening inside Core only. Split the previous monolithic doctor module into public re-exports over checks, types, report, and tests. Preserved the existing successful wire status `ok` and existing safe result shape, while adding explicit `not_run` and `placeholder` states and summary counts. Aggregate precedence is failed, warning, placeholder, not-run, skipped, then ok; an empty report is not healthy evidence and is classified not-run. Added passive count/boolean summaries for adapter cursors, Google Drive mapping, and worktree drift alongside existing DB, object-store, missing-blob, and adapter-token checks. Replaced arbitrary public result messages with a fixed redacted message vocabulary, added safe enum reason codes for not-run/placeholder results, validated message/status/check/detail consistency during deserialization, and revalidated report summaries during deserialization. Added focused tests for aggregation, precedence, empty reports, skipped/not-run behavior, fixed-message rejection, deterministic ordering, safe serialization, redaction boundaries, and all accepted check families. Added a dedicated downstream contract document. Final code/docs head 6b6803d934a38883c0e0032a5f5a3917d4a99d43 passed cargo fmt, cargo check, cargo test, and cargo clippy in Component CI run 29103013245, run number 1278, but the workflow concluded failure at Finalize CI diagnostics and published diagnostics artifact 8231629761. The artifact was not downloaded or read because the active role is implementation-worker.
+Downloaded and read diagnostics artifact 8231629761 for CORE-P7 Component CI run 29103013245. Read summary.md, manifest.json, all four failure markers, and the complete rust-fmt, cargo-check, cargo-test, and cargo-clippy logs listed in failed_checks. The artifact proved two minimum causes inside allowed Core scope: the CORE-P7 refactor had made the previously public DoctorReport.summary and DoctorReport.checks fields private, breaking the existing CLI consumer, and rustfmt required seven layout-only changes across doctor/checks.rs, doctor/mod.rs, doctor/tests.rs, and doctor/types.rs. Restored those two public report fields and applied exactly the formatter-selected layouts. Follow-up Component CI run 29107070868 passed fmt and cargo check but failed cargo test/clippy diagnostics. Downloaded and read its artifact 8233274866, including summary.md, manifest.json, both failure markers, and complete cargo-test and cargo-clippy logs. That artifact proved the remaining compatibility break: the existing CLI also reads DoctorCheckResult.check_id and borrows DoctorCheckResult.message as a string. Restored public check_id and public message while preserving the fixed safe DoctorCheckMessage enum; implemented Deref<Target = str> so existing string-borrowing consumers compile without reverting to arbitrary String messages. Status/details remain encapsulated and custom validating deserialization remains intact. No doctor classification, aggregation precedence, fixed message text, serialized field name, redaction rule, test assertion, documentation, workflow, dependency, or sibling component changed. Final source head ae5fe8a8099973a8705af98e091b369038dbf71e passed Component CI run 29107333698, run number 1368, completely.
 
 CHANGED_FILES:
+- crates/haze-sync-core/src/doctor/report.rs
 - crates/haze-sync-core/src/doctor/mod.rs
 - crates/haze-sync-core/src/doctor/checks.rs
-- crates/haze-sync-core/src/doctor/types.rs
-- crates/haze-sync-core/src/doctor/report.rs
 - crates/haze-sync-core/src/doctor/tests.rs
-- crates/haze-sync-core/docs/doctor-safety-reports.md
+- crates/haze-sync-core/src/doctor/types.rs
 - crates/haze-sync-core/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/core
 base_branch: main
 base_sha: PR #43 base observed as 1a82bea5c87953db378e5e03429326df38320ee8
-head_sha: final code/docs head before this report-only commit was 6b6803d934a38883c0e0032a5f5a3917d4a99d43
-source_commits:
-- d07efc64fb764d1b945287bce05b669ee9472b43
-- 65977712fb88853255df30dc0e591126aeba8b40
-- c4cade8285d4920556caca2657d189e9f6d6d647
-- 75c42da5d95b20916e49fa01e4e20a81513c8581
-- 13cb9c1a0a5afc26feb227de21fcca1e71dd8427
-documentation_commits:
-- 6b6803d934a38883c0e0032a5f5a3917d4a99d43
+head_sha: final source fixer head before this report-only commit was ae5fe8a8099973a8705af98e091b369038dbf71e; PR #43 was observed open, draft, and unmerged at that head
+source_fix_commits:
+- 887996218114f18aadafaf61b6ed3b67e454ded9
+- 7371f9073a454a731ea53fdc73ef0f03e69c9d4f
+- 01c7d5ba6af4d5eb9d0362f425a38607d7566267
+- 3e2d9dc27a7bbf3891bb262bce74877de75be4d4
+- 04340b412aca2e489914e5f8aaea108f210f6f99
+- ae5fe8a8099973a8705af98e091b369038dbf71e
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
 ci_skip_used: yes
-ci_skip_reason: used [skip ci] only for this final control/report-only commit. Source, tests, module wiring, and contract documentation commits did not use CI skip. This skipped report commit is not CI evidence.
+ci_skip_reason: used [skip ci] only for this final report-only commit. All source fixer commits ran without CI skip. Final CI evidence is successful Component CI run 29107333698 on source head ae5fe8a8099973a8705af98e091b369038dbf71e.
 
 SCOPE:
 allowed_files_only: yes
@@ -68,68 +66,94 @@ CONTRACT:
 contract_read: yes
 contract_satisfied: yes
 contract_changes_requested: no
-contract_change_rationale: implemented the existing CORE-P7 contract for passive, redacted, honest doctor states; no live checks, route policy, storage behavior, provider behavior, or repair ownership moved into Core
-affected_components: core only; downstream Server, CLI, Storage, and adapter obligations were documented but no sibling files were modified
+contract_change_rationale: restored existing Core public source compatibility required by the accepted CLI consumer while preserving CORE-P7 fixed-message safety, validating serde, explicit execution states, deterministic aggregation, and passive ownership
+ affected_components: core only; CLI source was read to understand the artifact-proven compatibility surface but was not modified
 
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- split doctor implementation into checks, types, report, and tests while preserving `haze_sync_core::doctor::*` public paths through re-exports
-- added adapter cursor, GDrive mapping, and worktree drift identifiers, inputs, details, and pure classifiers
-- added explicit not_run and placeholder statuses, safe reason enums, and per-status summary counts
-- made empty reports not_run and documented aggregate precedence failed > warning > placeholder > not_run > skipped > ok
-- kept existing `ok`, warning, failed, and skipped wire names and preserved the existing object-store result JSON shape
-- replaced arbitrary public message construction with a fixed redacted DoctorCheckMessage vocabulary
-- added validating deserialization for check/message/status/detail consistency
-- added validating DoctorReport deserialization that rejects inconsistent summaries and deterministically orders checks
-- documented passive doctor ownership, status semantics, check classifications, safe serialization, and downstream obligations
-behavior_changes: safety and honesty hardening; DB live checks with no supplied result and partial object-store facts are now not_run rather than being conflated with skipped, empty reports are not_run rather than ok, and arbitrary doctor message injection is no longer accepted. Existing completed check semantics and safe output fields remain available.
+- restored public DoctorReport.summary and DoctorReport.checks fields while retaining accessors and validating report deserialization
+- restored public DoctorCheckResult.check_id
+- restored public DoctorCheckResult.message as the fixed DoctorCheckMessage enum rather than an arbitrary String
+- implemented safe Deref<Target = str> for DoctorCheckMessage so existing string-borrowing consumers remain source-compatible
+- applied all seven rustfmt-selected layouts from the initial diagnostics artifact
+behavior_changes: no doctor policy change; this restores source compatibility and formatter conformance. Safe messages remain an enum-backed fixed vocabulary, report/check deserialization remains validating, and status/details remain encapsulated.
 bugs_found:
-- empty reports were classified ok despite containing no health evidence
-- skipped and absent/not-run results were conflated
-- no placeholder state existed for accepted but unwired checks
-- public DoctorCheckResult::new accepted arbitrary potentially secret-bearing message text and mismatched check/detail pairs
-- cursor, mapping, and worktree drift accepted doctor summaries were absent
-bugs_fixed: all listed CORE-P7 model and safety gaps were addressed with typed facts, fixed messages, validating serde, explicit statuses, and regression tests
-cleanups_made: decomposed the 545-line monolithic doctor module into responsibility-focused files and centralized report aggregation/status vocabulary
-non_goals_preserved: no live database connection, filesystem/object-store probing, provider/OAuth validation, CLI command implementation, HTTP policy, repair behavior, mutation, cursor advancement, mapping changes, workflow/dependency changes, or sibling component changes
-deferred_work: fixer-worker must inspect diagnostics artifact 8231629761 for failed Component CI run 29103013245; after a green follow-up run, CORE-P7 should proceed to clean-code review
+- DoctorReport public fields used by the accepted CLI were made private
+- DoctorCheckResult check_id and message fields used by accepted CLI tests were made private
+- doctor source had seven rustfmt layout mismatches
+bugs_fixed: all artifact-proven compatibility and formatting failures were fixed without editing CLI or weakening CORE-P7 safety
+cleanups_made: rustfmt-only layouts in four doctor files
+non_goals_preserved: no live checks, CLI behavior changes, HTTP policy, persistence, provider behavior, repair execution, workflow/dependency changes, sibling changes, test deletion, assertion weakening, arbitrary message strings, or raw diagnostics in public output
+deferred_work: none for CORE-P7 CI; Orchestrator may advance CORE-P7 to clean-code review using successful run 29107333698 as final source CI evidence
 
 TESTS_AND_CHECKS:
 checks_run:
-- read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, and chatgpt-gh-connector.md from Project Sources
-- read active control state, prompt, and previous report from branch component/core
-- read component contract, implementation plan CORE-P7, implementation log, dependency map, and passive-doctor architecture decision
-- read current doctor source and tests before replacement
-- read accepted project doctor/runbook/testing contracts for cursor validity, GDrive mapping references, worktree state, missing blobs, and honest operator diagnostics
-- read Server and CLI component contracts and preserved their runtime/output ownership boundaries
-- inspected PR #43 changed-file list and metadata; PR remained open, draft, and unmerged
-- observed Component CI run 29103013245 on final code/docs head 6b6803d934a38883c0e0032a5f5a3917d4a99d43
+- read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, and chatgpt-gh-connector.md from Project Sources
+- read active control state, prompt, and previous CORE-P7 implementation report
+- read current component contract, CORE-P7 implementation plan, implementation log, dependency map, doctor source/tests/docs, accepted CLI consumer source, and PR diff context
+- confirmed current branch differed from failed code head only by Orchestrator control-slot commits before fixer source changes
+- downloaded initial diagnostics artifact 8231629761
+- read initial summary.md and manifest.json
+- read initial failures/cargo-check.txt and logs/cargo-check.log
+- read initial failures/cargo-test.txt and logs/cargo-test.log
+- read initial failures/cargo-clippy.txt and logs/cargo-clippy.log
+- read initial failures/rust-fmt.txt and logs/rust-fmt.log
+- verified first fixer diff contained only report field compatibility and formatter changes
+- observed follow-up Component CI run 29107070868
+- downloaded follow-up diagnostics artifact 8233274866
+- read follow-up summary.md and manifest.json
+- read follow-up failures/cargo-test.txt and logs/cargo-test.log
+- read follow-up failures/cargo-clippy.txt and logs/cargo-clippy.log
+- inspected existing CLI usage of DoctorCheckResult.check_id and borrowed message
+- observed final Component CI run 29107333698, run number 1368
 - observed cargo fmt success
 - observed cargo check success
-- observed cargo test success, including all new CORE-P7 regression tests
+- observed cargo test success, including CLI doctor tests and CORE-P7 tests
 - observed cargo clippy success
-- observed Finalize CI diagnostics failure
-- observed workflow conclusion failure
-- listed diagnostics artifact metadata without downloading or reading its contents
+- observed Finalize CI diagnostics success
+- observed workflow conclusion success
 checks_not_run:
-- local cargo/rustfmt commands were not available in the connector-only environment; Component CI supplied product-check evidence
-ci_status: CI_RED for Component CI run 29103013245 despite cargo fmt/check/test/clippy success; Finalize CI diagnostics failed
-workflow_urls: failed Component CI run 29103013245
-known_failures: Finalize CI diagnostics failed; root cause was not inspected in implementation-worker role
+- local repository cargo commands were not used as acceptance evidence because repository work is GitHub-connector-only; Component CI run 29107333698 provides complete final evidence
+ci_status: CI_GREEN for Component CI run 29107333698 on source head ae5fe8a8099973a8705af98e091b369038dbf71e
+workflow_urls: failed initial run 29103013245; failed first follow-up run 29107070868; successful final run 29107333698
+known_failures: none remaining for final source fixer head
 
 CI_DIAGNOSTICS:
-artifact_based_logs: no
-artifact_name: ci-diag__component-core__wf-component-ci__run-29103013245__attempt-1
-artifact_id: 8231629761
-workflow_run_id: 29103013245
-workflow_run_attempt: 1
-artifact_status: metadata observed; artifact is available, unexpired, and expires at 2026-07-11T15:17:39Z; contents were not downloaded or read because the active implementation-worker prompt prohibits diagnostics artifact reading
-summary_read: no
-manifest_read: no
-logs_read: none
+artifact_based_logs: yes
+artifact_names:
+- ci-diag__component-core__wf-component-ci__run-29103013245__attempt-1
+- ci-diag__component-core__wf-component-ci__run-29107070868__attempt-1
+artifact_ids:
+- 8231629761
+- 8233274866
+workflow_run_ids:
+- 29103013245
+- 29107070868
+workflow_run_attempts:
+- 1
+- 1
+artifact_status: both artifacts were downloaded, readable, and contained summary.md, manifest.json, every declared failure marker, and every declared failed-check log
+summary_read: yes for both artifacts
+manifest_read: yes for both artifacts
+logs_read:
+- initial failures/cargo-check.txt
+- initial logs/cargo-check.log
+- initial failures/cargo-test.txt
+- initial logs/cargo-test.log
+- initial failures/cargo-clippy.txt
+- initial logs/cargo-clippy.log
+- initial failures/rust-fmt.txt
+- initial logs/rust-fmt.log
+- follow-up failures/cargo-test.txt
+- follow-up logs/cargo-test.log
+- follow-up failures/cargo-clippy.txt
+- follow-up logs/cargo-clippy.log
 raw_job_logs_used: no
-diagnostics_failure: not inspected; workflow metadata shows Finalize CI diagnostics failed after all Rust product checks succeeded
+diagnostics_failure:
+- initial run: private DoctorReport.summary/checks fields broke CLI compilation/tests and seven rustfmt diffs remained
+- first follow-up run: private DoctorCheckResult.check_id/message fields broke CLI tests/clippy
+- final run: none
 
 SAFETY_AND_SECRECY:
 secrets_committed: no
@@ -140,21 +164,19 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- Fixed: empty doctor reports claimed ok without check evidence.
-- Fixed: skipped, not-run, and placeholder execution states were not explicit.
-- Fixed: arbitrary result messages could carry raw diagnostics or secrets.
-- Fixed: accepted cursor, mapping, and worktree drift summary models were absent.
-- Remaining: Component CI run 29103013245 is formally red because Finalize CI diagnostics failed; artifact 8231629761 requires fixer-worker triage.
+- GitHub workflow step metadata for the two failed runs displayed product steps as successful even though diagnostics artifacts contained their actual command failures; artifacts were correctly treated as authoritative.
+- Existing CLI source compatibility is part of the current Core public surface even though accessors also exist; the minimum fix restored fields rather than modifying a sibling component.
+- Public message compatibility was restored with a fixed enum and safe string dereference, not an arbitrary mutable String.
 - This final report-only commit uses CI skip and is not CI evidence.
 
 BLOCKERS:
-Component CI is formally red until artifact-based fixer triage and a green follow-up run.
+none
 
 NEXT_RECOMMENDED_AGENT:
-fixer-worker
+orchestrator
 
 FINAL_VERDICT:
-SELF_NEEDS_FIX. CORE-P7 passive doctor and safety-report models, typed classifiers, explicit skipped/not-run/placeholder semantics, fixed redacted messages, validating serde, modular decomposition, tests, and downstream contract documentation are implemented. Final code/docs head 6b6803d934a38883c0e0032a5f5a3917d4a99d43 passed cargo fmt, cargo check, cargo test, and cargo clippy, but Component CI run 29103013245 concluded failure at Finalize CI diagnostics. Fixer-worker must use diagnostics artifact 8231629761 as source of truth.
+FIX_COMPLETE. Both CORE-P7 diagnostics artifacts were read completely and all artifact-proven causes were fixed inside Core scope. Existing CLI source compatibility is restored for DoctorReport summary/checks and DoctorCheckResult check_id/message, while fixed safe messages, validating serialization, explicit skipped/not-run/placeholder states, deterministic aggregation, all regression tests, and component boundaries remain intact. Final source head ae5fe8a8099973a8705af98e091b369038dbf71e passed Component CI run 29107333698 completely. Orchestrator may advance CORE-P7 to clean-code review.
 
 PUSHED:
 yes
