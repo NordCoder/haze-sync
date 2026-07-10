@@ -12,6 +12,15 @@ pub const HAZE_SYNC_TEST_DATABASE_URL_ENV: &str = "HAZE_SYNC_TEST_DATABASE_URL";
 /// but storage test helpers never read this variable implicitly.
 pub const DATABASE_URL_ENV: &str = "DATABASE_URL";
 
+const SAFE_QUERY_PARAMETERS: &[&str] = &[
+    "application_name",
+    "connect_timeout",
+    "sslcert",
+    "sslkey",
+    "sslmode",
+    "sslrootcert",
+];
+
 /// Source label for an explicitly supplied test database URL.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TestDatabaseUrlSource {
@@ -180,7 +189,13 @@ fn extract_safe_database_name(raw_url: &str) -> Result<String, TestSupportError>
         return Err(TestSupportError::InvalidDatabaseUrl);
     }
 
-    let without_query = rest.split_once('?').map_or(rest, |(path, _)| path);
+    let (without_query, query) = rest
+        .split_once('?')
+        .map_or((rest, None), |(path, query)| (path, Some(query)));
+    if let Some(query) = query {
+        validate_safe_query(query)?;
+    }
+
     let (_, database_name) = without_query
         .split_once('/')
         .ok_or(TestSupportError::MissingDatabaseName)?;
@@ -199,6 +214,30 @@ fn extract_safe_database_name(raw_url: &str) -> Result<String, TestSupportError>
 
     validate_test_database_name(database_name)?;
     Ok(database_name.to_owned())
+}
+
+fn validate_safe_query(query: &str) -> Result<(), TestSupportError> {
+    if query.is_empty() {
+        return Err(TestSupportError::InvalidDatabaseUrl);
+    }
+
+    let mut seen_keys = Vec::new();
+    for parameter in query.split('&') {
+        let (key, value) = parameter
+            .split_once('=')
+            .ok_or(TestSupportError::InvalidDatabaseUrl)?;
+        if key.is_empty()
+            || value.is_empty()
+            || key.contains('%')
+            || !SAFE_QUERY_PARAMETERS.contains(&key)
+            || seen_keys.contains(&key)
+        {
+            return Err(TestSupportError::InvalidDatabaseUrl);
+        }
+        seen_keys.push(key);
+    }
+
+    Ok(())
 }
 
 fn validate_test_database_name(database_name: &str) -> Result<(), TestSupportError> {
@@ -302,6 +341,35 @@ mod tests {
             ),
             Err(TestSupportError::InvalidDatabaseUrl)
         );
+    }
+
+    #[test]
+    fn rejects_query_parameters_that_can_change_target_or_session() {
+        for query in [
+            "dbname=production_test",
+            "options=-csearch_path%3Dpublic",
+            "sslmode=disable&sslmode=require",
+            "sslmode=",
+            "",
+        ] {
+            let result = TestDatabaseUrl::parse_explicit(
+                TestDatabaseUrlSource::HazeSyncTestDatabaseUrl,
+                format!("postgres://localhost/haze_sync_test?{query}"),
+            );
+
+            assert_eq!(result, Err(TestSupportError::InvalidDatabaseUrl));
+        }
+    }
+
+    #[test]
+    fn accepts_safe_tls_and_connection_query_parameters() {
+        let url = TestDatabaseUrl::parse_explicit(
+            TestDatabaseUrlSource::HazeSyncTestDatabaseUrl,
+            "postgres://localhost/haze_sync_test?sslmode=require&connect_timeout=5",
+        )
+        .unwrap();
+
+        assert_eq!(url.database_name(), "haze_sync_test");
     }
 
     #[test]
