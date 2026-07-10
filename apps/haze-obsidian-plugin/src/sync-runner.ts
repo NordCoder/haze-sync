@@ -44,6 +44,7 @@ export class SyncRunner {
   private intervalTimer?: number;
   private eventTimer?: number;
   private retryTimer?: number;
+  private followUpTimer?: number;
   private pendingAutoTrigger = false;
   private disposed = false;
 
@@ -62,8 +63,14 @@ export class SyncRunner {
     this.clearIntervalTimer();
     this.clearEventTimer();
     this.clearRetryTimer();
+    this.clearFollowUpTimer();
 
     if (this.disposed) {
+      return;
+    }
+
+    if (!automationEnabled(this.automation)) {
+      this.pendingAutoTrigger = false;
       return;
     }
 
@@ -94,7 +101,7 @@ export class SyncRunner {
     }
 
     if (this.runningPromise !== undefined) {
-      if (trigger !== "manual") {
+      if (trigger !== "manual" && automationEnabled(this.automation)) {
         this.pendingAutoTrigger = true;
       }
       return { status: "already_running", state: this.state };
@@ -124,9 +131,11 @@ export class SyncRunner {
         this.abortController = undefined;
       }
 
-      if (!this.disposed && this.pendingAutoTrigger) {
+      if (!this.disposed && this.pendingAutoTrigger && automationEnabled(this.automation)) {
         this.pendingAutoTrigger = false;
-        window.setTimeout(() => {
+        this.clearFollowUpTimer();
+        this.followUpTimer = window.setTimeout(() => {
+          this.followUpTimer = undefined;
           void this.request("event");
         }, 0);
       }
@@ -143,6 +152,7 @@ export class SyncRunner {
     this.clearIntervalTimer();
     this.clearEventTimer();
     this.clearRetryTimer();
+    this.clearFollowUpTimer();
     this.abortController?.abort();
     this.abortController = undefined;
     this.updateState(markSyncStopped(this.state, new Date().toISOString()));
@@ -187,19 +197,20 @@ export class SyncRunner {
 
   private scheduleRetryIfNeeded(): void {
     this.clearRetryTimer();
-    if (this.disposed || !automationEnabled(this.automation)) {
-      return;
-    }
-
-    const delay = syncBackoffRemainingMs(this.state);
-    if (delay <= 0 || this.state.lastErrorCategory === undefined || !isRetryableSyncCategory(this.state.lastErrorCategory)) {
+    if (
+      this.disposed ||
+      !automationEnabled(this.automation) ||
+      this.state.nextRetryAt === undefined ||
+      this.state.lastErrorCategory === undefined ||
+      !isRetryableSyncCategory(this.state.lastErrorCategory)
+    ) {
       return;
     }
 
     this.retryTimer = window.setTimeout(() => {
       this.retryTimer = undefined;
       void this.request("retry");
-    }, delay);
+    }, syncBackoffRemainingMs(this.state));
   }
 
   private clearIntervalTimer(): void {
@@ -220,6 +231,13 @@ export class SyncRunner {
     if (this.retryTimer !== undefined) {
       window.clearTimeout(this.retryTimer);
       this.retryTimer = undefined;
+    }
+  }
+
+  private clearFollowUpTimer(): void {
+    if (this.followUpTimer !== undefined) {
+      window.clearTimeout(this.followUpTimer);
+      this.followUpTimer = undefined;
     }
   }
 }
