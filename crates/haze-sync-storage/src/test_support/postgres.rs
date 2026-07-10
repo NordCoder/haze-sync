@@ -73,13 +73,18 @@ pub struct PostgresTestContext {
 }
 
 impl PostgresTestContext {
-    /// Connects to the explicitly configured test database.
+    /// Connects when an explicit dedicated test database is configured.
     ///
-    /// The `Option` return is retained for source compatibility with existing
-    /// repository tests, but missing configuration now returns
-    /// [`TestSupportError::MissingTestDatabaseUrl`] instead of `Ok(None)`.
+    /// This compatibility path returns `Ok(None)` only when
+    /// `HAZE_SYNC_TEST_DATABASE_URL` is absent or blank. Invalid configuration and
+    /// connection failures remain errors. New executable database tests should use
+    /// [`Self::connect_required_from_env`] or [`Self::prepare_from_env`].
     pub async fn connect_from_env() -> PostgresTestResult<Option<Self>> {
-        Self::connect_required_from_env().await.map(Some)
+        let Some(url) = TestDatabaseUrl::from_env()? else {
+            return Ok(None);
+        };
+
+        Self::connect(url).await.map(Some)
     }
 
     /// Connects to the required `HAZE_SYNC_TEST_DATABASE_URL` database.
@@ -163,12 +168,13 @@ pub async fn connect_required_test_database_from_env() -> PostgresTestResult<Pos
     PostgresTestContext::connect_required_from_env().await
 }
 
-/// Connects to the required real PostgreSQL test database.
+/// Connects when a dedicated real PostgreSQL test database is configured.
 ///
-/// The optional wrapper is retained for existing callers. Missing configuration
-/// is an error and never produces `Ok(None)`.
-pub async fn connect_test_database_from_env(
-) -> PostgresTestResult<Option<PostgresTestContext>> {
+/// This compatibility wrapper returns `Ok(None)` only for absent or blank
+/// `HAZE_SYNC_TEST_DATABASE_URL`. Invalid configuration and connection failures
+/// remain errors. New mandatory database tests should use
+/// [`connect_required_test_database_from_env`] or [`prepare_test_database_from_env`].
+pub async fn connect_test_database_from_env() -> PostgresTestResult<Option<PostgresTestContext>> {
     PostgresTestContext::connect_from_env().await
 }
 
