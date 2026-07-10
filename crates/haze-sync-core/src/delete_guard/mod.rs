@@ -530,7 +530,7 @@ mod tests {
         ));
         let actual_scope = scope("run-category");
 
-        let count_only = DeleteGuardInput::without_manual_unlock(actual_scope.clone(), 3, 100)
+        let count_only = DeleteGuardInput::without_manual_unlock(actual_scope.clone(), 6, 100)
             .with_manual_unlock(ManualDeleteUnlock::scoped(
                 actual_scope.clone(),
                 true,
@@ -539,22 +539,18 @@ mod tests {
         assert_eq!(
             guard.evaluate(&count_only),
             DeleteGuardDecision::BlockedRequiresManualUnlock {
-                proposed_delete_count: 3,
+                proposed_delete_count: 6,
                 total_files_before_run: 100,
                 reason: DeleteGuardBlockReason::DeleteRatio,
             }
         );
 
-        let ratio_only = DeleteGuardInput::without_manual_unlock(actual_scope.clone(), 3, 100)
-            .with_manual_unlock(ManualDeleteUnlock::scoped(
-                actual_scope,
-                false,
-                true,
-            ));
+        let ratio_only = DeleteGuardInput::without_manual_unlock(actual_scope.clone(), 6, 100)
+            .with_manual_unlock(ManualDeleteUnlock::scoped(actual_scope, false, true));
         assert_eq!(
             guard.evaluate(&ratio_only),
             DeleteGuardDecision::BlockedRequiresManualUnlock {
-                proposed_delete_count: 3,
+                proposed_delete_count: 6,
                 total_files_before_run: 100,
                 reason: DeleteGuardBlockReason::TooManyDeletes,
             }
