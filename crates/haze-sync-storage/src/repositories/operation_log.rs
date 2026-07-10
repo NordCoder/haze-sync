@@ -291,9 +291,7 @@ fn change_feed_page_from_rows(
 }
 
 fn operation_log_row_from_pg(row: &PgRow) -> RepositoryResult<OperationLogRow> {
-    let kind = validated_persisted_operation_kind(
-        row.try_get("kind").map_err(map_sqlx_error)?,
-    )?;
+    let kind = validated_persisted_operation_kind(row.try_get("kind").map_err(map_sqlx_error)?)?;
 
     Ok(OperationLogRow {
         seq: row.try_get("seq").map_err(map_sqlx_error)?,
@@ -309,9 +307,7 @@ fn operation_log_row_from_pg(row: &PgRow) -> RepositoryResult<OperationLogRow> {
 }
 
 fn change_feed_row_from_pg(row: &PgRow) -> RepositoryResult<ChangeFeedRow> {
-    let kind = validated_persisted_operation_kind(
-        row.try_get("kind").map_err(map_sqlx_error)?,
-    )?;
+    let kind = validated_persisted_operation_kind(row.try_get("kind").map_err(map_sqlx_error)?)?;
     let size_bytes =
         validated_persisted_size_bytes(row.try_get("size_bytes").map_err(map_sqlx_error)?)?;
 
