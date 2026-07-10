@@ -34,11 +34,11 @@ pub use path_mapping::{
     TRASH_DIR_NAME, WORKTREE_RUNTIME_DIR_NAME,
 };
 pub use reconciliation::{
-    WorktreeEchoStatus, WorktreeObservedFileState, WorktreeReconciliationEntry,
+    WorktreeEchoStatus, WorktreeObservedFileState, WorktreeReconciler, WorktreeReconciliationEntry,
     WorktreeReconciliationError, WorktreeReconciliationKind, WorktreeReconciliationReport,
     WorktreeReconciliationRunError, WorktreeReconciliationRunner, WorktreeReconciliationState,
     WorktreeReconciliationStateStore, WorktreeReconciliationStateTransition,
-    WorktreeReconciliationSummary, WorktreeReconciler,
+    WorktreeReconciliationSummary,
 };
 pub use scanner::{
     StableFileDetector, StableFileObservation, StableFileState, WorktreeFileSnapshot,
