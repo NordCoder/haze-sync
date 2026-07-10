@@ -14,11 +14,7 @@ fn hash(byte: u8) -> ContentHash {
     ContentHash::from_bytes([byte; 32])
 }
 
-fn stable_file(
-    vault_path: &str,
-    content_hash: ContentHash,
-    bytes: &[u8],
-) -> WorktreeImportFile {
+fn stable_file(vault_path: &str, content_hash: ContentHash, bytes: &[u8]) -> WorktreeImportFile {
     WorktreeImportFile::new(
         WorktreeFileSnapshot {
             vault_path: path(vault_path),
@@ -38,11 +34,8 @@ fn public_file_import_plan_never_infers_delete_actions() {
     state.record_present(path("missing.md"), revision("rev_missing"), hash(1));
     state.record_present(path("same.md"), revision("rev_same"), hash(2));
 
-    let plan = WorktreeImportPlanner::plan(
-        &state,
-        [stable_file("same.md", hash(2), b"same")],
-    )
-    .unwrap();
+    let plan =
+        WorktreeImportPlanner::plan(&state, [stable_file("same.md", hash(2), b"same")]).unwrap();
 
     assert!(plan.actions().is_empty());
     assert_eq!(plan.unchanged().len(), 1);
