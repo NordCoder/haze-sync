@@ -130,7 +130,7 @@ where
     let status = client.fetch_status(server_url);
     let report = build_core_report(readiness.as_ref().ok());
     let stdout = render_live_summary(&health, &readiness, &status, &report);
-    let failures = collect_surface_failures(&health, &readiness, &status);
+    let failures = collect_live_failures(&health, &readiness, &status, &report);
 
     if failures.is_empty() {
         CliOutput::success(stdout)
@@ -289,21 +289,41 @@ const fn server_status_label(status: ServerStatus) -> &'static str {
     status.as_str()
 }
 
-fn collect_surface_failures(
+fn collect_live_failures(
     health: &Result<HealthSummary, ServerReadError>,
     readiness: &Result<ReadinessSummary, ServerReadError>,
     status: &Result<StatusSummary, ServerReadError>,
+    report: &DoctorReport,
 ) -> Vec<String> {
     let mut failures = Vec::new();
-    if let Err(error) = health {
-        failures.push(format!("health={}", safe_error_code(*error)));
+
+    match health {
+        Ok(summary) if !summary.process_alive => failures.push("health=not_ready".to_owned()),
+        Err(error) => failures.push(format!("health={}", safe_error_code(*error))),
+        Ok(_) => {}
     }
-    if let Err(error) = readiness {
-        failures.push(format!("readiness={}", safe_error_code(*error)));
+
+    match readiness {
+        Ok(summary) if summary.overall == ReadinessOverallStatus::NotReady => {
+            failures.push("readiness=not_ready".to_owned());
+        }
+        Err(error) => failures.push(format!("readiness={}", safe_error_code(*error))),
+        Ok(_) => {}
     }
-    if let Err(error) = status {
-        failures.push(format!("status={}", safe_error_code(*error)));
+
+    match status {
+        Ok(summary) if summary.server_status != ServerStatus::Ready => failures.push(format!(
+            "status={}",
+            server_status_label(summary.server_status)
+        )),
+        Err(error) => failures.push(format!("status={}", safe_error_code(*error))),
+        Ok(_) => {}
     }
+
+    if report.summary.status == DoctorCheckStatus::Failed {
+        failures.push("doctor=failed".to_owned());
+    }
+
     failures
 }
 
@@ -427,7 +447,7 @@ mod tests {
     }
 
     #[test]
-    fn not_ready_dependencies_are_reported_as_failed_checks() {
+    fn not_ready_dependencies_fail_live_doctor() {
         let mut client = ready_client();
         client.readiness = Ok(ReadinessSummary {
             overall: ReadinessOverallStatus::NotReady,
@@ -436,10 +456,41 @@ mod tests {
         });
         let output = render_live_doctor(&configured(), &client);
 
-        assert_eq!(output.exit_code, CliExitCode::Success);
+        assert_eq!(output.exit_code, CliExitCode::RuntimeError);
         assert!(output.stdout.contains("readiness: not_ready"));
         assert!(output.stdout.contains("failed: 2"));
+        assert!(output.stderr.contains("readiness=not_ready"));
+        assert!(output.stderr.contains("doctor=failed"));
         assert_no_sensitive_markers(&output.stdout);
+        assert_no_sensitive_markers(&output.stderr);
+    }
+
+    #[test]
+    fn unhealthy_surface_values_fail_without_losing_report() {
+        let mut health_client = ready_client();
+        health_client.health = Ok(HealthSummary {
+            process_alive: false,
+        });
+        let health_output = render_live_doctor(&configured(), &health_client);
+
+        assert_eq!(health_output.exit_code, CliExitCode::RuntimeError);
+        assert!(health_output.stdout.contains("health: not_ready"));
+        assert!(health_output.stdout.contains("doctor summary"));
+        assert!(health_output.stderr.contains("health=not_ready"));
+
+        let mut status_client = ready_client();
+        let mut status = ready_status();
+        status.server_status = ServerStatus::Degraded;
+        status_client.status = Ok(status);
+        let status_output = render_live_doctor(&configured(), &status_client);
+
+        assert_eq!(status_output.exit_code, CliExitCode::RuntimeError);
+        assert!(status_output.stdout.contains("server status: degraded"));
+        assert!(status_output.stderr.contains("status=degraded"));
+        assert_no_sensitive_markers(&health_output.stdout);
+        assert_no_sensitive_markers(&health_output.stderr);
+        assert_no_sensitive_markers(&status_output.stdout);
+        assert_no_sensitive_markers(&status_output.stderr);
     }
 
     #[test]
