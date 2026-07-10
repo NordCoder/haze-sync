@@ -3,8 +3,10 @@
 //! The crate owns configuration, redaction, provider-safe Drive metadata
 //! normalization, fake-first provider abstractions, adapter-local mapping and
 //! cursor state, dependency-free content hashing, full-scan import planning,
-//! and process lifecycle scaffolding. Core/API execution remains deferred.
+//! change-feed reconciliation boundaries, and process lifecycle scaffolding.
+//! Core/API execution and concrete cursor persistence remain deferred.
 
+pub mod change_feed;
 pub mod config;
 pub mod drive;
 pub mod error;
@@ -13,6 +15,14 @@ pub mod runtime;
 pub mod scan;
 pub mod state;
 
+pub use change_feed::{
+    classify_drive_changes, run_change_feed_cycle, ChangeFeedCycleInput,
+    ChangeFeedCycleOutcome, ChangeFeedError, ChangeFeedModelError, ChangePollDebouncer,
+    ChangePollTrigger, ChangeProcessingError, ChangeWorkBatch, ChangeWorkItem,
+    ChangeWorkProcessor, CursorStoreError, DebouncedPoll, DriveChangeEntry, DriveChangeFeedProvider,
+    DriveChangePage, DriveChangePoll, DriveCursorStore, FakeDriveChangeFeedProvider,
+    FullScanFallbackReason, InMemoryDriveCursorStore, ProviderBackoffPolicy, RetryDisposition,
+};
 pub use config::{
     AdapterConfig, AdapterMode, DeleteSafetyConfig, RuntimeIntervals, SecretPath, SecretString,
 };
