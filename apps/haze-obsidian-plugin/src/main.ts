@@ -1,7 +1,7 @@
 import { Plugin, TAbstractFile, TFile } from "obsidian";
 
 import type { ConflictResolutionAction } from "./api-client";
-import { HazeSyncApiClient } from "./api-client";
+import { HazeSyncApiClient, createConfigurationError } from "./api-client";
 import {
   BaseRevisionState,
   createDefaultBaseRevisionState,
@@ -23,27 +23,36 @@ import {
   PendingChangeKind,
   createDefaultLocalSyncState,
   pendingQueueSummaryText,
-  reconcileFullScan,
   recordEventHint,
   summarizePendingQueue,
 } from "./pending-queue";
 import { parsePluginData, serializePluginData } from "./plugin-data";
-import {
-  RemoteEchoSuppressor,
-  fetchRemoteChangePage,
-  markRemotePullStarted,
-  materializeRemoteChange,
-  remoteChangeNeedsDownload,
-} from "./remote-materializer";
+import { RemoteEchoSuppressor } from "./remote-materializer";
 import { RemoteSyncState, createDefaultRemoteSyncState } from "./remote-sync-state";
 import {
   PluginSettings,
   createDefaultPluginSettings,
   settingsAreReady,
+  syncAutomationEnabled,
   syncModeLabel,
   validatePluginSettings,
 } from "./settings";
 import { HazeSyncSettingsTab } from "./settings-tab";
+import {
+  PullOperationResult,
+  PushOperationResult,
+  clearPendingChangeIfCurrent,
+  pullRemoteChanges,
+  pushPendingChanges,
+  scanLocalVault,
+} from "./sync-operations";
+import { SyncRunScope, SyncRunner } from "./sync-runner";
+import {
+  SyncRuntimeState,
+  SyncTrigger,
+  createDefaultSyncRuntimeState,
+  syncRuntimeSummary,
+} from "./sync-runtime-state";
 import { SafeStatusReporter } from "./status";
 import { VaultScanner } from "./vault-scanner";
 
@@ -54,10 +63,12 @@ export default class HazeSyncPlugin extends Plugin {
   private baseRevisionState: BaseRevisionState = createDefaultBaseRevisionState();
   private remoteSyncState: RemoteSyncState = createDefaultRemoteSyncState();
   private conflictActionKeyState: ConflictActionKeyState = createDefaultConflictActionKeyState();
+  private syncRuntimeState: SyncRuntimeState = createDefaultSyncRuntimeState();
   private readonly remoteEchoSuppressor = new RemoteEchoSuppressor();
   private pendingDataSave: Promise<void> = Promise.resolve();
   private serverOpenConflictCount?: number;
   private scanner?: VaultScanner;
+  private syncRunner?: SyncRunner;
   private statusReporter?: SafeStatusReporter;
   private settingsTab?: HazeSyncSettingsTab;
 
@@ -69,19 +80,29 @@ export default class HazeSyncPlugin extends Plugin {
       statusItem: this.addStatusBarItem(),
       getSecrets: () => [this.settings.authToken],
     });
+    this.syncRunner = new SyncRunner({
+      initialState: this.syncRuntimeState,
+      execute: (trigger, scope, signal) => this.executeSyncRun(trigger, scope, signal),
+      onStateChange: (state) => this.onSyncRuntimeStateChanged(state),
+    });
 
     this.settingsTab = new HazeSyncSettingsTab(this.app, this);
     this.addSettingTab(this.settingsTab);
+    this.addManualSyncCommand();
     this.addScanCommand();
     this.addRemotePullCommand();
     this.addConflictCenterCommand();
     this.registerVaultEventHints();
+    this.configureSyncAutomation();
 
     this.refreshSettingsStatus();
-    this.statusReporter.notice("Plugin loaded. Configure settings before enabling sync.");
+    this.statusReporter.notice("Plugin loaded. Use Sync now for an explicit guarded sync run.");
+    this.showAutomationLimitationNotice();
   }
 
   onunload(): void {
+    this.syncRunner?.dispose();
+    this.syncRunner = undefined;
     this.remoteEchoSuppressor.dispose();
     this.statusReporter?.dispose();
     this.statusReporter = undefined;
@@ -96,12 +117,14 @@ export default class HazeSyncPlugin extends Plugin {
     this.baseRevisionState = data.baseRevisionState;
     this.remoteSyncState = data.remoteSyncState;
     this.conflictActionKeyState = data.conflictActionKeyState;
+    this.syncRuntimeState = data.syncRuntimeState;
   }
 
   async saveSettings(): Promise<void> {
     const validation = validatePluginSettings(this.settings);
     this.settings = validation.normalized;
     await this.persistPluginData();
+    this.configureSyncAutomation();
     this.refreshSettingsStatus(validation);
   }
 
@@ -128,17 +151,31 @@ export default class HazeSyncPlugin extends Plugin {
       this.serverOpenConflictCount === undefined
         ? "server conflicts not loaded"
         : `${this.serverOpenConflictCount} open server conflict(s)`;
+    const automationText = syncAutomationEnabled(validation.normalized)
+      ? "automatic triggers are best-effort while Obsidian is active"
+      : "automatic triggers are off";
+    const runtimeText = syncRuntimeSummary(this.syncRuntimeState);
 
     if (validation.normalized.syncMode === "disabled") {
       this.statusReporter.setStatus(
-        `Configured; sync mode is disabled; ${queueText}; ${baseCount} tracked base revision(s); remote cursor ${remoteCursor}; ${localRemoteConflictCount} local pull conflict(s); ${serverConflictText}.`,
+        `Configured; sync mode is disabled; ${runtimeText}; ${automationText}; ${queueText}; ${baseCount} tracked base revision(s); remote cursor ${remoteCursor}; ${localRemoteConflictCount} local pull conflict(s); ${serverConflictText}.`,
       );
       return;
     }
 
     this.statusReporter.setStatus(
-      `Configured in ${syncModeLabel(validation.normalized.syncMode)} mode; ${queueText}; ${baseCount} tracked base revision(s); remote cursor ${remoteCursor}; ${localRemoteConflictCount} local pull conflict(s); ${serverConflictText}.`,
+      `Configured in ${syncModeLabel(validation.normalized.syncMode)} mode; ${runtimeText}; ${automationText}; ${queueText}; ${baseCount} tracked base revision(s); remote cursor ${remoteCursor}; ${localRemoteConflictCount} local pull conflict(s); ${serverConflictText}.`,
     );
+  }
+
+  private addManualSyncCommand(): void {
+    this.addCommand({
+      id: "haze-sync-sync-now",
+      name: "Sync now",
+      callback: () => {
+        void this.requestManualSync("full");
+      },
+    });
   }
 
   private addScanCommand(): void {
@@ -146,7 +183,7 @@ export default class HazeSyncPlugin extends Plugin {
       id: "haze-sync-scan-vault-local-queue",
       name: "Scan vault for local changes",
       callback: () => {
-        void this.scanVaultForLocalChanges();
+        void this.requestManualSync("scan_only");
       },
     });
   }
@@ -156,7 +193,7 @@ export default class HazeSyncPlugin extends Plugin {
       id: "haze-sync-pull-remote-changes",
       name: "Pull remote changes safely",
       callback: () => {
-        void this.pullRemoteChangesSafely();
+        void this.requestManualSync("pull_only");
       },
     });
   }
@@ -198,100 +235,183 @@ export default class HazeSyncPlugin extends Plugin {
     );
   }
 
-  private async scanVaultForLocalChanges(): Promise<void> {
-    if (this.scanner === undefined) {
+  private async requestManualSync(scope: SyncRunScope): Promise<void> {
+    if (this.syncRunner === undefined) {
       return;
     }
 
-    const scanResult = await this.scanner.scan();
-    const reconcileResult = reconcileFullScan(this.localState, scanResult.facts, scanResult.scannedAt);
-    this.localState = reconcileResult.state;
-    await this.persistPluginData();
+    if (scope !== "scan_only") {
+      const validation = validatePluginSettings(this.settings);
+      this.settings = validation.normalized;
+      if (!settingsAreReady(this.settings)) {
+        this.refreshSettingsStatus(validation);
+        this.statusReporter?.notice("Configure Haze Sync settings before running server sync.", "warning");
+        return;
+      }
+      if (scope === "full" && this.settings.syncMode === "disabled") {
+        this.statusReporter?.notice("Sync now is disabled by the current sync mode.", "warning");
+        return;
+      }
+      if (scope === "pull_only" && !modeAllowsPull(this.settings.syncMode)) {
+        this.statusReporter?.notice("Remote pull is disabled by the current sync mode.", "warning");
+        return;
+      }
+    }
 
-    const queueText = pendingQueueSummaryText(reconcileResult.summary);
-    const unreadableText = scanResult.errors.length === 0 ? "" : ` ${scanResult.errors.length} file(s) could not be read.`;
-    const level = scanResult.errors.length === 0 ? "success" : "warning";
-
-    this.statusReporter?.notice(`Vault scan complete: ${queueText}.${unreadableText}`, level);
-    this.refreshSettingsStatus();
+    const result = await this.syncRunner.request("manual", scope);
+    switch (result.status) {
+      case "already_running":
+        this.statusReporter?.notice("A sync run is already active. The new manual request was not started.", "warning");
+        break;
+      case "completed":
+        this.statusReporter?.notice(result.state.summary ?? "Sync completed.", "success");
+        break;
+      case "failed":
+        this.statusReporter?.notice(result.state.summary ?? "Sync failed safely.", "warning");
+        break;
+      case "backoff":
+        this.statusReporter?.notice("Automatic retry backoff is active. Manual Sync now may be used to retry immediately.", "warning");
+        break;
+      case "stopped":
+        break;
+    }
   }
 
-  private async pullRemoteChangesSafely(): Promise<void> {
+  private async executeSyncRun(
+    trigger: SyncTrigger,
+    scope: SyncRunScope,
+    signal: AbortSignal,
+  ): Promise<{ summary: string }> {
+    if (this.scanner === undefined) {
+      throw new Error("Vault scanner is unavailable.");
+    }
+
+    const scanResult = await scanLocalVault(this.scanner, this.localState, signal);
+    this.localState = scanResult.localState;
+    await this.persistPluginData();
+
+    if (scope === "scan_only") {
+      return {
+        summary: scanSummary(scanResult.unreadableFiles, this.localState),
+      };
+    }
+
     const validation = validatePluginSettings(this.settings);
     this.settings = validation.normalized;
     if (!settingsAreReady(this.settings)) {
-      this.refreshSettingsStatus(validation);
-      this.statusReporter?.notice("Configure Haze Sync settings before pulling remote changes.", "warning");
+      throw createConfigurationError("Haze Sync settings are incomplete.");
+    }
+    if (scope === "full" && this.settings.syncMode === "disabled") {
+      throw createConfigurationError("Sync mode is disabled.");
+    }
+    if (scope === "pull_only" && !modeAllowsPull(this.settings.syncMode)) {
+      throw createConfigurationError("Remote pull is disabled by the current sync mode.");
+    }
+
+    const client = HazeSyncApiClient.fromSettings(this.settings, undefined, signal);
+    let pushResult: PushOperationResult | undefined;
+    let pullResult: PullOperationResult | undefined;
+
+    if (scope === "full" && modeAllowsPush(this.settings.syncMode)) {
+      pushResult = await pushPendingChanges({
+        vault: this.app.vault,
+        client,
+        localState: this.localState,
+        baseRevisionState: this.baseRevisionState,
+        signal,
+        allowDeletes: !this.settings.safety.confirmBeforeDelete,
+        onProgress: async (progress) => {
+          this.baseRevisionState = progress.baseRevisionState;
+          this.localState = clearPendingChangeIfCurrent(
+            this.localState,
+            progress.path,
+            progress.operationIdempotencyKey,
+          );
+          await this.persistPluginData();
+        },
+      });
+    }
+
+    if (
+      scope === "pull_only" ||
+      (scope === "full" && modeAllowsPull(this.settings.syncMode))
+    ) {
+      pullResult = await pullRemoteChanges({
+        vault: this.app.vault,
+        client,
+        baseRevisionState: this.baseRevisionState,
+        remoteSyncState: this.remoteSyncState,
+        signal,
+        echoSuppressor: this.remoteEchoSuppressor,
+        onProgress: async (progress) => {
+          this.baseRevisionState = progress.baseRevisionState;
+          this.remoteSyncState = progress.remoteSyncState;
+          await this.persistPluginData();
+        },
+      });
+    }
+
+    const conflicts = await this.refreshOpenConflicts(client);
+    await this.persistPluginData();
+    this.refreshSettingsStatus();
+
+    return {
+      summary: fullSyncSummary(
+        trigger,
+        this.settings.syncMode,
+        scanResult.unreadableFiles,
+        this.localState,
+        pushResult,
+        pullResult,
+        conflicts.length,
+      ),
+    };
+  }
+
+  private configureSyncAutomation(): void {
+    if (this.syncRunner === undefined) {
       return;
     }
 
-    if (this.settings.syncMode === "disabled" || this.settings.syncMode === "push_only" || this.settings.syncMode === "dry_run") {
-      this.refreshSettingsStatus(validation);
-      this.statusReporter?.notice("Remote pull is disabled by the current sync mode.", "warning");
+    const active = settingsAreReady(this.settings) && this.settings.syncMode !== "disabled";
+    this.syncRunner.configureAutomation({
+      intervalMs:
+        active && this.settings.automation.intervalMinutes > 0
+          ? this.settings.automation.intervalMinutes * 60_000
+          : null,
+      eventDelayMs:
+        active && this.settings.automation.syncOnFileEvents
+          ? this.settings.automation.eventDebounceSeconds * 1_000
+          : null,
+    });
+  }
+
+  private onSyncRuntimeStateChanged(state: SyncRuntimeState): void {
+    const previous = this.syncRuntimeState;
+    this.syncRuntimeState = state;
+    this.refreshSettingsStatus();
+    void this.persistPluginData().catch(() => {
+      this.statusReporter?.setStatus("Could not save sync runtime status.", "warning");
+    });
+
+    if (
+      state.lastTrigger !== "manual" &&
+      previous.phase === "running" &&
+      (state.phase === "offline" || state.phase === "backoff" || state.phase === "error")
+    ) {
+      this.statusReporter?.notice(state.summary ?? "Automatic sync failed safely.", "warning");
+    }
+  }
+
+  private showAutomationLimitationNotice(): void {
+    if (!syncAutomationEnabled(this.settings) || !this.settings.safety.showMobileBackgroundWarning) {
       return;
     }
 
-    const observedAt = new Date().toISOString();
-    this.remoteSyncState = markRemotePullStarted(this.remoteSyncState, observedAt);
-
-    let applied = 0;
-    let conflicts = 0;
-    let tombstones = 0;
-    let noOps = 0;
-
-    try {
-      const client = HazeSyncApiClient.fromSettings(this.settings);
-      const response = await fetchRemoteChangePage(client, this.remoteSyncState, { limit: 50 });
-
-      for (const change of response.changes) {
-        const download = remoteChangeNeedsDownload(change) ? await client.getFile(change.path) : undefined;
-        const result = await materializeRemoteChange({
-          vault: this.app.vault,
-          change,
-          download,
-          baseRevisionState: this.baseRevisionState,
-          remoteSyncState: this.remoteSyncState,
-          observedAt,
-          echoSuppressor: this.remoteEchoSuppressor,
-        });
-
-        this.baseRevisionState = result.baseRevisionState;
-        this.remoteSyncState = result.remoteSyncState;
-
-        switch (result.status) {
-          case "applied":
-            applied += 1;
-            break;
-          case "conflict_queued":
-            conflicts += 1;
-            await this.persistPluginData();
-            this.refreshSettingsStatus();
-            this.statusReporter?.notice(
-              `Remote pull stopped: queued conflict for ${result.path}. Local file was preserved.`,
-              "warning",
-            );
-            return;
-          case "no_op":
-            noOps += 1;
-            break;
-          case "tombstone_recorded":
-            tombstones += 1;
-            break;
-        }
-      }
-
-      await this.persistPluginData();
-      this.refreshSettingsStatus();
-      const moreText = response.has_more ? " More remote changes are available; run pull again." : "";
-      this.statusReporter?.notice(
-        `Remote pull complete: ${applied} applied, ${noOps} already current, ${tombstones} tombstone(s), ${conflicts} conflict(s).${moreText}`,
-        conflicts === 0 ? "success" : "warning",
-      );
-    } catch {
-      await this.persistPluginData();
-      this.refreshSettingsStatus();
-      this.statusReporter?.notice("Remote pull failed safely. Local files were preserved and cursor was not advanced for the failed change.", "warning");
-    }
+    this.statusReporter?.notice(
+      "Automatic sync is best-effort only while Obsidian keeps the plugin active. Mobile suspension may delay or skip runs.",
+      "warning",
+    );
   }
 
   private openConflictCenter(): void {
@@ -313,7 +433,10 @@ export default class HazeSyncPlugin extends Plugin {
   }
 
   private async loadOpenConflicts(): Promise<ConflictCenterItem[]> {
-    const client = HazeSyncApiClient.fromSettings(this.settings);
+    return this.refreshOpenConflicts(HazeSyncApiClient.fromSettings(this.settings));
+  }
+
+  private async refreshOpenConflicts(client: HazeSyncApiClient): Promise<ConflictCenterItem[]> {
     const items = await loadOpenConflictItems(client, [this.settings.authToken]);
     const retainedKeys = retainOpenConflictActionKeys(
       this.conflictActionKeyState,
@@ -323,11 +446,7 @@ export default class HazeSyncPlugin extends Plugin {
 
     if (retainedKeys !== this.conflictActionKeyState) {
       this.conflictActionKeyState = retainedKeys;
-      try {
-        await this.persistPluginData();
-      } catch {
-        // Stale-key cleanup is best effort and must not hide the server conflict list.
-      }
+      await this.persistPluginData();
     }
 
     this.serverOpenConflictCount = items.length;
@@ -340,7 +459,7 @@ export default class HazeSyncPlugin extends Plugin {
     action: ConflictResolutionAction,
   ): Promise<string> {
     if (!this.canResolveConflicts()) {
-      throw new Error("Conflict resolution is disabled by the current sync mode.");
+      throw new Error("Conflict resolution is disabled while sync is running or by the current sync mode.");
     }
 
     const previousState = this.conflictActionKeyState;
@@ -373,7 +492,7 @@ export default class HazeSyncPlugin extends Plugin {
     idempotencyKey: string,
   ): Promise<ConflictResolutionResult> {
     if (!this.canResolveConflicts()) {
-      throw new Error("Conflict resolution is disabled by the current sync mode.");
+      throw new Error("Conflict resolution is disabled while sync is running or by the current sync mode.");
     }
 
     const result = await resolveConflictThroughServer(
@@ -414,7 +533,8 @@ export default class HazeSyncPlugin extends Plugin {
     return (
       settingsAreReady(this.settings) &&
       this.settings.syncMode !== "disabled" &&
-      this.settings.syncMode !== "dry_run"
+      this.settings.syncMode !== "dry_run" &&
+      this.syncRuntimeState.phase !== "running"
     );
   }
 
@@ -440,6 +560,7 @@ export default class HazeSyncPlugin extends Plugin {
     void this.persistPluginData().catch(() => {
       this.statusReporter?.setStatus("Could not save local pending queue state.", "warning");
     });
+    this.syncRunner?.scheduleEventTrigger();
     this.refreshSettingsStatus();
   }
 
@@ -450,6 +571,7 @@ export default class HazeSyncPlugin extends Plugin {
       this.baseRevisionState,
       this.remoteSyncState,
       this.conflictActionKeyState,
+      this.syncRuntimeState,
     );
     const write = this.pendingDataSave.then(
       () => this.saveData(data),
@@ -459,4 +581,56 @@ export default class HazeSyncPlugin extends Plugin {
 
     return write;
   }
+}
+
+function modeAllowsPush(mode: PluginSettings["syncMode"]): boolean {
+  return mode === "push_only" || mode === "bidirectional";
+}
+
+function modeAllowsPull(mode: PluginSettings["syncMode"]): boolean {
+  return mode === "pull_only" || mode === "bidirectional";
+}
+
+function scanSummary(unreadableFiles: number, localState: LocalSyncState): string {
+  const queueText = pendingQueueSummaryText(summarizePendingQueue(localState.pendingQueue));
+  const unreadableText = unreadableFiles === 0 ? "" : `; ${unreadableFiles} file(s) could not be read`;
+  return `Vault scan complete: ${queueText}${unreadableText}.`;
+}
+
+function fullSyncSummary(
+  trigger: SyncTrigger,
+  mode: PluginSettings["syncMode"],
+  unreadableFiles: number,
+  localState: LocalSyncState,
+  push: PushOperationResult | undefined,
+  pull: PullOperationResult | undefined,
+  openConflicts: number,
+): string {
+  const parts = [
+    `Sync (${trigger}, ${syncModeLabel(mode)}) complete`,
+    pendingQueueSummaryText(summarizePendingQueue(localState.pendingQueue)),
+  ];
+
+  if (unreadableFiles > 0) {
+    parts.push(`${unreadableFiles} unreadable file(s)`);
+  }
+  if (push !== undefined) {
+    parts.push(
+      `${push.uploaded} upload(s), ${push.deleted} delete(s), ${push.sameContent} already current, ${push.conflicts} push conflict(s), ${push.rejected} rejected, ${push.skipped} skipped`,
+    );
+  }
+  if (pull !== undefined) {
+    parts.push(
+      `${pull.applied} remote applied, ${pull.noOps} already current, ${pull.tombstones} tombstone(s), ${pull.conflicts} pull conflict(s)`,
+    );
+    if (pull.hasMore) {
+      parts.push("more remote changes remain after the bounded pull pass");
+    }
+  }
+  if (mode === "dry_run") {
+    parts.push("dry run performed no server or vault mutations");
+  }
+  parts.push(`${openConflicts} open server conflict(s)`);
+
+  return `${parts.join("; ")}.`;
 }
