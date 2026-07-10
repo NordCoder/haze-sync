@@ -18,20 +18,22 @@ SRV-P6 implementation, clean-code review, and CI fixer are complete. Post-fix Co
 - run_number: 890
 - conclusion: success
 
+Worktree WT-P7 implementation, clean-code review, and CI correction are accepted. Worktree is now queued for WT-P8, which owns the hostable watcher/runtime-service abstraction.
+
 ## Blocked next phase
 
 The next Server plan phase is SRV-P7: Worktree runtime composition fan-in.
 
-Do not start SRV-P7 yet. The Worktree implementation plan places the hostable runtime-service abstraction in WT-P8 and the explicit Server-hosted fan-in/doctor boundary in WT-P9. Worktree is currently only entering WT-P5 clean-code review.
+Do not start SRV-P7 while WT-P8 is only queued. Server must not duplicate Worktree-owned scan/watcher/runtime logic or invent lifecycle, mode, status, cancellation, or configuration contracts before they are implemented and reviewed.
 
-Starting SRV-P7 now would either duplicate Worktree-owned runtime logic inside Server or invent an unaccepted cross-component contract.
+WT-P9 owns the doctor/repair and explicit Server-hosted fan-in boundary unless a dedicated cross-component contract is approved earlier.
 
 ## Unblock condition
 
 Orchestrator may replace this hold only after:
 
-- WT-P8 runtime-service abstraction is implemented and clean-code/CI accepted;
-- any required WT-P9 Server-hosted boundary is explicitly available or a dedicated cross-component fan-in prompt is approved;
-- Worktree config, lifecycle, status, and mode contracts needed by Server are concrete and readable.
+- WT-P8 runtime-service abstraction is implemented, clean-code reviewed, and green in CI;
+- the required WT-P9 Server-hosted boundary is accepted, or a dedicated cross-component fan-in prompt defines the equivalent contract;
+- Worktree config, lifecycle, cancellation, status, mode, and safe diagnostics boundaries needed by Server are concrete and readable.
 
 Until then, do not modify Server source or report for SRV-P7.
