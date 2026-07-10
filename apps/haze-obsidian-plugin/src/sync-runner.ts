@@ -196,7 +196,7 @@ export class SyncRunner {
       }
       return { status: "completed", state: this.state };
     } catch (error) {
-      if (signal.aborted || this.disposed || isAbortError(error)) {
+      if (signal.aborted || this.disposed) {
         return { status: "stopped", state: this.state };
       }
 
@@ -347,8 +347,4 @@ function safeFailureSummary(category: ApiErrorCategory, trigger: SyncTrigger): s
     case "internal":
       return `Sync started by ${trigger} failed safely.`;
   }
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === "AbortError";
 }
