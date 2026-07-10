@@ -217,19 +217,11 @@ impl WorktreeTrashError {
             Self::RuntimeDirectoryCreateFailed => {
                 "worktree trash runtime directory could not be created"
             }
-            Self::TargetNotRegularFile { .. } => {
-                "tombstone target is not a regular local file"
-            }
+            Self::TargetNotRegularFile { .. } => "tombstone target is not a regular local file",
             Self::TargetReadFailed { .. } => "tombstone target could not be read safely",
-            Self::TargetChangedBeforeMove { .. } => {
-                "tombstone target changed before retained move"
-            }
-            Self::TrashDestinationExists { .. } => {
-                "retained trash destination already exists"
-            }
-            Self::MetadataWriteFailed { .. } => {
-                "restore metadata could not be committed safely"
-            }
+            Self::TargetChangedBeforeMove { .. } => "tombstone target changed before retained move",
+            Self::TrashDestinationExists { .. } => "retained trash destination already exists",
+            Self::MetadataWriteFailed { .. } => "restore metadata could not be committed safely",
             Self::MetadataReadFailed => "restore metadata could not be read safely",
             Self::InvalidMetadata => "restore metadata is invalid",
             Self::MoveFailed { .. } => "local file could not be moved into retained trash",
@@ -306,6 +298,7 @@ impl WorktreeTrashManager {
                 &request.vault_path,
                 &request.tombstone_revision_id,
                 observed.content_hash,
+                observed.size,
                 retained_at_seconds,
             ),
             vault_path: request.vault_path.clone(),
@@ -342,7 +335,8 @@ impl WorktreeTrashManager {
                 vault_path: request.vault_path,
             });
         }
-        if sync_directory(local_path.parent()).is_err() || sync_directory(destination.parent()).is_err()
+        if sync_directory(local_path.parent()).is_err()
+            || sync_directory(destination.parent()).is_err()
         {
             cleanup_owned_file(&staged_metadata);
             rollback_move(&destination, &local_path, &request.vault_path)?;
@@ -438,11 +432,7 @@ impl WorktreeTrashManager {
         self.config
             .metadata_dir()
             .join(TRASH_METADATA_DIR_NAME)
-            .join(format!(
-                "{}{}",
-                record_id.as_str(),
-                TRASH_METADATA_SUFFIX
-            ))
+            .join(format!("{}{}", record_id.as_str(), TRASH_METADATA_SUFFIX))
     }
 
     fn stage_metadata(&self, record: &WorktreeTrashRecord) -> Result<PathBuf, WorktreeTrashError> {
@@ -501,11 +491,10 @@ fn observe_regular_file(
             vault_path: vault_path.clone(),
         })?;
 
-    let after = fs::symlink_metadata(path).map_err(|_| {
-        WorktreeTrashError::TargetChangedBeforeMove {
+    let after =
+        fs::symlink_metadata(path).map_err(|_| WorktreeTrashError::TargetChangedBeforeMove {
             vault_path: vault_path.clone(),
-        }
-    })?;
+        })?;
     ensure_regular_file(&after, vault_path)?;
     if !same_file_metadata(&before, &after) || after.len() != bytes.len() as u64 {
         return Err(WorktreeTrashError::TargetChangedBeforeMove {
@@ -545,8 +534,8 @@ fn ensure_existing_root_chain(root: &Path) -> Result<(), WorktreeTrashError> {
         .collect();
     ancestors.reverse();
     for ancestor in ancestors {
-        let metadata = fs::symlink_metadata(ancestor)
-            .map_err(|_| WorktreeTrashError::RootUnavailable)?;
+        let metadata =
+            fs::symlink_metadata(ancestor).map_err(|_| WorktreeTrashError::RootUnavailable)?;
         if metadata.file_type().is_symlink() || !metadata.file_type().is_dir() {
             return Err(WorktreeTrashError::RootUnavailable);
         }
@@ -620,12 +609,14 @@ fn record_id_for(
     vault_path: &VaultPath,
     revision_id: &RevisionId,
     content_hash: ContentHash,
+    size: u64,
     retained_at_seconds: u64,
 ) -> WorktreeTrashRecordId {
     let mut bytes = Vec::new();
     append_length_prefixed(&mut bytes, vault_path.as_str().as_bytes());
     append_length_prefixed(&mut bytes, revision_id.as_str().as_bytes());
     append_length_prefixed(&mut bytes, content_hash.to_string().as_bytes());
+    bytes.extend_from_slice(&size.to_be_bytes());
     bytes.extend_from_slice(&retained_at_seconds.to_be_bytes());
     WorktreeTrashRecordId(content_hash_for_bytes(&bytes).as_hex().to_owned())
 }
@@ -637,6 +628,7 @@ fn recompute_record_id(
         &record.vault_path,
         &record.tombstone_revision_id,
         record.content_hash,
+        record.size,
         unix_seconds(record.retained_at)?,
     ))
 }
@@ -691,8 +683,10 @@ fn parse_metadata(bytes: &[u8]) -> Result<WorktreeTrashRecord, WorktreeTrashErro
         return Err(WorktreeTrashError::InvalidMetadata);
     }
 
-    let path = String::from_utf8(hex_decode(path_hex.ok_or(WorktreeTrashError::InvalidMetadata)?)?)
-        .map_err(|_| WorktreeTrashError::InvalidMetadata)?;
+    let path = String::from_utf8(hex_decode(
+        path_hex.ok_or(WorktreeTrashError::InvalidMetadata)?,
+    )?)
+    .map_err(|_| WorktreeTrashError::InvalidMetadata)?;
     let revision = String::from_utf8(hex_decode(
         revision_hex.ok_or(WorktreeTrashError::InvalidMetadata)?,
     )?)
@@ -710,10 +704,8 @@ fn parse_metadata(bytes: &[u8]) -> Result<WorktreeTrashRecord, WorktreeTrashErro
         vault_path: VaultPath::parse(&path).map_err(|_| WorktreeTrashError::InvalidMetadata)?,
         tombstone_revision_id: RevisionId::parse(&revision)
             .map_err(|_| WorktreeTrashError::InvalidMetadata)?,
-        content_hash: ContentHash::parse(
-            content_hash.ok_or(WorktreeTrashError::InvalidMetadata)?,
-        )
-        .map_err(|_| WorktreeTrashError::InvalidMetadata)?,
+        content_hash: ContentHash::parse(content_hash.ok_or(WorktreeTrashError::InvalidMetadata)?)
+            .map_err(|_| WorktreeTrashError::InvalidMetadata)?,
         size: parse_u64(size)?,
         retained_at: UNIX_EPOCH + Duration::from_secs(retained_at_seconds),
         retention_until: UNIX_EPOCH + Duration::from_secs(retention_until_seconds),
