@@ -55,7 +55,10 @@ impl fmt::Display for OperationLogError {
                 write!(formatter, "changes limit must not exceed {max}")
             }
             Self::PageTooLarge { max } => {
-                write!(formatter, "changes page must not contain more than {max} rows")
+                write!(
+                    formatter,
+                    "changes page must not contain more than {max} rows"
+                )
             }
             Self::NonMonotonicSequence => formatter
                 .write_str("operation log entries must be ordered by strictly increasing sequence"),
@@ -370,12 +373,7 @@ impl ChangesPage {
         changes: Vec<ChangeFeedEntry>,
         has_more: bool,
     ) -> Result<Self, OperationLogError> {
-        let to_seq = validate_page_shape(
-            query.since,
-            &changes,
-            has_more,
-            query.limit.value(),
-        )?;
+        let to_seq = validate_page_shape(query.since, &changes, has_more, query.limit.value())?;
 
         Ok(Self {
             from_seq: query.since,
