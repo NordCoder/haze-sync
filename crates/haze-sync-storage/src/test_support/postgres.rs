@@ -5,7 +5,9 @@
 //! or select a database implicitly.
 
 use super::{TestDatabaseUrl, TestNamespace, TestSupportError};
-use crate::schema::{table_names, INITIAL_MIGRATIONS};
+use crate::schema::table_names;
+#[cfg(test)]
+use crate::schema::INITIAL_MIGRATIONS;
 use sqlx::{postgres::PgPoolOptions, Executor, PgPool};
 use std::fmt;
 
@@ -218,8 +220,9 @@ pub async fn clean_storage_tables(pool: &PgPool) -> PostgresTestResult<()> {
         return Err(TestSupportError::IncompleteStorageSchema);
     }
 
+    let cleanup_sql = clean_storage_tables_sql();
     (&mut *transaction)
-        .execute(clean_storage_tables_sql().as_str())
+        .execute(cleanup_sql.as_str())
         .await
         .map_err(|_| TestSupportError::DatabaseOperationFailed)?;
 
@@ -243,7 +246,8 @@ async fn acquire_setup_lock(
 async fn storage_table_count(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 ) -> PostgresTestResult<i64> {
-    sqlx::query_scalar::<_, i64>(storage_table_count_sql().as_str())
+    let sql = storage_table_count_sql();
+    sqlx::query_scalar::<_, i64>(sql.as_str())
         .fetch_one(&mut **transaction)
         .await
         .map_err(|_| TestSupportError::DatabaseOperationFailed)
@@ -291,7 +295,7 @@ mod tests {
             .map(|migration| migration.name)
             .collect();
 
-        assert_eq!(actual_names, INITIAL_MIGRATIONS);
+        assert_eq!(actual_names.as_slice(), INITIAL_MIGRATIONS);
         assert!(STORAGE_TEST_MIGRATIONS
             .iter()
             .all(|migration| migration.sql.contains("create table")));
