@@ -1,41 +1,43 @@
-# W1-OBS-P7C — Obsidian conflict center clean-code review
+# W1-OBS-P8 — Sync runner, offline/backoff, and status UX
 
 Component: obsidian-plugin
 Path: apps/haze-obsidian-plugin
 Branch: component/obsidian-plugin
 PR: #51
-Role: clean-code-reviewer
+Role: implementation-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-OBS-P7 implementation is complete and its code-bearing Component CI run is green.
+OBS-P7 implementation and clean-code review are accepted. Clean-code Component CI is green.
 
-- code_bearing_sha: 6fd375f07ae942befd171181fcadfe72c52dc531
+- code_bearing_sha: c9caf95ad2e4261b825c07965f44ee7aedf87e19
 - workflow: Component CI
-- workflow_run_id: 29067731941
-- run_number: 849
+- workflow_run_id: 29080003119
+- run_number: 906
 - conclusion: success
+
+The next implementation phase is OBS-P8 from apps/haze-obsidian-plugin/docs/implementation-plan.md.
 
 ## Read
 
-Read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, chatgpt-gh-connector.md, component docs/control files, relevant source, and PR diff. Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
+Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current source, accepted API/Server contracts, and PR diff. Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
 
 ## Task
 
-Review OBS-P7 conflict center and supported server-backed actions.
+Implement OBS-P8: Sync runner, offline/backoff, and status UX.
 
-Focus areas:
+Follow the plan:
 
-- safe conflict DTO validation and rendering;
-- supported action vocabulary and destructive-action confirmation;
-- idempotency-key stability and retry behavior;
-- server-confirmed-only local base-state updates;
-- disabled/dry-run mutation guards;
-- sanitization of server-provided display values and generic UI errors;
-- separation of controller logic from Obsidian modal rendering;
-- preservation of all OBS-P7 non-goals.
+- implement an explicit manual sync trigger;
+- add optional interval/event-triggered sync only with explicit lifecycle ownership and cleanup;
+- model offline and retry/backoff state predictably;
+- expose sanitized status-bar or settings/status summaries;
+- prevent concurrent overlapping sync runs;
+- cancel/stop pending work on plugin unload;
+- make mobile and background limitations explicit in UI/docs;
+- coordinate existing push, pull, materialization, and conflict-refresh capabilities without bypassing Server/Core semantics.
 
 ## Allowed files
 
@@ -43,14 +45,14 @@ Focus areas:
 - apps/haze-obsidian-plugin/docs/**
 - apps/haze-obsidian-plugin/control/report.md
 
-## Forbidden changes
+## Non-goals
 
-No local-only resolution, semantic merge editor, new conflict policy vocabulary, server route changes, provider behavior, hard delete, background sync loop, workflow changes, dependency changes, or sibling component changes.
+No guaranteed mobile background sync, hidden telemetry, provider integration, server runtime changes, destructive repair automation, workflow changes, dependency changes, or sibling component changes.
 
 ## CI trigger policy
 
-Source/doc clean-code commits must not skip CI. A final report-only commit may skip CI.
+Product/source/docs commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only the report to apps/haze-obsidian-plugin/control/report.md. Use report-template.md. Set REPORT_TYPE to CLEAN_CODE_REVIEW and phase_id to OBS-P7C.
+Write only the report to apps/haze-obsidian-plugin/control/report.md. Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION and phase_id to OBS-P8.
