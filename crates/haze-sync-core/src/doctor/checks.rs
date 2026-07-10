@@ -28,14 +28,14 @@ impl DbConnectivityCheckInput {
 /// Builds a passive DB connectivity check result without storing DB URLs.
 #[must_use]
 pub fn db_connectivity_check(input: DbConnectivityCheckInput) -> DoctorCheckResult {
-    let connectivity_verified = if input.live_check_enabled {
+    let connectivity_verified = if input.metadata_configured && input.live_check_enabled {
         input.connectivity_verified
     } else {
         None
     };
     let details = DbConnectivityDetails {
         metadata_configured: input.metadata_configured,
-        live_check_performed: input.live_check_enabled && connectivity_verified.is_some(),
+        live_check_performed: connectivity_verified.is_some(),
         connectivity_verified,
     };
     let (status, message) = if !input.metadata_configured {
@@ -95,37 +95,46 @@ impl ObjectStoreExistsWritableInput {
 
 /// Builds a passive object-store existence/writability check result.
 ///
-/// The result intentionally omits the object-store root path.
+/// The result intentionally omits the object-store root path. Facts supplied
+/// for an unconfigured store are discarded, and writability is discarded when
+/// existence is already known to be false.
 #[must_use]
 pub fn object_store_exists_writable_check(
     input: ObjectStoreExistsWritableInput,
 ) -> DoctorCheckResult {
+    let (exists, writable) = if !input.configured {
+        (None, None)
+    } else if input.exists == Some(false) {
+        (Some(false), None)
+    } else {
+        (input.exists, input.writable)
+    };
     let details = ObjectStoreExistsWritableDetails {
         configured: input.configured,
-        exists: input.exists,
-        writable: input.writable,
+        exists,
+        writable,
     };
     let (status, message) = if !input.configured {
         (
             DoctorCheckStatus::Warning,
             DoctorCheckMessage::ObjectStoreNotConfigured,
         )
-    } else if input.exists == Some(false) {
+    } else if exists == Some(false) {
         (
             DoctorCheckStatus::Failed,
             DoctorCheckMessage::ObjectStoreMissing,
         )
-    } else if input.writable == Some(false) {
+    } else if writable == Some(false) {
         (
             DoctorCheckStatus::Failed,
             DoctorCheckMessage::ObjectStoreNotWritable,
         )
-    } else if input.exists == Some(true) && input.writable == Some(true) {
+    } else if exists == Some(true) && writable == Some(true) {
         (
             DoctorCheckStatus::Ok,
             DoctorCheckMessage::ObjectStoreAccessible,
         )
-    } else if input.exists.is_none() && input.writable.is_none() {
+    } else if exists.is_none() && writable.is_none() {
         (
             DoctorCheckStatus::Skipped,
             DoctorCheckMessage::ObjectStoreSkippedOffline,
@@ -245,12 +254,7 @@ pub fn adapter_cursor_check(input: AdapterCursorCheckInput) -> DoctorCheckResult
         invalid_cursor_count: input.invalid_cursor_count,
         stale_cursor_count: input.stale_cursor_count,
     };
-    let (status, message) = if input.expected_adapter_count == 0 && input.cursor_count == 0 {
-        (
-            DoctorCheckStatus::Skipped,
-            DoctorCheckMessage::NoAdaptersForCursorValidation,
-        )
-    } else if input.invalid_cursor_count > 0 {
+    let (status, message) = if input.invalid_cursor_count > 0 {
         (
             DoctorCheckStatus::Failed,
             DoctorCheckMessage::InvalidAdapterCursorDetected,
@@ -269,6 +273,11 @@ pub fn adapter_cursor_check(input: AdapterCursorCheckInput) -> DoctorCheckResult
         (
             DoctorCheckStatus::Warning,
             DoctorCheckMessage::StaleAdapterCursorDetected,
+        )
+    } else if input.expected_adapter_count == 0 && input.cursor_count == 0 {
+        (
+            DoctorCheckStatus::Skipped,
+            DoctorCheckMessage::NoAdaptersForCursorValidation,
         )
     } else {
         (
@@ -316,31 +325,44 @@ impl GdriveMappingCheckInput {
 }
 
 /// Builds a passive Google Drive mapping integrity result.
+///
+/// Mapping facts are normalized to zero when the adapter is not configured so
+/// a skipped result cannot serialize contradictory live-check data.
 #[must_use]
 pub fn gdrive_mapping_check(input: GdriveMappingCheckInput) -> DoctorCheckResult {
-    let details = GdriveMappingDetails {
-        configured: input.configured,
-        mapping_count: input.mapping_count,
-        unknown_revision_count: input.unknown_revision_count,
-        duplicate_drive_file_id_count: input.duplicate_drive_file_id_count,
-        unmapped_item_count: input.unmapped_item_count,
+    let details = if input.configured {
+        GdriveMappingDetails {
+            configured: true,
+            mapping_count: input.mapping_count,
+            unknown_revision_count: input.unknown_revision_count,
+            duplicate_drive_file_id_count: input.duplicate_drive_file_id_count,
+            unmapped_item_count: input.unmapped_item_count,
+        }
+    } else {
+        GdriveMappingDetails {
+            configured: false,
+            mapping_count: 0,
+            unknown_revision_count: 0,
+            duplicate_drive_file_id_count: 0,
+            unmapped_item_count: 0,
+        }
     };
-    let (status, message) = if !input.configured {
+    let (status, message) = if !details.configured {
         (
             DoctorCheckStatus::Skipped,
             DoctorCheckMessage::GdriveMappingSkipped,
         )
-    } else if input.unknown_revision_count > 0 {
+    } else if details.unknown_revision_count > 0 {
         (
             DoctorCheckStatus::Failed,
             DoctorCheckMessage::GdriveMappingUnknownRevision,
         )
-    } else if input.duplicate_drive_file_id_count > 0 {
+    } else if details.duplicate_drive_file_id_count > 0 {
         (
             DoctorCheckStatus::Failed,
             DoctorCheckMessage::GdriveMappingDuplicateFileId,
         )
-    } else if input.unmapped_item_count > 0 {
+    } else if details.unmapped_item_count > 0 {
         (
             DoctorCheckStatus::Warning,
             DoctorCheckMessage::GdriveMappingDriftDetected,
@@ -481,31 +503,44 @@ impl WorktreeDriftCheckInput {
 }
 
 /// Builds a passive worktree drift result without paths or file contents.
+///
+/// Worktree facts are normalized to zero when no worktree is configured so a
+/// skipped result cannot serialize contradictory scan data.
 #[must_use]
 pub fn worktree_drift_check(input: WorktreeDriftCheckInput) -> DoctorCheckResult {
-    let details = WorktreeDriftDetails {
-        configured: input.configured,
-        tracked_path_count: input.tracked_path_count,
-        unknown_revision_count: input.unknown_revision_count,
-        missing_path_count: input.missing_path_count,
-        content_mismatch_count: input.content_mismatch_count,
-        unexpected_path_count: input.unexpected_path_count,
+    let details = if input.configured {
+        WorktreeDriftDetails {
+            configured: true,
+            tracked_path_count: input.tracked_path_count,
+            unknown_revision_count: input.unknown_revision_count,
+            missing_path_count: input.missing_path_count,
+            content_mismatch_count: input.content_mismatch_count,
+            unexpected_path_count: input.unexpected_path_count,
+        }
+    } else {
+        WorktreeDriftDetails {
+            configured: false,
+            tracked_path_count: 0,
+            unknown_revision_count: 0,
+            missing_path_count: 0,
+            content_mismatch_count: 0,
+            unexpected_path_count: 0,
+        }
     };
-    let drift_count = input
-        .missing_path_count
-        .saturating_add(input.content_mismatch_count)
-        .saturating_add(input.unexpected_path_count);
-    let (status, message) = if !input.configured {
+    let (status, message) = if !details.configured {
         (
             DoctorCheckStatus::Skipped,
             DoctorCheckMessage::WorktreeDriftSkipped,
         )
-    } else if input.unknown_revision_count > 0 {
+    } else if details.unknown_revision_count > 0 {
         (
             DoctorCheckStatus::Failed,
             DoctorCheckMessage::WorktreeUnknownRevision,
         )
-    } else if drift_count > 0 {
+    } else if details.missing_path_count > 0
+        || details.content_mismatch_count > 0
+        || details.unexpected_path_count > 0
+    {
         (
             DoctorCheckStatus::Warning,
             DoctorCheckMessage::WorktreeDriftDetected,
