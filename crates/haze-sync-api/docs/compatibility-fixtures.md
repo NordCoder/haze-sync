@@ -1,0 +1,98 @@
+# API V1 Compatibility Fixtures
+
+## Purpose
+
+`fixtures/api-contract-v1.json` is the language-neutral compatibility reference for public JSON shapes owned by `haze-sync-api`.
+
+It exists so Rust Server/CLI code and TypeScript clients can detect drift in:
+
+- server-info metadata and capability names;
+- file metadata;
+- all tagged PUT and DELETE outcome shapes;
+- changes-page fields and operation-kind vocabulary;
+- the Server-exposed conflict list shape and conflict resolution body/response;
+- sanitized public error envelopes;
+- admin status, adapter, doctor, and adapter-runtime summaries;
+- closed API-owned string vocabularies.
+
+The fixture is verified by `tests/compatibility_fixtures.rs` against the current Rust DTOs and passive route helpers.
+
+## Scope
+
+The fixture contains synthetic public contract data only. It does not define or execute:
+
+- HTTP routing, authentication, persistence, Core policy, or provider behavior;
+- request headers, bearer tokens, idempotency-key values, or file bytes;
+- database/object-store configuration or local filesystem paths;
+- generated clients or TypeScript runtime behavior.
+
+Common-owned primitive normalization and validation remain covered by `crates/haze-sync-common/fixtures/common-primitives-v1.json`. The API fixture embeds already canonical primitive strings inside API-owned envelopes.
+
+## Fixture structure
+
+`schema_version` identifies the fixture document schema. Version `1` contains:
+
+- `server_info`;
+- `file_metadata`;
+- `put_file_outcomes`;
+- `changes_page`;
+- `conflict_list_query` and `conflict_list`;
+- `conflict_resolutions`, including the path conflict id plus request/response JSON;
+- `delete_file_outcomes`;
+- `public_errors`;
+- `admin` summaries;
+- `vocabulary`, containing complete closed wire-value sets represented by this phase.
+
+The conflict-list fixture follows the route contract currently consumed by Server: `ConflictListRouteResponse` with `conflict_id`, `original_path`, `conflict_path`, revision fields, `source_adapter_id`, `policy_applied`, status, and safe timestamps.
+
+## Verification rules
+
+The Rust verifier requires:
+
+- recognized `schema_version`;
+- no unknown root or fixture-group fields;
+- exact deserialize/serialize equality for every example;
+- complete and unique closed vocabularies;
+- valid server-info metadata;
+- valid changes pagination metadata;
+- conflict query/resolution examples accepted by passive route helpers;
+- status/readiness/timestamp combinations to be internally consistent;
+- pause summaries and adapter runtime summaries to be internally consistent;
+- no environment-specific, provider-specific, secret-bearing, or raw runtime values.
+
+Array order is for readability unless an endpoint explicitly defines response order. Vocabulary arrays should be treated as sets by downstream compatibility tests.
+
+## TypeScript mirror guidance
+
+The Obsidian plugin should use this fixture in OBS-P9 tests to validate its manually maintained DTO mirror. This phase does not edit or generate TypeScript.
+
+Recommended rules:
+
+- Validate `schema_version` before consuming the fixture.
+- Use exact `snake_case` JSON field names. Do not rename wire fields in DTO interfaces.
+- Model PUT and DELETE responses as discriminated unions on `status`; variant-only fields must not be treated as universally present.
+- Model changes with `from_seq`, `to_seq`, `has_more`, and entries using `seq`, `kind`, `content_sha256`, `updated_by`, and `updated_at`.
+- Treat absent optional fields differently from explicit `null`. For example, optional change metadata is omitted, while fields whose contract explicitly represents an unknown value may be `null`.
+- Model the conflict list using the fixture’s route fields. The resolve request body is `{ "resolution": <action> }`; the conflict id belongs to the route path, not the JSON body.
+- Treat `ErrorResponse.error.code` as a closed public code vocabulary in compatibility tests. `request_id` and `details` are optional, and `details` may be a string-list map or a flat string list.
+- Treat server capability, operation kind, conflict action/status, delete reason, readiness, doctor, cursor-presence, and adapter-runtime values as exact literal unions. Avoid `| string` fallbacks in compatibility tests because they hide drift; production parsing may map unknown values to a safe invalid-response state.
+- Validate sequence values with `Number.isSafeInteger` before storing or comparing them in TypeScript. The fixture uses small deterministic integers and does not redefine the Rust `i64` contract.
+- Reuse the Common fixture for path/hash/identifier and adapter role/mode validation rather than inferring primitive rules from API examples.
+- Do not infer client retry, overwrite, conflict-resolution, cursor advancement, or local-file behavior from these examples. Those behaviors remain owned by the client component and accepted Server/Core contracts.
+
+A TypeScript compatibility test should parse each fixture value through the plugin’s DTO validator and compare the re-serialized JSON shape to the fixture. Merely accepting the JSON without checking exact keys, discriminator values, and omitted/null behavior is not sufficient drift detection.
+
+## Versioning
+
+Breaking changes to V1 field names, discriminator values, or represented wire semantics require an explicit API contract change and a new versioned fixture rather than silently redefining this file.
+
+A non-breaking additional example may update the V1 fixture only when the Rust compatibility test changes in the same code-bearing commit and existing represented shapes retain their meaning.
+
+## Security
+
+Compatibility fixtures must remain safe to publish, log, and copy into client tests. They must not contain:
+
+- real credentials, bearer/OAuth material, token hashes, or idempotency-key values;
+- database URLs, HTTP endpoints, local absolute paths, or environment hostnames;
+- raw errors, stack traces, provider payloads, external cursor values, or request bodies;
+- real user vault content or production identifiers.
