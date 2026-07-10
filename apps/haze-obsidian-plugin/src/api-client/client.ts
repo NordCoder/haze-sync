@@ -16,11 +16,9 @@ import {
   buildApiUrl,
   buildFilePathUrl,
 } from "./request";
-import {
-  ChangeDto,
+import type {
   ChangesRequest,
   ChangesResponseDto,
-  ConflictDto,
   ConflictListRequest,
   ConflictsResponseDto,
   DeleteFileRequest,
@@ -32,6 +30,14 @@ import {
   ResolveConflictResponseDto,
   ServerInfoDto,
 } from "./types";
+import {
+  isChangesResponseDto,
+  isConflictsResponseDto,
+  isDeleteFileResponseDto,
+  isPutFileResponseDto,
+  isResolveConflictResponseDto,
+  isServerInfoDto,
+} from "./validators";
 
 export type HttpTransport = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -70,10 +76,15 @@ export class HazeSyncApiClient {
     });
   }
 
-  async getChanges(request: ChangesRequest = {}): Promise<ChangesResponseDto> {
-    return this.requestJson("GET", this.apiUrl("/v1/changes", request), {
-      validate: isChangesResponseDto,
-    });
+  async getChanges(request: Partial<ChangesRequest> = {}): Promise<ChangesResponseDto> {
+    return this.requestJson(
+      "GET",
+      this.apiUrl("/v1/changes", {
+        since: request.since ?? 0,
+        limit: request.limit ?? 50,
+      }),
+      { validate: isChangesResponseDto },
+    );
   }
 
   async getFile(path: string): Promise<FileDownload> {
@@ -81,10 +92,16 @@ export class HazeSyncApiClient {
       headers: buildApiHeaders(this.config.authToken, { accept: "application/octet-stream" }),
     });
 
-    const metadata: Partial<FileDownload["metadata"]> = {
+    const sizeHeader = response.headers.get("X-Size-Bytes");
+    const parsedSize = sizeHeader === null ? undefined : Number(sizeHeader);
+    const metadata: FileDownload["metadata"] = {
       path,
       revision_id: response.headers.get("X-Revision-Id") ?? undefined,
-      content_hash: response.headers.get("X-Content-SHA256") ?? undefined,
+      content_sha256: response.headers.get("X-Content-SHA256") ?? undefined,
+      size_bytes:
+        parsedSize !== undefined && Number.isSafeInteger(parsedSize) && parsedSize >= 0
+          ? parsedSize
+          : undefined,
     };
 
     return {
@@ -124,14 +141,18 @@ export class HazeSyncApiClient {
   }
 
   async resolveConflict(request: ResolveConflictRequest): Promise<ResolveConflictResponseDto> {
-    return this.requestJson("POST", this.apiUrl(`/v1/conflicts/${encodeURIComponent(request.conflictId)}/resolve`), {
-      body: JSON.stringify({ action: request.action }),
-      headers: buildApiHeaders(this.config.authToken, {
-        idempotencyKey: request.idempotencyKey,
-        contentType: "application/json",
-      }),
-      validate: isResolveConflictResponseDto,
-    });
+    return this.requestJson(
+      "POST",
+      this.apiUrl(`/v1/conflicts/${encodeURIComponent(request.conflictId)}/resolve`),
+      {
+        body: JSON.stringify({ resolution: request.resolution }),
+        headers: buildApiHeaders(this.config.authToken, {
+          idempotencyKey: request.idempotencyKey,
+          contentType: "application/json",
+        }),
+        validate: isResolveConflictResponseDto,
+      },
+    );
   }
 
   private apiUrl(path: string, query?: Record<string, string | number | undefined>): URL {
@@ -172,7 +193,10 @@ export class HazeSyncApiClient {
         throw error;
       }
 
-      throw createConfigurationError("Request URL does not match the configured Haze Sync Server origin.", endpointForReport(url));
+      throw createConfigurationError(
+        "Request URL does not match the configured Haze Sync Server origin.",
+        endpointForReport(url),
+      );
     }
 
     let response: Response;
@@ -228,66 +252,6 @@ function endpointForReport(url: URL): string {
   return `${url.origin}${url.pathname}`;
 }
 
-function isServerInfoDto(payload: unknown): payload is ServerInfoDto {
-  return isRecord(payload);
-}
-
-function isChangesResponseDto(payload: unknown): payload is ChangesResponseDto {
-  return isRecord(payload) && Array.isArray(payload.changes) && payload.changes.every(isChangeDto);
-}
-
-function isChangeDto(payload: unknown): payload is ChangeDto {
-  return isRecord(payload) && typeof payload.sequence === "number" && typeof payload.path === "string";
-}
-
-function isPutFileResponseDto(payload: unknown): payload is PutFileResponseDto {
-  return isRecord(payload) && typeof payload.status === "string" && typeof payload.path === "string";
-}
-
-function isDeleteFileResponseDto(payload: unknown): payload is DeleteFileResponseDto {
-  return isRecord(payload) && typeof payload.status === "string" && typeof payload.path === "string";
-}
-
-function isConflictsResponseDto(payload: unknown): payload is ConflictsResponseDto {
-  return isRecord(payload) && Array.isArray(payload.conflicts) && payload.conflicts.every(isConflictDto);
-}
-
-function isConflictDto(payload: unknown): payload is ConflictDto {
-  return (
-    isRecord(payload) &&
-    typeof payload.id === "string" &&
-    typeof payload.original_path === "string" &&
-    typeof payload.status === "string" &&
-    isOptionalStringOrNull(payload.conflict_path) &&
-    isOptionalStringOrNull(payload.current_revision_id) &&
-    isOptionalStringOrNull(payload.conflict_revision_id) &&
-    isOptionalStringOrNull(payload.source_adapter_id) &&
-    isOptionalString(payload.created_at) &&
-    isOptionalStringOrNull(payload.resolved_at)
-  );
-}
-
-function isResolveConflictResponseDto(payload: unknown): payload is ResolveConflictResponseDto {
-  return (
-    isRecord(payload) &&
-    typeof payload.status === "string" &&
-    typeof payload.conflict_id === "string" &&
-    isOptionalStringOrNull(payload.revision_id)
-  );
-}
-
-function isOptionalString(value: unknown): boolean {
-  return value === undefined || typeof value === "string";
-}
-
-function isOptionalStringOrNull(value: unknown): boolean {
-  return value === undefined || value === null || typeof value === "string";
-}
-
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
