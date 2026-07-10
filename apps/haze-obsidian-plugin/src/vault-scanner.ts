@@ -1,7 +1,9 @@
 import { TFile, Vault } from "obsidian";
 
-import { LocalFileFact, readLocalFileFact } from "./local-file-facts";
-import { ExcludedVaultPath, classifyVaultPath } from "./vault-paths";
+import type { LocalFileFact } from "./local-file-facts";
+import { readLocalFileFact } from "./local-file-facts";
+import type { ExcludedVaultPath } from "./vault-paths";
+import { classifyVaultPath } from "./vault-paths";
 
 export interface VaultScanError {
   path: string;
@@ -18,13 +20,14 @@ export interface VaultScanResult {
 export class VaultScanner {
   constructor(private readonly vault: Vault) {}
 
-  async scan(): Promise<VaultScanResult> {
+  async scan(signal?: AbortSignal): Promise<VaultScanResult> {
     const scannedAt = new Date().toISOString();
     const facts: LocalFileFact[] = [];
     const excluded: ExcludedVaultPath[] = [];
     const errors: VaultScanError[] = [];
 
     for (const file of this.vault.getFiles()) {
+      assertNotAborted(signal);
       const classification = classifyVaultPath(file.path);
       if (!classification.included) {
         excluded.push(classification);
@@ -33,13 +36,18 @@ export class VaultScanner {
 
       try {
         const result = await readLocalFileFact(this.vault, file as TFile);
+        assertNotAborted(signal);
         if (result.fact !== undefined) {
           facts.push(result.fact);
         }
         if (result.excluded !== undefined) {
           excluded.push(result.excluded);
         }
-      } catch {
+      } catch (error) {
+        if (isAbortError(error)) {
+          throw error;
+        }
+
         errors.push({
           path: classification.path,
           message: "Could not read file through Obsidian vault API.",
@@ -47,6 +55,7 @@ export class VaultScanner {
       }
     }
 
+    assertNotAborted(signal);
     facts.sort((left, right) => left.path.localeCompare(right.path));
     excluded.sort((left, right) => left.originalPath.localeCompare(right.originalPath));
     errors.sort((left, right) => left.path.localeCompare(right.path));
@@ -58,4 +67,14 @@ export class VaultScanner {
       errors,
     };
   }
+}
+
+function assertNotAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new DOMException("Vault scan aborted.", "AbortError");
+  }
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
 }
