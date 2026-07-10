@@ -93,9 +93,7 @@ impl DriveChangeEntry {
         self.drive_version.as_deref()
     }
 
-    pub(super) fn into_parts(
-        self,
-    ) -> (String, bool, Option<DriveMetadata>, Option<String>) {
+    pub(super) fn into_parts(self) -> (String, bool, Option<DriveMetadata>, Option<String>) {
         (
             self.provider_id,
             self.removed,
@@ -139,13 +137,7 @@ impl DriveChangePage {
         &self.changes
     }
 
-    pub(super) fn into_parts(
-        self,
-    ) -> (
-        Vec<DriveChangeEntry>,
-        Option<String>,
-        Option<String>,
-    ) {
+    pub(super) fn into_parts(self) -> (Vec<DriveChangeEntry>, Option<String>, Option<String>) {
         (
             self.changes,
             self.next_page_token,
