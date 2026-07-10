@@ -2,25 +2,23 @@
 
 component: server
 branch: component/server
-status: PROMPT_READY
+status: BLOCKED_BY_DEPENDENCY
 
 active_prompt: crates/haze-sync-server/control/prompt.md
 active_report: crates/haze-sync-server/control/report.md
-active_agent_role: fixer-worker
+active_agent_role: none
 
 wave: W1
-phase: FIX-SRV-P6C-CI
+phase: SRV-P7-BLOCKED
 
-implementation_status: SELF_ACCEPT_PENDING_CI
-clean_review_status: CLEAN_ACCEPT_PENDING_CI
-ci_status: CI_RED
+implementation_status: NOT_STARTED
+clean_review_status: CLEAN_ACCEPT
+ci_status: CI_GREEN
 ci_workflow: Component CI
-ci_run_id: 29067613093
-ci_run_number: 826
+ci_run_id: 29079795947
+ci_run_number: 890
 ci_run_attempt: 1
-ci_artifact_id: 8217733996
-ci_artifact_name: ci-diag__component-server__wf-component-ci__run-29067613093__attempt-1
-ci_artifact_expires_at: 2026-07-11T03:49:44Z
-known_failed_checks:
-- diagnostics-artifact-required
+known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
+blocker: Worktree hostable runtime and explicit Server fan-in boundary are not available until WT-P8/WT-P9
+unblock_condition: WT-P8 accepted plus required WT-P9 or dedicated cross-component fan-in contract
