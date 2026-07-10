@@ -212,7 +212,14 @@ pub fn run_export_cycle(
 
     for change in page.changes {
         let mapping = state_store.load_mapping(change.path())?;
-        let (source, create_target) = load_plan_inputs(core, state_store, &change, mapping.as_ref(), &input, retry_policy)?;
+        let (source, create_target) = load_plan_inputs(
+            core,
+            state_store,
+            &change,
+            mapping.as_ref(),
+            &input,
+            retry_policy,
+        )?;
         let plan = plan_core_export(
             change,
             mapping,
@@ -234,8 +241,12 @@ pub fn run_export_cycle(
         outcome.provider_mutations = outcome
             .provider_mutations
             .saturating_add(applied.provider_mutations);
-        outcome.mappings_saved = outcome.mappings_saved.saturating_add(applied.mappings_saved);
-        outcome.echoes_recorded = outcome.echoes_recorded.saturating_add(applied.echoes_recorded);
+        outcome.mappings_saved = outcome
+            .mappings_saved
+            .saturating_add(applied.mappings_saved);
+        outcome.echoes_recorded = outcome
+            .echoes_recorded
+            .saturating_add(applied.echoes_recorded);
     }
 
     if should_persist_cursor {
@@ -424,13 +435,7 @@ fn confirmed_update_mapping(
 ) -> Result<GDriveMapping, ExportError> {
     let parent_id = mapping.parent_id.clone();
     let name = mapping.name.clone();
-    record_provider_confirmation(
-        &mut mapping,
-        receipt,
-        parent_id,
-        name,
-        applied_at.clone(),
-    )?;
+    record_provider_confirmation(&mut mapping, receipt, parent_id, name, applied_at.clone())?;
     record_core_confirmation(&mut mapping, change, applied_at)?;
     Ok(mapping)
 }
@@ -443,13 +448,7 @@ fn confirmed_trash_mapping(
 ) -> Result<GDriveMapping, ExportError> {
     let parent_id = mapping.parent_id.clone();
     let name = mapping.name.clone();
-    record_provider_confirmation(
-        &mut mapping,
-        receipt,
-        parent_id,
-        name,
-        applied_at.clone(),
-    )?;
+    record_provider_confirmation(&mut mapping, receipt, parent_id, name, applied_at.clone())?;
     mapping.core_revision = None;
     mapping.core_sequence = Some(change.sequence());
     mapping.last_exported_at = Some(applied_at);
@@ -464,13 +463,8 @@ fn record_provider_confirmation(
     name: String,
     applied_at: SafeTimestamp,
 ) -> Result<(), ExportError> {
-    let observation = DriveStateObservation::new(
-        receipt.provider_id,
-        parent_id,
-        name,
-        applied_at,
-    )?
-    .with_drive_version(receipt.revision_token)?;
+    let observation = DriveStateObservation::new(receipt.provider_id, parent_id, name, applied_at)?
+        .with_drive_version(receipt.revision_token)?;
     mapping.record_drive_observation(observation)?;
     Ok(())
 }
@@ -590,7 +584,9 @@ fn core_error(
     ExportError::Core { error, retry }
 }
 
-pub fn echo_observation_for_mapping(mapping: &GDriveMapping) -> Result<DriveEchoObservation, StateError> {
+pub fn echo_observation_for_mapping(
+    mapping: &GDriveMapping,
+) -> Result<DriveEchoObservation, StateError> {
     let mut observation = DriveEchoObservation::new(mapping.drive_file_id.clone())?;
     if let Some(checksum) = mapping.checksum.as_deref() {
         observation = observation.with_checksum(checksum)?;
