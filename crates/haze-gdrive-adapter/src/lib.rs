@@ -4,11 +4,13 @@
 //! normalization, fake-first provider abstractions, adapter-local mapping and
 //! cursor state, dependency-free content hashing, full-scan import planning,
 //! change-feed reconciliation, Core-to-Drive export planning/apply boundaries,
-//! and process lifecycle scaffolding. Concrete HTTP, OAuth, persistence, and
-//! background runtime wiring remain deferred.
+//! conservative delete-candidate guardrails, and process lifecycle scaffolding.
+//! Concrete HTTP, OAuth, persistence, and background runtime wiring remain
+//! deferred.
 
 pub mod change_feed;
 pub mod config;
+pub mod delete_guard;
 pub mod drive;
 pub mod error;
 pub mod export;
@@ -27,6 +29,17 @@ pub use change_feed::{
 };
 pub use config::{
     AdapterConfig, AdapterMode, DeleteSafetyConfig, RuntimeIntervals, SecretPath, SecretString,
+};
+pub use delete_guard::{
+    run_delete_reconciliation, CompleteDeleteScan, ConfirmedDeleteCandidate, CoreDeleteError,
+    CoreDeleteErrorCategory, CoreDeleteGateway, CoreDeleteGuardBlockReason,
+    CoreDeleteGuardDecision, CoreDeleteGuardRequest, CoreDeleteRejectedReason, CoreDeleteRequest,
+    CoreDeleteResponse, DeleteBlockReason, DeleteCandidateStateStore, DeleteExecution,
+    DeleteModelError, DeleteReconciliationError, DeleteReconciliationInput,
+    DeleteReconciliationOutcome, DeleteRejection, DeleteSafetyNotice, DeleteScanIssue,
+    DeleteScanObservation, DeleteStateError, FakeCoreDeleteGateway,
+    InMemoryDeleteCandidateStateStore, ManualDeleteUnlockAvailability, MovedProviderIdentity,
+    GDRIVE_ADAPTER_ID,
 };
 pub use drive::{
     classify_drive_metadata, normalize_drive_metadata, DriveEntryClassification, DriveEntryKind,
