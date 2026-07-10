@@ -183,7 +183,7 @@ export class HazeSyncSettingsTab extends PluginSettingTab {
 
     new Setting(this.containerEl)
       .setName("Confirm delete actions")
-      .setDesc("Require explicit confirmation before future destructive local delete handling.")
+      .setDesc("When enabled, the sync runner leaves pending delete/tombstone requests queued instead of submitting them automatically. Disable only to permit automatic server delete requests; local hard delete is never performed here.")
       .addToggle((toggle) => {
         toggle
           .setValue(this.controller.settings.safety.confirmBeforeDelete)
