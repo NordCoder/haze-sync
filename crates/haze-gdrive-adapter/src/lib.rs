@@ -3,13 +3,15 @@
 //! The crate owns configuration, redaction, provider-safe Drive metadata
 //! normalization, fake-first provider abstractions, adapter-local mapping and
 //! cursor state, dependency-free content hashing, full-scan import planning,
-//! change-feed reconciliation boundaries, and process lifecycle scaffolding.
-//! Core/API execution and concrete cursor persistence remain deferred.
+//! change-feed reconciliation, Core-to-Drive export planning/apply boundaries,
+//! and process lifecycle scaffolding. Concrete HTTP, OAuth, persistence, and
+//! background runtime wiring remain deferred.
 
 pub mod change_feed;
 pub mod config;
 pub mod drive;
 pub mod error;
+pub mod export;
 pub mod hash;
 pub mod runtime;
 pub mod scan;
@@ -33,6 +35,16 @@ pub use drive::{
     SupportedFileType, UnsupportedEntryReason,
 };
 pub use error::{ConfigError, ConfigErrorCategory, RuntimeError, RuntimeErrorCategory};
+pub use export::{
+    cursor_after_page, echo_observation_for_mapping, plan_core_export, run_export_cycle,
+    CoreClientError, CoreClientErrorCategory, CoreExportChange, CoreExportClient, CoreExportPage,
+    CoreFileContent, DriveCreateExportRequest, DriveCreateTarget, DriveExportError,
+    DriveExportErrorCategory, DriveExportProvider, DriveExportReceipt, DriveTrashExportRequest,
+    DriveUpdateExportRequest, ExportCycleInput, ExportCycleOutcome, ExportError, ExportExecution,
+    ExportModelError, ExportPlanItem, ExportRetryDisposition, ExportRetryPolicy, ExportSkipReason,
+    ExportStateError, ExportStateStore, FakeCoreExportClient, FakeDriveExportProvider,
+    InMemoryExportStateStore, VerifiedExportSource, DEFAULT_CORE_CHANGE_PAGE_LIMIT,
+};
 pub use hash::ContentSha256;
 pub use runtime::{AdapterRuntime, RuntimeState, StartupStatus};
 pub use scan::{
