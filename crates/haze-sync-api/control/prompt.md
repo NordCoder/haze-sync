@@ -1,54 +1,52 @@
-# W1-API-P6 — Admin/status and doctor-facing contract hardening
+# W1-FIX-API-P6-CI — API status-contract CI correction
 
 Component: api
 Path: crates/haze-sync-api
 Branch: component/api
 PR: #44
-Role: implementation-worker
+Role: fixer-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-API-P5 implementation, fixer, and clean-code review are accepted. Green CI evidence applies to the accepted code-bearing state.
+API-P6 implementation is complete, but its final code/docs-bearing Component CI run failed.
 
-- code_bearing_sha: 8a80d45685d29a681d37e0861ec8ea1ba2e734c7
-- workflow_run_id: 29079842861
-- run_number: 892
-- conclusion: success
+- code_bearing_sha: 613b58cbc9be6c20329b1dfb36d889c879e8f8d1
+- workflow: Component CI
+- workflow_run_id: 29084450470
+- run_number: 1050
+- run_attempt: 1
+- artifact_id: 8224162592
+- artifact_name: ci-diag__component-api__wf-component-ci__run-29084450470__attempt-1
+- artifact_expires_at: 2026-07-11T09:53:37Z
 
-The next plan phase is API-P6.
+Use the diagnostics artifact as source of truth.
 
 ## Read
 
-Read process sources, component docs/control files, current admin/server DTOs and route helpers, accepted Server/Common contracts, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt instructs it.
+Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current API-P6 source/tests/docs, and PR diff. Download artifact 8224162592 and read summary.md, manifest.json, and every failed-check log. If unavailable or unreadable, report FIX_BLOCKED_BY_LOGS.
 
 ## Task
 
-Implement API-P6 admin/status and doctor-facing contract hardening.
-
-- test server-info capabilities and version/protocol metadata;
-- harden admin status DTOs for readiness, adapter summaries, cursor presence, pause support, and sanitized runtime state;
-- represent skipped/not-run/placeholder status honestly;
-- prevent public DTOs from containing raw cursor values, token hashes, database URLs, absolute local paths, provider payloads, or raw errors;
-- keep mutation/admin actions out unless an accepted public contract already exists.
+Apply only the minimum artifact-proven correction for the API-P6 CI failure. Preserve source compatibility, passive API ownership, safe operational DTO vocabulary, sanitized server/adapter status output, explicit skipped/not-run/placeholder semantics, tests, and all API-P6 non-goals.
 
 ## Allowed files
 
 - crates/haze-sync-api/src/routes/admin/**
 - crates/haze-sync-api/src/dto/server/**
-- crates/haze-sync-api/src/dto/common/** when shared status types live there
-- crates/haze-sync-api/docs/**
+- crates/haze-sync-api/src/dto/common/** only if diagnostics directly require it
+- crates/haze-sync-api/docs/** only if diagnostics prove a documentation issue
 - crates/haze-sync-api/control/report.md
 
-## Non-goals
+## Boundaries
 
-No live doctor checks, Server readiness implementation, adapter pause/resume mutation, repair execution, provider calls, workflow/dependency changes, or sibling changes.
+No live check execution, Server readiness behavior, pause/resume mutation, repair execution, provider calls, persistence, runtime route wiring, workflow/dependency changes, sibling changes, test deletion, or assertion weakening.
 
 ## CI trigger policy
 
-Source/docs commits must not skip CI. A final report-only commit may skip CI.
+Source/test/docs fixer commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only crates/haze-sync-api/control/report.md. Use REPORT_TYPE IMPLEMENTATION and phase_id API-P6.
+Write only crates/haze-sync-api/control/report.md. Use report-template.md, REPORT_TYPE FIX, phase_id FIX-API-P6-CI.
