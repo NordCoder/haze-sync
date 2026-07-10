@@ -37,13 +37,17 @@ Common-owned primitive normalization and validation remain covered by `crates/ha
 - `put_file_outcomes`;
 - `changes_page`;
 - `conflict_list_query` and `conflict_list`;
-- `conflict_resolutions`, including the path conflict id plus request/response JSON;
+- `conflict_resolutions`, including the path conflict id plus passive API request/response JSON;
 - `delete_file_outcomes`;
 - `public_errors`;
 - `admin` summaries;
 - `vocabulary`, containing complete closed wire-value sets represented by this phase.
 
 The conflict-list fixture follows the route contract currently consumed by Server: `ConflictListRouteResponse` with `conflict_id`, `original_path`, `conflict_path`, revision fields, `source_adapter_id`, `policy_applied`, status, and safe timestamps.
+
+The four `conflict_resolutions` entries verify API-owned request vocabulary and passive response-builder JSON only; they are not a Server support matrix. In particular, `accept_conflict` is accepted by the public API vocabulary but remains reserved for a future promotion flow, and the current Server returns a sanitized not-implemented response instead of executing it. Clients must handle runtime support independently from DTO compatibility.
+
+The `admin` group is one coherent synthetic snapshot: `status_summary.adapter_count`, `adapter_list.total_count`, adapter identities, and `adapter_operational_summaries` refer to the same two adapters.
 
 ## Verification rules
 
@@ -52,12 +56,14 @@ The Rust verifier requires:
 - recognized `schema_version`;
 - no unknown root or fixture-group fields;
 - exact deserialize/serialize equality for every example;
-- complete and unique closed vocabularies;
+- complete and unique closed vocabularies compared as unordered sets;
 - valid server-info metadata;
 - valid changes pagination metadata;
 - conflict query/resolution examples accepted by passive route helpers;
+- every tagged PUT/DELETE status and every conflict-resolution action to appear exactly once in their representative fixture groups;
 - status/readiness/timestamp combinations to be internally consistent;
 - pause summaries and adapter runtime summaries to be internally consistent;
+- admin adapter counts and adapter identities to agree across status, list, and operational summaries;
 - no environment-specific, provider-specific, secret-bearing, or raw runtime values.
 
 Array order is for readability unless an endpoint explicitly defines response order. Vocabulary arrays should be treated as sets by downstream compatibility tests.
@@ -74,6 +80,7 @@ Recommended rules:
 - Model changes with `from_seq`, `to_seq`, `has_more`, and entries using `seq`, `kind`, `content_sha256`, `updated_by`, and `updated_at`.
 - Treat absent optional fields differently from explicit `null`. For example, optional change metadata is omitted, while fields whose contract explicitly represents an unknown value may be `null`.
 - Model the conflict list using the fixture’s route fields. The resolve request body is `{ "resolution": <action> }`; the conflict id belongs to the route path, not the JSON body.
+- Treat conflict-resolution vocabulary as DTO compatibility, not proof that every action is executable by the current Server. `accept_conflict` is reserved and currently returns a sanitized not-implemented response; clients must not enable it solely because it appears in the fixture vocabulary.
 - Treat `ErrorResponse.error.code` as a closed public code vocabulary in compatibility tests. `request_id` and `details` are optional, and `details` may be a string-list map or a flat string list.
 - Treat server capability, operation kind, conflict action/status, delete reason, readiness, doctor, cursor-presence, and adapter-runtime values as exact literal unions. Avoid `| string` fallbacks in compatibility tests because they hide drift; production parsing may map unknown values to a safe invalid-response state.
 - Validate sequence values with `Number.isSafeInteger` before storing or comparing them in TypeScript. The fixture uses small deterministic integers and does not redefine the Rust `i64` contract.
