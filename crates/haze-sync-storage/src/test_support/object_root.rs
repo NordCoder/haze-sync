@@ -7,8 +7,9 @@ use std::path::{Path, PathBuf};
 
 /// Temporary object-store root for storage/Core tests.
 ///
-/// The directory is removed on drop by default. Call `keep` only while debugging
-/// a local test run.
+/// The directory is removed on drop by default. Call [`Self::cleanup`] when a
+/// test must verify cleanup success, or [`Self::keep`] only while debugging a
+/// local test run.
 pub struct TestObjectRoot {
     path: PathBuf,
     keep: bool,
@@ -41,6 +42,12 @@ impl TestObjectRoot {
     #[must_use]
     pub fn tmp_dir(&self) -> PathBuf {
         self.path.join("tmp")
+    }
+
+    /// Removes the directory and reports cleanup failures without exposing paths.
+    pub fn cleanup(mut self) -> Result<(), TestSupportError> {
+        self.keep = true;
+        fs::remove_dir_all(&self.path).map_err(|_| TestSupportError::FilesystemOperationFailed)
     }
 
     /// Keeps the directory on disk and returns its path.
@@ -81,5 +88,15 @@ mod tests {
         assert!(root.sha256_dir().is_dir());
         assert!(root.tmp_dir().is_dir());
         assert!(!format!("{root:?}").contains(root.path().to_string_lossy().as_ref()));
+    }
+
+    #[test]
+    fn explicit_cleanup_removes_root() {
+        let root = TestObjectRoot::create().expect("object root should be created");
+        let path = root.path().to_owned();
+
+        root.cleanup().expect("object root cleanup should succeed");
+
+        assert!(!path.exists());
     }
 }
