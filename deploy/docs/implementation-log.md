@@ -2,6 +2,40 @@
 
 ## Entries
 
+### 2026-07-10 — W1/DEP-P5 object-store, worktree, and host directory provisioning
+
+Agent:
+Implementation Worker
+
+Branch:
+component/deployment
+
+Prompt:
+deploy/control/prompt.md
+
+Report:
+deploy/control/report.md
+
+Commit(s):
+
+- 8649a2163fe9cf12303e231cfcdbe8848f6043d9 — Document host directory layout and permissions
+- f5db306f80d8ad6a9546641a48a595d5409e9ab4 — Align local env placeholders with current deployment docs
+- 43b945864c1df5cbf99a865502685dfe5b194a78 — Refresh deployment contract current surface
+- 47e8fe8a6fdcd33f2a5fe319fc43ce7225400774 — Record host path separation decision
+- 89b3a249f673ec54bea9560e76a7bbd960588ac0 — Link local compose to host directory guidance
+- ad71cf0c425a4b43f0dfe60666ab286cdd256cc8 — Link server compose to host path guidance
+
+Summary:
+Implemented DEP-P5 as documentation and placeholder alignment only. Added `deploy/docs/host-directory-layout.md` with production-style object-store, worktree, config, secret, log, backup, and runtime-temp path classes; ownership and mode expectations; Server config-key mapping; container UID 10001 considerations; backup classification; never-commit rules; provisioning checklist; and read-only validation examples. Updated `.env.example` with the existing Compose HTTP host-port placeholder and corrected current Server/Compose comments while preserving relative local Server path defaults. Refreshed the deployment contract and decisions to reflect the current PostgreSQL-plus-Server local scaffold and the accepted path separation model. Updated local/server Compose runbooks to link the new host layout while explicitly keeping named volumes, disabled Worktree runtime, and no host bind mounts.
+
+Status:
+SELF_ACCEPT_PENDING_CI
+
+Follow-ups:
+Run clean-code review and external CI. Validate host ownership/mode checks on an actual target only in a later authorized operations phase. Future bind mounts must coordinate container UID/GID behavior and accepted Worktree authority/write semantics. Secret generation/rotation, log retention, backup automation, cleanup, and actual host provisioning remain deferred.
+
+---
+
 ### 2026-07-09 — W1/DEP-P4 database migrations, backup, and restore runbook
 
 Agent:
