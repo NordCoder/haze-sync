@@ -1,3 +1,4 @@
+import { normalizeStoredContentHash } from "./content-hash";
 import type { LocalMutationKind } from "./idempotency-keys";
 import { generateLocalIdempotencyKey } from "./idempotency-keys";
 import type { LocalFileFact } from "./local-file-facts";
@@ -12,17 +13,6 @@ export interface PendingQueueEntry {
   firstSeenAt: string;
   lastSeenAt: string;
   operationIdempotencyKey: string;
-  file?: LocalFileFact;
-  previousFile?: LocalFileFact;
-}
-
-interface StoredPendingQueueEntry {
-  path: string;
-  kind: PendingChangeKind;
-  source: PendingChangeSource;
-  firstSeenAt: string;
-  lastSeenAt: string;
-  operationIdempotencyKey?: string;
   file?: LocalFileFact;
   previousFile?: LocalFileFact;
 }
@@ -61,7 +51,7 @@ export function mergeLocalSyncState(rawState: unknown): LocalSyncState {
   }
 
   return {
-    knownFiles: readRecord(rawState.knownFiles, isLocalFileFact),
+    knownFiles: readLocalFileFactRecord(rawState.knownFiles),
     pendingQueue: readPendingQueue(rawState.pendingQueue),
     lastFullScanAt: readOptionalString(rawState.lastFullScanAt),
     lastEventHintAt: readOptionalString(rawState.lastEventHintAt),
@@ -280,7 +270,21 @@ function readPendingQueue(value: unknown): Record<string, PendingQueueEntry> {
 }
 
 function readPendingQueueEntry(value: unknown): PendingQueueEntry | undefined {
-  if (!isStoredPendingQueueEntry(value)) {
+  if (
+    !isRecord(value) ||
+    typeof value.path !== "string" ||
+    !isPendingChangeKind(value.kind) ||
+    !isPendingChangeSource(value.source) ||
+    typeof value.firstSeenAt !== "string" ||
+    typeof value.lastSeenAt !== "string" ||
+    !(value.operationIdempotencyKey === undefined || typeof value.operationIdempotencyKey === "string")
+  ) {
+    return undefined;
+  }
+
+  const file = value.file === undefined ? undefined : readLocalFileFact(value.file);
+  const previousFile = value.previousFile === undefined ? undefined : readLocalFileFact(value.previousFile);
+  if ((value.file !== undefined && file === undefined) || (value.previousFile !== undefined && previousFile === undefined)) {
     return undefined;
   }
 
@@ -292,59 +296,53 @@ function readPendingQueueEntry(value: unknown): PendingQueueEntry | undefined {
     lastSeenAt: value.lastSeenAt,
     operationIdempotencyKey:
       value.operationIdempotencyKey ?? generateLocalIdempotencyKey(operationKindForPendingChange(value.kind)),
-    file: value.file,
-    previousFile: value.previousFile,
+    file,
+    previousFile,
   };
 }
 
-function readRecord<T>(value: unknown, predicate: (item: unknown) => item is T): Record<string, T> {
+function readLocalFileFactRecord(value: unknown): Record<string, LocalFileFact> {
   if (!isRecord(value)) {
     return {};
   }
 
-  const result: Record<string, T> = {};
+  const result: Record<string, LocalFileFact> = {};
   for (const [key, item] of Object.entries(value)) {
-    if (predicate(item)) {
-      result[key] = item;
+    const fact = readLocalFileFact(item);
+    if (fact !== undefined) {
+      result[key] = fact;
     }
   }
-
   return result;
+}
+
+function readLocalFileFact(value: unknown): LocalFileFact | undefined {
+  if (
+    !isRecord(value) ||
+    typeof value.path !== "string" ||
+    typeof value.extension !== "string" ||
+    typeof value.sizeBytes !== "number" ||
+    typeof value.mtime !== "number"
+  ) {
+    return undefined;
+  }
+
+  const contentHash = normalizeStoredContentHash(value.contentHash);
+  if (contentHash === undefined) {
+    return undefined;
+  }
+
+  return {
+    path: value.path,
+    extension: value.extension,
+    contentHash,
+    sizeBytes: value.sizeBytes,
+    mtime: value.mtime,
+  };
 }
 
 function readOptionalString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
-}
-
-function isStoredPendingQueueEntry(value: unknown): value is StoredPendingQueueEntry {
-  if (!isRecord(value)) {
-    return false;
-  }
-
-  return (
-    typeof value.path === "string" &&
-    isPendingChangeKind(value.kind) &&
-    isPendingChangeSource(value.source) &&
-    typeof value.firstSeenAt === "string" &&
-    typeof value.lastSeenAt === "string" &&
-    (value.operationIdempotencyKey === undefined || typeof value.operationIdempotencyKey === "string") &&
-    (value.file === undefined || isLocalFileFact(value.file)) &&
-    (value.previousFile === undefined || isLocalFileFact(value.previousFile))
-  );
-}
-
-function isLocalFileFact(value: unknown): value is LocalFileFact {
-  if (!isRecord(value)) {
-    return false;
-  }
-
-  return (
-    typeof value.path === "string" &&
-    typeof value.extension === "string" &&
-    typeof value.contentHash === "string" &&
-    typeof value.sizeBytes === "number" &&
-    typeof value.mtime === "number"
-  );
 }
 
 function isPendingChangeKind(value: unknown): value is PendingChangeKind {
