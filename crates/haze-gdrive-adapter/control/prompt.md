@@ -1,50 +1,58 @@
-# W1-FIX-GDA-P5-CI — GDrive full-scan CI correction
+# W1-GDA-P5C — GDrive full-scan/import clean-code review
 
 Component: gdrive-adapter
 Path: crates/haze-gdrive-adapter
 Branch: component/gdrive-adapter
 PR: #50
-Role: fixer-worker
+Role: clean-code-reviewer
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-GDA-P5 implementation is complete, but its code-bearing Component CI run failed.
+GDA-P5 implementation and CI fixer are complete. Post-fix Component CI is green.
 
-- code_bearing_sha: e4fa4b6e890961ae5e54b6252bef094263071de6
+- code_bearing_sha: 3641883fcf20425692516e6b93d6d5c858cdee8e
 - workflow: Component CI
-- workflow_run_id: 29082382356
-- run_number: 990
-- run_attempt: 1
-- artifact_id: 8223334844
-- artifact_name: ci-diag__component-gdrive-adapter__wf-component-ci__run-29082382356__attempt-1
-- artifact_expires_at: 2026-07-11T09:16:24Z
-
-Use the diagnostics artifact as source of truth.
+- workflow_run_id: 29084342761
+- run_number: 1038
+- conclusion: success
 
 ## Read
 
-Read process sources, component docs/control files, current GDA-P5 source/tests, and PR diff. Download artifact 8223334844 and read summary.md, manifest.json, and every failed-check log. If unavailable or unreadable, report FIX_BLOCKED_BY_LOGS.
+Read process sources, component docs/control files, current GDA-P5 source/tests, relevant accepted Common/API/Core boundaries, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt explicitly instructs it.
 
 ## Task
 
-Apply only the minimum artifact-proven correction for GDA-P5. Preserve full-scan/import planning, conservative delete candidates, mode rules, provider abstraction boundaries, and component non-goals.
+Review GDA-P5 full Drive subtree scan and Core import planning plus the formatter correction.
+
+Focus on:
+
+- recursive provider traversal and cycle/collision handling;
+- Common-compatible vault-path normalization;
+- new/modified/unchanged/unsupported classification;
+- download-on-demand behavior and provider-size verification;
+- canonical SHA-256 verification;
+- known-base and explicit-null-base upload requests;
+- conservative missing-file delete candidates;
+- adapter mode and dry-run behavior;
+- honest in-memory/injected mapping boundary without direct DB ownership;
+- test clarity and non-goal preservation.
 
 ## Allowed files
 
 - crates/haze-gdrive-adapter/src/**
-- crates/haze-gdrive-adapter/docs/** only if diagnostics prove a documentation issue
+- crates/haze-gdrive-adapter/docs/**
 - crates/haze-gdrive-adapter/control/report.md
 
 ## Boundaries
 
-No export phase work, live provider integration, Core policy changes, immediate deletion behavior, direct DB ownership, workflow/dependency changes, sibling changes, test deletion, or assertion weakening.
+No Drive export, live provider wiring beyond accepted abstractions, provider mutation, Core/API execution, direct DB ownership, immediate delete, workflow/dependency changes, or sibling-component changes.
 
 ## CI trigger policy
 
-Source/test/docs fixer commits must not skip CI. A final report-only commit may skip CI.
+Source/test/docs clean-code commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only crates/haze-gdrive-adapter/control/report.md. Use report-template.md, REPORT_TYPE FIX, phase_id FIX-GDA-P5-CI.
+Write only crates/haze-gdrive-adapter/control/report.md. Use report-template.md, REPORT_TYPE CLEAN_CODE_REVIEW, phase_id GDA-P5C.
