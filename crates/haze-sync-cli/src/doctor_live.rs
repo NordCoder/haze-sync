@@ -3,9 +3,8 @@
 //!
 //! No dedicated doctor endpoint exists. Live doctor therefore reads only the
 //! accepted public `/health`, `/ready`, and `/v1/admin/status` surfaces, maps
-//! those sanitized summaries into Core doctor models, and marks unsupported
-//! checks as skipped instead of reaching into databases, object stores, or
-//! providers directly.
+//! sanitized summaries into Core doctor models, and marks unsupported checks as
+//! skipped instead of reaching into databases, object stores, or providers.
 
 use crate::{
     config::{CliConfig, ServerUrl},
@@ -89,8 +88,10 @@ pub struct ReadinessSummary {
 pub trait DoctorReadClient {
     fn fetch_health(&self, server_url: &ServerUrl) -> Result<HealthSummary, ServerReadError>;
 
-    fn fetch_readiness(&self, server_url: &ServerUrl)
-        -> Result<ReadinessSummary, ServerReadError>;
+    fn fetch_readiness(
+        &self,
+        server_url: &ServerUrl,
+    ) -> Result<ReadinessSummary, ServerReadError>;
 
     fn fetch_status(&self, server_url: &ServerUrl) -> Result<StatusSummary, ServerReadError>;
 }
@@ -274,7 +275,10 @@ fn render_live_summary(
         Err(error) => format!("readiness: error_{}", safe_error_code(*error)),
     };
     let status_line = match status {
-        Ok(summary) => format!("server status: {}", summary.server_status.as_str()),
+        Ok(summary) => format!(
+            "server status: {}",
+            server_status_label(summary.server_status)
+        ),
         Err(error) => format!("server status: error_{}", safe_error_code(*error)),
     };
 
@@ -282,6 +286,10 @@ fn render_live_summary(
         "doctor mode: live\n{health_line}\n{readiness_line}\n{status_line}\n{}",
         doctor::render_detailed_report(report)
     )
+}
+
+const fn server_status_label(status: ServerStatus) -> &'static str {
+    status.as_str()
 }
 
 fn collect_surface_failures(
