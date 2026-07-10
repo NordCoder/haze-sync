@@ -143,7 +143,10 @@ mod tests {
         let namespace = TestNamespace::new("Pg Fixture");
 
         assert!(namespace.adapter_id("iphone").contains(namespace.id()));
-        assert_eq!(namespace.operation_id("put file"), namespace.operation_id("put file"));
+        assert_eq!(
+            namespace.operation_id("put file"),
+            namespace.operation_id("put file")
+        );
         assert!(namespace.operation_id("put file").contains("op-put-file"));
         assert!(namespace.request_id("upload").contains("req-upload"));
         assert!(namespace.vault_path("note").ends_with("/note.md"));
