@@ -305,7 +305,10 @@ fn watcher_start_failure_degrades_to_periodic_full_scans_without_shutdown() {
         .requests
         .iter()
         .all(|request| request.full_scan_required));
-    assert_eq!(runtime.shutdown().unwrap().watcher, WorktreeRuntimeWatcherState::Stopped);
+    assert_eq!(
+        runtime.shutdown().unwrap().watcher,
+        WorktreeRuntimeWatcherState::Stopped
+    );
     assert_eq!(runtime.watcher_mut().shutdowns, 0);
 }
 
