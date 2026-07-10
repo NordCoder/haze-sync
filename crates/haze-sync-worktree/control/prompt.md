@@ -1,56 +1,40 @@
-# W1-WT-P8 — Watcher latency layer and runtime service
+# W1-FIX-WT-P8-CI — Worktree WT-P8 validation correction
 
 Component: worktree
 Path: crates/haze-sync-worktree
 Branch: component/worktree
 PR: #49
-Role: implementation-worker
+Role: fixer-worker
 
-Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
+Use only the GitHub connector. Do not merge the PR or change its lifecycle state.
 
-## Context
+## Evidence
 
-WT-P7 implementation, clean-code review, and artifact-based CI correction are accepted. Final source CI is green.
+The WT-P8 implementation head has a failed Component CI result.
 
-- code_bearing_sha: a3ee10b47ae55878d6d27461774775a0febf4425
-- workflow: Component CI
-- workflow_run_id: 29113546394
-- run_number: 1445
-- conclusion: success
+- code_bearing_sha: 6d342f9d89fff8123a4bb5458390a24a587eb812
+- workflow_run_id: 29116232313
+- run_attempt: 1
+- artifact_id: 8236750926
+- artifact_name: ci-diag__component-worktree__wf-component-ci__run-29116232313__attempt-1
+- artifact_expires_at: 2026-07-11T18:56:49Z
 
-The next implementation phase is WT-P8 from crates/haze-sync-worktree/docs/implementation-plan.md.
+The diagnostics artifact is the authoritative failure evidence.
 
-## Read
+## Required work
 
-Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current scan/import/materialization/reconciliation/delete code, accepted adapter-mode contracts, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt explicitly instructs it.
+Read the project process files, current Worktree control files, WT-P8 implementation/tests/docs, PR diff, and every required file in artifact 8236750926. If the artifact is unavailable or incomplete, report FIX_BLOCKED_BY_LOGS.
 
-## Task
-
-Implement WT-P8: Watcher latency layer and runtime service.
-
-- introduce a hostable runtime-service abstraction without adding Server startup wiring;
-- use watcher events only as debounce/scheduling hints;
-- keep full scans authoritative for correctness;
-- trigger bounded scan/import planning after watcher hints;
-- provide explicit startup, cancellation, shutdown, and no-overlap behavior;
-- expose safe runtime status summaries without absolute local paths;
-- respect disabled, read-only, import-only, export-only, and bidirectional modes where applicable;
-- add focused fake-clock/fake-watcher tests for debounce, missed/duplicate/reordered hints, cancellation, shutdown, and mode behavior.
+Apply only the smallest correction demonstrated by the artifact. Keep the existing WT-P8 runtime lifecycle, watcher hint behavior, scan scheduling, mode checks, bounded work accounting, safe status output, tests, and ownership boundaries unchanged except where the artifact directly requires a correction.
 
 ## Allowed files
 
 - crates/haze-sync-worktree/src/**
-- crates/haze-sync-worktree/docs/**
+- crates/haze-sync-worktree/docs/** only when directly required by the diagnostics
 - crates/haze-sync-worktree/control/report.md
 
-## Non-goals
+Do not change Server composition, provider behavior, persistence ownership, shared workflows, dependencies, sibling components, or test expectations unrelated to the recorded failure.
 
-No Server startup/composition code, provider behavior, watcher-only correctness, hidden unmanaged background tasks, direct DB mutation, Core policy changes, workflow/dependency changes, or sibling component changes.
+Source/test/docs correction commits must run CI normally. A final report-only commit may skip CI.
 
-## CI trigger policy
-
-Product/source/test/docs commits must not skip CI. A final report-only commit may skip CI.
-
-## Report
-
-Write only crates/haze-sync-worktree/control/report.md. Use report-template.md, REPORT_TYPE IMPLEMENTATION, phase_id WT-P8.
+Write the result only to crates/haze-sync-worktree/control/report.md using REPORT_TYPE FIX and phase_id FIX-WT-P8-CI.
