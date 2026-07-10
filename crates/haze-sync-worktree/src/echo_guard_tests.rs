@@ -127,6 +127,62 @@ fn durable_materializer_marker_suppresses_once_and_is_consumed() {
 }
 
 #[test]
+fn repeated_runtime_load_preserves_durable_marker_for_restart() {
+    let root = TempRoot::new("durable-reload");
+    let config = root.config();
+    let vault_path = path("Notes/reload.md");
+    let revision_id = revision("rev_echo_reload");
+    let content_hash = ContentHash::parse(
+        "sha256:2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+    )
+    .unwrap();
+    let mut applied = WorktreeStateSnapshot::new();
+    WorktreeMaterializer::new(config.clone())
+        .materialize(
+            &mut applied,
+            WorktreeMaterializationRequest {
+                vault_path: vault_path.clone(),
+                revision_id: revision_id.clone(),
+                content_hash,
+                bytes: b"hello".to_vec(),
+            },
+        )
+        .unwrap();
+
+    let policy = WorktreeEchoGuardPolicy::new(Duration::from_secs(3600), 16).unwrap();
+    let now = SystemTime::now();
+    let mut guard = WorktreeEchoGuard::new(policy);
+    assert_eq!(guard.load_runtime_markers(&config, now).unwrap().loaded, 1);
+    let second_load = guard.load_runtime_markers(&config, now).unwrap();
+
+    assert_eq!(second_load.loaded, 1);
+    assert_eq!(second_load.evicted, 0);
+    assert_eq!(fs::read_dir(config.echo_dir()).unwrap().count(), 1);
+
+    drop(guard);
+    let mut restarted_guard = WorktreeEchoGuard::new(policy);
+    assert_eq!(
+        restarted_guard
+            .load_runtime_markers(&config, now)
+            .unwrap()
+            .loaded,
+        1
+    );
+    assert!(matches!(
+        restarted_guard
+            .consume_for_observation(
+                &vault_path,
+                Some(&revision_id),
+                Some(content_hash),
+                Some(content_hash),
+                now,
+            )
+            .unwrap(),
+        WorktreeEchoDecision::Suppressed(_)
+    ));
+}
+
+#[test]
 fn in_memory_marker_expires_and_cannot_suppress_later_observation() {
     let policy = WorktreeEchoGuardPolicy::new(Duration::from_secs(60), 4).unwrap();
     let mut guard = WorktreeEchoGuard::new(policy);
