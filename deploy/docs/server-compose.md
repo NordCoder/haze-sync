@@ -4,9 +4,12 @@
 
 This runbook documents the DEP-P3 local server service wiring in `deploy/docker-compose.yml`.
 
-The server service is intended for local and prod-like smoke workflows only. It is not a full production deployment and must not be used as evidence that provider sync, Worktree runtime, reverse proxy/TLS, migrations, backups, or real-vault rollout are ready.
+The server service is intended for local and prod-like smoke workflows only. It is not a full production deployment and must not be used as evidence that provider sync, Worktree runtime, reverse proxy/TLS, migrations, backups, host permissions, or real-vault rollout are ready.
 
-For database migration, backup, and restore sequencing, use `deploy/docs/migrations-backup-restore.md`.
+Use:
+
+- `deploy/docs/migrations-backup-restore.md` for database migration, backup, and restore sequencing;
+- `deploy/docs/host-directory-layout.md` for production-style path, ownership, permission, and backup boundaries.
 
 ## Packaging decision
 
@@ -18,7 +21,7 @@ deploy/server.Dockerfile
 
 Rationale:
 
-- the accepted Server dependency now starts from explicit environment configuration;
+- the accepted Server dependency starts from explicit environment configuration;
 - the Server binary owns listener startup, object-store root preparation, PostgreSQL pool creation, router construction, and graceful shutdown;
 - Docker Compose can wire PostgreSQL and Server without changing Server code;
 - container health checks can use the accepted `/health` route;
@@ -27,6 +30,8 @@ Rationale:
 The Docker build uses the repository `Cargo.lock` through `cargo build --release --locked -p haze-sync-server` so dependency resolution cannot silently change during image builds.
 
 `deploy/server.Dockerfile.dockerignore` keeps local secrets, `.env` files, `.git`, build outputs, dependency caches, logs, dumps, backups, archives, and OS/editor noise out of the server image build context while preserving tracked placeholder examples such as `.env.example`.
+
+The runtime image uses the non-root `haze-sync` account with numeric UID `10001`. A future host bind mount must grant only the required access to that identity or explicitly coordinate another accepted runtime user/group mapping.
 
 ## Service topology
 
@@ -57,6 +62,15 @@ HAZE_OBSIDIAN_ADAPTER_MODE=disabled
 
 The local Compose-network database URL is derived from placeholder PostgreSQL variables. Use an untracked `.env` file for local overrides. Never commit production database URLs or passwords.
 
+Production-style host placeholders remain the same accepted Server keys:
+
+```text
+HAZE_SYNC_OBJECT_STORE_PATH=/srv/haze-sync/objects
+HAZE_SYNC_WORKTREE_PATH=/srv/haze-vault/worktree
+```
+
+Those values are documentation only in DEP-P5; Compose does not bind those host paths.
+
 ## Volumes
 
 Current named volumes:
@@ -68,7 +82,7 @@ server_objects
 
 `postgres_data` stores local PostgreSQL state. `server_objects` stores local server object-store data.
 
-These are local Docker named volumes, not production host-directory guidance. Host path layout, permissions, backup boundaries, and restore order belong to later Deployment phases.
+These are local Docker named volumes, not production host directories. DEP-P5 now documents production-style host layout and permissions, but it intentionally does not replace the named volumes or add Worktree bind mounts.
 
 ## Startup
 
@@ -100,7 +114,7 @@ Expected meaning:
 
 - `/health` means the local HTTP process/router responds.
 - `/ready` means the Server's sanitized readiness check sees required configured runtime dependencies as ready.
-- Neither endpoint proves migrations, schema state, route-level write readiness, adapter credentials, Worktree runtime, reverse proxy/TLS, backup readiness, or production sync readiness.
+- Neither endpoint proves migrations, schema state, route-level write readiness, adapter credentials, Worktree runtime, reverse proxy/TLS, backup readiness, host permission correctness, or production sync readiness.
 
 The compose healthcheck uses `/health` so it verifies server process liveness without requiring migrations or provider/runtime sync.
 
@@ -122,7 +136,7 @@ docker compose -f deploy/docker-compose.yml down -v
 
 ## Deferred production behavior
 
-DEP-P3 intentionally does not add:
+Current deployment intentionally does not add:
 
 ```text
 GDrive adapter service
@@ -133,6 +147,7 @@ migration runner
 automatic backups
 provider credential flows
 remote deployment automation
+host mutation/provisioning scripts
 ```
 
 Those surfaces require later component contracts and Deployment phases.
