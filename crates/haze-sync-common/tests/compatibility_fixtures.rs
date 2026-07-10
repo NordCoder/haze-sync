@@ -1,6 +1,6 @@
 use haze_sync_common::{
-    AdapterId, AdapterMode, AdapterRole, ConflictId, ContentHash, OperationId, RevisionId,
-    Sha256, ValidationError, VaultPath,
+    AdapterId, AdapterMode, AdapterRole, ConflictId, ContentHash, OperationId, RevisionId, Sha256,
+    ValidationError, VaultPath,
 };
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
