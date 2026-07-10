@@ -1,13 +1,15 @@
 //! Real PostgreSQL helpers for storage integration tests.
 //!
 //! These helpers are compiled only with the explicit `test-support` feature.
-//! They require a validated test database URL and never create, drop, or select a
-//! database implicitly.
+//! They require a validated dedicated test database URL and never create, drop,
+//! or select a database implicitly.
 
 use super::{TestDatabaseUrl, TestNamespace, TestSupportError};
-use crate::schema::table_names;
+use crate::schema::{table_names, INITIAL_MIGRATIONS};
 use sqlx::{postgres::PgPoolOptions, Executor, PgPool};
 use std::fmt;
+
+const TEST_SETUP_ADVISORY_LOCK_KEY: i64 = 7_252_953_924_883_537_409;
 
 type PostgresTestResult<T> = Result<T, TestSupportError>;
 
@@ -68,17 +70,25 @@ pub struct PostgresTestContext {
 }
 
 impl PostgresTestContext {
-    /// Connects to the configured test database if an explicit URL is present.
+    /// Connects to the explicitly configured test database.
     ///
-    /// Returns `Ok(None)` when neither `HAZE_SYNC_TEST_DATABASE_URL` nor
-    /// `DATABASE_URL` is set. Callers can use that result to skip ignored or
-    /// opt-in integration tests without failing normal local/unit test runs.
+    /// The `Option` return is retained for source compatibility with existing
+    /// repository tests, but missing configuration now returns
+    /// [`TestSupportError::MissingTestDatabaseUrl`] instead of `Ok(None)`.
     pub async fn connect_from_env() -> PostgresTestResult<Option<Self>> {
-        let Some(url) = TestDatabaseUrl::from_env()? else {
-            return Ok(None);
-        };
+        Self::connect_required_from_env().await.map(Some)
+    }
 
-        Self::connect(url).await.map(Some)
+    /// Connects to the required `HAZE_SYNC_TEST_DATABASE_URL` database.
+    pub async fn connect_required_from_env() -> PostgresTestResult<Self> {
+        Self::connect(TestDatabaseUrl::require_from_env()?).await
+    }
+
+    /// Connects and applies the embedded schema under the setup lock.
+    pub async fn prepare_from_env() -> PostgresTestResult<Self> {
+        let context = Self::connect_required_from_env().await?;
+        context.apply_migrations().await?;
+        Ok(context)
     }
 
     /// Connects to a previously validated test database URL.
@@ -115,11 +125,11 @@ impl PostgresTestContext {
         &self.namespace
     }
 
-    /// Applies all embedded storage schema migrations to the connected database.
+    /// Applies all embedded storage schema migrations when the schema is empty.
     ///
-    /// This helper is intentionally test-only and assumes a fresh safe test
-    /// database. It is not a production migration runner and does not maintain a
-    /// schema history table.
+    /// Setup is serialized with a transaction-scoped PostgreSQL advisory lock.
+    /// An already-complete schema is accepted, while a partial schema fails
+    /// explicitly instead of running an ambiguous subset of migrations.
     pub async fn apply_migrations(&self) -> PostgresTestResult<()> {
         apply_storage_migrations(&self.pool).await
     }
@@ -127,7 +137,9 @@ impl PostgresTestContext {
     /// Truncates all known storage metadata tables in dependency-safe order.
     ///
     /// This is destructive by design and is available only after the database URL
-    /// has passed test-name safety checks. It never drops databases or schemas.
+    /// has passed test-name safety checks. Use it only during exclusive harness
+    /// setup; normal repository tests should isolate writes in rollbacked
+    /// caller-owned transactions and unique [`TestNamespace`] values.
     pub async fn clean_storage_tables(&self) -> PostgresTestResult<()> {
         clean_storage_tables(&self.pool).await
     }
@@ -143,25 +155,115 @@ impl fmt::Debug for PostgresTestContext {
     }
 }
 
-/// Connects to the configured real Postgres test database if available.
-pub async fn connect_test_database_from_env() -> PostgresTestResult<Option<PostgresTestContext>> {
+/// Connects to the required real PostgreSQL test database.
+pub async fn connect_required_test_database_from_env() -> PostgresTestResult<PostgresTestContext> {
+    PostgresTestContext::connect_required_from_env().await
+}
+
+/// Connects to the required real PostgreSQL test database.
+///
+/// The optional wrapper is retained for existing callers. Missing configuration
+/// is an error and never produces `Ok(None)`.
+pub async fn connect_test_database_from_env(
+) -> PostgresTestResult<Option<PostgresTestContext>> {
     PostgresTestContext::connect_from_env().await
 }
 
-/// Applies all embedded storage schema migrations to a test database.
+/// Connects to the required test database and prepares the storage schema.
+pub async fn prepare_test_database_from_env() -> PostgresTestResult<PostgresTestContext> {
+    PostgresTestContext::prepare_from_env().await
+}
+
+/// Applies embedded storage migrations safely to an empty test schema.
 pub async fn apply_storage_migrations(pool: &PgPool) -> PostgresTestResult<()> {
-    for migration in STORAGE_TEST_MIGRATIONS {
-        pool.execute(migration.sql)
-            .await
-            .map_err(|_| TestSupportError::DatabaseOperationFailed)?;
+    let mut transaction = pool
+        .begin()
+        .await
+        .map_err(|_| TestSupportError::DatabaseOperationFailed)?;
+    acquire_setup_lock(&mut transaction).await?;
+
+    let existing_table_count = storage_table_count(&mut transaction).await?;
+    let expected_table_count = table_names::ALL.len() as i64;
+
+    if existing_table_count == 0 {
+        for migration in STORAGE_TEST_MIGRATIONS {
+            (&mut *transaction)
+                .execute(migration.sql)
+                .await
+                .map_err(|_| TestSupportError::DatabaseOperationFailed)?;
+        }
+
+        if storage_table_count(&mut transaction).await? != expected_table_count {
+            return Err(TestSupportError::IncompleteStorageSchema);
+        }
+    } else if existing_table_count != expected_table_count {
+        return Err(TestSupportError::IncompleteStorageSchema);
     }
 
+    transaction
+        .commit()
+        .await
+        .map_err(|_| TestSupportError::DatabaseOperationFailed)
+}
+
+/// Truncates all known storage metadata tables under the setup lock.
+pub async fn clean_storage_tables(pool: &PgPool) -> PostgresTestResult<()> {
+    let mut transaction = pool
+        .begin()
+        .await
+        .map_err(|_| TestSupportError::DatabaseOperationFailed)?;
+    acquire_setup_lock(&mut transaction).await?;
+
+    if storage_table_count(&mut transaction).await? != table_names::ALL.len() as i64 {
+        return Err(TestSupportError::IncompleteStorageSchema);
+    }
+
+    (&mut *transaction)
+        .execute(clean_storage_tables_sql().as_str())
+        .await
+        .map_err(|_| TestSupportError::DatabaseOperationFailed)?;
+
+    transaction
+        .commit()
+        .await
+        .map_err(|_| TestSupportError::DatabaseOperationFailed)
+}
+
+async fn acquire_setup_lock(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+) -> PostgresTestResult<()> {
+    sqlx::query("select pg_advisory_xact_lock($1)")
+        .bind(TEST_SETUP_ADVISORY_LOCK_KEY)
+        .execute(&mut **transaction)
+        .await
+        .map_err(|_| TestSupportError::DatabaseOperationFailed)?;
     Ok(())
 }
 
-/// Truncates storage metadata tables in dependency-safe order.
-pub async fn clean_storage_tables(pool: &PgPool) -> PostgresTestResult<()> {
-    let sql = format!(
+async fn storage_table_count(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+) -> PostgresTestResult<i64> {
+    sqlx::query_scalar::<_, i64>(storage_table_count_sql().as_str())
+        .fetch_one(&mut **transaction)
+        .await
+        .map_err(|_| TestSupportError::DatabaseOperationFailed)
+}
+
+fn storage_table_count_sql() -> String {
+    let table_names = table_names::ALL
+        .iter()
+        .map(|table_name| format!("'{table_name}'"))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    format!(
+        "select count(*)::bigint from information_schema.tables \
+         where table_schema = current_schema() and table_name in ({table_names})"
+    )
+}
+
+fn clean_storage_tables_sql() -> String {
+    format!(
         "truncate table {audit_events}, {worktree_state}, {gdrive_mapping}, {idempotency_records}, {adapter_cursors}, {operation_log}, {conflicts}, {tombstones}, {file_revisions}, {sync_objects}, {content_blobs}, {sync_adapters} restart identity cascade",
         audit_events = table_names::AUDIT_EVENTS,
         worktree_state = table_names::WORKTREE_STATE,
@@ -175,11 +277,45 @@ pub async fn clean_storage_tables(pool: &PgPool) -> PostgresTestResult<()> {
         sync_objects = table_names::SYNC_OBJECTS,
         content_blobs = table_names::CONTENT_BLOBS,
         sync_adapters = table_names::SYNC_ADAPTERS,
-    );
+    )
+}
 
-    pool.execute(sql.as_str())
-        .await
-        .map_err(|_| TestSupportError::DatabaseOperationFailed)?;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    Ok(())
+    #[test]
+    fn embedded_migrations_match_schema_metadata() {
+        let actual_names: Vec<_> = STORAGE_TEST_MIGRATIONS
+            .iter()
+            .map(|migration| migration.name)
+            .collect();
+
+        assert_eq!(actual_names, INITIAL_MIGRATIONS);
+        assert!(STORAGE_TEST_MIGRATIONS
+            .iter()
+            .all(|migration| migration.sql.contains("create table")));
+    }
+
+    #[test]
+    fn schema_probe_covers_every_owned_table() {
+        let sql = storage_table_count_sql();
+
+        for table_name in table_names::ALL {
+            assert!(sql.contains(table_name));
+        }
+        assert!(sql.contains("current_schema()"));
+    }
+
+    #[test]
+    fn cleanup_sql_covers_every_owned_table_without_drop_statements() {
+        let sql = clean_storage_tables_sql().to_ascii_lowercase();
+
+        for table_name in table_names::ALL {
+            assert!(sql.contains(table_name));
+        }
+        assert!(sql.starts_with("truncate table"));
+        assert!(!sql.contains("drop database"));
+        assert!(!sql.contains("drop schema"));
+    }
 }
