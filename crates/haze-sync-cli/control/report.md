@@ -2,12 +2,12 @@ REPORT_TYPE:
 FIX
 
 STATUS:
-FIX_COMPLETE_PENDING_CI
+FIX_COMPLETE
 
 AGENT:
 role: fixer-worker
-agent_execution_id: cli-W1-FIX-CLI-P4-CI-2
-chat_name: cli — W1 FIX-CLI-P4-CI-2 Follow-up CI Fix
+agent_execution_id: cli-W1-FIX-CLI-P4-CI-2-RERUN
+chat_name: cli — W1 FIX-CLI-P4-CI-2-RERUN
 
 COMPONENT:
 name: cli
@@ -21,28 +21,28 @@ control_report_path: crates/haze-sync-cli/control/report.md
 
 WAVE:
 id: W1
-phase_id: FIX-CLI-P4-CI-2
-dependency_status: first CLI-P4 fixer completed; post-fix Component CI run 29034837249 was red and diagnostics artifact 8205459786 was available and readable
+phase_id: FIX-CLI-P4-CI-2-RERUN
+dependency_status: first CLI-P4 fixer completed; post-fix run 29034837249 failed rust-fmt; source fix commit 0262c5d5ec6cd0ecd695205ebf4d5d2e5c349249 is now validated by successful Component CI run 29038501230
 
 SUMMARY:
-Fixed the minimum follow-up CLI-P4 CI failure inside cli scope. The diagnostics artifact for run 29034837249 showed only rust-fmt failed. The failure was a rustfmt diff in crates/haze-sync-cli/src/main.rs for the `annotate_legacy_smoke_summary` condition introduced by the previous smoke-compatibility fix. The source fix applies the exact formatting expected by rustfmt without changing behavior. No tests were edited, and no admin mutations, direct DB reads, provider calls, route changes, token rotation, sibling component changes, workflow changes, concrete HTTP transport, or dependency changes were added.
+Completed the explicit FIX-CLI-P4-CI-2-RERUN. The refreshed prompt required re-reading diagnostics artifact 8205459786 and closing the rerun under the exact phase id. The artifact again proved a single rust-fmt failure in crates/haze-sync-cli/src/main.rs. The current branch already contains the exact required formatting correction in source commit 0262c5d5ec6cd0ecd695205ebf4d5d2e5c349249. Component CI run 29038501230 for that source commit completed successfully. No additional product or source changes were needed in this rerun; only this final report was updated.
 
 CHANGED_FILES:
-- crates/haze-sync-cli/src/main.rs
 - crates/haze-sync-cli/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/cli
 base_branch: main
 base_sha: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2 from PR #48 metadata
-head_sha: 0262c5d5ec6cd0ecd695205ebf4d5d2e5c349249 before report-only commit; report write creates final head commit
+head_sha: ebe2f8127ca7be9060512f3f7d51acce720d5a6e before this report-only commit
+source_fix_sha: 0262c5d5ec6cd0ecd695205ebf4d5d2e5c349249
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
 ci_skip_used: yes, for this final control/report.md-only commit only
-ci_skip_reason: final report update is strictly control/report-only and cannot change executable behavior or validation outcome; the source format-fix commit did not use CI skip
+ci_skip_reason: rerun required only an exact phase-id report closure after the existing source fix was proven green; the report-only commit cannot alter executable behavior or CI validation
 
 SCOPE:
 allowed_files_only: yes
@@ -60,25 +60,26 @@ affected_components: cli only
 
 IMPLEMENTATION_OR_REVIEW:
 completed:
-- Read current control state and active follow-up fixer prompt from component/cli.
-- Read previous control report.
-- Fetched diagnostics artifact metadata for run 29034837249 and verified artifact 8205459786 was present and not expired.
-- Downloaded diagnostics artifact ci-diag__component-cli__wf-component-ci__run-29034837249__attempt-1.
-- Read summary.md, manifest.json, failures/rust-fmt.txt, and logs/rust-fmt.log.
-- Updated src/main.rs only with the rustfmt-required multi-line `if` condition in `annotate_legacy_smoke_summary`.
+- Reloaded current control state and read the refreshed active prompt FIX-CLI-P4-CI-2-RERUN.
+- Read the current control report and relevant current source.
+- Re-read diagnostics artifact 8205459786: summary.md, manifest.json, failures/rust-fmt.txt, and logs/rust-fmt.log.
+- Confirmed the artifact contains exactly one failed check: rust-fmt for the `annotate_legacy_smoke_summary` condition in src/main.rs.
+- Confirmed current source contains the exact multi-line condition required by the artifact.
+- Confirmed Component CI run 29038501230 for source fix commit 0262c5d5ec6cd0ecd695205ebf4d5d2e5c349249 completed with conclusion success.
+- Updated control/report.md with exact phase_id FIX-CLI-P4-CI-2-RERUN and final status FIX_COMPLETE.
 main_findings:
-- Diagnostics artifact schema was haze-ci-diagnostics-v1.
-- Failed check was rust-fmt with exit code 1.
-- rust-fmt log showed a single diff in crates/haze-sync-cli/src/main.rs around the `annotate_legacy_smoke_summary` condition.
-- The expected formatting split the condition across multiple lines.
+- The active rerun was not a new code failure; it was issued because the previous active report did not close the exact refreshed phase id.
+- Artifact 8205459786 remains readable and matches run 29034837249, attempt 1, source head 4755faef7b7d7cc6b2872657bea59ea131b025ca.
+- The source formatting correction is present in commit 0262c5d5ec6cd0ecd695205ebf4d5d2e5c349249.
+- Component CI run 29038501230 is green for the source correction.
 behavior_changes:
-- none; formatting-only source change
+- none in this rerun
 bugs_found:
-- Previous fixer source change was not rustfmt-compliant.
+- none beyond the already-fixed rustfmt issue documented by artifact 8205459786
 bugs_fixed:
-- Applied rustfmt-compatible formatting in src/main.rs.
+- no new fix was required in this rerun; existing source fix was verified green
 cleanups_made:
-- none beyond required formatting
+- corrected report phase identity and final closure status
 non_goals_preserved:
 - no admin mutations
 - no direct DB reads
@@ -87,30 +88,26 @@ non_goals_preserved:
 - no token rotation
 - no sibling component changes
 - no workflow changes
-- no config/env/file/stdin/keychain IO
-- no concrete HTTP transport dependency
-- no JSON output contract added
-- no test deletion or weakening
+- no test deletion
+- no source or product edits in this rerun
 deferred_work:
-- Orchestrator should observe source-fix CI run 29038501230 for commit 0262c5d5ec6cd0ecd695205ebf4d5d2e5c349249.
+- none for FIX-CLI-P4-CI-2-RERUN
 
 TESTS_AND_CHECKS:
 checks_run:
-- GitHub fetches for control state, active follow-up fixer prompt, previous report, and current source.
-- GitHub artifact listing for run 29034837249 filtered to ci-diag__component-cli__wf-component-ci__run-29034837249__attempt-1.
-- GitHub artifact download for artifact 8205459786.
-- Read diagnostics artifact summary.md, manifest.json, failures/rust-fmt.txt, and logs/rust-fmt.log.
-- Observed new Component CI run 29038501230 for source-fix head 0262c5d5ec6cd0ecd695205ebf4d5d2e5c349249 as in_progress.
+- GitHub fetches for current state, refreshed prompt, current report, current source, and PR metadata.
+- Re-read diagnostics artifact 8205459786 summary.md, manifest.json, failures/rust-fmt.txt, and logs/rust-fmt.log.
+- Observed Component CI run 29038501230 for source fix commit 0262c5d5ec6cd0ecd695205ebf4d5d2e5c349249 as completed with conclusion success.
 checks_not_run:
 - cargo fmt --all --check: not run locally; GitHub connector does not provide shell execution.
 - cargo check -p haze-sync-cli: not run locally; GitHub connector does not provide shell execution.
 - cargo test -p haze-sync-cli: not run locally; GitHub connector does not provide shell execution.
 - cargo clippy -p haze-sync-cli --all-targets -- -D warnings: not run locally; GitHub connector does not provide shell execution.
-ci_status: CI_PENDING
+ci_status: CI_GREEN
 workflow_urls:
-- Component CI run 29038501230 for source-fix head 0262c5d5ec6cd0ecd695205ebf4d5d2e5c349249 observed as in_progress
+- Component CI run 29038501230, run number 738, for source fix commit 0262c5d5ec6cd0ecd695205ebf4d5d2e5c349249; completed success
 known_failures:
-- Previous run 29034837249 failed rust-fmt due to formatting in src/main.rs.
+- Historical run 29034837249 failed rust-fmt and is superseded by successful source-fix run 29038501230.
 
 CI_DIAGNOSTICS:
 artifact_based_logs: yes
@@ -118,7 +115,7 @@ artifact_name: ci-diag__component-cli__wf-component-ci__run-29034837249__attempt
 artifact_id: 8205459786
 workflow_run_id: 29034837249
 workflow_run_attempt: 1
-artifact_status: present, not expired, downloaded, readable
+artifact_status: present, downloaded, readable
 summary_read: yes
 manifest_read: yes
 logs_read:
@@ -136,9 +133,8 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- Local shell commands cannot be run through the GitHub connector.
-- The final report-only commit uses CI skip and is not CI evidence.
-- Source-fix CI was in_progress at report time.
+- The refreshed rerun was necessary because the prior report phase id did not match the newly issued active phase.
+- This report-only commit uses CI skip and is not CI evidence; CI evidence is run 29038501230 on source commit 0262c5d5ec6cd0ecd695205ebf4d5d2e5c349249.
 
 BLOCKERS:
 none
@@ -147,7 +143,7 @@ NEXT_RECOMMENDED_AGENT:
 orchestrator
 
 FINAL_VERDICT:
-FIX_COMPLETE_PENDING_CI. The artifact-proven rust-fmt failure was fixed inside cli scope with a minimal formatting-only src/main.rs change. Source-fix CI is pending and must be observed by Orchestrator.
+FIX_COMPLETE. The exact artifact-proven rustfmt issue is fixed in source commit 0262c5d5ec6cd0ecd695205ebf4d5d2e5c349249, and Component CI run 29038501230 completed successfully. The refreshed rerun phase is now closed under phase_id FIX-CLI-P4-CI-2-RERUN.
 
 PUSHED:
 yes
