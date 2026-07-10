@@ -1,46 +1,31 @@
-# W1-CLI-P5C — CLI live-doctor clean-code review
+# W1-CLI-P6-BLOCKED — Bootstrap/operator endpoint dependency gate
 
 Component: cli
 Path: crates/haze-sync-cli
 Branch: component/cli
 PR: #48
-Role: clean-code-reviewer
+Role: none
 
-Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
+This is a hold notice, not an executable worker prompt.
 
-## Context
+## Accepted state
 
-CLI-P5 implementation and CI fixer are complete. Final code-bearing Component CI is green.
+CLI-P5 implementation, CI fixer, and clean-code review are accepted. Final code/docs CI is green.
 
-- code_bearing_sha: 97ef1ae1c6995aff71d364d303d0cdbea040de49
-- workflow_run_id: 29081982496
-- run_number: 966
+- code_bearing_sha: 3130df7c6ceeb735baf186d57cee931f973a4cd3
+- workflow: Component CI
+- workflow_run_id: 29084418994
+- run_number: 1047
 - conclusion: success
 
-## Read
+## Blocked next phase
 
-Read process sources, component docs/control files, current source/tests, accepted Server/API/Core diagnostic contracts, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt instructs it.
+The next plan phase is CLI-P6: bootstrap and sync operation commands.
 
-## Task
+CLI-P6 may only call accepted Server/API operator endpoints or an explicitly accepted local orchestration contract. The required bootstrap/import/export/sync-once endpoints and safe orchestration boundaries do not yet exist. Worktree and GDrive are also not at their runtime/fan-in completion phases.
 
-Review CLI-P5 live doctor integration plus the CI correction.
+## Unblock condition
 
-Focus on offline-by-default behavior, explicit live mode, accepted public diagnostic surfaces, skipped/not-run honesty, safe partial failures, output redaction, predictable exit codes, client abstraction boundaries, and non-goal preservation.
+Unblock after Server/API expose accepted bootstrap and sync-operation contracts, with required Worktree/GDrive runtime boundaries and safety gates available, or after a dedicated cross-component fan-in contract is approved.
 
-## Allowed files
-
-- crates/haze-sync-cli/src/**
-- crates/haze-sync-cli/docs/**
-- crates/haze-sync-cli/control/report.md
-
-## Boundaries
-
-No repair behavior, direct DB/object-store/provider access, new Server/API surfaces, token lifecycle work, workflow/dependency changes, or sibling changes.
-
-## CI trigger policy
-
-Source/docs clean-code commits must not skip CI. A final report-only commit may skip CI.
-
-## Report
-
-Write only crates/haze-sync-cli/control/report.md. Use REPORT_TYPE CLEAN_CODE_REVIEW and phase_id CLI-P5C.
+Until then, do not run a worker for this component and do not add placeholder mutation commands.
