@@ -2,6 +2,34 @@
 
 ## Entries
 
+### 2026-07-11 — W1/STOR-P9C test-support clean-code review
+
+Agent:
+Clean-Code Reviewer
+
+Branch:
+component/storage
+
+Prompt:
+crates/haze-sync-storage/control/prompt.md
+
+Report:
+crates/haze-sync-storage/control/report.md
+
+Commit(s):
+See component/storage branch history for the clean-code commits.
+
+Summary:
+Reviewed STOR-P9 test-support configuration, PostgreSQL setup and cleanup, fixture generation, filesystem cleanup, feature gating, downstream usage, and documentation. Hardened generated operation ids against the shared `OperationId` contract, removed partial temporary object roots on setup failure, retained Drop retry after explicit cleanup failure, restricted database URL query parameters that could change connection target or session behavior, and required schema-completeness probes to count base tables rather than views. Identified a cross-component production-isolation blocker: `haze-sync-server` enables Storage `test-support` in its normal dependency set, so production Server builds compile and export test-only helpers despite the Storage contract.
+
+Status:
+CLEAN_BLOCKED_BY_CONTRACT
+
+Follow-ups:
+Move the Server production dependency on `haze-sync-storage` to the default feature set and enable `test-support` only through a Server dev-dependency or dedicated test harness. Then rerun workspace CI and complete lifecycle acceptance.
+
+---
+
 ### 2026-07-10 — W1/STOR-P9 storage test-support and integration harness hardening
 
 Agent:
@@ -20,7 +48,7 @@ Commit(s):
 See component/storage branch history for the implementation commits.
 
 Summary:
-Hardened Storage test support without adding production runtime dependencies. PostgreSQL integration helpers now require the dedicated `HAZE_SYNC_TEST_DATABASE_URL`, ignore general application `DATABASE_URL`, reject missing, malformed, non-test, and production-looking database configuration through redacted errors, and expose a strict prepare helper. Schema setup is serialized with a transaction-scoped PostgreSQL advisory lock, applies migrations only to an empty schema, accepts an already-complete initial schema, and rejects partial schemas rather than guessing. Default crate tests compile the PostgreSQL helper implementation without requiring a live database, while feature-gated repository roundtrips require explicit configuration and fail on connection/setup errors instead of silently passing. Added bounded stable fixture namespaces, explicit temporary object-root cleanup, focused unit tests, and a test-support runbook with exact commands and isolation rules.
+Hardened Storage test support without adding production runtime behavior inside the Storage crate. PostgreSQL integration helpers now read only the dedicated `HAZE_SYNC_TEST_DATABASE_URL`, ignore general application `DATABASE_URL`, reject malformed, non-test, and production-looking database configuration through redacted errors, and expose strict required/prepare helpers. Schema setup is serialized with a transaction-scoped PostgreSQL advisory lock, applies migrations only to an empty schema, accepts an already-complete initial schema, and rejects partial schemas rather than guessing. Default crate tests compile the PostgreSQL helper implementation without requiring a live database. The optional compatibility wrapper reports the real-PostgreSQL path as not run only when dedicated configuration is absent or blank; strict helpers and all invalid-configuration, connection, setup, migration, and cleanup failures remain errors. Added bounded stable fixture namespaces, explicit temporary object-root cleanup, focused unit tests, and a test-support runbook with exact commands and isolation rules.
 
 Status:
 SELF_ACCEPT_PENDING_CI
@@ -216,7 +244,7 @@ Commit(s):
 See branch history for the implementation commits.
 
 Summary:
-Hardened object-store verification coverage while preserving the existing content-addressed blob layout and runtime behavior. Added tests for missing blob path-free errors, corrupted committed blob verification through read/exists/stat, unexpected directory entries at blob paths, temporary blob cleanup after failed commit, duplicate writes, hash mismatch handling, and path-free error Display output. Documented that the local object-store root is caller-owned durable storage while Storage owns only the internal hash-addressed layout below that root.
+Hardened object-store verification coverage while preserving the existing content-addressed blob layout and runtime behavior. Added tests for missing blobs, corrupted blobs, unexpected entries, duplicate writes, temporary cleanup after failed commits, and path-free error formatting. Documented that the local object-store root is caller-owned durable storage while Storage owns only the internal hash-addressed layout below that root.
 
 Status:
 SELF_ACCEPT_PENDING_CI
