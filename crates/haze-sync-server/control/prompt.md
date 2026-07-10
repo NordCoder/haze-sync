@@ -1,35 +1,39 @@
-# W1-SRV-P6-RERUN — Admin/status, readiness, doctor, and observability hardening
+# W1-SRV-P6C — Server admin/status clean-code review
 
 Component: server
 Path: crates/haze-sync-server
 Branch: component/server
 PR: #45
-Role: implementation-worker
+Role: clean-code-reviewer
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
-## Rerun guard
-
-This is an explicit refreshed active prompt. The current report before this prompt was for SRV-P5C, not SRV-P6. Therefore SRV-P6-RERUN is not already complete.
-
 ## Context
 
-SRV-P5 implementation, CI fixer, and clean-code review are accepted. Component CI evidence for the accepted product-code state is green.
+SRV-P6-RERUN implementation report closed the active implementation phase with SELF_ACCEPT_PENDING_CI.
 
-- workflow: Component CI
-- workflow_run_id: 29028061038
-- run_number: 619
-- conclusion: success
-
-The next implementation phase is SRV-P6 from crates/haze-sync-server/docs/implementation-plan.md.
+Important: Orchestrator has not confirmed green CI for the SRV-P6 code-bearing state. The older CI run 29028061038 predates SRV-P6 and must not be treated as SRV-P6 CI evidence.
 
 ## Read
 
-Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, relevant code and PR diff. Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
+Read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, chatgpt-gh-connector.md, component docs/control files, current server source/tests/docs, and PR diff. Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
 
 ## Task
 
-Implement SRV-P6: Admin/status, readiness, doctor, and observability hardening. Focus on honest read-only operational surfaces, safe readiness checks, safe adapter/status summaries, skipped/not-run check representation, redacted logs/tracing if scoped, and metrics only if accepted by system scope.
+Review SRV-P6 admin/status, readiness, doctor, and observability hardening.
+
+Focus areas:
+
+- readiness-driven admin status behavior;
+- DB and object-store readiness summaries;
+- safe adapter summaries, cursor-presence output, pause support, and mode/status summaries;
+- honest skipped/not-run/placeholder status representation;
+- redacted logging or observability changes if present;
+- preservation of read-only operational semantics and non-goals.
+
+## CI handling
+
+Attempt to observe Component CI for the SRV-P6 code-bearing commit through GitHub metadata. If no green SRV-P6 code-bearing CI run can be verified, do not report CLEAN_ACCEPT. Use CLEAN_ACCEPT_PENDING_CI if the code review passes but CI remains unknown or pending.
 
 ## Allowed files
 
@@ -40,14 +44,14 @@ Implement SRV-P6: Admin/status, readiness, doctor, and observability hardening. 
 - crates/haze-sync-server/docs/**
 - crates/haze-sync-server/control/report.md
 
-## Non-goals
+## Forbidden changes
 
-No admin mutations by default, repair execution, token rotation, provider calls without accepted provider contract, raw cursor/status payload exposure, workflow changes, or sibling component changes.
+No admin mutations, repair execution, token rotation, provider calls without accepted provider contract, raw cursor/status payload exposure, workflow changes, or sibling component changes.
 
 ## CI trigger policy
 
-Product/source/docs commits must not skip CI. A final report-only commit may skip CI.
+Source/doc clean-code commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only the report to crates/haze-sync-server/control/report.md. Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION and phase_id to SRV-P6-RERUN.
+Write only the report to crates/haze-sync-server/control/report.md. Use report-template.md. Set REPORT_TYPE to CLEAN_CODE_REVIEW and phase_id to SRV-P6C.
