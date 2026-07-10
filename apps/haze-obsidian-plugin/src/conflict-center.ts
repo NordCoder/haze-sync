@@ -3,10 +3,10 @@ import type {
   ConflictResolutionAction,
   HazeSyncApiClient,
   ResolveConflictResponseDto,
-  RevisionId,
 } from "./api-client";
 import type { BaseRevisionState } from "./base-revision-store";
 import { markRemoteBaseRevision } from "./base-revision-store";
+import { sanitizeStatusMessage } from "./status";
 import { classifyVaultPath } from "./vault-paths";
 
 export interface ConflictActionDefinition {
@@ -98,7 +98,7 @@ export async function resolveConflictThroughServer(
     };
   }
 
-  const revisionId = resolvedRevisionId(response, item.conflict, action);
+  const revisionId = response.revision_id ?? null;
   const path = classifyVaultPath(item.conflict.original_path);
   if (!path.included || revisionId === null) {
     return {
@@ -147,22 +147,6 @@ function isConfirmedResolution(
   return response.status === "resolved" || response.status === "kept_both";
 }
 
-function resolvedRevisionId(
-  response: ResolveConflictResponseDto,
-  conflict: ConflictDto,
-  action: ConflictResolutionAction,
-): RevisionId | null {
-  if (response.revision_id !== undefined && response.revision_id !== null) {
-    return response.revision_id;
-  }
-
-  if (action === "accept_conflict") {
-    return conflict.conflict_revision_id ?? null;
-  }
-
-  return conflict.current_revision_id ?? null;
-}
-
 function safeTimestamp(value: string | null | undefined): string {
   if (value === undefined || value === null || value.trim().length === 0) {
     return "Not provided";
@@ -181,7 +165,7 @@ function safeDisplayText(value: string | null | undefined, fallback: string, max
     return fallback;
   }
 
-  const normalized = value.replace(/[\r\n\t\u0000-\u001f\u007f]+/gu, " ").trim();
+  const normalized = sanitizeStatusMessage(value);
   if (normalized.length === 0) {
     return fallback;
   }
