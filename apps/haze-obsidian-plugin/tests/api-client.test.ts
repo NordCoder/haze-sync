@@ -20,7 +20,7 @@ function jsonResponse(payload: unknown, status = 200): Response {
 }
 
 function clientWithTransport(handler: (request: CapturedRequest) => Response | Promise<Response>): HazeSyncApiClient {
-  const transport: HttpTransport = (url, init) => handler({ url: new URL(url), init });
+  const transport: HttpTransport = (url, init) => Promise.resolve(handler({ url: new URL(url), init }));
   return new HazeSyncApiClient({
     config: {
       serverUrl: "https://sync.example.test",
