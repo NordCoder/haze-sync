@@ -1,33 +1,42 @@
-# W1-OBS-P6C-RERUN — Obsidian remote materialization clean-code review
+# W1-OBS-P7 — Conflict center and user actions
 
 Component: obsidian-plugin
 Path: apps/haze-obsidian-plugin
 Branch: component/obsidian-plugin
 PR: #51
-Role: clean-code-reviewer
+Role: implementation-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
-## Rerun guard
-
-This is an explicit refreshed active prompt. The current report before this prompt was for OBS-P6, not OBS-P6C. Therefore OBS-P6C-RERUN is not already complete.
-
 ## Context
 
-OBS-P6 implementation is complete. Component CI for the code-bearing commit is green.
+OBS-P6 implementation and clean-code review are accepted. Component CI evidence for the accepted source state is green.
 
 - workflow: Component CI
-- workflow_run_id: 29034944309
-- run_number: 698
+- workflow_run_id: 29038540630
+- run_number: 740
 - conclusion: success
+
+The next implementation phase is OBS-P7 from apps/haze-obsidian-plugin/docs/implementation-plan.md.
 
 ## Read
 
-Read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, chatgpt-gh-connector.md, component docs/control files, relevant code and PR diff. Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
+Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, relevant source, and PR diff.
+
+Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
 
 ## Task
 
-Review OBS-P6 remote changes pull and safe materialization. Focus on cursor/pull-state persistence, hash and revision verification before materialization, local dirty-file detection, Vault API write boundaries, safe cursor/base updates, tombstone-without-hard-delete behavior, conflict queueing, echo suppression, and non-goal preservation.
+Implement OBS-P7: Conflict center and user actions.
+
+Follow the plan:
+
+- list open conflicts from Server through accepted abstractions;
+- show original path, conflict path or materialized copy, status, source adapter, and safe timestamps;
+- provide supported actions: accept_current, accept_conflict, keep_both, mark_resolved;
+- explain destructive implications before actions where necessary;
+- refresh local base state after server-confirmed resolution;
+- avoid raw server internals or token details in UI/state.
 
 ## Allowed files
 
@@ -35,14 +44,14 @@ Review OBS-P6 remote changes pull and safe materialization. Focus on cursor/pull
 - apps/haze-obsidian-plugin/docs/**
 - apps/haze-obsidian-plugin/control/report.md
 
-## Forbidden changes
+## Non-goals
 
-No provider calls, semantic merge, hard delete, server route changes, Worktree behavior, workflow changes, or sibling component changes.
+No local-only conflict resolution bypassing Server, semantic merge editor, new conflict policy vocabulary, server route changes, workflow changes, or sibling component changes.
 
 ## CI trigger policy
 
-Source/doc clean-code commits must not skip CI. A final report-only commit may skip CI.
+Product/source/docs commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only the report to apps/haze-obsidian-plugin/control/report.md. Use report-template.md. Set REPORT_TYPE to CLEAN_CODE_REVIEW and phase_id to OBS-P6C-RERUN.
+Write only the report to apps/haze-obsidian-plugin/control/report.md. Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION and phase_id to OBS-P7.
