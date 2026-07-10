@@ -61,12 +61,16 @@ export interface ConflictResolutionResult {
   message: string;
 }
 
-export async function loadOpenConflictItems(client: HazeSyncApiClient): Promise<ConflictCenterItem[]> {
+export async function loadOpenConflictItems(
+  client: HazeSyncApiClient,
+  secrets: readonly string[] = [],
+): Promise<ConflictCenterItem[]> {
   const response = await client.getConflicts({ status: "open" });
+  const redactionSecrets = Array.from(secrets);
 
   return response.conflicts
     .filter((conflict) => conflict.status === "open")
-    .map(toConflictCenterItem)
+    .map((conflict) => toConflictCenterItem(conflict, redactionSecrets))
     .sort(compareConflictItems);
 }
 
@@ -125,13 +129,18 @@ export async function resolveConflictThroughServer(
   };
 }
 
-function toConflictCenterItem(conflict: ConflictDto): ConflictCenterItem {
+function toConflictCenterItem(conflict: ConflictDto, secrets: string[]): ConflictCenterItem {
   return {
     conflict,
-    originalPath: safeDisplayText(conflict.original_path, "Path unavailable", 240),
-    conflictPath: safeDisplayText(conflict.conflict_path, "Server-managed conflict copy (path not provided)", 240),
-    status: safeDisplayText(conflict.status, "Unknown", 48),
-    sourceAdapter: safeDisplayText(conflict.source_adapter_id, "Not provided", 128),
+    originalPath: safeDisplayText(conflict.original_path, "Path unavailable", 240, secrets),
+    conflictPath: safeDisplayText(
+      conflict.conflict_path,
+      "Server-managed conflict copy (path not provided)",
+      240,
+      secrets,
+    ),
+    status: safeDisplayText(conflict.status, "Unknown", 48, secrets),
+    sourceAdapter: safeDisplayText(conflict.source_adapter_id, "Not provided", 128, secrets),
     createdAt: safeTimestamp(conflict.created_at),
     resolvedAt: safeTimestamp(conflict.resolved_at),
   };
@@ -160,12 +169,17 @@ function safeTimestamp(value: string | null | undefined): string {
   return new Date(timestamp).toLocaleString();
 }
 
-function safeDisplayText(value: string | null | undefined, fallback: string, maxLength: number): string {
+function safeDisplayText(
+  value: string | null | undefined,
+  fallback: string,
+  maxLength: number,
+  secrets: string[],
+): string {
   if (value === undefined || value === null) {
     return fallback;
   }
 
-  const normalized = sanitizeStatusMessage(value);
+  const normalized = sanitizeStatusMessage(value, secrets);
   if (normalized.length === 0) {
     return fallback;
   }
