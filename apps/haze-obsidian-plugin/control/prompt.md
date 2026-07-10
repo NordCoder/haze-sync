@@ -1,61 +1,35 @@
-# W1-OBS-P9C — Obsidian compatibility and packaging clean-code review
+# W1-OBS-P9C-BLOCKED-BY-TOOLING — Node validation evidence gate
 
 Component: obsidian-plugin
 Path: apps/haze-obsidian-plugin
 Branch: component/obsidian-plugin
 PR: #51
-Role: clean-code-reviewer
+Role: none
 
-Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
+This is a hold notice, not an executable worker prompt.
 
-## Context
+## Accepted evidence
 
-OBS-P9 implementation completed. Component CI for the final source/config/docs head is green.
+OBS-P9 implementation and OBS-P9C clean-code corrections are present. Final source Component CI is green.
 
-- code_bearing_sha: 69f2040ac17d309bbc3264e469263494885f6356
+- code_bearing_sha: d43ef5fe946de1f4467572ef0df5311e1b239717
 - workflow: Component CI
-- workflow_run_id: 29103932164
-- run_number: 1314
+- workflow_run_id: 29107572342
+- run_number: 1374
 - conclusion: success
 
-Important: the current Component CI workflow does not prove execution of the plugin Node test, typecheck, or build commands. Do not treat Rust workspace CI as evidence for those commands.
+## Tooling blocker
 
-## Read
+The current Component CI workflow does not execute or prove these plugin commands:
 
-Read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, chatgpt-gh-connector.md, component docs/control files, accepted API fixture/guidance, current TypeScript source, validators, mocked tests, package scripts, packaging policy, E2E documentation, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt explicitly instructs it.
+- npm test --workspace haze-obsidian-plugin
+- npm run typecheck --workspace haze-obsidian-plugin
+- npm run build --workspace haze-obsidian-plugin
 
-## Task
+GitHub-connector-only workers cannot execute these commands locally. Rust workspace CI must not be treated as Node validation evidence.
 
-Review OBS-P9 compatibility, packaging, and E2E readiness.
+## Unblock condition
 
-Focus on:
+Provide independently observable successful execution evidence for all three Node commands in an accepted validation environment or add an explicitly authorized CI/fan-in validation path that runs them. If any command fails, route the failure through a scoped fixer prompt using the resulting evidence.
 
-- exact API fixture mirroring and fixture-drift detection;
-- strict canonical DTO and vocabulary validation;
-- runtime migration from prior persisted hash forms;
-- representative mocked client and sync-flow tests;
-- ordered change-page and conflict-action behavior;
-- safe public error/status rendering;
-- package scripts and generated-output policy;
-- local installation and deterministic synthetic E2E guidance;
-- preservation of existing plugin lifecycle and component boundaries.
-
-## Validation honesty
-
-Inspect available GitHub metadata and repository files. If no independent evidence exists that the Node test, typecheck, and build commands completed successfully, do not claim those commands passed. Use a tooling-blocked or pending verdict if that missing evidence prevents phase acceptance.
-
-## Allowed files
-
-- apps/haze-obsidian-plugin/**
-
-## Boundaries
-
-No marketplace publication, real vault data, committed generated bundles without explicit policy, API fixture ownership changes, Server/Core/provider changes, workflow changes, sibling changes, test deletion, or assertion weakening.
-
-## CI trigger policy
-
-Source/test/docs/config clean-code commits must not skip CI. A final report-only commit may skip CI.
-
-## Report
-
-Write only apps/haze-obsidian-plugin/control/report.md. Use report-template.md, REPORT_TYPE CLEAN_CODE_REVIEW, phase_id OBS-P9C.
+Do not launch a component worker from this hold notice.
