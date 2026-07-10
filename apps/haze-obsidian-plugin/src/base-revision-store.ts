@@ -22,6 +22,7 @@ export interface BaseRevisionState {
 export type ServerMutationOutcome =
   | "accepted"
   | "same_content"
+  | "not_found"
   | "conflict_saved"
   | "rejected"
   | "unauthorized"
@@ -36,9 +37,7 @@ export interface BaseStateUpdateResult {
 }
 
 export function createDefaultBaseRevisionState(): BaseRevisionState {
-  return {
-    byPath: {},
-  };
+  return { byPath: {} };
 }
 
 export function mergeBaseRevisionState(rawState: unknown): BaseRevisionState {
@@ -65,26 +64,31 @@ export function applyUploadOutcome(
   observedAt: string,
   confirmedContentHash?: ContentHash | null,
 ): BaseStateUpdateResult {
-  const outcome = classifyServerStatus(response.status);
-  if (outcome !== "accepted" && outcome !== "same_content") {
-    return skippedUpdate(state, outcome, response.conflict_id ?? undefined);
+  switch (response.status) {
+    case "accepted":
+      return {
+        state: upsertBaseRevision(state, {
+          path: response.path,
+          revisionId: response.revision_id,
+          contentHash: confirmedContentHash ?? state.byPath[response.path]?.contentHash ?? null,
+          serverDeleted: false,
+          updatedAt: observedAt,
+        }),
+        outcome: "accepted",
+        baseUpdated: true,
+      };
+    case "ignored":
+      return skippedUpdate(
+        state,
+        "same_content",
+        undefined,
+        "Server confirmed identical content without returning current revision metadata.",
+      );
+    case "conflict_saved":
+      return skippedUpdate(state, "conflict_saved", response.conflict_id);
+    case "rejected":
+      return skippedUpdate(state, "rejected", undefined, response.reason);
   }
-
-  if (response.revision_id === undefined || response.revision_id === null) {
-    return skippedUpdate(state, outcome, undefined, "Server did not return a revision for accepted upload outcome.");
-  }
-
-  return {
-    state: upsertBaseRevision(state, {
-      path: response.path,
-      revisionId: response.revision_id,
-      contentHash: response.content_hash ?? confirmedContentHash ?? state.byPath[response.path]?.contentHash ?? null,
-      serverDeleted: false,
-      updatedAt: observedAt,
-    }),
-    outcome,
-    baseUpdated: true,
-  };
 }
 
 export function applyDeleteOutcome(
@@ -92,22 +96,14 @@ export function applyDeleteOutcome(
   response: DeleteFileResponseDto,
   observedAt: string,
 ): BaseStateUpdateResult {
-  const outcome = classifyServerStatus(response.status);
-  if (outcome !== "accepted" && outcome !== "same_content") {
-    return skippedUpdate(state, outcome, response.conflict_id ?? undefined);
+  switch (response.status) {
+    case "tombstoned":
+      return confirmedDelete(state, response.path, "accepted", observedAt);
+    case "not_found":
+      return confirmedDelete(state, response.path, "not_found", observedAt);
+    case "rejected":
+      return skippedUpdate(state, "rejected", undefined, response.reason);
   }
-
-  return {
-    state: upsertBaseRevision(state, {
-      path: response.path,
-      revisionId: response.revision_id ?? state.byPath[response.path]?.revisionId ?? null,
-      contentHash: null,
-      serverDeleted: true,
-      updatedAt: observedAt,
-    }),
-    outcome,
-    baseUpdated: true,
-  };
 }
 
 export function skippedUpdateForApiError(
@@ -149,6 +145,25 @@ export function markRemoteDelete(
   });
 }
 
+function confirmedDelete(
+  state: BaseRevisionState,
+  path: VaultPath,
+  outcome: "accepted" | "not_found",
+  observedAt: string,
+): BaseStateUpdateResult {
+  return {
+    state: upsertBaseRevision(state, {
+      path,
+      revisionId: state.byPath[path]?.revisionId ?? null,
+      contentHash: null,
+      serverDeleted: true,
+      updatedAt: observedAt,
+    }),
+    outcome,
+    baseUpdated: true,
+  };
+}
+
 function upsertBaseRevision(state: BaseRevisionState, entry: BaseRevisionEntry): BaseRevisionState {
   return {
     byPath: {
@@ -173,26 +188,6 @@ function skippedUpdate(
   };
 }
 
-function classifyServerStatus(status: string): ServerMutationOutcome {
-  switch (status) {
-    case "accepted":
-    case "tombstoned":
-    case "resolved":
-      return "accepted";
-    case "same_content":
-      return "same_content";
-    case "conflict_saved":
-      return "conflict_saved";
-    case "unauthorized":
-      return "unauthorized";
-    case "server_unavailable":
-      return "server_unavailable";
-    case "rejected":
-    default:
-      return "rejected";
-  }
-}
-
 function mutationOutcomeFromApiErrorCategory(category: ApiErrorCategory): ServerMutationOutcome {
   switch (category) {
     case "unauthorized":
@@ -204,9 +199,10 @@ function mutationOutcomeFromApiErrorCategory(category: ApiErrorCategory): Server
       return "server_unavailable";
     case "conflict":
       return "conflict_saved";
+    case "not_found":
+      return "not_found";
     case "configuration":
     case "invalid_response":
-    case "not_found":
     case "rejected":
     case "internal":
       return "rejected";
@@ -224,7 +220,6 @@ function readRecord<T>(value: unknown, predicate: (item: unknown) => item is T):
       result[key] = item;
     }
   }
-
   return result;
 }
 
