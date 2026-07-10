@@ -20,5 +20,5 @@ ci_run_number: 890
 ci_run_attempt: 1
 known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
-blocker: Worktree hostable runtime and explicit Server fan-in boundary are not available until WT-P8/WT-P9
-unblock_condition: WT-P8 accepted plus required WT-P9 or dedicated cross-component fan-in contract
+blocker: WT-P8 is queued but not accepted; Worktree hostable runtime and explicit WT-P9 Server fan-in boundaries are unavailable
+unblock_condition: WT-P8 clean-code/CI acceptance plus required WT-P9 or a dedicated cross-component fan-in contract
