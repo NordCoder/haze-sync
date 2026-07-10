@@ -1,47 +1,44 @@
-# W1-WT-P4C-RERUN — Worktree import planner clean-code review
+# W1-WT-P5 — Materializer and atomic writer
 
 Component: worktree
 Path: crates/haze-sync-worktree
 Branch: component/worktree
 PR: #49
-Role: clean-code-reviewer
+Role: implementation-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
-## Rerun guard
-
-This is an explicit refreshed active prompt. The current report before this prompt was for FIX-WT-P4-CI, not WT-P4C. Therefore WT-P4C-RERUN is not already complete.
-
 ## Context
 
-WT-P4 implementation and CI fixer are complete. Post-fix Component CI is green.
+WT-P4 implementation, fixer, and clean-code review are accepted. Component CI evidence for the accepted source state is green.
 
 - workflow: Component CI
 - workflow_run_id: 29034738311
 - run_number: 679
 - conclusion: success
 
+The next implementation phase is WT-P5 from crates/haze-sync-worktree/docs/implementation-plan.md.
+
 ## Read
 
-Read before editing:
-
-- implementation-manifest.md from ChatGPT Project Sources
-- report-template.md from ChatGPT Project Sources
-- clean-code-reviewer-prompt.md from ChatGPT Project Sources
-- chatgpt-gh-connector.md from ChatGPT Project Sources
-- crates/haze-sync-worktree/docs/component-contract.md
-- crates/haze-sync-worktree/docs/implementation-plan.md
-- crates/haze-sync-worktree/docs/implementation-log.md
-- crates/haze-sync-worktree/docs/dependency-map.md
-- crates/haze-sync-worktree/control/prompt.md
-- crates/haze-sync-worktree/control/report.md
-- relevant current repository code and PR diff
+Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, relevant current code, and PR diff.
 
 Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
 
 ## Task
 
-Review WT-P4 import planner and Core/API submission boundary plus the CI fixer. Preserve the existing non-goals: no direct SQLx/Storage writes, no route handlers, no provider/GDrive behavior, no Worktree-owned conflict policy, no hard delete, no workflow changes, no sibling component changes.
+Implement WT-P5: Materializer and atomic writer.
+
+Follow the plan:
+
+- represent materialization requests from Core/API changes feed or Server-hosted state;
+- verify incoming bytes against expected content hash;
+- write through temp files under reserved runtime area;
+- use fsync/rename or an accepted platform-safe equivalent where practical;
+- avoid overwriting dirty local files and create a conflict/import plan instead where necessary;
+- update worktree state after successful materialization;
+- add an echo-guard marker for adapter-written files;
+- test partial-write cleanup where practical.
 
 ## Allowed files
 
@@ -49,10 +46,14 @@ Review WT-P4 import planner and Core/API submission boundary plus the CI fixer. 
 - crates/haze-sync-worktree/docs/**
 - crates/haze-sync-worktree/control/report.md
 
+## Non-goals
+
+No Core conflict policy, API DTO redesign, provider calls, watcher requirement, hard delete, workflow changes, or sibling component changes.
+
 ## CI trigger policy
 
-Source/doc clean-code commits must not skip CI. A final report-only commit may skip CI.
+Product/source/docs commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only the report to crates/haze-sync-worktree/control/report.md. Use report-template.md. Set REPORT_TYPE to CLEAN_CODE_REVIEW and phase_id to WT-P4C-RERUN.
+Write only the report to crates/haze-sync-worktree/control/report.md. Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION and phase_id to WT-P5.
