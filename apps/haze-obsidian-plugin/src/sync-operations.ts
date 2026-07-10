@@ -326,7 +326,7 @@ async function readStableUploadBodies(
     .sort((left, right) => left.path.localeCompare(right.path));
 
   for (const entry of entries) {
-    assertNotAborted(input.signal);
+    assertNotAborted(signal);
     const file = vault.getAbstractFileByPath(entry.path);
     if (!(file instanceof TFile) || entry.file === undefined) {
       continue;
