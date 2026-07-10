@@ -8,7 +8,6 @@ mod delete_guard;
 mod echo_guard;
 mod file_import;
 mod hashing;
-#[allow(dead_code)]
 mod import_planner;
 mod materializer;
 mod path_mapping;
