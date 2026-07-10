@@ -2,6 +2,34 @@
 
 ## Entries
 
+### 2026-07-10 — W1/STOR-P6C conflict and tombstone clean-code review
+
+Agent:
+Clean-Code Reviewer
+
+Branch:
+component/storage
+
+Prompt:
+crates/haze-sync-storage/control/prompt.md
+
+Report:
+crates/haze-sync-storage/control/report.md
+
+Commit(s):
+See component/storage branch history for the clean-code commits.
+
+Summary:
+Reviewed STOR-P6 and its CI compatibility fix across conflict lifecycle updates, bounded/source-compatible listing, tombstone restore metadata, operation-log mapping, caller-owned transaction composition, and non-goal preservation. Hardened all operation-log read paths so unsupported persisted operation kinds return the safe `InvalidOperationKind` repository error instead of escaping as unvalidated strings. Split operation-log unit and feature-gated PostgreSQL tests into dedicated submodules to keep production repository code focused without weakening coverage or changing public APIs.
+
+Status:
+CLEAN_ACCEPT_PENDING_CI
+
+Follow-ups:
+Use Component CI for fmt/check/test/clippy verification of the clean-code source/docs head. No additional STOR-P6 behavior is deferred.
+
+---
+
 ### 2026-07-10 — W1/STOR-P6 conflict, tombstone, and delete repository support
 
 Agent:
@@ -101,7 +129,7 @@ Report:
 crates/haze-sync-storage/control/report.md
 
 Commit(s):
-See component/storage branch history for the implementation commits.
+See branch history for the implementation commits.
 
 Summary:
 Hardened object-store verification coverage while preserving the existing content-addressed blob layout and runtime behavior. Added tests for missing blob path-free errors, corrupted committed blob verification through read/exists/stat, unexpected directory entries at blob paths, temporary blob cleanup after failed commit, duplicate writes, hash mismatch handling, and path-free error Display output. Documented that the local object-store root is caller-owned durable storage while Storage owns only the internal hash-addressed layout below that root.
@@ -129,7 +157,7 @@ Report:
 crates/haze-sync-storage/control/report.md
 
 Commit(s):
-See component/storage branch history for the implementation commits.
+See branch history for the implementation commits.
 
 Summary:
 Audited schema table-name metadata, initial migration filename ordering, and passive row models against migrations 0001 through 0009. Added schema tests that bind INITIAL_MIGRATIONS to the actual migration files and verify table metadata coverage. Added explicit sensitive/internal-only row-field metadata for token hashes, object-store path metadata, adapter cursors, idempotency material, provider identifiers, and audit metadata. Added row serialization roundtrip tests for representative rows with sensitive fields, optional timestamps, JSON cursor fields, and JSON audit metadata. No migration schema changes were required.
