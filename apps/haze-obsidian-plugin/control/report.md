@@ -1,12 +1,12 @@
 REPORT_TYPE:
-CLEAN_CODE_REVIEW
+IMPLEMENTATION
 
 STATUS:
-CLEAN_BLOCKED_BY_TOOLING
+BLOCKED_BY_TOOLING
 
 AGENT:
-role: clean-code-reviewer
-agent_execution_id: W1-OBS-P9C-20260710-obsidian-plugin
+role: implementation-worker
+agent_execution_id: W1-OBS-P9-NODE-CI-20260710-obsidian-plugin
 chat_name: obsidian-plugin persistent worker
 
 COMPONENT:
@@ -21,128 +21,111 @@ control_report_path: apps/haze-obsidian-plugin/control/report.md
 
 WAVE:
 id: W1
-phase_id: OBS-P9C
-dependency_status: API-P7C accepted at 3109c0fd9b456ca5fd8db099cd83843dae44cef9; canonical API fixture blob ac69d26d4de689595dd21381a6aec2ed03369fa0 is mirrored exactly; clean-review source head d43ef5fe946de1f4467572ef0df5311e1b239717 has successful Component CI run 29107572342; Node test/typecheck/build execution remains unverified
+phase_id: OBS-P9-NODE-CI
+dependency_status: OBS-P9C source corrections are present at d43ef5fe946de1f4467572ef0df5311e1b239717 with green pre-existing Component CI run 29107572342; Node validation workflow job is implemented at 161b412bb57546c28bf0aa7fb0d9408f5b74536d but no workflow run can currently be observed because PR #51 is merge-conflicted
 
 SUMMARY:
-Reviewed OBS-P9 API compatibility, fixture drift detection, canonical DTO validation, persisted hash migration, mocked tests, conflict/change cursor behavior, public error secrecy, package scripts, generated-output policy, and packaging/E2E documentation. The accepted API fixture mirror and closed API-owned vocabularies are exact, generated artifacts remain excluded, packaging claims are honest, and the current Server-reserved accept_conflict action is not exposed as executable. Clean review found and fixed four correctness/security classes: confirmed delete state retained a stale revision that could be reused on recreation; public server error text could expose the current Idempotency-Key; conflict_created change-feed entries permanently blocked cursor progress; and successfully replayed blocked changes left stale local conflict records. Added regression tests for delete/recreate planning, mutation-secret redaction, server conflict metadata progress/resolution, and exact blocking-conflict cleanup. Final Component CI is green. Phase acceptance remains blocked because no independent evidence exists that npm test, npm run typecheck, or npm run build completed successfully; the current Component CI workflow does not execute those commands.
+Extended the existing Component CI workflow with a dedicated Obsidian Node validation job. The new job is restricted to pull requests whose head branch is component/obsidian-plugin and to manual workflow dispatches on that same branch. It uses checkout v4, setup-node v4, Node.js 20, npm caching through the root package-lock.json, the required diagnostics context, stable ci-run.sh check names for npm ci/test/typecheck/build, the existing finalizer, and the existing one-day diagnostics artifact convention. The Rust job and workflow-level permissions/concurrency were preserved unchanged. No package, lockfile, product code, tests, generated output, dependency, or sibling component was modified. Validation is blocked before job creation: GitHub reports PR #51 as mergeable=false with no merge commit, the workflow commit has no associated pull-request workflow runs or status checks, and the available GitHub connector exposes no workflow-dispatch invocation action. Therefore the Node commands have not executed and cannot be reported as passed.
 
 CHANGED_FILES:
-- apps/haze-obsidian-plugin/src/api-client/client.ts
-- apps/haze-obsidian-plugin/src/base-revision-store.ts
-- apps/haze-obsidian-plugin/src/remote-materializer.ts
-- apps/haze-obsidian-plugin/src/remote-sync-state.ts
-- apps/haze-obsidian-plugin/src/sync-operations.ts
-- apps/haze-obsidian-plugin/tests/api-client.test.ts
-- apps/haze-obsidian-plugin/tests/sync-contracts.test.ts
+- .github/workflows/component-ci.yml
 - apps/haze-obsidian-plugin/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/obsidian-plugin
 base_branch: main
-base_sha: observed_current_main=c1e69a664388b0cba028170e8398b9088218957d; merge_base=1a82bea5c87953db378e5e03429326df38320ee8
-reviewed_implementation_sha: 69f2040ac17d309bbc3264e469263494885f6356
-final_source_sha: d43ef5fe946de1f4467572ef0df5311e1b239717
-branch_divergence_before_report: ahead_by=232, behind_by=7
+base_sha: current main workflow blob 621af4c925ecc3328b6323bc23547ce880edfc64; reviewed plugin source d43ef5fe946de1f4467572ef0df5311e1b239717
+head_sha: workflow/config commit 161b412bb57546c28bf0aa7fb0d9408f5b74536d before report write; report write creates final branch head
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
-ci_skip_used: yes
-ci_skip_reason: final commit updates only apps/haze-obsidian-plugin/control/report.md after all source/test fixes triggered non-skipped Component CI; skipped report-only workflow is not validation evidence
+ci_skip_used: no
+ci_skip_reason: no CI skip was used for the workflow commit or final report commit; the prompt allows a skipped report-only commit only after observable workflow evidence exists, and no run was created
 
 SCOPE:
 allowed_files_only: yes
 scope_expansion_used: no
 scope_expansion_rationale: none
-cross_component_changes: no
-forbidden_files_touched: no by this reviewer; compare output includes orchestrator-owned control rotations and pre-existing branch history outside this execution
+cross_component_changes: authorized shared Component CI workflow only
+forbidden_files_touched: no
 
 CONTRACT:
 contract_read: yes
 contract_satisfied: yes
 contract_changes_requested: no
 contract_change_rationale: none
-affected_components: haze-sync-api contract consumed read-only; no API, Server, Core, provider, workflow, or sibling-component file modified
+affected_components: shared Component CI workflow receives one branch-gated job; existing Rust behavior and unrelated component execution remain unchanged
 
 IMPLEMENTATION_OR_REVIEW:
-completed: yes
-review_scope: exact API fixture mirroring; strict canonical DTO and vocabulary validation; omitted-versus-null behavior; safe integer and ordered change-page handling; persisted legacy hash migration; request/header semantics; mutation/base state transitions; conflict action support; change-feed cursor progress; public status/error secrecy; package/test scripts; generated artifact policy; local packaging and synthetic E2E guidance; lifecycle and component boundaries
-findings:
-- confirmed tombstoned/not_found delete outcomes retained an old revision id, so a later recreate could submit stale base metadata instead of explicit null
-- API client redacted the auth token but not the current mutation Idempotency-Key if a server error message echoed it
-- conflict_created was treated as a blocking unsupported pull change, so the cursor could never advance to later changes or the corresponding conflict_resolved event
-- resolved/replayed remote changes could leave stale local conflict records indefinitely
-- mocked tests did not cover these transitions
-fixes_applied:
-- confirmed delete state now stores revisionId/contentHash null, getBaseRevisionId returns null for serverDeleted entries, and persisted deleted entries migrate away stale metadata
-- put/delete/resolve requests provide their idempotency key as an explicit error-redaction secret
-- conflict_created, conflict_resolved, and backup_created now use nonblocking metadata transitions; server conflict creation records safe local metadata while advancing the cursor, and resolution clears only the matching record
-- successful replay/materialization and remote delete clear the exact blocking change record before cursor advancement
-- blocking local dirty/write/hash/path failures still stop without cursor advancement; pull result now reports remaining work when a blocking event occurs before the end of a page
-- regression tests added for delete/recreate explicit-null base, stale persisted delete migration, token/idempotency redaction, server conflict cursor progress, server conflict resolution cleanup, and exact replayed blocking-record cleanup
-clean_code_assessment: accepted subject to executable Node validation; changes are component-local, explicit, typed, and preserve Server/Core authority
-assertion_strength: no tests deleted or weakened; assertions were added
-non_goals_preserved: no marketplace publication; no generated main.js/source maps/.test-dist/zip committed; no real vault or secrets; no new dependency or lockfile change; no workflow change; no provider call; no DB/storage access; no hard local delete; no Core policy implementation
+completed: yes for workflow definition; no for executable validation evidence
+main_changes: Added jobs.obsidian-node to .github/workflows/component-ci.yml. The job runs only when pull_request head_ref equals component/obsidian-plugin or workflow_dispatch ref_name equals component/obsidian-plugin. It configures HAZE_COMPONENT=obsidian-plugin, branch/head/workflow diagnostics context, checkout v4, setup-node v4 with Node 20 and root-lockfile npm cache, node-install/node-test/node-typecheck/node-build checks through ci-run.sh, ci-finalize.sh under !cancelled(), and failure-only upload-artifact v4 diagnostics with one-day retention.
+behavior_changes: When the workflow is runnable for PR #51 or manually dispatched on the component branch, it will execute npm ci plus the plugin test, typecheck, and build scripts in a separate job. Unrelated component branches will skip this job.
+bugs_found: none in package scripts or lockfile during this phase; workflow execution is externally blocked by the PR merge conflict
+bugs_fixed: missing independent Obsidian Node validation job in Component CI
+cleanups_made: none beyond direct branch-gated job definition
+non_goals_preserved: Rust commands/job unchanged; no product code repair; no test deletion or assertion weakening; no dependency upgrade; no generated output; no provider/secret/PR lifecycle/merge action
+deferred_work: resolve PR #51 merge conflict through an authorized integration action or manually dispatch Component CI on component/obsidian-plugin; then inspect exact Rust/Node job and step conclusions
 
 TESTS_AND_CHECKS:
 checks_run:
-- read process sources, active state/prompt/report, component contract/plan/log/dependency map, current TypeScript source/tests/package scripts/docs, accepted API fixture guidance, canonical fixture, API file/conflict route helpers, and branch diff
-- verified vendored fixture blob SHA ac69d26d4de689595dd21381a6aec2ed03369fa0 exactly matches accepted API fixture blob
-- manually checked exact root/group fields, discriminated variants, closed vocabularies, omitted/null rules, safe integers, ordered sequence progression, canonical content hashes, request route/body/header semantics, accept_conflict reservation, generated-output exclusions, and packaging honesty
-- statically checked test import graph: Node test runtime imports pure API/state/planner modules; Obsidian-dependent modules are compile inputs but are not imported by the test entrypoint at runtime
-- compared implementation SHA 69f2040ac17d309bbc3264e469263494885f6356 to final clean-review source SHA d43ef5fe946de1f4467572ef0df5311e1b239717
-- observed Component CI run 29107572342, run number 1374, status completed, conclusion success for final source head
+- Read active state, prompt, prior report, component contract/plan/log/dependency map, process instructions, current Component CI workflow, root package/workspace lock metadata, plugin package scripts, and shared ci-run.sh/ci-finalize.sh from current main.
+- Verified the root package-lock includes apps/haze-obsidian-plugin and its declared development dependencies.
+- Preserved the existing Rust job text, permissions, concurrency, finalizer, and artifact behavior while appending the dedicated Node job.
+- Parsed the resulting YAML successfully with a local YAML parser; jobs rust and obsidian-node were present. This is syntax-only checking, not GitHub Actions or Node execution evidence.
+- Verified workflow commit 161b412bb57546c28bf0aa7fb0d9408f5b74536d was created without CI skip.
+- Queried associated pull-request workflow runs repeatedly; GitHub returned an empty run list.
+- Queried combined commit statuses; GitHub returned no statuses.
+- Queried PR #51 metadata; head is 161b412bb57546c28bf0aa7fb0d9408f5b74536d, mergeable=false, merge_commit_sha=null.
+- Compared d43ef5fe946de1f4467572ef0df5311e1b239717 to workflow head; the only executable/config change in this phase is .github/workflows/component-ci.yml.
 checks_not_run:
-- npm install --no-audit --no-fund: not run in connector-only environment
-- npm test --workspace haze-obsidian-plugin: not run; no independent execution evidence exists
-- npm run typecheck --workspace haze-obsidian-plugin: not run; no independent execution evidence exists
-- npm run build --workspace haze-obsidian-plugin: not run; no independent execution evidence exists
-- disposable Obsidian vault/server E2E: documented but not executed; no accepted generated main.js bundle exists
-ci_status: CI_GREEN_NODE_VALIDATION_UNVERIFIED
-workflow_urls: Component CI run_id=29107572342, run_number=1374, status=completed, conclusion=success
-known_failures: none reported by available Component CI metadata; Node suite result is unknown, not green
+- npm ci: workflow job was not created
+- npm test --workspace haze-obsidian-plugin: workflow job was not created
+- npm run typecheck --workspace haze-obsidian-plugin: workflow job was not created
+- npm run build --workspace haze-obsidian-plugin: workflow job was not created
+- Rust job regression execution for this workflow commit: workflow run was not created
+ci_status: CI_NOT_CREATED_PR_MERGE_CONFLICT
+workflow_urls: none for commit 161b412bb57546c28bf0aa7fb0d9408f5b74536d
+known_failures: no command failure evidence; validation is blocked before workflow-run creation because PR #51 is not mergeable
 
 CI_DIAGNOSTICS:
 artifact_based_logs: not read
 artifact_name: none
 artifact_id: none
-workflow_run_id: 29107572342
-workflow_run_attempt: unknown
-artifact_status: not_applicable_for_clean_review
+workflow_run_id: none
+workflow_run_attempt: none
+artifact_status: no workflow run or artifact exists
 summary_read: no
 manifest_read: no
 logs_read: no
 raw_job_logs_used: no
-diagnostics_failure: none; clean-review prompt prohibited diagnostics artifact use
+diagnostics_failure: no run was created, so diagnostics generation could not begin
 
 SAFETY_AND_SECRECY:
 secrets_committed: no
 unsafe_public_output: no
-raw_errors_exposed: no; configured token and mutation idempotency keys are explicit sanitizer inputs
+raw_errors_exposed: no
 provider_calls_added: no
 hard_delete_added: no
-background_jobs_added: no
+background_jobs_added: CI validation job only; no product/runtime background behavior
 generated_artifacts_committed: no
-real_vault_data_committed: no
 
 ISSUES_FOUND:
-- Required Node test/typecheck/build commands have not been executed by any independently observable validation path.
-- Current Component CI success must not be treated as evidence for the plugin Node commands.
-- Packaging remains source/test readiness only; no installable main.js bundle or disposable-vault installation evidence exists, as documented.
-- Common-owned primitive/role/mode fixture fan-in remains unavailable/deferred; API-owned fixture coverage is exact.
-- Branch remains diverged from main: ahead_by=232, behind_by=7 before the report-only commit. No merge, rebase, cherry-pick, force-push, or history rewrite was performed.
+- PR #51 currently reports mergeable=false and merge_commit_sha=null.
+- Pull-request Component CI did not create a run for workflow commit 161b412bb57546c28bf0aa7fb0d9408f5b74536d.
+- The available connector can inspect and rerun existing workflow runs but exposes no action to create a workflow_dispatch run.
+- The three required Node checks and Rust regression job remain unexecuted for the workflow change.
 
 BLOCKERS:
-- tooling evidence blocker: run npm test --workspace haze-obsidian-plugin, npm run typecheck --workspace haze-obsidian-plugin, and npm run build --workspace haze-obsidian-plugin in a Node-capable validation environment and record independently observable results
-- if any command fails, route to fixer with the authorized diagnostics/evidence protocol; do not infer success from the Rust-oriented Component CI
+- An authorized actor must resolve the PR branch conflict with main without forbidden history rewriting, or manually dispatch Component CI on component/obsidian-plugin.
+- After a run exists, exact job and step conclusions must be inspected. Only completed successful node-install, node-test, node-typecheck, node-build, and finalization steps may unblock OBS-P9C.
 
 NEXT_RECOMMENDED_AGENT:
 orchestrator
 
 FINAL_VERDICT:
-CLEAN_BLOCKED_BY_TOOLING — clean-code review fixes are applied and final Component CI is green, but OBS-P9C cannot be clean-accepted until the plugin Node test, typecheck, and build commands have independently observable successful execution evidence.
+BLOCKED_BY_TOOLING — the scoped Obsidian Node CI job is implemented without altering Rust validation, but GitHub cannot create the required pull-request run while PR #51 is merge-conflicted, and this connector cannot initiate workflow_dispatch. Node validation remains unproven.
 
 PUSHED:
 yes
