@@ -1,13 +1,20 @@
 import { TFile, Vault } from "obsidian";
 
-import type { ChangeDto, ChangesResponseDto, ContentHash, FileDownload, HazeSyncApiClient, RevisionId } from "./api-client";
+import type {
+  ChangeDto,
+  ChangesResponseDto,
+  ContentHash,
+  FileDownload,
+  HazeSyncApiClient,
+  RevisionId,
+} from "./api-client";
 import {
   BaseRevisionState,
   getBaseContentHash,
   markRemoteBaseRevision,
   markRemoteDelete,
 } from "./base-revision-store";
-import { readLocalFileFact, sha256Hex } from "./local-file-facts";
+import { readLocalFileFact, sha256ContentHash } from "./local-file-facts";
 import {
   RemoteConflictReason,
   RemoteSyncState,
@@ -92,8 +99,8 @@ export async function fetchRemoteChangePage(
   options: RemotePullOptions = {},
 ): Promise<ChangesResponseDto> {
   return client.getChanges({
-    since: state.changeCursor,
-    limit: options.limit,
+    since: state.changeCursor ?? 0,
+    limit: options.limit ?? 50,
   });
 }
 
@@ -102,7 +109,10 @@ export function markRemotePullStarted(state: RemoteSyncState, observedAt: string
 }
 
 export function remoteChangeNeedsDownload(change: ChangeDto): boolean {
-  return change.kind === "upsert" && classifyVaultPath(change.path).included;
+  return (
+    (change.kind === "upsert_file" || change.kind === "restore_file") &&
+    classifyVaultPath(change.path).included
+  );
 }
 
 export async function materializeRemoteChange(input: RemoteMaterializationInput): Promise<RemoteMaterializationResult> {
@@ -112,14 +122,16 @@ export async function materializeRemoteChange(input: RemoteMaterializationInput)
   }
 
   switch (input.change.kind) {
-    case "upsert":
+    case "upsert_file":
+    case "restore_file":
       return materializeUpsert(input, classification.path);
-    case "delete":
+    case "delete_file":
       return materializeDelete(input, classification.path);
-    case "conflict":
+    case "conflict_created":
       return queueConflict(input, "unsupported_change");
-    default:
-      return queueConflict(input, "unsupported_change");
+    case "conflict_resolved":
+    case "backup_created":
+      return metadataOnlyChangeApplied(input, classification.path);
   }
 }
 
@@ -131,27 +143,26 @@ async function materializeUpsert(
     return queueConflict(input, "download_missing");
   }
 
-  const expectedHash = input.change.content_hash ?? input.download.metadata.content_hash ?? undefined;
-  if (expectedHash === undefined || expectedHash === null) {
+  const expectedHash = input.change.content_sha256 ?? input.download.metadata.content_sha256;
+  if (expectedHash === undefined) {
     return queueConflict(input, "missing_content_hash");
   }
 
-  const revisionId = input.change.revision_id ?? input.download.metadata.revision_id ?? undefined;
-  if (revisionId === undefined || revisionId === null) {
+  const revisionId = input.change.revision_id ?? input.download.metadata.revision_id;
+  if (revisionId === undefined) {
     return queueConflict(input, "missing_revision");
   }
 
   const downloadedRevisionId = input.download.metadata.revision_id;
   if (
     input.change.revision_id !== undefined &&
-    input.change.revision_id !== null &&
     downloadedRevisionId !== undefined &&
     downloadedRevisionId !== input.change.revision_id
   ) {
     return queueConflict(input, "revision_mismatch");
   }
 
-  const actualHash = await sha256Hex(input.download.body);
+  const actualHash = await sha256ContentHash(input.download.body);
   if (actualHash !== expectedHash) {
     return queueConflict(input, "hash_mismatch");
   }
@@ -193,17 +204,25 @@ async function materializeDelete(input: RemoteMaterializationInput, path: string
     return queueConflict(input, local.reason);
   }
 
-  const revisionId = input.change.revision_id ?? null;
   const remoteSyncState = advanceRemoteCursor(
-    recordRemoteTombstone(input.remoteSyncState, input.change, revisionId, input.observedAt),
-    input.change.sequence,
+    recordRemoteTombstone(input.remoteSyncState, input.change, null, input.observedAt),
+    input.change.seq,
     input.observedAt,
   );
 
   return {
     status: "tombstone_recorded",
-    baseRevisionState: markRemoteDelete(input.baseRevisionState, path, revisionId, input.observedAt),
+    baseRevisionState: markRemoteDelete(input.baseRevisionState, path, null, input.observedAt),
     remoteSyncState,
+    path,
+  };
+}
+
+function metadataOnlyChangeApplied(input: RemoteMaterializationInput, path: string): RemoteMaterializationResult {
+  return {
+    status: "no_op",
+    baseRevisionState: input.baseRevisionState,
+    remoteSyncState: advanceRemoteCursor(input.remoteSyncState, input.change.seq, input.observedAt),
     path,
   };
 }
@@ -250,7 +269,7 @@ function remoteApplied(
   return {
     status: wroteLocalFile ? "applied" : "no_op",
     baseRevisionState: markRemoteBaseRevision(input.baseRevisionState, path, revisionId, contentHash, input.observedAt),
-    remoteSyncState: advanceRemoteCursor(input.remoteSyncState, input.change.sequence, input.observedAt),
+    remoteSyncState: advanceRemoteCursor(input.remoteSyncState, input.change.seq, input.observedAt),
     path,
   };
 }
