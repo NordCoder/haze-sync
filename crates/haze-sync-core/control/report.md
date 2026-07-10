@@ -1,13 +1,13 @@
 REPORT_TYPE:
-CLEAN_CODE_REVIEW
+FIX
 
 STATUS:
-CLEAN_NEEDS_FIX
+FIX_COMPLETE
 
 AGENT:
-role: clean-code-reviewer
-agent_execution_id: W1-CORE-P6C
-chat_name: core — W1 CORE-P6C Clean-Code Review
+role: fixer-worker
+agent_execution_id: W1-FIX-CORE-P6C-CI
+chat_name: core — W1 FIX-CORE-P6C-CI CI Fix
 
 COMPONENT:
 name: core
@@ -21,37 +21,30 @@ control_report_path: crates/haze-sync-core/control/report.md
 
 WAVE:
 id: W1
-phase_id: CORE-P6C
-dependency_status: control state was PROMPT_READY, active_agent_role was clean-code-reviewer, CORE-P6 implementation and artifact-based fixer were complete, and Component CI run 29088874164 was green for fixer source head 97704236cdd13714a0d0c6e4ebac7a27d9a5b231.
+phase_id: FIX-CORE-P6C-CI
+dependency_status: control state was PROMPT_READY, active_agent_role was fixer-worker, and the active prompt supplied exact metadata for failed Component CI run 29090558606 attempt 1 and diagnostics artifact 8226606694.
 
 SUMMARY:
-Reviewed CORE-P6 idempotency, operation-log, changes-page, cursor, durable fan-in documentation, tests, and the CI fixer without reading diagnostics artifacts. Confirmed redacted IdempotencyKey formatting, deterministic canonical fingerprints, validating replay deserialization, exact OperationKind strings, validated sequence/limit/tombstone/page deserialization, cursor monotonicity, and persistence/runtime non-goals. Found two safety gaps. First, StoredIdempotencyResponse described a completed replay snapshot but accepted informational 1xx statuses, non-ASCII header values, and hop-by-hop or payload-framing headers whose persisted values could be invalid when replaying a JSON body. Restricted snapshots to final 200..=599 statuses, visible ASCII header values, and non-sensitive end-to-end headers; added boundary and rejection tests. Second, ChangesPage::new validated ordering but did not enforce query.limit, while serialized pages could exceed MAX_CHANGES_LIMIT or advertise has_more with an empty non-advancing page. Added explicit page-size and progress validation for constructors and deserialization plus regression tests. Updated durable fan-in documentation and the component contract without changing fingerprint bytes, serialized field names, durable lookup identity, operation sequence numeric semantics, or persistence ownership. Final code/docs head 1714117a4254384fb286291b5a5d29314a65b749 passed cargo fmt, cargo check, cargo test, and cargo clippy in Component CI run 29090558606, run number 1181, but the workflow concluded failure at Finalize CI diagnostics and published artifact 8226606694. The artifact was not read because the active clean-code reviewer prompt prohibits diagnostics artifact reading.
+Downloaded and read diagnostics artifact 8226606694 for Component CI run 29090558606. Read summary.md, manifest.json, the rust-fmt failure marker, and the complete rust-fmt log listed by failed_checks. The artifact proved one minimum cause inside allowed Core scope: cargo fmt required exactly two layout changes in crates/haze-sync-core/src/operation_log/mod.rs. Applied only those formatter-selected layouts: expanded the PageTooLarge Display write! call and collapsed the ChangesPage::new validate_page_shape invocation. No production semantics, final-status replay validation, header restrictions, fingerprint bytes, serialized fields, page limit/progress rules, cursor invariants, regression assertions, documentation, dependencies, workflows, or sibling components changed. Source fixer commit 90e2e03cfe41e36a072bdb87265eddc517f6fec6 passed follow-up Component CI run 29093462297, run number 1218, completely.
 
 CHANGED_FILES:
-- crates/haze-sync-core/src/idempotency/mod.rs
 - crates/haze-sync-core/src/operation_log/mod.rs
-- crates/haze-sync-core/docs/idempotency-operation-log-persistence.md
-- crates/haze-sync-core/docs/component-contract.md
 - crates/haze-sync-core/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/core
 base_branch: main
 base_sha: PR #43 base observed as 1a82bea5c87953db378e5e03429326df38320ee8
-head_sha: code/docs clean-code head before this report-only commit was 1714117a4254384fb286291b5a5d29314a65b749
-source_review_commits:
-- 3ec81e8ce6e7e3274905edc759e1208a2a0dfd18
-- c1264db03a0c6b8ac5df22f9e142e8bcd2950b33
-documentation_review_commits:
-- ccf14f8077cd177a39acbe7f05c189f290534b9c
-- 1714117a4254384fb286291b5a5d29314a65b749
+head_sha: final source fixer head before this report-only commit was 90e2e03cfe41e36a072bdb87265eddc517f6fec6; PR #43 was observed open, draft, and unmerged at that head
+source_fix_commits:
+- 90e2e03cfe41e36a072bdb87265eddc517f6fec6
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
 ci_skip_used: yes
-ci_skip_reason: used [skip ci] only for this final control/report-only commit. Source, tests, durable fan-in documentation, and component contract commits did not use CI skip. This skipped report commit is not CI evidence.
+ci_skip_reason: used [skip ci] only for this final report-only commit. Source fixer commit 90e2e03cfe41e36a072bdb87265eddc517f6fec6 did not use CI skip. Follow-up CI evidence is Component CI run 29093462297 on that source head.
 
 SCOPE:
 allowed_files_only: yes
@@ -64,78 +57,72 @@ CONTRACT:
 contract_read: yes
 contract_satisfied: yes
 contract_changes_requested: no
-contract_change_rationale: clarified and enforced existing safe replay and bounded/progressing changes-page semantics; fingerprint algorithm, serialized field names, operation sequence type semantics, and persistence ownership were preserved
-affected_components: core only; Storage/Server/API fan-in obligations were documented but no sibling files were modified
+contract_change_rationale: none; the fix changes only formatter-selected layout and preserves all CORE-P6C behavior and documentation
+ affected_components: core only
 
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- reviewed IdempotencyKey validation, redacted Debug/Display behavior, raw persistence access, record serde, fingerprint canonicalization, and replay classification
-- reviewed StoredIdempotencyResponse status/header/body shape and validating deserialization
-- restricted replay snapshots to final status codes 200 through 599
-- rejected non-ASCII/control replay header values and hop-by-hop or payload-framing headers that must be regenerated by HTTP runtime code
-- reviewed OperationSequence, ChangesLimit, OperationKind, TombstoneId, ChangesQuery, ChangesPage, AdapterCursor, and CursorUpdateOutcome invariants
-- made ChangesPage::new enforce the requested query limit
-- made ChangesPage deserialization enforce MAX_CHANGES_LIMIT
-- rejected has_more pages that contain no change and therefore cannot advance to_seq
-- added exact boundary, serde-bypass, oversized-page, and non-advancing-page regression tests
-- aligned durable fan-in and component contract documentation with executable semantics
-behavior_changes: safety tightening only; informational 1xx replay snapshots, unsafe transport/framing headers, non-visible/non-ASCII header values, oversized changes pages, and empty has_more pages are now rejected. Valid fingerprints, storage record fields, safe replay headers, operation kinds, cursor outcomes, and persistence boundaries are unchanged.
+- applied rustfmt multiline layout to OperationLogError::PageTooLarge Display output
+- applied rustfmt single-line layout to the ChangesPage::new validate_page_shape call
+behavior_changes: none; product semantics and public contracts are unchanged
 bugs_found:
-- completed idempotency snapshots accepted informational statuses and replay-unsafe transport/framing headers or non-ASCII values
-- changes pages could exceed their requested/global limit or advertise more data without sequence progress
-bugs_fixed: both safety gaps were fixed with constructor/deserialization validation and regression tests
-cleanups_made: centralized changes-page shape validation and clarified replay/header/page contracts
-non_goals_preserved: no durable idempotency repository, no database append implementation, no HTTP replay middleware, no adapter polling loop, no Storage/API/Server edits, no workflow/dependency changes, no sibling changes, no test deletion, and no assertion weakening
-deferred_work: fixer-worker must inspect diagnostics artifact 8226606694 for failed Component CI run 29090558606; after green follow-up CI, Orchestrator may accept CORE-P6C
+- two formatter mismatches caused cargo fmt --all --check to fail
+bugs_fixed: both artifact-proven formatter mismatches were fixed exactly
+cleanups_made: formatter-only layouts required by cargo fmt
+non_goals_preserved: no durable idempotency repository, no operation-log database append, no HTTP replay middleware, no adapter polling loop, no Storage/API/Server edits, no workflow/dependency changes, no sibling changes, no test deletion, and no assertion weakening
+deferred_work: Orchestrator may accept CORE-P6C using successful Component CI run 29093462297 as final source CI evidence
 
 TESTS_AND_CHECKS:
 checks_run:
 - read implementation-manifest.md from Project Sources
 - read report-template.md from Project Sources
-- read clean-code-reviewer-prompt.md from Project Sources
+- read fixer-worker-prompt.md from Project Sources
 - read chatgpt-gh-connector.md from Project Sources
 - read crates/haze-sync-core/control/state.md on branch component/core
-- read crates/haze-sync-core/control/prompt.md for CORE-P6C
-- read previous FIX-CORE-P6-CI report before replacing it
+- read crates/haze-sync-core/control/prompt.md for FIX-CORE-P6C-CI
+- read previous CORE-P6C clean-code report before replacing it
 - read crates/haze-sync-core/docs/component-contract.md
 - read CORE-P6 section of crates/haze-sync-core/docs/implementation-plan.md
 - read crates/haze-sync-core/docs/implementation-log.md
 - read crates/haze-sync-core/docs/dependency-map.md
-- read crates/haze-sync-core/docs/decisions.md
-- read crates/haze-sync-core/docs/idempotency-operation-log-persistence.md
-- read current crates/haze-sync-core/src/idempotency/mod.rs and tests
-- read current crates/haze-sync-core/src/operation_log/mod.rs and tests
-- inspected PR #43 metadata and CORE-P6 compare/diff context
-- inspected exact source review commit 3ec81e8ce6e7e3274905edc759e1208a2a0dfd18
-- inspected exact source review commit c1264db03a0c6b8ac5df22f9e142e8bcd2950b33
-- observed PR #43 open, draft, and unmerged at code/docs head 1714117a4254384fb286291b5a5d29314a65b749 before this report update
-- observed Component CI run 29090558606, run number 1181, for code/docs head 1714117a4254384fb286291b5a5d29314a65b749
+- read current crates/haze-sync-core/src/operation_log/mod.rs
+- inspected PR #43 metadata and confirmed it remained open, draft, and unmerged
+- downloaded diagnostics artifact 8226606694
+- read summary.md
+- read manifest.json
+- read failures/rust-fmt.txt
+- read logs/rust-fmt.log
+- verified exact source commit diff 90e2e03cfe41e36a072bdb87265eddc517f6fec6 contains only the two artifact-proven rustfmt corrections
+- verified committed operation_log blob SHA ec6d529506560e51b0e340d21fe31f664a4bed8f
+- observed follow-up Component CI run 29093462297, run number 1218
 - observed cargo fmt success
 - observed cargo check success
-- observed cargo test success, including new replay and changes-page regression tests
+- observed cargo test success
 - observed cargo clippy success
-- observed Finalize CI diagnostics failure
-- observed workflow conclusion failure
-- listed diagnostics artifact metadata without downloading or reading its contents
+- observed Finalize CI diagnostics success
+- observed workflow conclusion success
 checks_not_run:
-- local cargo commands were not run because repository work is GitHub-connector-only and no local repository checkout/toolchain was used; Component CI supplied product-check evidence
-ci_status: CI_RED for Component CI run 29090558606 despite cargo fmt/check/test/clippy success; Finalize CI diagnostics failed
-workflow_urls: previous successful fixer run 29088874164; failed clean-code run 29090558606
-known_failures: Finalize CI diagnostics failed; root cause was not inspected in this clean-code reviewer run
+- local cargo commands were not used as acceptance evidence because repository work is GitHub-connector-only; Component CI run 29093462297 provides complete check evidence
+ci_status: CI_GREEN for Component CI run 29093462297 on source head 90e2e03cfe41e36a072bdb87265eddc517f6fec6
+workflow_urls: failed Component CI run 29090558606; successful follow-up Component CI run 29093462297
+known_failures: none remaining for final source fixer head
 
 CI_DIAGNOSTICS:
-artifact_based_logs: no
+artifact_based_logs: yes
 artifact_name: ci-diag__component-core__wf-component-ci__run-29090558606__attempt-1
 artifact_id: 8226606694
 workflow_run_id: 29090558606
 workflow_run_attempt: 1
-artifact_status: metadata observed; artifact is available, unexpired, and expires at 2026-07-11T11:50:18Z; contents were not downloaded or read because the active clean-code reviewer prompt prohibits diagnostics artifact reading
-summary_read: no
-manifest_read: no
-logs_read: none
+artifact_status: downloaded and readable; all required logical files were present
+summary_read: yes
+manifest_read: yes
+logs_read:
+- failures/rust-fmt.txt
+- logs/rust-fmt.log
 raw_job_logs_used: no
-diagnostics_failure: not inspected; workflow metadata shows Finalize CI diagnostics failed after all Rust product checks succeeded
+diagnostics_failure:
+- rust-fmt: two formatter-only diffs in crates/haze-sync-core/src/operation_log/mod.rs
 
 SAFETY_AND_SECRECY:
 secrets_committed: no
@@ -146,19 +133,18 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- Fixed: completed replay snapshots accepted informational statuses, non-ASCII values, and transport/framing headers that should be regenerated by the HTTP replay layer.
-- Fixed: ChangesPage constructors/deserialization did not fully enforce bounded and progressing page semantics.
-- Remaining: Component CI run 29090558606 is formally red because Finalize CI diagnostics failed; artifact 8226606694 requires fixer-worker triage.
+- The workflow step metadata for the failed run reported cargo fmt success, but the diagnostics artifact was authoritative and contained the rustfmt failure; artifact contents were treated as the fixer source of truth.
+- No production, contract, documentation, or cross-component defect was found by diagnostics.
 - This final report-only commit uses CI skip and is not CI evidence.
 
 BLOCKERS:
-Component CI is formally red until artifact-based fixer triage and a green follow-up run.
+none
 
 NEXT_RECOMMENDED_AGENT:
-fixer-worker
+orchestrator
 
 FINAL_VERDICT:
-CLEAN_NEEDS_FIX. CORE-P6 idempotency, operation-log, changes-page, cursor, fixer changes, tests, and durable fan-in documentation were reviewed and safety gaps were closed inside Core scope. Final code/docs head 1714117a4254384fb286291b5a5d29314a65b749 passed cargo fmt, cargo check, cargo test, and cargo clippy, but Component CI run 29090558606 concluded failure at Finalize CI diagnostics. Fixer-worker must use diagnostics artifact 8226606694 as source of truth.
+FIX_COMPLETE. The only artifact-proven CORE-P6C CI failure was two rustfmt layouts in operation_log. They were fixed exactly without changing behavior, contracts, documentation, tests, or component boundaries. Final source head 90e2e03cfe41e36a072bdb87265eddc517f6fec6 passed Component CI run 29093462297 completely. Orchestrator may accept CORE-P6C and advance the component lifecycle.
 
 PUSHED:
 yes
