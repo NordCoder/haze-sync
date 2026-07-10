@@ -1,12 +1,12 @@
 REPORT_TYPE:
-IMPLEMENTATION
+CLEAN_CODE_REVIEW
 
 STATUS:
-SELF_ACCEPT_PENDING_CI
+CLEAN_ACCEPT_PENDING_CI
 
 AGENT:
-role: implementation-worker
-agent_execution_id: W1-OBS-P7-20260710-obsidian-plugin
+role: clean-code-reviewer
+agent_execution_id: W1-OBS-P7C-20260710-obsidian-plugin
 chat_name: obsidian-plugin persistent worker
 
 COMPONENT:
@@ -21,18 +21,17 @@ control_report_path: apps/haze-obsidian-plugin/control/report.md
 
 WAVE:
 id: W1
-phase_id: OBS-P7
-dependency_status: OBS-P6 implementation and clean-code review accepted; Component CI run 29038540630 was green before OBS-P7; fresh Component CI run 29067731941 is in progress for the OBS-P7 code-bearing head
+phase_id: OBS-P7C
+dependency_status: OBS-P7 implementation completed; implementation code-bearing Component CI run 29067731941 for commit 6fd375f07ae942befd171181fcadfe72c52dc531 completed successfully; clean-code source changes triggered fresh Component CI run 29080003119 and it is in progress
 
 SUMMARY:
-Implemented OBS-P7 conflict center and server-backed user actions inside the Obsidian plugin component. Added an Obsidian modal that lists open conflicts through the existing Haze Sync API client and displays safe original path, conflict path or server-managed-copy fallback, status, source adapter, and formatted timestamps. Added only the supported server action vocabulary: accept_current, accept_conflict, keep_both, and mark_resolved. Destructive actions require an explicit confirmation step with an explanation of their implications; keep_both remains the non-destructive direct action. Resolution requests use per-conflict/action idempotency keys, are sent only through the public Server API abstraction, and never perform local-only conflict policy. Local base revision metadata is updated only after a server-confirmed resolution and only when the response provides the resulting revision_id for a supported vault path; otherwise it is intentionally left unchanged for a later sync refresh. Conflict DTO runtime validation and UI text redaction were strengthened. Disabled and dry_run modes allow inspection but block conflict mutation actions. No semantic merge editor, local conflict bypass, new policy vocabulary, server route changes, workflow changes, provider behavior, hard delete, or sibling component changes were added.
+Reviewed OBS-P7 conflict center and supported server-backed actions against the component contract, OBS-P7 plan, public API contract, current source, and branch diff. The implementation preserves the supported action vocabulary, destructive-action confirmations, server-confirmed-only resolution semantics, disabled/dry_run mutation guards, generic UI errors, controller/modal separation, and all non-goals. Made focused clean-code and correctness fixes: conflict action idempotency keys are now persisted in plugin-local state before a request is sent and reused across modal close/reopen and plugin restart until a definitive server-confirmed outcome or conflict-list pruning; server-provided conflict display fields are sanitized with the configured auth token included in the redaction set; modal async work no longer repopulates UI after close; and a server-confirmed action is no longer presented as unconfirmed merely because subsequent local metadata persistence failed. No local-only resolution, semantic merge, new policy vocabulary, server route changes, provider behavior, hard delete, background sync loop, workflow changes, dependency changes, or sibling component changes were added.
 
 CHANGED_FILES:
+- apps/haze-obsidian-plugin/src/conflict-action-keys.ts
+- apps/haze-obsidian-plugin/src/plugin-data.ts
 - apps/haze-obsidian-plugin/src/conflict-center.ts
 - apps/haze-obsidian-plugin/src/conflict-center-modal.ts
-- apps/haze-obsidian-plugin/src/idempotency-keys.ts
-- apps/haze-obsidian-plugin/src/api-client/types.ts
-- apps/haze-obsidian-plugin/src/api-client/client.ts
 - apps/haze-obsidian-plugin/src/main.ts
 - apps/haze-obsidian-plugin/control/report.md
 
@@ -40,19 +39,19 @@ BRANCH_AND_CONTROL:
 current_branch: component/obsidian-plugin
 base_branch: main
 base_sha: observed_current_main=c1e69a664388b0cba028170e8398b9088218957d; merge_base=1a82bea5c87953db378e5e03429326df38320ee8
-head_sha: 6fd375f07ae942befd171181fcadfe72c52dc531 before report write; report write creates final branch head
+head_sha: c9caf95ad2e4261b825c07965f44ee7aedf87e19 before report write; report write creates final branch head
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
 ci_skip_used: yes
-ci_skip_reason: final commit updates only apps/haze-obsidian-plugin/control/report.md after source commits already triggered Component CI; the skipped report-only workflow is not CI evidence
+ci_skip_reason: final commit updates only apps/haze-obsidian-plugin/control/report.md after source clean-code commits already triggered Component CI; the skipped report-only workflow is not CI evidence
 
 SCOPE:
 allowed_files_only: yes
 scope_expansion_used: no
-scope_expansion_rationale: none
+scope_expansion_rationale: Added conflict-action-keys.ts and plugin-data persistence within the same component because durable retry-key stability is part of the active review focus and cannot be guaranteed by modal-local state alone.
 cross_component_changes: no
 forbidden_files_touched: no by this worker; branch-vs-main diff includes pre-existing workflow/control/log/docs history outside this execution
 
@@ -65,44 +64,46 @@ affected_components: none
 
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
-main_changes: Added conflict-center.ts for safe conflict presentation, supported action definitions, open-conflict loading, server-confirmed resolution handling, and guarded base revision refresh. Added conflict-center-modal.ts for Obsidian conflict inspection, refresh, supported action buttons, destructive-action confirmation, stable retry keys during the modal session, generic safe error output, and read-only behavior when mutations are disabled. Added conflict-resolution idempotency key generation. Required idempotencyKey on ResolveConflictRequest. Strengthened ConflictDto and ResolveConflictResponseDto runtime validation. Wired an Open conflict center command and controller methods into main.ts, including server-open-conflict status count, current-mode mutation guards, persistence after confirmed base updates, and no local-only resolution.
-behavior_changes: Users with configured settings can open a conflict center and inspect current open server conflicts. Server mutation buttons are disabled in disabled and dry_run modes. In active modes, supported actions are posted to Server with an idempotency key. accept_current, accept_conflict, and mark_resolved require explicit confirmation; keep_both is presented as non-destructive. After confirmed resolution, the modal refreshes from Server. Base revision metadata changes only when Server returns the resulting revision_id and the original path is supported.
-bugs_found: During internal verification, pre-resolution revision IDs from the conflict-list DTO were identified as unsafe fallback values for post-resolution base metadata because Server may create a different resulting revision. Displayed conflict DTO strings also needed the same redaction discipline as other user-facing status text.
-bugs_fixed: Removed pre-resolution revision fallback from base refresh; only response.revision_id can advance local base metadata after resolution. Applied sanitizeStatusMessage to server-provided display strings before rendering/truncation.
-cleanups_made: Separated server/action logic from Obsidian modal rendering; centralized action labels, descriptions, and confirmation implications; kept main.ts as lifecycle/controller wiring rather than embedding conflict UI implementation.
-non_goals_preserved: no local-only conflict resolution bypassing Server; no semantic merge editor; no unsupported conflict action vocabulary; no server route changes; no provider calls; no direct database access; no Worktree behavior; no workflow changes; no sibling component changes; no hard delete; no background sync loop.
-deferred_work: clean-code review, fresh CI completion, fixer loop if CI fails, richer styling/accessibility, cross-session persistence of ambiguous in-flight action idempotency keys if later required, local materialization following conflict resolution through normal pull flow, sync runner/backoff, packaging/E2E, and fixture/unit tests when the component test harness is available.
+main_changes: Added a plugin-local persisted ConflictActionKeyState with strict merge validation, server/adapter context binding, stable per-conflict/action key preparation, server-confirmed key clearing, and pruning for conflicts no longer returned as open. Extended plugin-data parse/serialize compatibility to include this state. Moved key ownership out of the modal and into the plugin controller so retry identity survives modal lifecycle and plugin restart. Added closed-modal guards around async rendering and avoided post-close conflict reload. Passed the configured auth token into conflict display sanitization. Separated server confirmation from local save success so confirmed destructive actions are reported honestly even if local metadata persistence fails.
+behavior_changes: Retrying the same open conflict action reuses the same idempotency key across modal close/reopen and plugin restart. No conflict request is sent unless its retry key has first been persisted successfully. Keys are scoped to the configured server URL and adapter identity, removed after server-confirmed resolution, and pruned when the server no longer lists the conflict as open. Conflict paths/status/source adapter fields redact both generic secret patterns and the configured auth token. Closing the modal prevents later async callbacks from rendering into the closed UI. If Server confirms an action but plugin-data persistence fails, the user is told that Server confirmed the action and is instructed to refresh rather than being told the action was unconfirmed.
+bugs_found: Idempotency keys were previously modal-local and were discarded on close, allowing a retry after an ambiguous network outcome to use a new key. Server-provided display fields used generic redaction patterns but did not include the actual configured auth token. Async modal operations could render after modal close. A post-confirmation saveData failure propagated as a generic resolution failure and could mislead the user into retrying an already-confirmed destructive action.
+bugs_fixed: Persisted and context-bound conflict action keys; token-aware conflict-field sanitization; closed-modal async render guards; honest separation of server outcome from local persistence outcome.
+cleanups_made: Extracted conflict retry-key state and lifecycle into conflict-action-keys.ts; removed idempotency generation and ownership from the modal; retained modal responsibility for rendering/interaction and plugin responsibility for state/network coordination.
+non_goals_preserved: no local-only conflict resolution bypassing Server; no semantic merge editor; no unsupported conflict action vocabulary; no server route changes; no provider calls; no direct database access; no Worktree behavior; no workflow or dependency changes; no sibling component changes; no hard delete; no background sync loop.
+deferred_work: fresh CI completion after clean-code source changes, fixer loop if CI fails, richer conflict styling/accessibility, local materialization after resolution through the normal pull flow, sync runner/backoff, packaging/E2E, and fixture/unit tests when the component test harness is available.
 
 TESTS_AND_CHECKS:
 checks_run:
-- Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, and wave-plan project sources as required.
-- Read apps/haze-obsidian-plugin/control/state.md and verified status PROMPT_READY, active_agent_role implementation-worker, wave W1, phase OBS-P7.
-- Read apps/haze-obsidian-plugin/control/prompt.md and previous control/report.md.
+- Read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, chatgpt-gh-connector.md, and wave-plan project sources.
+- Read apps/haze-obsidian-plugin/control/state.md and verified status PROMPT_READY, active_agent_role clean-code-reviewer, wave W1, and phase OBS-P7C.
+- Read apps/haze-obsidian-plugin/control/prompt.md and previous implementation report.
 - Read apps/haze-obsidian-plugin/docs/component-contract.md, OBS-P7 implementation-plan section, implementation-log.md, and dependency-map.md.
-- Inspected current API client conflict DTO/request/response abstractions, idempotency helpers, base revision store, settings/status code, settings UI patterns, remote materialization code, and main plugin lifecycle wiring.
-- Compared component/obsidian-plugin against main after implementation; observed ahead_by=115, behind_by=7, merge_base=1a82bea5c87953db378e5e03429326df38320ee8 before this report write.
-- Manually reviewed supported action vocabulary, confirmation semantics, runtime DTO validation, idempotency headers, server-confirmed-only state changes, path classification before base updates, display redaction, safe timestamps, generic UI errors, disabled/dry_run mutation guards, modal retry behavior, no raw token/server internals, and no local policy bypass.
-- Observed Component CI workflow run 29067731941 for code-bearing source commit 6fd375f07ae942befd171181fcadfe72c52dc531 with status in_progress and conclusion None.
+- Read the API component contract and implementation plan to verify public conflict action vocabulary and API/plugin ownership boundaries.
+- Inspected current conflict-center.ts, conflict-center-modal.ts, main.ts, plugin-data.ts, API client conflict validation/request code, status sanitization, idempotency helpers, and base-revision behavior.
+- Confirmed OBS-P7 implementation source CI run 29067731941 completed successfully before this review.
+- Compared component/obsidian-plugin against main after clean-code changes; observed ahead_by=125, behind_by=7, merge_base=1a82bea5c87953db378e5e03429326df38320ee8 before this report write.
+- Manually reviewed persisted-state backward compatibility, retry-key stability, context binding, ambiguous network retry behavior, token/idempotency non-disclosure, supported actions, confirmation semantics, disabled/dry_run guards, server-confirmed-only base updates, save failure handling, modal close lifecycle, generic errors, and non-goal preservation.
+- Observed Component CI run 29080003119 for code-bearing clean-code commit c9caf95ad2e4261b825c07965f44ee7aedf87e19 with status in_progress and conclusion None.
 checks_not_run:
 - npm install --no-audit --no-fund: not run because repository work is constrained to the GitHub connector and no local git/shell repository execution is permitted.
 - npm run --workspace haze-obsidian-plugin typecheck: not run locally for the same connector-only reason.
 - npm run --workspace haze-obsidian-plugin build: not run locally for the same connector-only reason.
 ci_status: CI_PENDING
-workflow_urls: Component CI run_id=29067731941, run_number=849, status=in_progress, conclusion=None
+workflow_urls: Component CI run_id=29080003119, run_number=906, status=in_progress, conclusion=None
 known_failures: none observed
 
 CI_DIAGNOSTICS:
 artifact_based_logs: not read
 artifact_name: none
 artifact_id: none
-workflow_run_id: 29067731941
+workflow_run_id: 29080003119
 workflow_run_attempt: unknown
-artifact_status: not_applicable_for_implementation_worker
+artifact_status: not_applicable_for_clean_code_review
 summary_read: no
 manifest_read: no
 logs_read: no
 raw_job_logs_used: no
-diagnostics_failure: none; active prompt explicitly said not to read CI diagnostics artifacts
+diagnostics_failure: none; active prompt explicitly prohibited diagnostics artifact reading unless a future prompt instructs it
 
 SAFETY_AND_SECRECY:
 secrets_committed: no
@@ -113,18 +114,22 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- Fresh CI for OBS-P7 code-bearing head is in progress.
-- Branch is currently diverged from main: ahead_by=115, behind_by=7, merge_base=1a82bea5c87953db378e5e03429326df38320ee8 before this report write. No merge, rebase, cherry-pick, force-push, or history rewrite was performed.
+- Fixed: retry identity was lost when a modal closed or the plugin restarted before an ambiguous action outcome was retried.
+- Fixed: server-provided conflict display fields did not redact the exact configured auth token.
+- Fixed: asynchronous modal callbacks could render after modal close.
+- Fixed: local persistence failure after Server confirmation could be misreported as an unconfirmed action.
+- Fresh CI for the OBS-P7C code-bearing head is in progress.
+- Branch remains diverged from main: ahead_by=125, behind_by=7, merge_base=1a82bea5c87953db378e5e03429326df38320ee8 before this report write. No merge, rebase, cherry-pick, force-push, or history rewrite was performed.
 - Shell typecheck/build could not be run from the connector-only worker environment.
 
 BLOCKERS:
-none for the component-local OBS-P7 implementation; CI remains pending
+none
 
 NEXT_RECOMMENDED_AGENT:
-clean-code-reviewer
+orchestrator
 
 FINAL_VERDICT:
-SELF_ACCEPT_PENDING_CI — OBS-P7 conflict center and supported server-backed user actions are implemented within obsidian-plugin scope; source commits triggered fresh Component CI, which is still in progress.
+CLEAN_ACCEPT_PENDING_CI — OBS-P7 clean-code review completed with focused retry, secrecy, lifecycle, and outcome-reporting fixes; component contract and non-goals are preserved; fresh Component CI is in progress.
 
 PUSHED:
 yes
