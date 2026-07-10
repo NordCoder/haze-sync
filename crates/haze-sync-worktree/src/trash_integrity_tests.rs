@@ -141,7 +141,10 @@ fn tampered_restore_metadata_fields_fail_record_id_integrity_check() {
 
     fs::write(
         &metadata_path,
-        metadata.replace("retention_until_unix_seconds=80", "retention_until_unix_seconds=81"),
+        metadata.replace(
+            "retention_until_unix_seconds=80",
+            "retention_until_unix_seconds=81",
+        ),
     )
     .unwrap();
     assert_eq!(
