@@ -32,6 +32,7 @@ export interface LocalScanOperationResult {
 export interface PushOperationProgress {
   path: string;
   operationIdempotencyKey: string;
+  queueVersion: number;
   baseRevisionState: BaseRevisionState;
 }
 
@@ -64,7 +65,7 @@ export async function scanLocalVault(
   signal: AbortSignal,
 ): Promise<LocalScanOperationResult> {
   assertNotAborted(signal);
-  const scanResult = await scanner.scan();
+  const scanResult = await scanner.scan(signal);
   assertNotAborted(signal);
   const safeFacts = preserveUnreadableKnownFiles(scanResult, currentState.knownFiles);
   const reconciled = reconcileFullScan(currentState, safeFacts, scanResult.scannedAt);
@@ -102,11 +103,7 @@ export async function pushPendingChanges(input: {
     assertNotAborted(input.signal);
     if (skipped.reason === "same_content") {
       result.sameContent += 1;
-      await input.onProgress({
-        path: skipped.path,
-        operationIdempotencyKey: skipped.queueEntry.operationIdempotencyKey,
-        baseRevisionState: workingBaseState,
-      });
+      await input.onProgress(progressForEntry(skipped.queueEntry, workingBaseState));
     } else {
       result.skipped += 1;
     }
@@ -137,11 +134,7 @@ export async function pushPendingChanges(input: {
         workingBaseState = update.state;
         result.uploaded += update.outcome === "accepted" ? 1 : 0;
         result.sameContent += update.outcome === "same_content" ? 1 : 0;
-        await input.onProgress({
-          path: mutation.path,
-          operationIdempotencyKey: mutation.queueEntry.operationIdempotencyKey,
-          baseRevisionState: workingBaseState,
-        });
+        await input.onProgress(progressForEntry(mutation.queueEntry, workingBaseState));
       } else if (update.outcome === "conflict_saved") {
         result.conflicts += 1;
       } else {
@@ -156,11 +149,7 @@ export async function pushPendingChanges(input: {
     if (update.baseUpdated) {
       workingBaseState = update.state;
       result.deleted += 1;
-      await input.onProgress({
-        path: mutation.path,
-        operationIdempotencyKey: mutation.queueEntry.operationIdempotencyKey,
-        baseRevisionState: workingBaseState,
-      });
+      await input.onProgress(progressForEntry(mutation.queueEntry, workingBaseState));
     } else if (update.outcome === "conflict_saved") {
       result.conflicts += 1;
     } else {
@@ -246,9 +235,14 @@ export function clearPendingChangeIfCurrent(
   state: LocalSyncState,
   path: string,
   operationIdempotencyKey: string,
+  queueVersion: number,
 ): LocalSyncState {
   const current = state.pendingQueue[path];
-  if (current === undefined || current.operationIdempotencyKey !== operationIdempotencyKey) {
+  if (
+    current === undefined ||
+    current.operationIdempotencyKey !== operationIdempotencyKey ||
+    current.version !== queueVersion
+  ) {
     return state;
   }
 
@@ -257,6 +251,18 @@ export function clearPendingChangeIfCurrent(
   return {
     ...state,
     pendingQueue,
+  };
+}
+
+function progressForEntry(
+  entry: PendingQueueEntry,
+  baseRevisionState: BaseRevisionState,
+): PushOperationProgress {
+  return {
+    path: entry.path,
+    operationIdempotencyKey: entry.operationIdempotencyKey,
+    queueVersion: entry.version,
+    baseRevisionState,
   };
 }
 
