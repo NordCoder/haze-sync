@@ -1,47 +1,56 @@
-# W1-CORE-P5C — Core tombstone/delete-guard clean-code review
+# W1-CORE-P6 — Idempotency, operation-log, and cursor primitive hardening
 
 Component: core
 Path: crates/haze-sync-core
 Branch: component/core
 PR: #43
-Role: clean-code-reviewer
+Role: implementation-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-CORE-P5 implementation and CI fixer are complete. Final code-bearing Component CI is green.
+CORE-P5 implementation, CI fixer, and clean-code review are accepted. Final code/docs CI is green.
 
-- code_bearing_sha: f827341777a0b1f405b446ebf564f209ea1aaa60
-- workflow_run_id: 29082064452
-- run_number: 976
+- code_bearing_sha: 657380f82dcae2e929431dc081793b7249a3bf90
+- workflow: Component CI
+- workflow_run_id: 29084444310
+- run_number: 1049
 - conclusion: success
+
+The next implementation phase is CORE-P6 from crates/haze-sync-core/docs/implementation-plan.md.
 
 ## Read
 
-Read process sources, component docs/control files, current source/tests/docs, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt instructs it.
+Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current idempotency/operation-log source and tests, accepted Storage/API boundaries, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt explicitly instructs it.
 
 ## Task
 
-Review CORE-P5 tombstone validation, restore/retention classifiers, delete-guard hardening, and CI corrections.
+Implement CORE-P6: Idempotency, operation-log, and cursor primitive hardening.
 
-Focus on deterministic classifiers, metadata invariants, exact retention boundaries, threshold arithmetic, scoped unlock semantics, public-safe outputs, test fixture correctness, storage/adapter neutrality, and non-goal preservation.
+- harden idempotency-key validation and redaction boundaries;
+- test deterministic request fingerprinting and same/different request classification;
+- document and validate the safe replay snapshot shape and its limitations;
+- harden operation-kind parsing and serialization;
+- validate changes-query limit boundaries;
+- define and test cursor monotonicity, advancement, and regression rejection;
+- document what durable Storage/Server components must persist without adding persistence to Core.
 
 ## Allowed files
 
-- crates/haze-sync-core/src/tombstone_service/**
-- crates/haze-sync-core/src/delete_guard/**
+- crates/haze-sync-core/src/idempotency/**
+- crates/haze-sync-core/src/operation_log/**
 - crates/haze-sync-core/docs/**
 - crates/haze-sync-core/control/report.md
 
-## Boundaries
+## Non-goals
 
-No physical cleanup, filesystem/provider actions, repository implementation, CLI parsing, API/Server wiring, workflow/dependency changes, or sibling changes.
+No durable idempotency repository, database append implementation, HTTP replay middleware, adapter polling loop, Storage/API/Server edits, workflow/dependency changes, or sibling-component changes.
 
 ## CI trigger policy
 
-Source/docs clean-code commits must not skip CI. A final report-only commit may skip CI.
+Product/source/docs commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only crates/haze-sync-core/control/report.md. Use REPORT_TYPE CLEAN_CODE_REVIEW and phase_id CORE-P5C.
+Write only crates/haze-sync-core/control/report.md. Use report-template.md, REPORT_TYPE IMPLEMENTATION, phase_id CORE-P6.
