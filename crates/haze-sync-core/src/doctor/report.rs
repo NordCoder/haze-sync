@@ -1,5 +1,5 @@
 use super::types::{DoctorCheckResult, DoctorCheckStatus};
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// Aggregate doctor report summary.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -67,7 +67,7 @@ impl DoctorReportSummary {
 }
 
 /// Deterministically ordered doctor report.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DoctorReport {
     pub summary: DoctorReportSummary,
     pub checks: Vec<DoctorCheckResult>,
@@ -91,6 +91,43 @@ impl DoctorReport {
     pub fn checks(&self) -> &[DoctorCheckResult] {
         &self.checks
     }
+
+    fn validate(&self) -> Result<(), &'static str> {
+        for check in &self.checks {
+            check.validate()?;
+        }
+        if !self
+            .checks
+            .windows(2)
+            .all(|window| window[0].check_id() <= window[1].check_id())
+        {
+            return Err("doctor report checks are not deterministically ordered");
+        }
+        if self.summary != DoctorReportSummary::from_results(&self.checks) {
+            return Err("doctor report summary does not match check results");
+        }
+        Ok(())
+    }
+}
+
+#[derive(Serialize)]
+struct DoctorReportWireRef<'a> {
+    summary: &'a DoctorReportSummary,
+    checks: &'a [DoctorCheckResult],
+}
+
+impl Serialize for DoctorReport {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.validate().map_err(serde::ser::Error::custom)?;
+        DoctorReportWireRef {
+            summary: &self.summary,
+            checks: &self.checks,
+        }
+        .serialize(serializer)
+    }
 }
 
 impl<'de> Deserialize<'de> for DoctorReport {
@@ -111,6 +148,7 @@ impl<'de> Deserialize<'de> for DoctorReport {
                 "doctor report summary does not match check results",
             ));
         }
+        report.validate().map_err(serde::de::Error::custom)?;
         Ok(report)
     }
 }
