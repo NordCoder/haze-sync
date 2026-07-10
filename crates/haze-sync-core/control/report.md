@@ -1,13 +1,13 @@
 REPORT_TYPE:
-CLEAN_CODE_REVIEW
+IMPLEMENTATION
 
 STATUS:
-CLEAN_ACCEPT
+SELF_NEEDS_FIX
 
 AGENT:
-role: clean-code-reviewer
-agent_execution_id: W1-CORE-P5C
-chat_name: core — W1 CORE-P5C Clean-Code Review
+role: implementation-worker
+agent_execution_id: W1-CORE-P6
+chat_name: core — W1 CORE-P6 Implementation
 
 COMPONENT:
 name: core
@@ -21,32 +21,30 @@ control_report_path: crates/haze-sync-core/control/report.md
 
 WAVE:
 id: W1
-phase_id: CORE-P5C
-dependency_status: control state was PROMPT_READY, active_agent_role was clean-code-reviewer, CORE-P5 implementation/fixer work was complete, and Component CI run 29082064452 was green for pre-review source head f827341777a0b1f405b446ebf564f209ea1aaa60.
+phase_id: CORE-P6
+dependency_status: control state was PROMPT_READY, active_agent_role was implementation-worker, CORE-P5 clean-code review was accepted, and Component CI run 29084444310 was green for the accepted CORE-P5 code/docs head.
 
 SUMMARY:
-Reviewed CORE-P5 tombstone metadata validation, restore/retention classifiers, delete-guard arithmetic and scoped unlock semantics, contract documentation, tests, fixer changes, and current PR diff. Tombstone classifiers remained deterministic, storage-neutral, adapter-neutral, exact at the retention boundary, and safe against incomplete restore metadata. Found one delete-safety correctness bug: a correctly scoped ManualDeleteUnlock bypassed count or ratio thresholds even when DeleteGuardPolicy.require_manual_unlock_for_mass_delete was false. That policy mode already returned hard-block variants when no unlock was supplied, so allowing an unlock to bypass it made hard-block and unlockable policy modes semantically inconsistent and weakened the explicit safety setting. Reordered count and ratio evaluation so hard-block mode always returns BlockedTooManyDeletes or BlockedDeleteRatio before considering unlock metadata; unlockable mode still requires exact adapter/run/category coverage. Added regression coverage for both threshold categories and clarified the existing contract. Final code/docs head 657380f82dcae2e929431dc081793b7249a3bf90 passed Component CI run 29084444310 completely.
+Implemented CORE-P6 idempotency, operation-log, changes-page, and cursor primitive hardening inside core scope. Idempotency key formatting is now redacted while explicit storage accessors and persistence serialization retain the raw validated key. Stored replay responses re-run status/header validation during deserialization, reject sensitive/idempotency headers, control-character values, and case-normalization collisions, while preserving the existing serialized response fields and request fingerprint algorithm. Expanded deterministic fingerprint, replay, key-boundary, redaction, safe-header, and durable-record tests. OperationSequence, ChangesLimit, and operation-log TombstoneId now re-run constructor validation during deserialization. ChangesPage deserialization now validates strict ordering and serialized from/to bounds. Added complete OperationKind parse/display/serde coverage, changes-query boundary tests, cursor boundary/serde tests, and an AdapterCursor convenience classifier over the existing pure monotonicity function. Added a durable fan-in document defining exact idempotency lookup identity, atomic race handling, safe fingerprint inputs, response limitations, append-only sequence rules, changes pagination, and atomic adapter cursor persistence. Source/docs commits were cc812b772f41c9670ca088d96a24ebfbf376e1fe, c40e0e05216efbcbce958d8fc2d24a8c3e656fc0, and a25d01c9633692906d94f783c053cb332521fe06. Component CI run 29086772001 passed cargo fmt, cargo check, cargo test, and cargo clippy, but the workflow concluded failure because Finalize CI diagnostics failed. Diagnostics artifact contents were not read because this is an implementation-worker prompt.
 
 CHANGED_FILES:
-- crates/haze-sync-core/src/delete_guard/mod.rs
-- crates/haze-sync-core/docs/component-contract.md
+- crates/haze-sync-core/src/idempotency/mod.rs
+- crates/haze-sync-core/src/operation_log/mod.rs
+- crates/haze-sync-core/docs/idempotency-operation-log-persistence.md
 - crates/haze-sync-core/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/core
 base_branch: main
 base_sha: PR #43 base observed as 1a82bea5c87953db378e5e03429326df38320ee8
-head_sha: code/docs clean-code head before this report-only commit was 657380f82dcae2e929431dc081793b7249a3bf90; source review commit was 666ac04ae4264680bff4a696e87e76d545e14398
-source_review_commits:
-- 666ac04ae4264680bff4a696e87e76d545e14398
-- 657380f82dcae2e929431dc081793b7249a3bf90
+head_sha: code/docs implementation head before this report-only commit was a25d01c9633692906d94f783c053cb332521fe06; idempotency source commit was cc812b772f41c9670ca088d96a24ebfbf376e1fe; operation-log source commit was c40e0e05216efbcbce958d8fc2d24a8c3e656fc0; durable fan-in docs commit was a25d01c9633692906d94f783c053cb332521fe06
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
 ci_skip_used: yes
-ci_skip_reason: used [skip ci] only for this final control/report-only commit. Source and contract commits did not use CI skip; Component CI run 29084444310 on code/docs head 657380f82dcae2e929431dc081793b7249a3bf90 is the CI evidence.
+ci_skip_reason: used [skip ci] only for this final control/report-only commit; source, tests, and durable fan-in docs commits did not skip CI. This skipped report commit is not CI evidence.
 
 SCOPE:
 allowed_files_only: yes
@@ -59,71 +57,79 @@ CONTRACT:
 contract_read: yes
 contract_satisfied: yes
 contract_changes_requested: no
-contract_change_rationale: component-contract.md was clarified to state the already implied distinction between hard-block policy and unlockable policy; no default threshold, ownership boundary, public side effect, or cross-component contract changed
-affected_components: core only
+contract_change_rationale: none; request fingerprint bytes, stored response field shape, operation sequence numeric semantics, and persistence ownership were preserved
+affected_components: core only; Storage/Server/API obligations are documented for future fan-in but no sibling files were modified
 
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- reviewed tombstone ID/retention/restore metadata validation and restore/cleanup eligibility classifiers
-- reviewed delete-ratio zero-total, exact-boundary, and u64 cross-multiplication behavior
-- reviewed adapter/run/category-scoped unlock coverage and the CORE-P5 fixer corrections
-- fixed hard-block policy so manual unlock values are ignored when require_manual_unlock_for_mass_delete is false
-- preserved unlockable policy behavior when require_manual_unlock_for_mass_delete is true
-- added count-threshold and ratio-threshold regression assertions proving unlock cannot bypass hard-block policy
-- clarified input/output/test obligations for hard-block versus unlockable policies in component-contract.md
-behavior_changes: safety tightening for explicit hard-block policies only; a scoped unlock no longer converts an over-threshold run to Allowed when require_manual_unlock_for_mass_delete is false. Default policy behavior, thresholds, unlockable policy behavior, tombstone classifiers, and output variants are unchanged.
-bugs_found: scoped manual unlock values could bypass hard count/ratio blocks even when manual-unlock policy was disabled
-bugs_fixed: reordered both threshold branches to return hard-block decisions before checking unlock coverage when require_manual_unlock_for_mass_delete is false
-cleanups_made: made hard-block versus unlockable branch behavior explicit and aligned contract language with executable semantics
-non_goals_preserved: no hard-delete cleanup, filesystem trash behavior, provider calls, tombstone repository, CLI parsing, API/Server route wiring, workflow changes, dependency changes, sibling component changes, test deletion, or assertion weakening
-deferred_work: none for CORE-P5; Orchestrator may advance after this accepted review
+- replaced raw IdempotencyKey Debug/Display output with a stable redacted marker while retaining explicit raw storage accessors and persistence serialization
+- documented safe fingerprint input exclusions without changing canonical JSON hashing or SHA-256 output
+- added validating Deserialize for StoredIdempotencyResponse so persisted unsafe status/header data cannot bypass constructor rules
+- expanded replay-header rejection to idempotency/auth-token names, control characters, and duplicate names after lowercase normalization
+- added key minimum/maximum/control/non-ASCII tests, redaction tests, nested canonical JSON determinism tests, same/different replay tests, validating response serde tests, and durable record roundtrip tests
+- added validating Deserialize for OperationSequence, ChangesLimit, and operation-log TombstoneId
+- added validating Deserialize for ChangesPage with strict ordering and from/to bound consistency
+- added InconsistentPageBounds as a safe non-exhaustive operation-log error variant
+- added complete OperationKind exact string parse/display/serde tests
+- added changes-query lower/upper/serde boundary tests and limit+sentinel checks
+- added AdapterCursor::classify_core_sequence_update as a pure convenience over classify_cursor_update
+- expanded cursor zero/same/advance/regression/i64::MAX and stable serde-name tests
+- documented durable idempotency, operation-log, pagination, and cursor fan-in obligations
+behavior_changes: safety hardening only; IdempotencyKey formatting is redacted, unsafe persisted replay snapshots and invalid deserialized operation-log values/pages are rejected, and valid existing serialized shapes/algorithms remain unchanged
+bugs_found:
+- derived Debug/Display exposed raw idempotency key material
+- derived StoredIdempotencyResponse deserialization bypassed status/header validation
+- derived OperationSequence, ChangesLimit, operation-log TombstoneId, and ChangesPage deserialization could bypass constructor/page invariants
+bugs_fixed: all listed Core hardening gaps were fixed and covered by tests
+cleanups_made: centralized changes-page ordering validation and documented storage-only raw-key access plus durable fan-in responsibilities
+non_goals_preserved: no durable idempotency repository, no database operation append, no HTTP replay middleware, no adapter polling loop, no Storage/API/Server edits, no workflow/dependency changes, and no sibling component changes
+deferred_work: Orchestrator should route failed Component CI run 29086772001 and artifact 8225090296 to fixer-worker; after green CI, run clean-code-reviewer for CORE-P6
 
 TESTS_AND_CHECKS:
 checks_run:
 - read implementation-manifest.md from Project Sources
 - read report-template.md from Project Sources
-- read clean-code-reviewer-prompt.md from Project Sources
+- read implementation-worker-prompt.md from Project Sources
 - read chatgpt-gh-connector.md from Project Sources
 - read crates/haze-sync-core/control/state.md on branch component/core
-- read crates/haze-sync-core/control/prompt.md for CORE-P5C
-- read previous FIX report before replacing it
+- read crates/haze-sync-core/control/prompt.md for CORE-P6
+- read previous CORE-P5C report before replacing it
 - read crates/haze-sync-core/docs/component-contract.md
-- read CORE-P5 section of crates/haze-sync-core/docs/implementation-plan.md
+- read CORE-P6 section of crates/haze-sync-core/docs/implementation-plan.md
 - read crates/haze-sync-core/docs/implementation-log.md
 - read crates/haze-sync-core/docs/dependency-map.md
-- read delete-safety decisions in crates/haze-sync-core/docs/decisions.md
-- read current crates/haze-sync-core/src/tombstone_service/mod.rs and its tests
-- read current crates/haze-sync-core/src/delete_guard/mod.rs and its tests
-- inspected PR #43 changed filenames and relevant file patches
-- inspected exact source commit diff 666ac04ae4264680bff4a696e87e76d545e14398
-- inspected exact contract commit diff 657380f82dcae2e929431dc081793b7249a3bf90
-- observed PR #43 open, draft, and unmerged at code/docs head 657380f82dcae2e929431dc081793b7249a3bf90 before this report update
-- observed Component CI run 29084444310, run number 1049, for code/docs head 657380f82dcae2e929431dc081793b7249a3bf90
+- read current crates/haze-sync-core/src/idempotency/mod.rs and tests
+- read current crates/haze-sync-core/src/operation_log/mod.rs and tests
+- read project storage schema and Core API contracts for durable table/feed/cursor expectations
+- read current Storage and API component contracts and confirmed they remain scaffold-level boundaries with safe-error requirements
+- inspected PR #43 metadata and observed it remained open, draft, and unmerged with code/docs head a25d01c9633692906d94f783c053cb332521fe06 before this report update
+- observed Component CI run 29086772001, run number 1104, for code/docs head a25d01c9633692906d94f783c053cb332521fe06
 - observed cargo fmt success
 - observed cargo check success
-- observed cargo test success, including the new hard-block unlock regression test
+- observed cargo test success
 - observed cargo clippy success
-- observed Finalize CI diagnostics success
-- observed workflow conclusion success
+- observed Finalize CI diagnostics failure
+- observed workflow conclusion failure
+- listed diagnostics artifact metadata without downloading or reading artifact contents
 checks_not_run:
-- local cargo commands were not run because repository work is GitHub-connector-only and no local repository checkout was used; Component CI run 29084444310 provides the complete check evidence
-ci_status: CI_GREEN for Component CI run 29084444310 on code/docs head 657380f82dcae2e929431dc081793b7249a3bf90
-workflow_urls: previous successful fixer run 29082064452; successful clean-code run 29084444310
-known_failures: none remaining for CORE-P5 clean-code head
+- local cargo commands were not run because repository work is GitHub-connector-only and no local repository checkout/toolchain was used; Component CI supplied product-check evidence
+ci_status: CI_RED for Component CI run 29086772001 even though cargo fmt/check/test/clippy all succeeded; Finalize CI diagnostics failed
+workflow_urls: Component CI run 29086772001, run_number 1104
+known_failures: Finalize CI diagnostics step failed; root cause not inspected in this implementation-worker run
 
 CI_DIAGNOSTICS:
 artifact_based_logs: no
-artifact_name: none
-artifact_id: none
-workflow_run_id: none for diagnostics; observed clean-code CI run was 29084444310
-workflow_run_attempt: none for diagnostics
-artifact_status: not read; active clean-code reviewer prompt prohibited diagnostics artifact reading and did not expand that permission
+artifact_name: ci-diag__component-core__wf-component-ci__run-29086772001__attempt-1
+artifact_id: 8225090296
+workflow_run_id: 29086772001
+workflow_run_attempt: 1
+artifact_status: metadata observed; artifact is available, unexpired, and expires at 2026-07-11T10:36:24Z; artifact was not downloaded or read because the active implementation-worker prompt did not permit diagnostics reading
 summary_read: no
 manifest_read: no
 logs_read: none
 raw_job_logs_used: no
-diagnostics_failure: none inspected
+diagnostics_failure: not inspected; workflow step metadata shows Finalize CI diagnostics failed after all Rust product checks succeeded
 
 SAFETY_AND_SECRECY:
 secrets_committed: no
@@ -134,18 +140,19 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- Fixed: scoped unlock could bypass an explicit hard-block policy for both count and ratio thresholds.
-- No remaining correctness, threshold-arithmetic, retention-boundary, metadata-invariant, scope, secrecy, persistence-boundary, or adapter-neutrality issue was found in CORE-P5 after the fix.
+- Component CI run 29086772001 is formally red because Finalize CI diagnostics failed despite fmt/check/test/clippy success.
+- Diagnostics artifact 8225090296 must be read by a fixer-worker, not this implementation-worker.
+- StoredIdempotencyRecord serialization intentionally contains the raw validated key for persistence; the new durable fan-in document explicitly forbids exposing that serialization through API/log/report/metric surfaces.
 - This final report-only commit uses CI skip and is not CI evidence.
 
 BLOCKERS:
-none
+none for product implementation; CI diagnostics-finalization failure requires fixer-worker triage
 
 NEXT_RECOMMENDED_AGENT:
-orchestrator
+fixer-worker
 
 FINAL_VERDICT:
-CLEAN_ACCEPT. CORE-P5 tombstone validation, restore/retention classifiers, delete-guard hardening, and fixer corrections are accepted after closing the hard-block unlock bypass. Final code/docs head 657380f82dcae2e929431dc081793b7249a3bf90 passed Component CI run 29084444310 completely.
+SELF_NEEDS_FIX. CORE-P6 product implementation and durable fan-in documentation are complete, and cargo fmt/check/test/clippy passed in Component CI run 29086772001. The workflow nevertheless concluded failure at Finalize CI diagnostics. Orchestrator should issue a fixer-worker prompt using artifact 8225090296. No diagnostics artifact contents were read in this implementation-worker run.
 
 PUSHED:
 yes
