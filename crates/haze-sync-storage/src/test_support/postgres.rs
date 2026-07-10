@@ -269,7 +269,9 @@ fn storage_table_count_sql() -> String {
 
     format!(
         "select count(*)::bigint from information_schema.tables \
-         where table_schema = current_schema() and table_name in ({table_names})"
+         where table_schema = current_schema() \
+           and table_type = 'BASE TABLE' \
+           and table_name in ({table_names})"
     )
 }
 
@@ -309,13 +311,14 @@ mod tests {
     }
 
     #[test]
-    fn schema_probe_covers_every_owned_table() {
+    fn schema_probe_covers_every_owned_base_table() {
         let sql = storage_table_count_sql();
 
         for table_name in table_names::ALL {
             assert!(sql.contains(table_name));
         }
         assert!(sql.contains("current_schema()"));
+        assert!(sql.contains("table_type = 'BASE TABLE'"));
     }
 
     #[test]
