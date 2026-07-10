@@ -18,7 +18,7 @@ pub fn unique_test_id(prefix: &str) -> String {
         .map_or(0, |duration| duration.as_nanos());
 
     format!(
-        "{prefix}-{}-{timestamp_nanos}-{sequence}",
+        "{prefix}-{:x}-{timestamp_nanos:x}-{sequence:x}",
         std::process::id()
     )
 }
