@@ -2,6 +2,34 @@
 
 ## Entries
 
+### 2026-07-10 — W1/STOR-P9 storage test-support and integration harness hardening
+
+Agent:
+Implementation Worker
+
+Branch:
+component/storage
+
+Prompt:
+crates/haze-sync-storage/control/prompt.md
+
+Report:
+crates/haze-sync-storage/control/report.md
+
+Commit(s):
+See component/storage branch history for the implementation commits.
+
+Summary:
+Hardened Storage test support without adding production runtime dependencies. PostgreSQL integration helpers now require the dedicated `HAZE_SYNC_TEST_DATABASE_URL`, ignore general application `DATABASE_URL`, reject missing, malformed, non-test, and production-looking database configuration through redacted errors, and expose a strict prepare helper. Schema setup is serialized with a transaction-scoped PostgreSQL advisory lock, applies migrations only to an empty schema, accepts an already-complete initial schema, and rejects partial schemas rather than guessing. Default crate tests compile the PostgreSQL helper implementation without requiring a live database, while feature-gated repository roundtrips require explicit configuration and fail on connection/setup errors instead of silently passing. Added bounded stable fixture namespaces, explicit temporary object-root cleanup, focused unit tests, and a test-support runbook with exact commands and isolation rules.
+
+Status:
+SELF_ACCEPT_PENDING_CI
+
+Follow-ups:
+Use Component CI for workspace fmt/check/test/clippy verification. Run `cargo test -p haze-sync-storage --features test-support` with a dedicated reachable PostgreSQL test database, then perform the mandatory clean-code review.
+
+---
+
 ### 2026-07-10 — W1/STOR-P8 adapter mapping and worktree state repository support
 
 Agent:
