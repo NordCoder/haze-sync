@@ -20,5 +20,5 @@ ci_run_number: 1047
 ci_run_attempt: 1
 known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
-blocker: WT-P8 and GDA-P7C are implemented but formally red and not fan-in accepted; Server/API operator contracts are unavailable
-unblock_condition: green WT-P8 and GDA-P7C acceptance plus Server/API bootstrap and sync contracts, or a dedicated CLI fan-in contract
+blocker: GDA-P7C is accepted, but WT-P8C and Server/API bootstrap/sync operator contracts and runtime fan-in are unavailable
+unblock_condition: green WT-P8C acceptance plus accepted Server/API operator and runtime fan-in contracts, or a dedicated CLI fan-in contract
