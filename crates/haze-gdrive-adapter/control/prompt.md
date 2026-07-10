@@ -1,50 +1,49 @@
-# W1-FIX-GDA-P6-CI — GDrive GDA-P6 CI correction
+# W1-GDA-P6C — GDrive change-feed clean-code review
 
 Component: gdrive-adapter
 Path: crates/haze-gdrive-adapter
 Branch: component/gdrive-adapter
 PR: #50
-Role: fixer-worker
+Role: clean-code-reviewer
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-GDA-P6 implementation completed, but its final code-bearing Component CI run failed.
+GDA-P6 implementation and artifact-based CI correction are complete. Final source CI is green.
 
-- code_bearing_sha: 6912e1165855672340980ae55e118f1469169de3
+- code_bearing_sha: e8cbc92b6963a94d2f4f0ee933d562c171e7a8bd
 - workflow: Component CI
-- workflow_run_id: 29090536525
-- run_number: 1179
-- run_attempt: 1
-- artifact_id: 8226593826
-- artifact_name: ci-diag__component-gdrive-adapter__wf-component-ci__run-29090536525__attempt-1
-- artifact_expires_at: 2026-07-11T11:49:39Z
+- workflow_run_id: 29092966548
+- run_number: 1214
+- conclusion: success
 
-Use the diagnostics artifact as source of truth.
+Concrete Storage/DB cursor persistence is still a fan-in concern. Review the injected cursor-store boundary without adding direct persistence ownership.
 
 ## Read
 
-Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current GDA-P6 source/tests, and PR diff. Download artifact 8226593826 and read summary.md, manifest.json, and every failed-check log. If unavailable or unreadable, report FIX_BLOCKED_BY_LOGS.
+Read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, chatgpt-gh-connector.md, component docs/control files, current GDA-P6 source/tests, fixer changes, relevant accepted Storage cursor boundaries, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt explicitly instructs it.
 
 ## Task
 
-Apply only the minimum artifact-proven correction for the GDA-P6 CI failure. Preserve cursor invalidation fallback, deterministic coalescing, success-only cursor advancement, retry/backoff classification, provider-token redaction, tests, and injected persistence boundaries.
+Review GDA-P6 change-feed polling and reconciliation plus the CI correction.
+
+Focus on cursor invalidation/full-scan fallback, deterministic duplicate/reordered-event handling, bounded pagination, success-only cursor advancement, injected store and processor boundaries, mode-aware classification, export-echo confirmation, retry/backoff classification, provider-token redaction, debounce behavior, tests, and non-goal preservation.
 
 ## Allowed files
 
 - crates/haze-gdrive-adapter/src/**
-- crates/haze-gdrive-adapter/docs/** only if diagnostics prove a documentation issue
+- crates/haze-gdrive-adapter/docs/**
 - crates/haze-gdrive-adapter/control/report.md
 
 ## Boundaries
 
-No live provider client, export apply runner, provider mutation, concrete Storage/DB wiring, Core policy, background runtime, workflow/dependency changes, sibling changes, test deletion, or assertion weakening.
+No live Google client/OAuth wiring, provider mutation, GDA-P7 export runner, direct Storage/DB ownership, Core/API policy execution, background scheduler, webhook/public callback, workflow/dependency changes, sibling changes, test deletion, or assertion weakening.
 
 ## CI trigger policy
 
-Source/test/docs fixer commits must not skip CI. A final report-only commit may skip CI.
+Source/test/docs clean-code commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only crates/haze-gdrive-adapter/control/report.md. Use report-template.md, REPORT_TYPE FIX, phase_id FIX-GDA-P6-CI.
+Write only crates/haze-gdrive-adapter/control/report.md. Use report-template.md, REPORT_TYPE CLEAN_CODE_REVIEW, phase_id GDA-P6C.
