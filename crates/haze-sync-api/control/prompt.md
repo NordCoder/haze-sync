@@ -1,60 +1,55 @@
-# W1-API-P5 — Conflict and delete route-helper contract hardening
+# W1-FIX-API-P5-CI — API API-P5 CI correction
 
 Component: api
 Path: crates/haze-sync-api
 Branch: component/api
 PR: #44
-Role: implementation-worker
+Role: fixer-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-API-P4 implementation, fixer, and clean-code review are accepted. Component CI evidence for the accepted source state is green.
+API-P5 implementation is complete, but the Component CI run for its source commit did not complete successfully.
 
+- source_commit: b31c4b89482e184d42091a0718c73f63a38b9cae
 - workflow: Component CI
-- workflow_run_id: 29034803865
-- run_number: 689
-- conclusion: success
+- workflow_run_id: 29067723610
+- run_number: 848
+- run_attempt: 1
+- artifact_id: 8217771726
+- artifact_name: ci-diag__component-api__wf-component-ci__run-29067723610__attempt-1
+- artifact_expires_at: 2026-07-11T03:52:54Z
 
-The next implementation phase is API-P5 from crates/haze-sync-api/docs/implementation-plan.md.
+Use the diagnostics artifact as the authoritative description of the failed check.
 
 ## Read
 
-Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, relevant current source, and PR diff.
+Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, component docs and control files, relevant source files, and the current PR diff.
 
-Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
+Download artifact 8217771726. Read `summary.md`, `manifest.json`, and each log named by `failed_checks`. If the artifact is unavailable or cannot be interpreted, report `FIX_BLOCKED_BY_LOGS`.
 
 ## Task
 
-Implement API-P5: Conflict and delete route-helper contract hardening.
-
-Follow the plan:
-
-- test conflict list query parsing, especially status filters and bounds;
-- test conflict resolve action parsing for accept_current, accept_conflict, keep_both, and mark_resolved;
-- test conflict list/resolve DTO serde roundtrips and safe path/hash/revision fields;
-- test DELETE metadata extraction for path, base revision/null-base, idempotency key, and adapter principal requirement;
-- test delete response vocabulary for tombstoned, not_found, rejected, and guard-blocked outcomes;
-- ensure API does not implement conflict resolution or tombstone creation itself.
+Apply the smallest API-local correction needed for the failed API-P5 check. Preserve the existing conflict and delete request/response contracts, compatibility, safe error vocabulary, and phase boundaries.
 
 ## Allowed files
 
 - crates/haze-sync-api/src/routes/conflicts/**
 - crates/haze-sync-api/src/routes/delete/**
 - crates/haze-sync-api/src/dto/conflicts/**
-- crates/haze-sync-api/src/dto/files/** when delete DTOs live there
-- crates/haze-sync-api/docs/**
+- crates/haze-sync-api/src/dto/files/** when directly required
+- crates/haze-sync-api/docs/** only when the diagnostics identify a docs-format issue
 - crates/haze-sync-api/control/report.md
 
-## Non-goals
+## Boundaries
 
-No conflict row repository, content replacement implementation, tombstone persistence, provider/worktree trash behavior, mass-delete guard execution, workflow changes, or sibling component changes.
+Do not add new route execution behavior, persistence behavior, provider behavior, deletion execution, workflow changes, dependency changes, or sibling component changes.
 
 ## CI trigger policy
 
-Product/source/docs commits must not skip CI. A final report-only commit may skip CI.
+Source or documentation correction commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only the report to crates/haze-sync-api/control/report.md. Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION and phase_id to API-P5.
+Write only the report to crates/haze-sync-api/control/report.md. Use report-template.md. Set REPORT_TYPE to FIX and phase_id to FIX-API-P5-CI.
