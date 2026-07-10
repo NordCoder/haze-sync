@@ -52,7 +52,7 @@ struct CompatibilityExamples {
     idempotency_replay: IdempotencyReplayOutcome,
     idempotency_conflict: IdempotencyReplayOutcome,
     operation_log_cursor_outcomes: Vec<CursorOutcomeFixture>,
-    doctor_summary_healthy: DoctorReport,
+    doctor_summary_offline: DoctorReport,
     doctor_summary_partial: DoctorReport,
 }
 
@@ -292,13 +292,13 @@ fn cursor_and_doctor_fixtures_match_live_core_semantics() {
         assert_eq!(case.outcome, classify_cursor_update(current, requested));
     }
 
-    let healthy = DoctorReport::from_results(vec![
+    let offline = DoctorReport::from_results(vec![
         db_connectivity_check(DbConnectivityCheckInput::offline(true)),
         missing_blob_detection_check(MissingBlobDetectionInput::new(2, Vec::new(), 2)),
     ]);
-    assert_eq!(examples.doctor_summary_healthy, healthy);
+    assert_eq!(examples.doctor_summary_offline, offline);
     assert_eq!(
-        examples.doctor_summary_healthy.summary().status,
+        examples.doctor_summary_offline.summary().status,
         DoctorCheckStatus::Skipped
     );
 
