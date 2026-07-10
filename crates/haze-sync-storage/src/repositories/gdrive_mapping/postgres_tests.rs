@@ -65,18 +65,18 @@ async fn gdrive_mapping_roundtrips_in_caller_owned_transaction() {
         GDriveMappingUpsert {
             path: &path,
             drive_file_id: Some(&drive_file_id),
-            drive_parent_id: Some(&drive_parent_id),
+            drive_parent_id: None,
             drive_name: Some("gdrive-map.md"),
             mime_type: Some("text/markdown"),
-            md5_checksum: Some(&checksum),
+            md5_checksum: None,
             head_revision_id: Some("drive-head-2"),
             drive_version: Some("2"),
-            drive_modified_time: Some(modified_at),
+            drive_modified_time: None,
             core_revision_id: None,
             core_seq: Some(8),
-            last_imported_at: Some(seen_at),
+            last_imported_at: None,
             last_exported_at: Some(seen_at),
-            last_seen_at: Some(seen_at),
+            last_seen_at: None,
             delete_candidate_at: Some(delete_candidate_at),
         },
     )
@@ -86,6 +86,11 @@ async fn gdrive_mapping_roundtrips_in_caller_owned_transaction() {
     assert_eq!(updated.drive_version.as_deref(), Some("2"));
     assert_eq!(updated.core_seq, Some(8));
     assert_eq!(updated.delete_candidate_at, Some(delete_candidate_at));
+    assert!(updated.drive_parent_id.is_none());
+    assert!(updated.md5_checksum.is_none());
+    assert!(updated.drive_modified_time.is_none());
+    assert!(updated.last_imported_at.is_none());
+    assert!(updated.last_seen_at.is_none());
 
     transaction.rollback().await.unwrap();
 }
