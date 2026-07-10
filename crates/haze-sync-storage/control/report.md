@@ -1,13 +1,13 @@
 REPORT_TYPE:
-CLEAN_CODE_REVIEW
+FIX
 
 STATUS:
-CLEAN_ACCEPT_PENDING_CI
+FIX_COMPLETE
 
 AGENT:
-role: clean-code-reviewer
-agent_execution_id: W1-STOR-P6C-storage-conflict-tombstone-clean-code-review
-chat_name: storage — W1 STOR-P6C Clean-Code Review
+role: fixer-worker
+agent_execution_id: W1-FIX-STOR-P6C-CI-storage-clean-code-ci-fix
+chat_name: storage — W1 FIX-STOR-P6C-CI CI Fix
 
 COMPONENT:
 name: storage
@@ -21,31 +21,29 @@ control_report_path: crates/haze-sync-storage/control/report.md
 
 WAVE:
 id: W1
-phase_id: STOR-P6C
-dependency_status: active prompt state was PROMPT_READY; active_prompt matched crates/haze-sync-storage/control/prompt.md; active role was clean-code-reviewer; STOR-P6 implementation and CI fixer were complete; Component CI run 29082024073 was independently observed completed/success for compatibility-fix commit b47bf13f652e0287c6153e6b0c969140920b796e before this review
+phase_id: FIX-STOR-P6C-CI
+dependency_status: active prompt state was PROMPT_READY; active_prompt matched crates/haze-sync-storage/control/prompt.md; active role was fixer-worker; STOR-P6C clean-code report status was CLEAN_ACCEPT_PENDING_CI; active state recorded Component CI run 29084413726 as CI_RED with diagnostics artifact 8224149261
 
 SUMMARY:
-Reviewed STOR-P6 conflict, tombstone, restore-metadata, operation-log, compatibility, transaction-boundary, and integration-test behavior. Conflict insertion/read/lifecycle updates remain caller-transaction-owned and policy-free; bounded listing preserves the existing two-argument API plus an explicit limited API; tombstone restore records only one-shot metadata and performs no hard delete or content restoration. Found and fixed one persisted-value boundary bug: operation-log read methods and changes-feed mapping validated typed append inputs but returned unsupported persisted `kind` strings without classification. All operation-log row mapping now validates the persisted kind through `OperationKindName` and returns the safe `RepositoryError::InvalidOperationKind` boundary. Split the large operation-log unit and PostgreSQL tests into dedicated child modules, preserving all assertions and feature gates while reducing production-module noise. New Component CI run 29084413726 is in progress for the clean-code source/docs head 4f2f27ee63ddaaf48dfecd0e6fbbb6deb40f086f.
+Fixed the complete artifact-proven cause of the STOR-P6C Component CI failure. Diagnostics contained one failed check only: `cargo fmt --all --check`. Applied the three exact rustfmt layout corrections in `operation_log.rs` and `operation_log/tests.rs`. No behavior, repository signature, safe persisted operation-kind validation, conflict/tombstone semantics, caller-owned transaction behavior, test assertion, documentation, dependency, workflow, or sibling component was changed. New Component CI run 29086476328 is in progress for final source head 56ee302fa490c94f2c3ed3e405d3fc91d5a63bf9.
 
 CHANGED_FILES:
 - crates/haze-sync-storage/src/repositories/operation_log.rs
 - crates/haze-sync-storage/src/repositories/operation_log/tests.rs
-- crates/haze-sync-storage/src/repositories/operation_log/postgres_tests.rs
-- crates/haze-sync-storage/docs/implementation-log.md
 - crates/haze-sync-storage/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/storage
 base_branch: main
 base_sha: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
-head_sha: 4f2f27ee63ddaaf48dfecd0e6fbbb6deb40f086f before report write; report write creates the next branch head
+head_sha: 56ee302fa490c94f2c3ed3e405d3fc91d5a63bf9 before report write; report write creates the next branch head
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: crates/haze-sync-storage/control/prompt.md
 control_report_written: crates/haze-sync-storage/control/report.md
 control_files_archived_by_worker: no
 ci_skip_used: yes for the final report-only commit only
-ci_skip_reason: final commit updates only crates/haze-sync-storage/control/report.md; all source/test/docs clean-code commits did not skip CI and triggered Component CI
+ci_skip_reason: final commit updates only crates/haze-sync-storage/control/report.md; both source/test formatting commits did not use CI skip and triggered Component CI
 
 SCOPE:
 allowed_files_only: yes
@@ -64,54 +62,52 @@ affected_components: storage only
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- Reviewed `ConflictRepository` insertion, lookup, source-compatible maximum listing, explicit bounded listing, safe persisted-status validation, and guarded open-to-resolved/open-to-ignored updates.
-- Confirmed conflict lifecycle helpers only persist caller-decided metadata and do not choose merge, overwrite, materialization, or acceptance policy.
-- Reviewed tombstone insertion, lookup, bounded active/path listing, and one-shot `restored_at` metadata update; confirmed no hard-delete, retention clearing, blob removal, provider calls, or content restore behavior.
-- Reviewed the compatibility correction restoring `list_by_status(executor, status)` and retaining `list_by_status_limited(executor, status, limit)`.
-- Found that `OperationLogRepository` append inputs were typed, but persisted operation kinds loaded by `append`, `get_by_sequence`, `get_by_operation_id`, `list_since`, and `changes_since` were not validated.
-- Converted operation-log row mapping to the safe `RepositoryResult` boundary and validated every persisted kind through `OperationKindName::from_str`.
-- Preserved negative persisted size validation for changes-feed rows.
-- Split unit tests into `operation_log/tests.rs` and feature-gated PostgreSQL integration coverage into `operation_log/postgres_tests.rs` without deleting or weakening tests.
-- Added explicit unit coverage for accepted and rejected persisted operation-kind strings.
-- Added the STOR-P6C implementation-log entry.
-behavior_changes: unsupported persisted operation-log kind values now return `RepositoryError::InvalidOperationKind` from all repository read/change-feed paths instead of escaping as unvalidated strings; valid rows and public method signatures are unchanged
-bugs_found: one safe-boundary inconsistency in persisted operation-kind reads
-bugs_fixed: centralized persisted operation-kind validation for normal rows and enriched changes-feed rows
-cleanups_made: moved 500-plus lines of inline unit/PostgreSQL test code into focused child modules; normalized operation-log row mappers to the repository-safe error boundary
-non_goals_preserved: no Core conflict/delete/restore policy, no hard delete, no filesystem/provider behavior, no API handlers, no cleanup execution, no workflow/dependency changes, no sibling changes
-deferred_work: only Component CI verification of the clean-code source/docs head remains
+- Applied rustfmt's exact one-line layout for persisted operation-kind extraction in `operation_log_row_from_pg`.
+- Applied rustfmt's exact one-line layout for persisted operation-kind extraction in `change_feed_row_from_pg`.
+- Applied rustfmt's exact wrapping for the long SHA-256 fixture string in the operation-log unit-test helper.
+- Preserved the STOR-P6C safe `OperationKindName` validation on all operation-log read paths.
+- Preserved split unit/PostgreSQL test modules and all existing assertions.
+behavior_changes: none
+bugs_found: source/test formatting did not match rustfmt output
+bugs_fixed: all three rustfmt diffs from diagnostics artifact 8224149261 were applied exactly
+cleanups_made: formatting only
+non_goals_preserved: no Core policy, no hard delete, no filesystem/provider behavior, no API handlers, no cleanup execution, no workflow/dependency changes, no sibling changes, no test deletion, no assertion weakening
+deferred_work: new Component CI verification is pending
 
 TESTS_AND_CHECKS:
 checks_run:
-- Re-read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, implementation-worker-prompt.md, fixer-worker-prompt.md, and chatgpt-gh-connector.md from Project Sources.
-- Read current storage control state, active prompt, prior fixer report, component contract, implementation plan, implementation log, dependency map, current conflict/tombstone/operation-log source and tests, PR changed filenames, relevant PR patch, PR metadata, and main..component/storage compare metadata through GitHub connector.
-- Verified through GitHub workflow metadata that Component CI run 29082024073 completed successfully for pre-review source commit b47bf13f652e0287c6153e6b0c969140920b796e.
-- Verified the final source structure after edits: production operation-log module contains repository code and safe row mapping; unit and feature-gated PostgreSQL tests are separate child modules with original coverage retained.
-- GitHub workflow-run lookup for final clean-code source/docs commit 4f2f27ee63ddaaf48dfecd0e6fbbb6deb40f086f observed Component CI run 29084413726 in progress.
-- GitHub workflow job metadata showed Rust workspace setup/toolchain in progress at report time; fmt/check/test/clippy had not yet completed.
+- Re-read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, and chatgpt-gh-connector.md from Project Sources.
+- Read current storage control state, active fixer prompt, previous clean-code report, component contract, STOR-P6 implementation-plan section, implementation log, dependency map, current operation-log source/tests, PR changed filenames, relevant PR patch, PR metadata, and main..component/storage compare metadata through GitHub connector.
+- Downloaded diagnostics artifact 8224149261 and read `summary.md`, `manifest.json`, `failures/rust-fmt.txt`, and `logs/rust-fmt.log` completely.
+- Verified diagnostics listed only `rust-fmt`; no cargo-check, cargo-test, or cargo-clippy failure was present in the artifact.
+- Re-read the corrected source line ranges through GitHub connector and confirmed all three artifact-reported layouts are present.
+- GitHub workflow-run lookup for final source commit 56ee302fa490c94f2c3ed3e405d3fc91d5a63bf9 observed Component CI run 29086476328 with status in_progress and conclusion none.
+- GitHub PR #47 metadata showed open draft PR head 56ee302fa490c94f2c3ed3e405d3fc91d5a63bf9 before report write.
 checks_not_run:
 - cargo fmt --all --check locally
 - cargo check --workspace locally
 - cargo test --workspace locally
 - cargo test -p haze-sync-storage --features test-support locally
 - cargo clippy --workspace --all-targets -- -D warnings locally
-ci_status: CI_PENDING for Component CI run 29084413726 on source/docs commit 4f2f27ee63ddaaf48dfecd0e6fbbb6deb40f086f; prior compatibility-fix run 29082024073 was CI_GREEN
+ci_status: CI_PENDING for Component CI run 29086476328 on source/test head 56ee302fa490c94f2c3ed3e405d3fc91d5a63bf9
 workflow_urls:
-- prior successful run: Component CI 29082024073, run_number 972, conclusion success
-- new clean-code run: Component CI 29084413726, run_number 1044, status in_progress, conclusion none
+- failed run: Component CI 29084413726, run_number 1044, attempt 1, artifact 8224149261
+- new source-fix run: Component CI 29086476328, run_number 1097, status in_progress, conclusion none
 known_failures:
-- none observed for the new clean-code run at report time; checks were still pending/in progress
+- Artifact 8224149261 proved only rustfmt layout differences in operation_log.rs and operation_log/tests.rs; all were corrected
 
 CI_DIAGNOSTICS:
-artifact_based_logs: no; active role is clean-code-reviewer and the active prompt prohibited diagnostics-artifact reading
-artifact_name: none
-artifact_id: none
-workflow_run_id: 29084413726 from workflow metadata only
-workflow_run_attempt: unknown from commit workflow-run lookup
-artifact_status: not applicable
-summary_read: no
-manifest_read: no
-logs_read: none
+artifact_based_logs: yes
+artifact_name: ci-diag__component-storage__wf-component-ci__run-29084413726__attempt-1
+artifact_id: 8224149261
+workflow_run_id: 29084413726
+workflow_run_attempt: 1
+artifact_status: downloaded, extracted, and read successfully
+summary_read: yes
+manifest_read: yes
+logs_read:
+- failures/rust-fmt.txt
+- logs/rust-fmt.log
 raw_job_logs_used: no
 diagnostics_failure: none
 
@@ -126,17 +122,16 @@ background_jobs_added: no
 ISSUES_FOUND:
 - Branch remains diverged from main: compare reported main head c1e69a664388b0cba028170e8398b9088218957d and merge base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2 before report write.
 - Shell commands against the repository were not run because this worker is restricted to the GitHub connector; Component CI is the verification source.
-- Feature-gated PostgreSQL tests continue to skip when no explicit safe test database URL is configured, matching the existing test-support contract.
-- This final report-only commit uses [skip ci] and is not CI evidence; source/test/docs commits did not skip CI.
+- This final report-only commit uses [skip ci] and is not CI evidence; source/test fixer commits did not skip CI.
 
 BLOCKERS:
-none; CI verification is pending
+none for the fix; CI verification is pending
 
 NEXT_RECOMMENDED_AGENT:
 orchestrator
 
 FINAL_VERDICT:
-CLEAN_ACCEPT_PENDING_CI. STOR-P6 and its compatibility fix satisfy passive Storage ownership, bounded/source-compatible listing, guarded conflict/tombstone metadata, caller-owned transaction, and no-hard-delete boundaries. The clean-code pass fixed unsupported persisted operation kinds escaping validation and split oversized inline tests into focused modules. Component CI run 29084413726 is in progress for the final source/docs head; the final report-only commit used CI skip and is not CI evidence.
+FIX_COMPLETE. The only artifact-proven STOR-P6C failure was rustfmt, and every reported layout difference was corrected inside the allowed operation-log files without behavioral or contract changes. Component CI run 29086476328 is in progress for the source/test head; the final report-only commit used CI skip and must not be treated as CI evidence.
 
 PUSHED:
 yes
