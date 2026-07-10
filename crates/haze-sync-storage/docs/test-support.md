@@ -3,8 +3,13 @@
 ## Scope
 
 `haze-sync-storage` exposes test helpers only under `cfg(test)` or the explicit
-`test-support` feature. Default production builds do not compile or export the
+`test-support` feature. The crate's default build does not compile or export the
 `test_support` module.
+
+Downstream production crates must depend on `haze-sync-storage` without enabling
+`test-support` in their normal dependency set. A downstream crate that needs the
+helpers for tests should enable the feature through a dev-dependency or a
+separate test-harness package so its production dependency graph remains clean.
 
 The helpers are for local or CI-owned storage tests. They do not contact provider
 services, load OAuth credentials, access external vaults, choose production
@@ -53,6 +58,9 @@ mandatory execution.
 - Names containing production markers such as `prod`, `production`, `live`,
   `primary`, `main`, or `default` are rejected even when they also contain a
   test marker.
+- URL query parameters are allowlisted. TLS parameters plus
+  `application_name` and `connect_timeout` are accepted; target/session-changing
+  options such as `dbname` or `options` and duplicate keys are rejected.
 - URLs and database names are redacted from `Debug`, `Display`, and public test
   support errors. Raw URLs are available only through the explicitly sensitive
   accessor used to construct the SQLx pool.
@@ -76,16 +84,17 @@ PostgreSQL integration tests. It:
 2. connects without exposing connection details in errors;
 3. serializes schema preparation with a transaction-scoped PostgreSQL advisory
    lock;
-4. applies the embedded storage migrations only when no owned storage tables
-   exist;
-5. accepts an already-complete initial storage schema;
-6. rejects a partial schema instead of guessing which migrations are safe to
-   replay.
+4. applies the embedded storage migrations only when no owned storage base
+   tables exist;
+5. accepts an already-complete initial storage schema made of base tables;
+6. rejects a partial schema or views masquerading as owned tables instead of
+   guessing which migrations are safe to replay.
 
 Repository tests should isolate writes with caller-owned transactions and roll
 them back. Each `PostgresTestContext` also supplies a bounded unique
 `TestNamespace`; child identifiers are stable within that namespace and remain
-within shared identifier length limits.
+within shared identifier length limits. Typed fixture helpers such as
+`operation_id` produce values accepted by their corresponding Common types.
 
 `clean_storage_tables` truncates every owned storage table and is intentionally
 destructive. Use it only during exclusive harness setup. Normal parallel
@@ -94,9 +103,11 @@ repository tests should prefer namespaced fixtures plus transaction rollback.
 ## Filesystem setup and cleanup
 
 `TestObjectRoot` creates an isolated temporary object-store root with `sha256`
-and `tmp` directories. Drop cleanup is best-effort. Tests that must prove cleanup
-should call `TestObjectRoot::cleanup`, which reports failures through a
-path-redacted error.
+and `tmp` directories. Partial layout creation is removed before returning an
+error. Drop cleanup is best-effort. Tests that must prove cleanup should call
+`TestObjectRoot::cleanup`, which reports failures through a path-redacted error
+and leaves Drop cleanup enabled for a final best-effort retry when explicit
+removal fails.
 
 `TestObjectRoot::keep` is only for local debugging and deliberately transfers the
 local path to the test caller. It must not be used in CI reports or public output.
