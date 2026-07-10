@@ -133,11 +133,9 @@ fn read_test_database_url_env() -> Result<Option<String>, TestSupportError> {
     match env::var(HAZE_SYNC_TEST_DATABASE_URL_ENV) {
         Ok(value) => Ok(Some(value)),
         Err(env::VarError::NotPresent) => Ok(None),
-        Err(env::VarError::NotUnicode(_)) => {
-            Err(TestSupportError::EnvironmentVariableNotUnicode {
-                name: HAZE_SYNC_TEST_DATABASE_URL_ENV,
-            })
-        }
+        Err(env::VarError::NotUnicode(_)) => Err(TestSupportError::EnvironmentVariableNotUnicode {
+            name: HAZE_SYNC_TEST_DATABASE_URL_ENV,
+        }),
     }
 }
 
@@ -192,9 +190,9 @@ fn extract_safe_database_name(raw_url: &str) -> Result<String, TestSupportError>
     }
     if database_name.contains('/')
         || database_name.contains('%')
-        || !database_name
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '_' | '-' | '.'))
+        || !database_name.chars().all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '_' | '-' | '.')
+        })
     {
         return Err(TestSupportError::InvalidDatabaseUrl);
     }
@@ -230,9 +228,9 @@ fn validate_test_database_name(database_name: &str) -> Result<(), TestSupportErr
     });
     let has_test_marker = tokens.iter().any(|token| {
         *token == "test"
-            || token
-                .strip_prefix("test")
-                .is_some_and(|suffix| !suffix.is_empty() && suffix.chars().all(|ch| ch.is_ascii_digit()))
+            || token.strip_prefix("test").is_some_and(|suffix| {
+                !suffix.is_empty() && suffix.chars().all(|ch| ch.is_ascii_digit())
+            })
     });
 
     if blocked_exact.contains(&lower.as_str()) || blocked_token || !has_test_marker {
