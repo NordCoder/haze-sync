@@ -6,7 +6,9 @@
 
 use crate::{
     models::ConflictRow,
-    repositories::{map_sqlx_error, validate_limit, RepositoryError, RepositoryResult},
+    repositories::{
+        map_sqlx_error, validate_limit, RepositoryError, RepositoryResult, MAX_CHANGES_LIMIT,
+    },
 };
 use haze_sync_common::{AdapterId, ConflictId, RevisionId, VaultPath};
 use serde::{Deserialize, Serialize};
@@ -119,8 +121,25 @@ impl ConflictRepository {
         conflict_row_from_pg(&row)
     }
 
-    /// List conflicts with a specific lifecycle status.
+    /// List conflicts with a specific lifecycle status using the repository's
+    /// standard maximum page size.
+    ///
+    /// This compatibility method preserves the existing two-argument repository
+    /// contract for Server and integration-test consumers.
     pub async fn list_by_status<'executor, E>(
+        &self,
+        executor: E,
+        status: ConflictStatusName,
+    ) -> RepositoryResult<Vec<ConflictRow>>
+    where
+        E: Executor<'executor, Database = Postgres>,
+    {
+        self.list_by_status_limited(executor, status, MAX_CHANGES_LIMIT)
+            .await
+    }
+
+    /// List conflicts with a specific lifecycle status and a validated page limit.
+    pub async fn list_by_status_limited<'executor, E>(
         &self,
         executor: E,
         status: ConflictStatusName,
@@ -246,15 +265,11 @@ fn conflict_row_from_pg(row: &PgRow) -> RepositoryResult<ConflictRow> {
         conflict_id: row.try_get("conflict_id").map_err(map_sqlx_error)?,
         original_path: row.try_get("original_path").map_err(map_sqlx_error)?,
         base_revision_id: row.try_get("base_revision_id").map_err(map_sqlx_error)?,
-        current_revision_id: row
-            .try_get("current_revision_id")
-            .map_err(map_sqlx_error)?,
+        current_revision_id: row.try_get("current_revision_id").map_err(map_sqlx_error)?,
         incoming_revision_id: row
             .try_get("incoming_revision_id")
             .map_err(map_sqlx_error)?,
-        incoming_adapter_id: row
-            .try_get("incoming_adapter_id")
-            .map_err(map_sqlx_error)?,
+        incoming_adapter_id: row.try_get("incoming_adapter_id").map_err(map_sqlx_error)?,
         policy_applied: row.try_get("policy_applied").map_err(map_sqlx_error)?,
         materialized_path: row.try_get("materialized_path").map_err(map_sqlx_error)?,
         status,
@@ -267,7 +282,6 @@ fn conflict_row_from_pg(row: &PgRow) -> RepositoryResult<ConflictRow> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repositories::MAX_CHANGES_LIMIT;
 
     #[test]
     fn conflict_status_names_match_contract_strings() {
