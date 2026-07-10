@@ -1,13 +1,13 @@
 REPORT_TYPE:
-IMPLEMENTATION
+FIX
 
 STATUS:
-SELF_NEEDS_FIX
+FIX_COMPLETE
 
 AGENT:
-role: implementation-worker
-agent_execution_id: W1-CORE-P6
-chat_name: core — W1 CORE-P6 Implementation
+role: fixer-worker
+agent_execution_id: W1-FIX-CORE-P6-CI
+chat_name: core — W1 FIX-CORE-P6-CI CI Fix
 
 COMPONENT:
 name: core
@@ -21,30 +21,31 @@ control_report_path: crates/haze-sync-core/control/report.md
 
 WAVE:
 id: W1
-phase_id: CORE-P6
-dependency_status: control state was PROMPT_READY, active_agent_role was implementation-worker, CORE-P5 clean-code review was accepted, and Component CI run 29084444310 was green for the accepted CORE-P5 code/docs head.
+phase_id: FIX-CORE-P6-CI
+dependency_status: control state was PROMPT_READY, active_agent_role was fixer-worker, and the active prompt supplied exact metadata for failed Component CI run 29086772001 attempt 1 and diagnostics artifact 8225090296.
 
 SUMMARY:
-Implemented CORE-P6 idempotency, operation-log, changes-page, and cursor primitive hardening inside core scope. Idempotency key formatting is now redacted while explicit storage accessors and persistence serialization retain the raw validated key. Stored replay responses re-run status/header validation during deserialization, reject sensitive/idempotency headers, control-character values, and case-normalization collisions, while preserving the existing serialized response fields and request fingerprint algorithm. Expanded deterministic fingerprint, replay, key-boundary, redaction, safe-header, and durable-record tests. OperationSequence, ChangesLimit, and operation-log TombstoneId now re-run constructor validation during deserialization. ChangesPage deserialization now validates strict ordering and serialized from/to bounds. Added complete OperationKind parse/display/serde coverage, changes-query boundary tests, cursor boundary/serde tests, and an AdapterCursor convenience classifier over the existing pure monotonicity function. Added a durable fan-in document defining exact idempotency lookup identity, atomic race handling, safe fingerprint inputs, response limitations, append-only sequence rules, changes pagination, and atomic adapter cursor persistence. Source/docs commits were cc812b772f41c9670ca088d96a24ebfbf376e1fe, c40e0e05216efbcbce958d8fc2d24a8c3e656fc0, and a25d01c9633692906d94f783c053cb332521fe06. Component CI run 29086772001 passed cargo fmt, cargo check, cargo test, and cargo clippy, but the workflow concluded failure because Finalize CI diagnostics failed. Diagnostics artifact contents were not read because this is an implementation-worker prompt.
+Downloaded and read diagnostics artifact 8225090296 for Component CI run 29086772001. Read summary.md, manifest.json, all failure markers, and every failed-check log listed by the manifest. The artifact proved two minimum causes inside allowed Core scope: a compile-time test typo in idempotency where the ConflictDifferentRequest field shorthand referenced an undefined incoming_request_fingerprint variable instead of the existing incoming_fingerprint fixture, and rustfmt-only diffs in idempotency plus operation_log. Replaced the invalid shorthand with an explicit field assignment and applied exactly the five rustfmt layouts reported by the artifact. No fingerprint algorithm, replay response shape, operation sequence semantics, cursor policy, durable fan-in documentation, production behavior, tests, dependencies, workflows, or sibling components changed. Source fixer commit 97704236cdd13714a0d0c6e4ebac7a27d9a5b231 passed follow-up Component CI run 29088874164, run number 1149, completely.
 
 CHANGED_FILES:
 - crates/haze-sync-core/src/idempotency/mod.rs
 - crates/haze-sync-core/src/operation_log/mod.rs
-- crates/haze-sync-core/docs/idempotency-operation-log-persistence.md
 - crates/haze-sync-core/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/core
 base_branch: main
 base_sha: PR #43 base observed as 1a82bea5c87953db378e5e03429326df38320ee8
-head_sha: code/docs implementation head before this report-only commit was a25d01c9633692906d94f783c053cb332521fe06; idempotency source commit was cc812b772f41c9670ca088d96a24ebfbf376e1fe; operation-log source commit was c40e0e05216efbcbce958d8fc2d24a8c3e656fc0; durable fan-in docs commit was a25d01c9633692906d94f783c053cb332521fe06
+head_sha: final source fixer head before this report-only commit was 97704236cdd13714a0d0c6e4ebac7a27d9a5b231; PR #43 was observed open, draft, and unmerged at that head
+source_fix_commits:
+- 97704236cdd13714a0d0c6e4ebac7a27d9a5b231
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
 ci_skip_used: yes
-ci_skip_reason: used [skip ci] only for this final control/report-only commit; source, tests, and durable fan-in docs commits did not skip CI. This skipped report commit is not CI evidence.
+ci_skip_reason: used [skip ci] only for this final report-only commit. Source fixer commit 97704236cdd13714a0d0c6e4ebac7a27d9a5b231 did not use CI skip. Follow-up CI evidence is Component CI run 29088874164 on that source head.
 
 SCOPE:
 allowed_files_only: yes
@@ -57,79 +58,90 @@ CONTRACT:
 contract_read: yes
 contract_satisfied: yes
 contract_changes_requested: no
-contract_change_rationale: none; request fingerprint bytes, stored response field shape, operation sequence numeric semantics, and persistence ownership were preserved
-affected_components: core only; Storage/Server/API obligations are documented for future fan-in but no sibling files were modified
+contract_change_rationale: none; the fix changes only one invalid test field reference and formatter-selected layout
+affected_components: core only
 
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- replaced raw IdempotencyKey Debug/Display output with a stable redacted marker while retaining explicit raw storage accessors and persistence serialization
-- documented safe fingerprint input exclusions without changing canonical JSON hashing or SHA-256 output
-- added validating Deserialize for StoredIdempotencyResponse so persisted unsafe status/header data cannot bypass constructor rules
-- expanded replay-header rejection to idempotency/auth-token names, control characters, and duplicate names after lowercase normalization
-- added key minimum/maximum/control/non-ASCII tests, redaction tests, nested canonical JSON determinism tests, same/different replay tests, validating response serde tests, and durable record roundtrip tests
-- added validating Deserialize for OperationSequence, ChangesLimit, and operation-log TombstoneId
-- added validating Deserialize for ChangesPage with strict ordering and from/to bound consistency
-- added InconsistentPageBounds as a safe non-exhaustive operation-log error variant
-- added complete OperationKind exact string parse/display/serde tests
-- added changes-query lower/upper/serde boundary tests and limit+sentinel checks
-- added AdapterCursor::classify_core_sequence_update as a pure convenience over classify_cursor_update
-- expanded cursor zero/same/advance/regression/i64::MAX and stable serde-name tests
-- documented durable idempotency, operation-log, pagination, and cursor fan-in obligations
-behavior_changes: safety hardening only; IdempotencyKey formatting is redacted, unsafe persisted replay snapshots and invalid deserialized operation-log values/pages are rejected, and valid existing serialized shapes/algorithms remain unchanged
+- changed ConflictDifferentRequest test construction from undefined incoming_request_fingerprint shorthand to incoming_request_fingerprint: incoming_fingerprint
+- applied rustfmt multiline layout to the unsafe-header newline insertion test
+- applied rustfmt layout to ChangesPage deserialization expected_to_seq construction
+- applied rustfmt multiline layout to ChangesLimit deserialization assertion
+- applied rustfmt multiline layout to OperationKind deserialization assertion
+- applied rustfmt multiline layout to the i64::MAX cursor unchanged assertion
+behavior_changes: none; product semantics and public contracts are unchanged
 bugs_found:
-- derived Debug/Display exposed raw idempotency key material
-- derived StoredIdempotencyResponse deserialization bypassed status/header validation
-- derived OperationSequence, ChangesLimit, operation-log TombstoneId, and ChangesPage deserialization could bypass constructor/page invariants
-bugs_fixed: all listed Core hardening gaps were fixed and covered by tests
-cleanups_made: centralized changes-page ordering validation and documented storage-only raw-key access plus durable fan-in responsibilities
-non_goals_preserved: no durable idempotency repository, no database operation append, no HTTP replay middleware, no adapter polling loop, no Storage/API/Server edits, no workflow/dependency changes, and no sibling component changes
-deferred_work: Orchestrator should route failed Component CI run 29086772001 and artifact 8225090296 to fixer-worker; after green CI, run clean-code-reviewer for CORE-P6
+- undefined incoming_request_fingerprint test identifier caused cargo test and cargo clippy compilation failure
+- five formatter mismatches caused cargo fmt failure
+bugs_fixed: all artifact-proven failures fixed exactly
+cleanups_made: formatter-only layouts required by cargo fmt
+non_goals_preserved: no durable idempotency repository, no operation-log database append, no HTTP replay middleware, no adapter polling loop, no Storage/API/Server edits, no workflow/dependency changes, no sibling changes, no test deletion, and no assertion weakening
+deferred_work: Orchestrator may advance CORE-P6 to clean-code review using successful Component CI run 29088874164 as source CI evidence
 
 TESTS_AND_CHECKS:
 checks_run:
 - read implementation-manifest.md from Project Sources
 - read report-template.md from Project Sources
-- read implementation-worker-prompt.md from Project Sources
+- read fixer-worker-prompt.md from Project Sources
 - read chatgpt-gh-connector.md from Project Sources
 - read crates/haze-sync-core/control/state.md on branch component/core
-- read crates/haze-sync-core/control/prompt.md for CORE-P6
-- read previous CORE-P5C report before replacing it
+- read crates/haze-sync-core/control/prompt.md for FIX-CORE-P6-CI
+- read previous CORE-P6 implementation report before replacing it
 - read crates/haze-sync-core/docs/component-contract.md
 - read CORE-P6 section of crates/haze-sync-core/docs/implementation-plan.md
 - read crates/haze-sync-core/docs/implementation-log.md
 - read crates/haze-sync-core/docs/dependency-map.md
-- read current crates/haze-sync-core/src/idempotency/mod.rs and tests
-- read current crates/haze-sync-core/src/operation_log/mod.rs and tests
-- read project storage schema and Core API contracts for durable table/feed/cursor expectations
-- read current Storage and API component contracts and confirmed they remain scaffold-level boundaries with safe-error requirements
-- inspected PR #43 metadata and observed it remained open, draft, and unmerged with code/docs head a25d01c9633692906d94f783c053cb332521fe06 before this report update
-- observed Component CI run 29086772001, run number 1104, for code/docs head a25d01c9633692906d94f783c053cb332521fe06
+- read crates/haze-sync-core/docs/idempotency-operation-log-persistence.md
+- read current crates/haze-sync-core/src/idempotency/mod.rs
+- read current crates/haze-sync-core/src/operation_log/mod.rs
+- inspected PR #43 changed filenames and relevant source patches
+- downloaded diagnostics artifact 8225090296
+- read summary.md
+- read manifest.json
+- read failures/cargo-clippy.txt
+- read failures/cargo-test.txt
+- read failures/rust-fmt.txt
+- read logs/cargo-clippy.log
+- read logs/cargo-test.log
+- read logs/rust-fmt.log
+- verified exact source commit diff 97704236cdd13714a0d0c6e4ebac7a27d9a5b231 contains only artifact-proven corrections
+- verified committed idempotency blob SHA e8468ced16d6bd100925ec56860d4e51a2259caf
+- verified committed operation_log blob SHA 769e82ac44d2b1367dd37b8b307952eb12a71fc1
+- observed PR #43 open, draft, and unmerged at source head 97704236cdd13714a0d0c6e4ebac7a27d9a5b231 before this report update
+- observed follow-up Component CI run 29088874164, run number 1149
 - observed cargo fmt success
 - observed cargo check success
 - observed cargo test success
 - observed cargo clippy success
-- observed Finalize CI diagnostics failure
-- observed workflow conclusion failure
-- listed diagnostics artifact metadata without downloading or reading artifact contents
+- observed Finalize CI diagnostics success
+- observed workflow conclusion success
 checks_not_run:
-- local cargo commands were not run because repository work is GitHub-connector-only and no local repository checkout/toolchain was used; Component CI supplied product-check evidence
-ci_status: CI_RED for Component CI run 29086772001 even though cargo fmt/check/test/clippy all succeeded; Finalize CI diagnostics failed
-workflow_urls: Component CI run 29086772001, run_number 1104
-known_failures: Finalize CI diagnostics step failed; root cause not inspected in this implementation-worker run
+- local cargo commands were not run because repository work is GitHub-connector-only and no local repository checkout was used; Component CI run 29088874164 provides complete check evidence
+ci_status: CI_GREEN for Component CI run 29088874164 on source head 97704236cdd13714a0d0c6e4ebac7a27d9a5b231
+workflow_urls: failed Component CI run 29086772001; successful follow-up Component CI run 29088874164
+known_failures: none remaining for final source fixer head
 
 CI_DIAGNOSTICS:
-artifact_based_logs: no
+artifact_based_logs: yes
 artifact_name: ci-diag__component-core__wf-component-ci__run-29086772001__attempt-1
 artifact_id: 8225090296
 workflow_run_id: 29086772001
 workflow_run_attempt: 1
-artifact_status: metadata observed; artifact is available, unexpired, and expires at 2026-07-11T10:36:24Z; artifact was not downloaded or read because the active implementation-worker prompt did not permit diagnostics reading
-summary_read: no
-manifest_read: no
-logs_read: none
+artifact_status: downloaded and readable; required logical files were present
+summary_read: yes
+manifest_read: yes
+logs_read:
+- failures/cargo-clippy.txt
+- failures/cargo-test.txt
+- failures/rust-fmt.txt
+- logs/cargo-clippy.log
+- logs/cargo-test.log
+- logs/rust-fmt.log
 raw_job_logs_used: no
-diagnostics_failure: not inspected; workflow step metadata shows Finalize CI diagnostics failed after all Rust product checks succeeded
+diagnostics_failure:
+- cargo-test/cargo-clippy: undefined incoming_request_fingerprint in idempotency conflict test
+- rust-fmt: one layout diff in idempotency and four layout diffs in operation_log
 
 SAFETY_AND_SECRECY:
 secrets_committed: no
@@ -140,19 +152,18 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- Component CI run 29086772001 is formally red because Finalize CI diagnostics failed despite fmt/check/test/clippy success.
-- Diagnostics artifact 8225090296 must be read by a fixer-worker, not this implementation-worker.
-- StoredIdempotencyRecord serialization intentionally contains the raw validated key for persistence; the new durable fan-in document explicitly forbids exposing that serialization through API/log/report/metric surfaces.
+- The failed workflow step summary had indicated Rust product checks as successful, but the diagnostics artifact contained the authoritative cargo test, clippy, and rustfmt failures; artifact contents were treated as the fixer source of truth.
+- No production or contract defect was found by diagnostics; the failures were limited to one test identifier typo and formatting.
 - This final report-only commit uses CI skip and is not CI evidence.
 
 BLOCKERS:
-none for product implementation; CI diagnostics-finalization failure requires fixer-worker triage
+none
 
 NEXT_RECOMMENDED_AGENT:
-fixer-worker
+orchestrator
 
 FINAL_VERDICT:
-SELF_NEEDS_FIX. CORE-P6 product implementation and durable fan-in documentation are complete, and cargo fmt/check/test/clippy passed in Component CI run 29086772001. The workflow nevertheless concluded failure at Finalize CI diagnostics. Orchestrator should issue a fixer-worker prompt using artifact 8225090296. No diagnostics artifact contents were read in this implementation-worker run.
+FIX_COMPLETE. All artifact-proven CORE-P6 CI failures were fixed inside Core scope without changing product semantics, public contracts, durable fan-in boundaries, or tests. Final source head 97704236cdd13714a0d0c6e4ebac7a27d9a5b231 passed Component CI run 29088874164 completely. Orchestrator may advance CORE-P6 to clean-code review.
 
 PUSHED:
 yes
