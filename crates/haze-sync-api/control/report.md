@@ -6,8 +6,8 @@ CLEAN_ACCEPT
 
 AGENT:
 role: clean-code-reviewer
-agent_execution_id: W1-API-P4C
-chat_name: api — W1 API-P4C Clean-Code Review
+agent_execution_id: W1-API-P4C-RERUN
+chat_name: api — W1 API-P4C-RERUN Clean-Code Review
 
 COMPONENT:
 name: api
@@ -21,11 +21,11 @@ control_report_path: crates/haze-sync-api/control/report.md
 
 WAVE:
 id: W1
-phase_id: API-P4C
-dependency_status: active control state was PROMPT_READY; API-P4 implementation and CI fixer were complete; post-fix Component CI was green
+phase_id: API-P4C-RERUN
+dependency_status: refreshed active control state was PROMPT_READY for API-P4C-RERUN; API-P4 implementation and CI fixer were complete; post-fix Component CI was green
 
 SUMMARY:
-Reviewed API-P4 file and changes route-helper hardening plus the API-P4 CI fixer. No code changes were required. The current file route helpers preserve VaultPath parsing, idempotency-key parsing, X-Content-SHA256 conversion, explicit null or known base-revision semantics, body length metadata, and raw body redaction. The post-fixer shape preserves source compatibility of public PutFileRouteRequestParts construction while providing a separate passive parse_authenticated_put_file_request helper for already verified AdapterPrincipal values without runtime auth lookup. Public upload response helpers cover accepted, same-content, conflict-saved, hash-mismatch, and stale-base outcomes. Changes route helpers keep since/limit bounds and page metadata validation passive and free of storage/Core side effects beyond pure public DTO conversion from stable Core value types. No Axum handlers, object-store reads/writes, operation-log queries, content streaming, background cursor updates, workflow changes, or sibling component changes were introduced.
+Completed the explicitly refreshed API-P4C-RERUN clean-code review of the API-P4 file and changes route-helper hardening plus its CI fixer. No product/code changes were required. Vault paths are normalized through VaultPath; PUT metadata parsing validates the idempotency key, content hash, base revision, body length, and upload limit while preserving body and idempotency-key redaction. Public PutFileRouteRequestParts construction remains source-compatible. The separate parse_authenticated_put_file_request helper requires an already verified AdapterPrincipal without performing runtime token lookup. Upload response helpers preserve accepted, same-content, conflict-saved, hash-mismatch, and stale-base public outcomes. Changes helpers enforce since/limit bounds and validate deterministic page metadata. The reviewed implementation remains passive and adds no handler runtime, object-store access, operation-log queries, content streaming, background cursor updates, workflow changes, or sibling-component changes.
 
 CHANGED_FILES:
 - crates/haze-sync-api/control/report.md
@@ -35,20 +35,25 @@ REVIEWED_FILES:
 - crates/haze-sync-api/src/routes/changes.rs
 - crates/haze-sync-api/src/dto/files.rs
 - crates/haze-sync-api/src/dto/changes.rs
+- crates/haze-sync-api/docs/component-contract.md
+- crates/haze-sync-api/docs/implementation-plan.md
+- crates/haze-sync-api/docs/implementation-log.md
+- crates/haze-sync-api/docs/dependency-map.md
+- crates/haze-sync-api/control/prompt.md
 - crates/haze-sync-api/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/api
 base_branch: main
 base_sha: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
-head_sha: 435868c021468a4f968e3d81115259acb556df6a before clean-code report-only commits; reviewed code-bearing fix commit 7748d81690ee1d78035c21756e6bd9235127dadb had green CI
+head_sha: 379e6e60e5b79f68a7079aec54f95e7f0ddaffea before this report-only commit; reviewed code-bearing fix commit 7748d81690ee1d78035c21756e6bd9235127dadb had green CI
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
-ci_skip_used: yes, only for report-only clean-code report commits
-ci_skip_reason: report commits update only crates/haze-sync-api/control/report.md and cannot change executable behavior or validation outcome; skipped workflows are not CI evidence
+ci_skip_used: yes, only for this report-only API-P4C-RERUN commit
+ci_skip_reason: this commit updates only crates/haze-sync-api/control/report.md and cannot change executable behavior or validation outcome; the skipped workflow is not CI evidence
 
 SCOPE:
 allowed_files_only: yes
@@ -67,46 +72,43 @@ affected_components: none
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- No product/code changes were made by this clean-code reviewer.
-- Reviewed file-route parsing, authenticated helper behavior, upload response helpers, safe error mapping, and download metadata helpers.
-- Reviewed changes-route query parsing, bounds validation, response page metadata validation, safe error mapping, and passive DTO conversion from Core value types.
-- Confirmed the API-P4 fixer restored public PutFileRouteRequestParts source compatibility while preserving a non-breaking authenticated helper for future Server wiring.
+- Performed the refreshed clean-code review against the active API-P4C-RERUN prompt.
+- Reviewed current relevant source and the PR patches for routes/files.rs, routes/changes.rs, and dto/files.rs.
+- Confirmed source-compatible PutFileRouteRequestParts construction and the separate verified-principal helper behavior.
+- Confirmed API-P4 tests cover route metadata, safe redaction, public upload outcomes, changes bounds, and response-page consistency.
+- No product/code edits were necessary.
 behavior_changes: none
 bugs_found: none requiring code changes
 bugs_fixed: none by this reviewer
-cleanups_made: none; existing post-fixer code is acceptable for this phase
+cleanups_made: none; current post-fixer implementation is acceptable
 non_goals_preserved:
-- no Axum handler implementation
+- no Axum handler or runtime route implementation
 - no object-store reads or writes
-- no operation-log queries
+- no operation-log queries or persistence
 - no content streaming
 - no background cursor updates
-- no runtime auth lookup
+- no runtime authentication lookup
 - no workflow changes
-- no sibling component changes
+- no sibling-component changes
 - no tests deleted
 deferred_work:
-- Future Server wiring should choose parse_authenticated_put_file_request when a verified AdapterPrincipal is available.
+- Future Server wiring should use parse_authenticated_put_file_request after runtime authentication has produced a verified AdapterPrincipal.
 
 TESTS_AND_CHECKS:
 checks_run:
 - Read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, and chatgpt-gh-connector.md from Project Sources.
-- Read current control state and active API-P4C prompt from component/api.
-- Read previous API-P4 fixer report.
-- Read API component contract, implementation plan API-P4 section, implementation log, and dependency map.
-- Compared component/api against base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2.
-- Inspected crates/haze-sync-api/src/routes/files.rs.
-- Inspected crates/haze-sync-api/src/routes/changes.rs.
-- Inspected crates/haze-sync-api/src/dto/files.rs.
-- Inspected crates/haze-sync-api/src/dto/changes.rs.
-- Observed PR #44 metadata for branch/base/head context.
-- Observed Component CI run 29034803865 for code-bearing fix commit 7748d81690ee1d78035c21756e6bd9235127dadb completed with conclusion success.
+- Read refreshed control state and active API-P4C-RERUN prompt from component/api.
+- Read the current prior clean-code report.
+- Read API component contract, API-P4 implementation-plan section, implementation log, and dependency map.
+- Listed PR #44 changed files and inspected relevant PR patches for routes/files.rs, routes/changes.rs, and dto/files.rs.
+- Inspected current route and DTO source for the API-P4 scope.
+- Observed Component CI run 29034803865 for code-bearing fix commit 7748d81690ee1d78035c21756e6bd9235127dadb.
 - Observed Rust workspace job 86176755110 completed with conclusion success.
-- Observed CI steps cargo fmt, cargo check, cargo test, cargo clippy, and Finalize CI diagnostics completed with conclusion success.
+- Observed cargo fmt, cargo check, cargo test, cargo clippy, and Finalize CI diagnostics completed with conclusion success.
 checks_not_run:
 - Local shell checks were not run.
 - CI diagnostics artifacts were not read.
-Reason: this worker is constrained to GitHub connector only; no local shell execution is available, and the active clean-code reviewer prompt explicitly says not to read CI diagnostics artifacts.
+Reason: this worker is constrained to GitHub connector only; the active clean-code prompt does not authorize reading CI diagnostics artifacts, and green CI metadata was directly observed.
 ci_status: CI_GREEN
 workflow_urls:
 - Component CI run 29034803865 completed successfully for 7748d81690ee1d78035c21756e6bd9235127dadb
@@ -118,7 +120,7 @@ artifact_name: none
 artifact_id: none
 workflow_run_id: 29034803865
 workflow_run_attempt: 1
-artifact_status: not read; clean-code reviewer prompt explicitly said not to read CI diagnostics artifacts
+artifact_status: not read; active clean-code prompt did not authorize diagnostics-artifact access
 summary_read: no
 manifest_read: no
 logs_read: none
@@ -143,7 +145,7 @@ NEXT_RECOMMENDED_AGENT:
 orchestrator
 
 FINAL_VERDICT:
-CLEAN_ACCEPT. API-P4 file and changes route-helper hardening plus the CI fixer are acceptable inside API scope, and post-fix Component CI is green.
+CLEAN_ACCEPT. API-P4C-RERUN is complete. The file and changes route-helper hardening plus the compatibility fixer satisfy the API contract, preserve passive boundaries, and have green post-fix Component CI evidence.
 
 PUSHED:
 yes
