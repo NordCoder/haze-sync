@@ -1,8 +1,9 @@
 //! Real PostgreSQL helpers for storage integration tests.
 //!
-//! These helpers are compiled only with the explicit `test-support` feature.
-//! They require a validated dedicated test database URL and never create, drop,
-//! or select a database implicitly.
+//! These helpers are compiled for storage crate tests and for downstream
+//! harnesses that explicitly enable the `test-support` feature. They require a
+//! validated dedicated test database URL and never create, drop, or select a
+//! database implicitly.
 
 use super::{TestDatabaseUrl, TestNamespace, TestSupportError};
 use crate::schema::table_names;
