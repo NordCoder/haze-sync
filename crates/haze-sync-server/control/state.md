@@ -20,5 +20,5 @@ ci_run_number: 890
 ci_run_attempt: 1
 known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
-blocker: WT-P8 is implemented but formally red and not clean-code accepted; WT-P9 Server fan-in boundary is unavailable
-unblock_condition: green WT-P8 fixer and clean-code acceptance plus required WT-P9 or a dedicated cross-component fan-in contract
+blocker: WT-P8 fixer is green but WT-P8C clean-code acceptance and WT-P9 Server fan-in boundary are unavailable
+unblock_condition: green WT-P8C acceptance plus required WT-P9 or a dedicated Worktree/Server fan-in contract
