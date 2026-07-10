@@ -3,6 +3,7 @@ use std::process::ExitCode;
 mod commands;
 mod config;
 mod doctor;
+mod doctor_live;
 mod output;
 mod server_api;
 
@@ -46,10 +47,13 @@ fn render_command(command: commands::CliCommand) -> output::CliOutput {
                 "adapters list command parsed; live server calls remain unavailable",
             )
         }
-        commands::CliCommand::Doctor(command) => {
-            let report = command.build_offline_report();
-            output::CliOutput::success(doctor::render_text_summary(&report))
-        }
+        commands::CliCommand::Doctor(command) => match command.mode {
+            doctor::DoctorMode::Offline => {
+                let report = command.build_offline_report();
+                output::CliOutput::success(doctor::render_offline_report(&report))
+            }
+            doctor::DoctorMode::Live => doctor_live::render_live_doctor(&config, &client),
+        },
     }
 }
 
@@ -133,6 +137,28 @@ mod tests {
     }
 
     #[test]
+    fn doctor_defaults_to_offline_summary() {
+        let output = run_from_args(["haze-sync", "doctor"]);
+
+        assert_eq!(output.exit_code, CliExitCode::Success);
+        assert!(output.stdout.contains("doctor mode: offline"));
+        assert!(output.stdout.contains("live server calls: not attempted"));
+        assert!(output.stdout.contains("doctor summary"));
+        assert!(output.stdout.contains("total: 4"));
+        assert!(output.stderr.is_empty());
+    }
+
+    #[test]
+    fn live_doctor_without_config_is_not_run_and_non_zero() {
+        let output = run_from_args(["haze-sync", "doctor", "--live"]);
+
+        assert_eq!(output.exit_code, CliExitCode::RuntimeError);
+        assert!(output.stdout.contains("doctor mode: live"));
+        assert!(output.stdout.contains("live checks: not_run"));
+        assert!(output.stderr.contains("server URL is not configured"));
+    }
+
+    #[test]
     fn parse_errors_write_safe_message_to_stderr() {
         let sensitive_arg = concat!("--", "to", "ken", "=", "redacted-test-value");
         let output = run_from_args(["haze-sync", "status", sensitive_arg]);
@@ -148,7 +174,8 @@ mod tests {
         let output = run_from_args(["haze-sync", "doctor", "--help"]);
 
         assert_eq!(output.exit_code, CliExitCode::Success);
-        assert!(output.stdout.contains("usage: haze-sync doctor"));
+        assert!(output.stdout.contains("usage: haze-sync doctor [--offline]"));
+        assert!(output.stdout.contains("haze-sync doctor --live"));
         assert!(output.stderr.is_empty());
     }
 }
