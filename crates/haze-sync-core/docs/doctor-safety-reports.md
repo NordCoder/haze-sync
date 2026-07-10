@@ -60,7 +60,8 @@ healthy system. Summary counts preserve every explicit status category.
 - Any missing required blob is failed. Only sorted, deduplicated content-hash
   samples may be exposed.
 - Invalid adapter cursors are failed. Missing, orphaned, or stale cursors are
-  warnings. No expected adapters and no cursors is skipped.
+  warnings. No expected adapters and no cursors is skipped only when no invalid or
+  stale cursor facts were supplied.
 - GDrive mapping references to unknown Core revisions or duplicate provider file
   identifiers are failed. Unmapped-item drift is warning. An unconfigured adapter
   is skipped.
@@ -70,16 +71,33 @@ healthy system. Summary counts preserve every explicit status category.
   or unexpected materialized paths are warning. An unconfigured worktree is
   skipped.
 
+Facts that could only come from an unperformed check are normalized away. In
+particular, DB connectivity is omitted when metadata is not configured, object
+store facts are omitted when the store is not configured, and mapping/worktree
+counts are zeroed when their integration is disabled. This prevents a skipped or
+configuration-warning result from carrying contradictory live-check evidence.
+
 ## Safe construction and serialization
 
 Doctor result messages come from a fixed redacted vocabulary. Public callers
-cannot inject arbitrary message text into a result. Deserialization rejects a
-message/status/check mismatch and rejects details tagged for another check.
+cannot inject arbitrary message text into a result. Deserialization rejects:
+
+- message/status/check mismatches;
+- details tagged for another check;
+- detail counts or booleans that contradict the declared status and message;
+- non-deterministic missing-blob samples;
+- derived cursor counts that do not match expected and stored cursor totals.
 
 Generic `not_run` and `placeholder` results expose only enum reason codes. A
 serialized report is revalidated on deserialization: its summary must exactly
 match the contained checks, and checks are deterministically ordered by stable
-identifier.
+wire identifier.
+
+Some report/result fields remain public for accepted CLI source compatibility.
+They are compatibility views, not an escape hatch from invariants. Serialization
+revalidates each result, deterministic ordering, and the aggregate summary; a
+caller mutation that creates an inconsistent value returns a serialization error
+rather than emitting misleading JSON.
 
 ## Downstream obligations
 
@@ -88,5 +106,7 @@ identifier.
 - Storage and adapters perform the actual checks and keep raw diagnostics private.
 - A caller must not claim a live check was performed unless it actually obtained
   the corresponding facts.
+- Public compatibility fields should be treated as read-only; construct reports
+  through `DoctorReport::from_results` and use the provided classifiers.
 - Repair, cursor advancement, mapping changes, cleanup, and provider actions remain
   separate explicit operations outside Core.
