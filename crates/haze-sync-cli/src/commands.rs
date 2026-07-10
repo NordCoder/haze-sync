@@ -7,7 +7,7 @@
 //! output is commonly copied into logs, tickets, and chat.
 
 use crate::{
-    doctor::{self, DoctorCliCommand, DoctorCommand, DoctorParseError},
+    doctor::{self, DoctorCliCommand, DoctorCommand, DoctorMode, DoctorParseError},
     server_api::ReadCommandMode,
 };
 use std::fmt;
@@ -21,7 +21,7 @@ pub enum CliCommand {
     Status(StatusCommand),
     /// `haze-sync adapters ...` command group.
     Adapters(AdaptersCommand),
-    /// `haze-sync doctor [--offline]` offline diagnostic command.
+    /// `haze-sync doctor [--offline]` or `haze-sync doctor --live`.
     Doctor(DoctorCommand),
 }
 
@@ -80,7 +80,7 @@ impl std::error::Error for CliParseError {}
 
 #[must_use]
 pub const fn usage() -> &'static str {
-    "usage: haze-sync <command>\n\ncommands:\n  status [--offline]        read-only server status summary\n  adapters list [--offline] read-only adapter summary\n  doctor [--offline]        read-only offline doctor summary"
+    "usage: haze-sync <command>\n\ncommands:\n  status [--offline]        read-only server status summary\n  adapters list [--offline] read-only adapter summary\n  doctor [--offline]        read-only offline doctor summary\n  doctor --live             read-only Server health/readiness/status doctor"
 }
 
 /// Parse process arguments into the minimal command model.
@@ -234,10 +234,27 @@ mod tests {
     }
 
     #[test]
-    fn doctor_command_parses_through_top_level_model() {
-        let command = parse_cli(["haze-sync", "doctor", "--offline"]).unwrap();
+    fn doctor_modes_parse_through_top_level_model() {
+        assert_eq!(
+            parse_cli(["haze-sync", "doctor", "--offline"]).unwrap(),
+            CliCommand::Doctor(DoctorCommand {
+                mode: DoctorMode::Offline,
+            })
+        );
+        assert_eq!(
+            parse_cli(["haze-sync", "doctor", "--live"]).unwrap(),
+            CliCommand::Doctor(DoctorCommand {
+                mode: DoctorMode::Live,
+            })
+        );
+    }
 
-        assert_eq!(command, CliCommand::Doctor(DoctorCommand { offline: true }));
+    #[test]
+    fn conflicting_doctor_modes_are_rejected() {
+        assert_eq!(
+            parse_cli(["haze-sync", "doctor", "--offline", "--live"]).unwrap_err(),
+            CliParseError::Doctor(DoctorParseError::ConflictingDoctorModes)
+        );
     }
 
     #[test]
@@ -255,6 +272,7 @@ mod tests {
             CliCommand::Help(HelpTopic::Doctor)
         );
         assert!(usage().contains("doctor [--offline]"));
+        assert!(usage().contains("doctor --live"));
         assert!(usage().contains("read-only"));
     }
 
