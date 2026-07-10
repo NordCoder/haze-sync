@@ -19,6 +19,10 @@ import {
   reconcileFullScan,
   recordEventHint,
 } from "../src/pending-queue";
+import {
+  applyRemoteMetadataChange,
+  createDefaultRemoteSyncState,
+} from "../src/remote-sync-state";
 import { sanitizeStatusMessage } from "../src/safe-text";
 import { markSyncFailed, syncBackoffRemainingMs } from "../src/sync-runtime-state";
 import { parseApiContractFixture } from "../src/api-client";
@@ -101,6 +105,42 @@ test("canonical base outcomes do not invent missing revision metadata", () => {
   if (upload.kind === "upload") {
     assert.equal(upload.request.baseRevisionId, null);
   }
+});
+
+test("server conflict metadata advances cursor and clears after resolution", () => {
+  const created = applyRemoteMetadataChange(
+    createDefaultRemoteSyncState(),
+    {
+      seq: 43,
+      kind: "conflict_created",
+      path: "Notes/a.md",
+      conflict_id: "conf_fixture_0001",
+      updated_by: "gdrive-adapter",
+      updated_at: "2026-01-01T00:03:00Z",
+    },
+    "2026-01-01T00:03:01Z",
+  );
+
+  assert.equal(created.conflictRecorded, true);
+  assert.equal(created.state.changeCursor, 43);
+  assert.equal(created.state.conflicts.conf_fixture_0001.reason, "server_conflict");
+
+  const resolved = applyRemoteMetadataChange(
+    created.state,
+    {
+      seq: 44,
+      kind: "conflict_resolved",
+      path: "Notes/a.md",
+      conflict_id: "conf_fixture_0001",
+      updated_by: "obsidian-plugin",
+      updated_at: "2026-01-01T00:04:00Z",
+    },
+    "2026-01-01T00:04:01Z",
+  );
+
+  assert.equal(resolved.conflictRecorded, false);
+  assert.equal(resolved.state.changeCursor, 44);
+  assert.deepEqual(resolved.state.conflicts, {});
 });
 
 test("legacy persisted hex hashes migrate in base and pending state readers", () => {
