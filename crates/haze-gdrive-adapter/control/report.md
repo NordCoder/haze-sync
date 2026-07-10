@@ -1,13 +1,13 @@
 REPORT_TYPE:
-IMPLEMENTATION
+FIX
 
 STATUS:
-SELF_ACCEPT_PENDING_CI
+FIX_COMPLETE
 
 AGENT:
-role: implementation-worker
-agent_execution_id: W1-GDA-P5-implementation
-chat_name: gdrive-adapter — W1 GDA-P5 Implementation
+role: fixer-worker
+agent_execution_id: W1-FIX-GDA-P5-CI
+chat_name: gdrive-adapter — W1 GDA-P5 CI Fix
 
 COMPONENT:
 name: gdrive-adapter
@@ -21,35 +21,33 @@ control_report_path: crates/haze-gdrive-adapter/control/report.md
 
 WAVE:
 id: W1
-phase_id: GDA-P5
-dependency_status: Active control state was PROMPT_READY with active_agent_role implementation-worker and phase GDA-P5. The state reported the preceding GDA-P4C fixer Component CI run 29079858205 green before implementation started.
+phase_id: FIX-GDA-P5-CI
+dependency_status: Active control state was PROMPT_READY with active_agent_role fixer-worker and phase FIX-GDA-P5-CI. CI_RED metadata identified Component CI run 29082382356 attempt 1 and diagnostics artifact 8223334844. The active fixer prompt required the artifact to be used as source of truth.
 
 SUMMARY:
-Implemented the GDA-P5 full Drive subtree scan and Core import planner inside gdrive-adapter scope. Added dependency-free SHA-256 hashing aligned with the accepted Common/API `sha256:<64 lowercase hex>` wire contract. Added recursive fake/provider subtree traversal, Common-compatible vault-path normalization, deterministic new/modified/unchanged/unsupported detection, path collision and folder-cycle guards, mode-aware import planning, download-on-demand behavior, provider size verification, known-base or explicit-null-base upload requests, and conservative missing-file delete candidates. The planner performs no Core/API calls, provider mutations, persistence writes, immediate deletes, or policy arbitration.
+Fixed the minimum GDA-P5 CI failure inside gdrive-adapter scope. The diagnostics artifact showed the only failed check was rust-fmt in crates/haze-gdrive-adapter/src/scan.rs. Applied exactly the formatter-required layout changes while preserving full-scan/import planning, SHA-256 verification, mode rules, conservative delete candidates, provider abstraction boundaries, tests, and all component non-goals. No behavior, assertions, dependencies, docs/contracts, workflows, sibling components, persistence ownership, Core policy, export behavior, or deletion semantics were changed.
 
 CHANGED_FILES:
-- crates/haze-gdrive-adapter/src/hash.rs
 - crates/haze-gdrive-adapter/src/scan.rs
-- crates/haze-gdrive-adapter/src/lib.rs
 - crates/haze-gdrive-adapter/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/gdrive-adapter
 base_branch: main
 base_sha: current main observed as c1e69a664388b0cba028170e8398b9088218957d; PR base_sha remains 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
-head_sha: e4fa4b6e890961ae5e54b6252bef094263071de6 before writing this report; this report is written by a later report-only commit with [skip ci].
+head_sha: 3641883fcf20425692516e6b93d6d5c858cdee8e before writing this report; the report itself is written by a later GitHub contents API commit with [skip ci].
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
 ci_skip_used: yes for the report-only commit only
-ci_skip_reason: the final commit changes only crates/haze-gdrive-adapter/control/report.md and cannot change executable behavior or validation outcome. All source commits were non-skipped and triggered PR Component CI.
+ci_skip_reason: the final commit changes only crates/haze-gdrive-adapter/control/report.md and cannot change executable behavior or validation outcome. The source fixer commit did not use CI skip and triggered PR Component CI.
 
 SCOPE:
 allowed_files_only: yes
-scope_expansion_used: yes
-scope_expansion_rationale: GDA-P5 required a dependency-free local SHA-256 value type because the active prompt forbids dependency changes while the accepted API contract requires SHA-256 upload metadata. This remains inside the gdrive-adapter component and directly supports the assigned phase.
+scope_expansion_used: no
+scope_expansion_rationale: none
 cross_component_changes: no
 forbidden_files_touched: no
 
@@ -63,116 +61,97 @@ affected_components: none
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- Added src/hash.rs with a dependency-free SHA-256 implementation and ContentSha256 wire value matching accepted Common/API semantics.
-- Added known SHA-256 vector and verification tests.
-- Added src/scan.rs with FullScanInput, FullScanPlan, FullScanError, CoreUploadRequest, PlannedImport, skipped/unchanged/delete-candidate DTOs, and safe skip classifications.
-- Implemented recursive list_children traversal from a configured root folder through the existing DriveProvider abstraction.
-- Traversed regular folders structurally while skipping Google Docs/Sheets/Slides, shortcuts, shared drives, unknown entries, and invalid paths safely.
-- Mirrored accepted Common VaultPath normalization rules for percent decoding, relative-path enforcement, traversal rejection, Windows/backslash rejection, null-byte rejection, duplicate/dot segment normalization, and reserved runtime-path rejection.
-- Added duplicate provider entry, folder cycle, and normalized path collision safeguards before downloads.
-- Indexed an injected in-memory mapping snapshot and rejected duplicate mapping Drive identities or paths.
-- Detected new, modified, and unchanged files using mapping identity, normalized path, parent/name, Drive MD5, and Drive modified-time facts.
-- Downloaded bytes only for actionable or dry-run new/modified imports; unchanged and mode-blocked files are not downloaded.
-- Prepared Core-compatible upload requests with known mapping core revision or explicit None/null base semantics.
-- Computed SHA-256, verified request bytes/hash/size consistency, and verified provider size metadata when present.
-- Represented missing mapped Drive files only as DeleteCandidatePlan values with previous candidate timestamp and base revision; no immediate delete action exists.
-- Applied adapter mode rules: import_only/bidirectional produce submit plans, dry-run configuration produces preview plans, and disabled/read_only/export_only skip imports without downloading.
-- Exported GDA-P5 hash and scan planner APIs from lib.rs.
-behavior_changes:
-- The crate can now build deterministic in-memory full-scan import plans from fake or injected DriveProvider data.
-- No runtime loop, network provider implementation, Core submission, mapping persistence, or deletion behavior was activated.
+- Applied rustfmt formatting to the initial collect_folder call in plan_full_scan.
+- Applied rustfmt formatting to the mapping test helper signature.
+- Applied rustfmt formatting to DriveMetadata test setup for the notes folder, invalid path, mode guard, path collision, and folder cycle cases.
+- Applied rustfmt formatting to missing-mapping test setup.
+behavior_changes: none
 bugs_found:
-- During internal verification, the initial dry-run test used an incorrect expected SHA-256 for `preview`.
-- The initial planner kept SupportedFileType only in an internal scan node rather than the resulting import plan.
-- The initial path helper referenced a private/nonexistent VaultPath constructor.
+- Diagnostics artifact reported rust-fmt failure in crates/haze-gdrive-adapter/src/scan.rs.
 bugs_fixed:
-- Corrected the expected SHA-256 vector.
-- Added file_type to PlannedImport.
-- Switched the normalized path handoff to the existing validated VaultPath constructor.
-cleanups_made:
-- Kept hashing and scan planning in separate focused modules.
-- Sorted plan outputs deterministically by vault path/provider id.
-- Used an injected mapping slice rather than claiming a durable persistence boundary.
+- Fixed every formatter difference listed in logs/rust-fmt.log.
+cleanups_made: rustfmt-equivalent formatting only
 non_goals_preserved:
+- Full-scan/import planning remains intact.
+- SHA-256 content verification remains intact.
+- Known-base and explicit-null-base request semantics remain intact.
+- Conservative delete candidates remain intact; no immediate delete exists.
+- Adapter mode rules remain intact.
 - No Drive export.
-- No real Google SDK wiring or live provider calls.
-- No provider mutation.
-- No Core/API network calls or Core policy decisions.
-- No hard delete or immediate tombstone.
-- No direct DB access or persistence ownership claim.
-- No Docs conversion.
-- No dependency changes.
-- No workflow changes.
+- No live provider integration or provider mutation.
+- No Core/API calls or Core policy decisions.
+- No direct DB access or persistence ownership.
+- No dependency or workflow changes.
 - No sibling component changes.
+- No test deletion or assertion weakening.
 deferred_work:
-- Durable mapping/cursor persistence remains unresolved and requires an explicit Server/API or accepted Storage repository fan-in decision.
-- Core/API execution of PreparedImport requests remains a future integration phase.
-- Change-feed polling, export planning, delete guardrails, and status/doctor remain later phases.
-- Orchestrator/fixer must triage the Component CI diagnostics-finalizer failure for run 29082382356; implementation-worker did not read the artifact.
+- Orchestrator should triage completion of Component CI run 29084342761 after it finishes.
+- GDA-P5 clean-code review remains pending after the fixer CI loop is resolved.
 
 TESTS_AND_CHECKS:
 checks_run:
-- Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, and haze-sync-development-wave-plan.md from Project Sources.
-- Read current control state, active GDA-P5 prompt, previous fixer report, component contract, implementation plan, dependency map, implementation log, and decisions.
-- Read current gdrive provider abstraction, config mode model, mapping/cursor state, lib exports, and crate Cargo.toml.
-- Read accepted Common contracts for VaultPath, ContentHash/Sha256, and AdapterMode.
-- Read accepted API PUT file metadata contract with base_revision_id Option/null and content_sha256.
-- Read accepted Storage gdrive_mapping migration shape including md5_checksum, Drive version/time, Core revision/seq, and delete_candidate_at.
-- Created hash.rs and scan.rs through the GitHub connector.
-- Updated scan.rs after internal verification and updated lib.rs exports through the GitHub connector.
-- Observed PR #50 source head e4fa4b6e890961ae5e54b6252bef094263071de6.
-- Observed Component CI run 29082382356, run number 990, for source head e4fa4b6e890961ae5e54b6252bef094263071de6.
-- Observed cargo fmt success.
-- Observed cargo check success.
-- Observed cargo test success.
-- Observed cargo clippy success.
-- Observed Finalize CI diagnostics failure and Upload CI diagnostics success.
-- Compared component/gdrive-adapter against current main; connector reported branch diverged, ahead by 89 and behind by 12, with merge base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2.
+- Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, and haze-sync-development-wave-plan.md from Project Sources.
+- Read current control state, active fixer prompt, and previous GDA-P5 implementation report.
+- Read component contract, GDA-P5 implementation-plan section, dependency map, current GDA-P5 source/tests, PR changed-file list, and scan.rs PR patch.
+- Listed and downloaded diagnostics artifact 8223334844.
+- Read summary.md, manifest.json, failures/rust-fmt.txt, and logs/rust-fmt.log.
+- Confirmed artifact metadata: Component CI run 29082382356, attempt 1, head SHA e4fa4b6e890961ae5e54b6252bef094263071de6, sole failed check rust-fmt.
+- Updated scan.rs through the GitHub connector with only artifact-required formatting changes.
+- Observed PR #50 head update to source-fix commit 3641883fcf20425692516e6b93d6d5c858cdee8e.
+- Observed new Component CI run 29084342761, run number 1038, for source-fix commit 3641883fcf20425692516e6b93d6d5c858cdee8e.
+- Observed Rust workspace job 86334390980 in progress; cargo fmt completed successfully and cargo check was in progress at last observation. cargo test and cargo clippy remained pending.
+- Compared component/gdrive-adapter against current main; connector reported branch diverged, ahead by 95 and behind by 12, with merge base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2.
 checks_not_run:
-- No local shell repository checks were run because repository work is constrained to the GitHub connector.
-ci_status: CI_RED
+- cargo fmt --check locally
+- cargo check -p haze-gdrive-adapter locally
+- cargo test -p haze-gdrive-adapter locally
+- cargo clippy -p haze-gdrive-adapter --all-targets -- -D warnings locally
+Reason: repository work is constrained to the GitHub connector and no local repository shell execution was used.
+ci_status: CI_PENDING
 workflow_urls:
-- https://github.com/NordCoder/haze-sync/actions/runs/29079858205
 - https://github.com/NordCoder/haze-sync/actions/runs/29082382356
+- https://github.com/NordCoder/haze-sync/actions/runs/29084342761
 known_failures:
-- Component CI run 29082382356 is overall failure because Finalize CI diagnostics failed.
-- All product validation steps visible in workflow metadata passed: cargo fmt, cargo check, cargo test, and cargo clippy.
+- Previous run 29082382356: artifact summary listed rust-fmt with exit_code 1.
+- No known failure observed yet on source-fix run 29084342761; workflow was still in progress.
 
 CI_DIAGNOSTICS:
-artifact_based_logs: no
-artifact_name: not read
-artifact_id: not read
+artifact_based_logs: yes
+artifact_name: ci-diag__component-gdrive-adapter__wf-component-ci__run-29082382356__attempt-1
+artifact_id: 8223334844
 workflow_run_id: 29082382356
 workflow_run_attempt: 1
-artifact_status: not inspected; active implementation prompt explicitly prohibits reading CI diagnostics artifacts
-summary_read: no
-manifest_read: no
-logs_read: none
+artifact_status: found, downloaded, and readable. Artifact contained summary.md, manifest.json, failures/rust-fmt.txt, and logs/rust-fmt.log.
+summary_read: yes, summary.md
+manifest_read: yes, manifest.json
+logs_read:
+- failures/rust-fmt.txt
+- logs/rust-fmt.log
 raw_job_logs_used: no
-diagnostics_failure: workflow metadata reports Finalize CI diagnostics failure; exact artifact cause intentionally deferred to fixer-worker
+diagnostics_failure: none
 
 SAFETY_AND_SECRECY:
 secrets_committed: no
 unsafe_public_output: no
 raw_errors_exposed: no
-provider_calls_added: read-only calls through existing DriveProvider list_children/download_file abstraction only
+provider_calls_added: no
 hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- The accepted Common/API types are not dependencies of haze-gdrive-adapter and the active prompt forbids dependency changes, so GDA-P5 mirrors the accepted wire/path semantics locally rather than adding cross-crate coupling.
-- GDriveMapping uses the existing local `checksum` field as the accepted storage mapping's Drive MD5 fact; no Storage schema change was made.
-- Component CI product checks are green, but the diagnostics finalizer made the workflow overall red. Artifact content was not read in this implementation phase.
+- Control state listed diagnostics-artifact-required, while the artifact manifest identified rust-fmt as the actual failed check. The artifact was used as source of truth.
+- GitHub connector cannot run local repository shell commands.
+- Source-fix CI run 29084342761 was still in progress at report time, so CI green was not claimed.
 - Branch is behind current main by 12 commits; no merge, rebase, or branch update was performed.
 
 BLOCKERS:
-none for GDA-P5 source implementation; CI finalizer requires orchestrator/fixer triage
+none
 
 NEXT_RECOMMENDED_AGENT:
 orchestrator
 
 FINAL_VERDICT:
-SELF_ACCEPT_PENDING_CI. GDA-P5 full-scan/import planning is implemented within component scope, contract non-goals are preserved, and all visible Rust product checks passed. The workflow remains CI_RED solely at the diagnostics finalizer, so orchestrator must assign artifact-based fixer triage before the next lifecycle step.
+FIX_COMPLETE. The sole artifact-proven rust-fmt failure for GDA-P5 was fixed without changing behavior, weakening tests, or expanding scope. The source-fix commit triggered Component CI, which remained pending at report time.
 
 PUSHED:
 yes
