@@ -72,6 +72,13 @@ fn persisted_state_validation_rejects_noncanonical_or_invalid_values() {
         validate_worktree_state_row(invalid_hash),
         Err(RepositoryError::InvalidHash)
     );
+
+    let mut noncanonical_hash = state_row();
+    noncanonical_hash.last_seen_sha256 = Some("A".repeat(64));
+    assert_eq!(
+        validate_worktree_state_row(noncanonical_hash),
+        Err(RepositoryError::InvalidHash)
+    );
 }
 
 #[test]
