@@ -27,7 +27,7 @@ export async function readLocalFileFact(vault: Vault, file: TFile): Promise<Loca
     fact: {
       path: classification.path,
       extension: classification.extension,
-      contentHash: await sha256Hex(body),
+      contentHash: await sha256ContentHash(body),
       sizeBytes: file.stat.size,
       mtime: file.stat.mtime,
     },
@@ -38,9 +38,9 @@ export function factFromEventPath(rawPath: string): IncludedVaultPath | Excluded
   return classifyVaultPath(rawPath);
 }
 
-export async function sha256Hex(body: ArrayBuffer): Promise<string> {
+export async function sha256ContentHash(body: ArrayBuffer): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", body);
   const bytes = new Uint8Array(digest);
-
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `sha256:${hex}`;
 }
