@@ -38,21 +38,29 @@ export type HttpTransport = (url: string, init: RequestInit) => Promise<Response
 export interface HazeSyncApiClientOptions {
   config: ApiClientConfig;
   transport?: HttpTransport;
+  signal?: AbortSignal;
 }
 
 export class HazeSyncApiClient {
   private readonly config: ApiClientConfig;
   private readonly transport: HttpTransport;
+  private readonly signal?: AbortSignal;
 
   constructor(options: HazeSyncApiClientOptions) {
     this.config = options.config;
     this.transport = options.transport ?? fetch;
+    this.signal = options.signal;
   }
 
-  static fromSettings(settings: PluginSettings, transport?: HttpTransport): HazeSyncApiClient {
+  static fromSettings(
+    settings: PluginSettings,
+    transport?: HttpTransport,
+    signal?: AbortSignal,
+  ): HazeSyncApiClient {
     return new HazeSyncApiClient({
       config: apiClientConfigFromSettings(settings),
       transport,
+      signal,
     });
   }
 
@@ -176,9 +184,10 @@ export class HazeSyncApiClient {
         redirect: "error",
         credentials: "omit",
         cache: "no-store",
+        signal: this.signal,
       });
     } catch (error) {
-      if (error instanceof ApiClientError) {
+      if (error instanceof ApiClientError || isAbortError(error)) {
         throw error;
       }
 
@@ -273,6 +282,10 @@ function isOptionalString(value: unknown): boolean {
 
 function isOptionalStringOrNull(value: unknown): boolean {
   return value === undefined || value === null || typeof value === "string";
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
