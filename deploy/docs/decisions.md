@@ -1,5 +1,42 @@
 # Decisions: deployment
 
+## 2026-07-10 — DEP-P6 uses Caddy as the placeholder public TLS boundary
+
+Decision:
+
+Deployment provides one tracked, secret-free Caddy example at `deploy/reverse-proxy/Caddyfile`. Public HTTPS terminates at Caddy, which proxies to Haze Sync Server over `127.0.0.1:8080`. The tracked public listener blocks `/health` and `/ready`, preserves Server-owned authentication for protected V1 routes, and enforces the accepted `52,428,800`-byte upload limit.
+
+Rationale:
+
+A single documented proxy model is easier to validate and less ambiguous than parallel nginx/Caddy/Traefik examples. Caddy supports automatic HTTPS without tracked certificate paths, keeps the upstream loopback-only, and provides a configuration validation command. Server remains the application authentication authority rather than duplicating bearer-token policy in deployment configuration.
+
+Alternatives:
+
+- Track several proxy examples with drifting security behavior.
+- Expose Server directly on a public interface.
+- Inject a bearer credential at the proxy.
+- Expose readiness publicly by default.
+- Commit certificate/private-key paths or material.
+- Change the proxy body-size limit independently of Server/API.
+
+Consequences:
+
+- Caddy 2.10 or newer is required because the example uses `request_body`.
+- Operators must replace `sync.example.com`, configure DNS, and validate the Caddyfile before rollout.
+- Public inbound access is limited to TCP 443 and optional TCP 80; Server, PostgreSQL, and Caddy admin ports remain non-public.
+- `/v1/server-info` stays publicly proxied; protected V1 routes continue to require Server bearer authentication and role checks.
+- Public health endpoints return `404` in the tracked example; Caddy checks upstream `/health` over loopback.
+- Certificate material remains in Caddy-managed host-local protected storage and outside the repository.
+- Syntax/config validation is not production readiness evidence.
+
+Affected contracts:
+
+- deploy/reverse-proxy/Caddyfile;
+- deploy/docs/public-access.md;
+- Server route/auth/health contracts;
+- API upload-limit contract;
+- deployment component contract and Server compose runbook.
+
 ## 2026-07-09 — DEP-P5 separates host path classes
 
 Decision:
