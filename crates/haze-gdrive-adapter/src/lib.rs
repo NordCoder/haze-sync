@@ -1,14 +1,16 @@
 //! Google Drive adapter runtime foundation.
 //!
-//! The crate currently owns configuration, redaction, provider-safe Drive
-//! metadata normalization, fake-first provider abstractions, adapter-local
-//! mapping/cursor/echo state models, and process lifecycle scaffolding.
-//! Core/API calls are intentionally deferred.
+//! The crate owns configuration, redaction, provider-safe Drive metadata
+//! normalization, fake-first provider abstractions, adapter-local mapping and
+//! cursor state, dependency-free content hashing, full-scan import planning,
+//! and process lifecycle scaffolding. Core/API execution remains deferred.
 
 pub mod config;
 pub mod drive;
 pub mod error;
+pub mod hash;
 pub mod runtime;
+pub mod scan;
 pub mod state;
 
 pub use config::{
@@ -21,7 +23,13 @@ pub use drive::{
     SupportedFileType, UnsupportedEntryReason,
 };
 pub use error::{ConfigError, ConfigErrorCategory, RuntimeError, RuntimeErrorCategory};
+pub use hash::ContentSha256;
 pub use runtime::{AdapterRuntime, RuntimeState, StartupStatus};
+pub use scan::{
+    plan_full_scan, CoreUploadRequest, DeleteCandidatePlan, FullScanError, FullScanInput,
+    FullScanPlan, ImportChangeKind, ImportExecution, PlannedImport, ScanSkipReason, SkippedImport,
+    SkippedScanEntry, UnchangedDriveEntry,
+};
 pub use state::{
     CoreChangeCursor, CoreStateObservation, DriveChangeCursor, DriveEchoObservation,
     DriveStateObservation, EchoDecision, EchoGuard, EchoGuardEntry, GDriveMapping,
