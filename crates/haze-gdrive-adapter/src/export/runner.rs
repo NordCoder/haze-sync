@@ -1,7 +1,7 @@
 use super::core::{CoreClientError, CoreClientErrorCategory, CoreExportClient};
 use super::model::{
-    CoreExportChange, CoreFileContent, DriveCreateTarget, ExportCycleInput, ExportCycleOutcome,
-    ExportExecution, ExportPlanItem, ExportSkipReason, VerifiedExportSource,
+    CoreExportChange, CoreExportPage, CoreFileContent, DriveCreateTarget, ExportCycleInput,
+    ExportCycleOutcome, ExportExecution, ExportPlanItem, ExportSkipReason, VerifiedExportSource,
 };
 use super::provider::{
     DriveCreateExportRequest, DriveExportError, DriveExportErrorCategory, DriveExportProvider,
@@ -37,6 +37,8 @@ pub enum ExportError {
     PageLimitZero,
     MissingSource,
     MissingCreateTarget,
+    MappingPathMismatch,
+    MissingProviderRevisionPrecondition,
     SourcePathMismatch,
     SourceRevisionMismatch,
     SourceDeclaredHashMismatch,
@@ -64,6 +66,11 @@ impl fmt::Display for ExportError {
             Self::MissingCreateTarget => {
                 formatter.write_str("Drive create target is missing for export")
             }
+            Self::MappingPathMismatch => {
+                formatter.write_str("Drive mapping path does not match the Core export change")
+            }
+            Self::MissingProviderRevisionPrecondition => formatter
+                .write_str("Drive update or trash requires a provider revision precondition"),
             Self::SourcePathMismatch => {
                 formatter.write_str("Core export source path does not match change metadata")
             }
@@ -95,6 +102,8 @@ impl Error for ExportError {
             | Self::PageLimitZero
             | Self::MissingSource
             | Self::MissingCreateTarget
+            | Self::MappingPathMismatch
+            | Self::MissingProviderRevisionPrecondition
             | Self::SourcePathMismatch
             | Self::SourceRevisionMismatch
             | Self::SourceDeclaredHashMismatch
@@ -132,6 +141,10 @@ pub fn plan_core_export(
         });
     };
 
+    if let Some(mapping) = mapping.as_ref() {
+        validate_mapping_path(mapping, change.path())?;
+    }
+
     if mapping
         .as_ref()
         .and_then(|mapping| mapping.core_sequence)
@@ -148,6 +161,7 @@ pub fn plan_core_export(
             let source = verify_source(&change, source.ok_or(ExportError::MissingSource)?)?;
             match mapping {
                 Some(mapping) if !mapping_is_confirmed_trashed(&mapping) => {
+                    require_provider_revision(&mapping)?;
                     Ok(ExportPlanItem::Update {
                         change,
                         mapping,
@@ -164,11 +178,14 @@ pub fn plan_core_export(
             }
         }
         CoreExportChange::Tombstone { .. } => match mapping {
-            Some(mapping) => Ok(ExportPlanItem::Trash {
-                change,
-                mapping,
-                execution,
-            }),
+            Some(mapping) => {
+                require_provider_revision(&mapping)?;
+                Ok(ExportPlanItem::Trash {
+                    change,
+                    mapping,
+                    execution,
+                })
+            }
             None => Ok(ExportPlanItem::Skip {
                 change,
                 reason: ExportSkipReason::MissingMappingForTombstone,
@@ -193,9 +210,7 @@ pub fn run_export_cycle(
     let page = core
         .list_changes(cursor.next_sequence, input.page_limit)
         .map_err(|error| core_error(error, retry_policy, input.provider_attempt))?;
-    if page.from_sequence != cursor.next_sequence {
-        return Err(ExportError::InvalidCorePage);
-    }
+    validate_core_page(&page, cursor.next_sequence, input.page_limit)?;
 
     let should_persist_cursor =
         export_execution(input.mode, input.dry_run) == Some(ExportExecution::Submit);
@@ -211,6 +226,11 @@ pub fn run_export_cycle(
     };
 
     for change in page.changes {
+        outcome.work_items_planned = outcome.work_items_planned.saturating_add(1);
+        if change.updated_by() == input.adapter_id.as_str() {
+            continue;
+        }
+
         let mapping = state_store.load_mapping(change.path())?;
         let (source, create_target) = load_plan_inputs(
             core,
@@ -228,7 +248,6 @@ pub fn run_export_cycle(
             input.mode,
             input.dry_run,
         )?;
-        outcome.work_items_planned = outcome.work_items_planned.saturating_add(1);
         let applied = apply_export_plan(
             provider,
             state_store,
@@ -256,6 +275,32 @@ pub fn run_export_cycle(
     }
 
     Ok(outcome)
+}
+
+fn validate_core_page(
+    page: &CoreExportPage,
+    expected_from_sequence: u64,
+    page_limit: usize,
+) -> Result<(), ExportError> {
+    if page.from_sequence != expected_from_sequence
+        || page.next_sequence < page.from_sequence
+        || page.changes.len() > page_limit
+    {
+        return Err(ExportError::InvalidCorePage);
+    }
+
+    let mut previous_sequence = None;
+    for change in &page.changes {
+        let sequence = change.sequence();
+        if sequence < page.from_sequence
+            || sequence >= page.next_sequence
+            || previous_sequence.is_some_and(|previous| sequence <= previous)
+        {
+            return Err(ExportError::InvalidCorePage);
+        }
+        previous_sequence = Some(sequence);
+    }
+    Ok(())
 }
 
 fn load_plan_inputs(
@@ -351,11 +396,12 @@ fn apply_export_plan(
             source,
             execution: ExportExecution::Submit,
         } => {
+            let expected_revision_token = require_provider_revision(&mapping)?.to_owned();
             let receipt = provider
                 .update_file(DriveUpdateExportRequest {
                     operation_id: change.operation_id().to_owned(),
                     file_id: mapping.drive_file_id.clone(),
-                    expected_revision_token: mapping.drive_version.clone(),
+                    expected_revision_token: Some(expected_revision_token),
                     mime_type: mime_type_for_path(change.path()).to_owned(),
                     content_sha256: source.content_sha256,
                     content: source.into_content(),
@@ -374,11 +420,12 @@ fn apply_export_plan(
             mapping,
             execution: ExportExecution::Submit,
         } => {
+            let expected_revision_token = require_provider_revision(&mapping)?.to_owned();
             let receipt = provider
                 .trash_file(DriveTrashExportRequest {
                     operation_id: change.operation_id().to_owned(),
                     file_id: mapping.drive_file_id.clone(),
-                    expected_revision_token: mapping.drive_version.clone(),
+                    expected_revision_token: Some(expected_revision_token),
                 })
                 .map_err(|error| provider_error(error, retry_policy, provider_attempt))?;
             let mapping = confirmed_trash_mapping(&change, mapping, receipt, applied_at.clone())?;
@@ -528,6 +575,21 @@ fn verify_source(
         *size_bytes,
         source.into_content(),
     ))
+}
+
+fn validate_mapping_path(mapping: &GDriveMapping, path: &VaultPath) -> Result<(), ExportError> {
+    if &mapping.vault_path != path {
+        return Err(ExportError::MappingPathMismatch);
+    }
+    Ok(())
+}
+
+fn require_provider_revision(mapping: &GDriveMapping) -> Result<&str, ExportError> {
+    mapping
+        .drive_version
+        .as_deref()
+        .filter(|revision| !revision.trim().is_empty())
+        .ok_or(ExportError::MissingProviderRevisionPrecondition)
 }
 
 fn mapping_is_confirmed_trashed(mapping: &GDriveMapping) -> bool {
