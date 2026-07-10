@@ -1,8 +1,9 @@
 //! Pure service-level tombstone primitives.
 //!
 //! Creating a tombstone records safe delete intent and retention metadata only.
-//! This module does not hard-delete storage rows, remove blobs, move files to
-//! trash, run retention cleanup, call adapters, or implement restore behavior.
+//! This module classifies restore and retention-cleanup eligibility but does not
+//! hard-delete storage rows, remove blobs, move files to trash, run retention
+//! cleanup, call adapters, or perform restore side effects.
 
 use chrono::{DateTime, Utc};
 use haze_sync_common::{AdapterId, RevisionId, VaultPath};
@@ -126,13 +127,44 @@ impl TombstoneRetention {
     }
 }
 
-/// Restore-ready metadata shape. Restore behavior is intentionally not
-/// implemented in this phase.
+/// Restore-ready metadata. Classification is pure; restore persistence and
+/// revision creation remain downstream responsibilities.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RestoreMetadata {
     pub restored_at: Option<DateTime<Utc>>,
     pub restored_by: Option<AdapterId>,
     pub restore_revision_id: Option<RevisionId>,
+}
+
+/// Pure classification of whether a tombstone is ready for restore planning.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case", tag = "eligibility")]
+pub enum RestoreEligibility {
+    Eligible {
+        deleted_revision_id: RevisionId,
+        current_revision_id: RevisionId,
+    },
+    AlreadyRestored {
+        restored_at: DateTime<Utc>,
+        restored_by: AdapterId,
+        restore_revision_id: RevisionId,
+    },
+}
+
+/// Pure classification for a future physical retention-cleanup worker.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case", tag = "eligibility")]
+pub enum RetentionCleanupEligibility {
+    RetainedUntil {
+        retention_until: DateTime<Utc>,
+    },
+    EligibleAfterRetention {
+        retention_until: DateTime<Utc>,
+    },
+    NotEligibleRestored {
+        restored_at: DateTime<Utc>,
+        restore_revision_id: RevisionId,
+    },
 }
 
 /// Request accepted by the tombstone service.
@@ -227,6 +259,65 @@ impl Tombstone {
     pub fn current_revision_id(&self) -> &RevisionId {
         &self.revision.current_revision_id
     }
+
+    /// Validate retention and restore metadata after persistence/API mapping.
+    pub fn validate_metadata(&self) -> Result<(), TombstoneServiceError> {
+        validate_retention(self.created_at.clone(), &self.retention)?;
+        validate_restore_metadata(self.created_at.clone(), &self.restore)
+    }
+
+    /// Classify restore readiness without creating revisions or mutating storage.
+    pub fn classify_restore_eligibility(
+        &self,
+    ) -> Result<RestoreEligibility, TombstoneServiceError> {
+        self.validate_metadata()?;
+
+        match (
+            self.restore.restored_at.as_ref(),
+            self.restore.restored_by.as_ref(),
+            self.restore.restore_revision_id.as_ref(),
+        ) {
+            (Some(restored_at), Some(restored_by), Some(restore_revision_id)) => {
+                Ok(RestoreEligibility::AlreadyRestored {
+                    restored_at: restored_at.clone(),
+                    restored_by: restored_by.clone(),
+                    restore_revision_id: restore_revision_id.clone(),
+                })
+            }
+            _ => Ok(RestoreEligibility::Eligible {
+                deleted_revision_id: self.deleted_revision_id().clone(),
+                current_revision_id: self.current_revision_id().clone(),
+            }),
+        }
+    }
+
+    /// Classify retention-cleanup eligibility at an explicit UTC timestamp.
+    pub fn classify_retention_cleanup(
+        &self,
+        evaluated_at: DateTime<Utc>,
+    ) -> Result<RetentionCleanupEligibility, TombstoneServiceError> {
+        self.validate_metadata()?;
+
+        if let (Some(restored_at), Some(restore_revision_id)) = (
+            self.restore.restored_at.as_ref(),
+            self.restore.restore_revision_id.as_ref(),
+        ) {
+            return Ok(RetentionCleanupEligibility::NotEligibleRestored {
+                restored_at: restored_at.clone(),
+                restore_revision_id: restore_revision_id.clone(),
+            });
+        }
+
+        if evaluated_at < self.retention.retention_until {
+            return Ok(RetentionCleanupEligibility::RetainedUntil {
+                retention_until: self.retention.retention_until.clone(),
+            });
+        }
+
+        Ok(RetentionCleanupEligibility::EligibleAfterRetention {
+            retention_until: self.retention.retention_until.clone(),
+        })
+    }
 }
 
 /// Pure tombstone service.
@@ -245,7 +336,7 @@ impl TombstoneService {
         &self,
         input: TombstoneCreationInput,
     ) -> Result<Tombstone, TombstoneServiceError> {
-        validate_retention(input.created_at, input.retention.retention_until)?;
+        validate_retention(input.created_at.clone(), &input.retention)?;
 
         Ok(Tombstone {
             tombstone_id: input.tombstone_id,
@@ -267,6 +358,7 @@ pub enum TombstoneServiceError {
     InvalidRevisionId,
     InvalidAdapterId,
     InvalidRetention,
+    InvalidRestoreMetadata,
 }
 
 impl TombstoneServiceError {
@@ -279,6 +371,7 @@ impl TombstoneServiceError {
             Self::InvalidRevisionId => "invalid_deleted_revision_id",
             Self::InvalidAdapterId => "invalid_deleted_by_adapter_id",
             Self::InvalidRetention => "invalid_tombstone_retention",
+            Self::InvalidRestoreMetadata => "invalid_tombstone_restore_metadata",
         }
     }
 }
@@ -291,6 +384,7 @@ impl fmt::Display for TombstoneServiceError {
             Self::InvalidRevisionId => "tombstone revision id is invalid",
             Self::InvalidAdapterId => "tombstone adapter id is invalid",
             Self::InvalidRetention => "tombstone retention metadata is invalid",
+            Self::InvalidRestoreMetadata => "tombstone restore metadata is invalid",
         })
     }
 }
@@ -299,15 +393,41 @@ impl Error for TombstoneServiceError {}
 
 fn validate_retention(
     created_at: Option<DateTime<Utc>>,
-    retention_until: DateTime<Utc>,
+    retention: &TombstoneRetention,
 ) -> Result<(), TombstoneServiceError> {
+    if !retention.cleanup_after_retention_only || retention.retention_days == Some(0) {
+        return Err(TombstoneServiceError::InvalidRetention);
+    }
+
     if let Some(created_at) = created_at {
-        if retention_until <= created_at {
+        if retention.retention_until <= created_at {
             return Err(TombstoneServiceError::InvalidRetention);
         }
     }
 
     Ok(())
+}
+
+fn validate_restore_metadata(
+    created_at: Option<DateTime<Utc>>,
+    restore: &RestoreMetadata,
+) -> Result<(), TombstoneServiceError> {
+    match (
+        restore.restored_at.as_ref(),
+        restore.restored_by.as_ref(),
+        restore.restore_revision_id.as_ref(),
+    ) {
+        (None, None, None) => Ok(()),
+        (Some(restored_at), Some(_restored_by), Some(_restore_revision_id)) => {
+            if let Some(created_at) = created_at {
+                if restored_at <= &created_at {
+                    return Err(TombstoneServiceError::InvalidRestoreMetadata);
+                }
+            }
+            Ok(())
+        }
+        _ => Err(TombstoneServiceError::InvalidRestoreMetadata),
+    }
 }
 
 #[cfg(test)]
@@ -316,12 +436,55 @@ mod tests {
 
     fn timestamp(value: &str) -> DateTime<Utc> {
         DateTime::parse_from_rfc3339(value)
-            .unwrap()
+            .expect("fixture timestamp should parse")
             .with_timezone(&Utc)
     }
 
     fn retention() -> TombstoneRetention {
         TombstoneRetention::new(timestamp("2026-08-01T00:00:00Z"), Some(30))
+    }
+
+    fn tombstone() -> Tombstone {
+        let input = TombstoneCreationInput::try_from_raw(
+            "tmb_01JTEST",
+            "Notes/old.md",
+            "rev_01JDELETE",
+            Some("rev_01JCURRENT"),
+            "worktree-adapter",
+            retention(),
+            Some(timestamp("2026-07-01T00:00:00Z")),
+        )
+        .expect("fixture input should parse");
+
+        TombstoneService::new()
+            .create_tombstone(input)
+            .expect("fixture tombstone should be valid")
+    }
+
+    #[test]
+    fn tombstone_id_validation_and_serde_roundtrip_are_stable() {
+        assert_eq!(
+            TombstoneId::parse("tmb_").expect_err("empty suffix should reject"),
+            TombstoneServiceError::InvalidTombstoneId
+        );
+        assert_eq!(
+            TombstoneId::parse("tmb_bad/id").expect_err("slash should reject"),
+            TombstoneServiceError::InvalidTombstoneId
+        );
+
+        let max_length_id = format!("{TOMBSTONE_ID_PREFIX}{}", "a".repeat(124));
+        let parsed = TombstoneId::parse(&max_length_id).expect("maximum length should parse");
+        let serialized = serde_json::to_string(&parsed).expect("id should serialize");
+        assert_eq!(
+            serde_json::from_str::<TombstoneId>(&serialized).expect("id should deserialize"),
+            parsed
+        );
+
+        let too_long_id = format!("{TOMBSTONE_ID_PREFIX}{}", "a".repeat(125));
+        assert_eq!(
+            TombstoneId::parse(&too_long_id).expect_err("overlong id should reject"),
+            TombstoneServiceError::InvalidTombstoneId
+        );
     }
 
     #[test]
@@ -336,7 +499,7 @@ mod tests {
                 retention(),
                 Some(timestamp("2026-07-01T00:00:00Z")),
             )
-            .unwrap_err(),
+            .expect_err("unsafe path should reject"),
             TombstoneServiceError::InvalidPath
         );
         assert_eq!(
@@ -349,7 +512,7 @@ mod tests {
                 retention(),
                 Some(timestamp("2026-07-01T00:00:00Z")),
             )
-            .unwrap_err(),
+            .expect_err("invalid revision should reject"),
             TombstoneServiceError::InvalidRevisionId
         );
         assert_eq!(
@@ -362,25 +525,14 @@ mod tests {
                 retention(),
                 Some(timestamp("2026-07-01T00:00:00Z")),
             )
-            .unwrap_err(),
+            .expect_err("invalid adapter should reject"),
             TombstoneServiceError::InvalidAdapterId
         );
     }
 
     #[test]
     fn creates_restore_ready_tombstone_without_restore_behavior() {
-        let input = TombstoneCreationInput::try_from_raw(
-            "tmb_01JTEST",
-            "Notes/old.md",
-            "rev_01JDELETE",
-            Some("rev_01JCURRENT"),
-            "worktree-adapter",
-            retention(),
-            Some(timestamp("2026-07-01T00:00:00Z")),
-        )
-        .unwrap();
-
-        let tombstone = TombstoneService::new().create_tombstone(input).unwrap();
+        let tombstone = tombstone();
 
         assert_eq!(tombstone.path.as_str(), "Notes/old.md");
         assert_eq!(tombstone.deleted_revision_id().as_str(), "rev_01JDELETE");
@@ -392,24 +544,131 @@ mod tests {
             Some(timestamp("2026-07-01T00:00:00Z"))
         );
         assert_eq!(tombstone.restore, RestoreMetadata::default());
+        assert_eq!(
+            tombstone
+                .classify_restore_eligibility()
+                .expect("metadata should classify"),
+            RestoreEligibility::Eligible {
+                deleted_revision_id: RevisionId::parse("rev_01JDELETE").unwrap(),
+                current_revision_id: RevisionId::parse("rev_01JCURRENT").unwrap(),
+            }
+        );
     }
 
     #[test]
-    fn rejects_retention_that_does_not_outlive_creation_timestamp() {
-        let input = TombstoneCreationInput::try_from_raw(
-            "tmb_01JTEST",
-            "Notes/old.md",
-            "rev_01JDELETE",
-            None,
-            "worktree-adapter",
+    fn rejects_invalid_retention_metadata_and_boundaries() {
+        for retention in [
             TombstoneRetention::new(timestamp("2026-07-01T00:00:00Z"), Some(30)),
-            Some(timestamp("2026-07-01T00:00:00Z")),
-        )
-        .unwrap();
+            TombstoneRetention::new(timestamp("2026-06-30T23:59:59Z"), Some(30)),
+            TombstoneRetention::new(timestamp("2026-08-01T00:00:00Z"), Some(0)),
+            TombstoneRetention {
+                retention_until: timestamp("2026-08-01T00:00:00Z"),
+                retention_days: Some(30),
+                cleanup_after_retention_only: false,
+            },
+        ] {
+            let input = TombstoneCreationInput::try_from_raw(
+                "tmb_01JTEST",
+                "Notes/old.md",
+                "rev_01JDELETE",
+                None,
+                "worktree-adapter",
+                retention,
+                Some(timestamp("2026-07-01T00:00:00Z")),
+            )
+            .expect("boundary input should parse");
+
+            assert_eq!(
+                TombstoneService::new()
+                    .create_tombstone(input)
+                    .expect_err("invalid retention should reject"),
+                TombstoneServiceError::InvalidRetention
+            );
+        }
+    }
+
+    #[test]
+    fn retention_cleanup_classifier_uses_exact_boundary_without_side_effects() {
+        let tombstone = tombstone();
 
         assert_eq!(
-            TombstoneService::new().create_tombstone(input).unwrap_err(),
-            TombstoneServiceError::InvalidRetention
+            tombstone
+                .classify_retention_cleanup(timestamp("2026-07-31T23:59:59Z"))
+                .expect("metadata should classify"),
+            RetentionCleanupEligibility::RetainedUntil {
+                retention_until: timestamp("2026-08-01T00:00:00Z"),
+            }
+        );
+        assert_eq!(
+            tombstone
+                .classify_retention_cleanup(timestamp("2026-08-01T00:00:00Z"))
+                .expect("metadata should classify"),
+            RetentionCleanupEligibility::EligibleAfterRetention {
+                retention_until: timestamp("2026-08-01T00:00:00Z"),
+            }
+        );
+        assert_eq!(
+            tombstone
+                .classify_retention_cleanup(timestamp("2026-08-02T00:00:00Z"))
+                .expect("metadata should classify"),
+            RetentionCleanupEligibility::EligibleAfterRetention {
+                retention_until: timestamp("2026-08-01T00:00:00Z"),
+            }
+        );
+    }
+
+    #[test]
+    fn completed_restore_is_classified_and_not_cleanup_eligible() {
+        let mut tombstone = tombstone();
+        tombstone.restore = RestoreMetadata {
+            restored_at: Some(timestamp("2026-07-15T00:00:00Z")),
+            restored_by: Some(AdapterId::parse("worktree-adapter").unwrap()),
+            restore_revision_id: Some(RevisionId::parse("rev_01JRESTORE").unwrap()),
+        };
+
+        assert_eq!(
+            tombstone
+                .classify_restore_eligibility()
+                .expect("restored metadata should classify"),
+            RestoreEligibility::AlreadyRestored {
+                restored_at: timestamp("2026-07-15T00:00:00Z"),
+                restored_by: AdapterId::parse("worktree-adapter").unwrap(),
+                restore_revision_id: RevisionId::parse("rev_01JRESTORE").unwrap(),
+            }
+        );
+        assert_eq!(
+            tombstone
+                .classify_retention_cleanup(timestamp("2026-09-01T00:00:00Z"))
+                .expect("restored metadata should classify"),
+            RetentionCleanupEligibility::NotEligibleRestored {
+                restored_at: timestamp("2026-07-15T00:00:00Z"),
+                restore_revision_id: RevisionId::parse("rev_01JRESTORE").unwrap(),
+            }
+        );
+    }
+
+    #[test]
+    fn incomplete_or_precreation_restore_metadata_is_rejected() {
+        let mut incomplete = tombstone();
+        incomplete.restore.restored_at = Some(timestamp("2026-07-15T00:00:00Z"));
+        assert_eq!(
+            incomplete
+                .classify_restore_eligibility()
+                .expect_err("partial restore metadata should reject"),
+            TombstoneServiceError::InvalidRestoreMetadata
+        );
+
+        let mut before_creation = tombstone();
+        before_creation.restore = RestoreMetadata {
+            restored_at: Some(timestamp("2026-07-01T00:00:00Z")),
+            restored_by: Some(AdapterId::parse("worktree-adapter").unwrap()),
+            restore_revision_id: Some(RevisionId::parse("rev_01JRESTORE").unwrap()),
+        };
+        assert_eq!(
+            before_creation
+                .validate_metadata()
+                .expect_err("restore must follow creation"),
+            TombstoneServiceError::InvalidRestoreMetadata
         );
     }
 }
