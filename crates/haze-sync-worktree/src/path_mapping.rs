@@ -2,6 +2,8 @@
 
 use haze_sync_common::{ValidationError, VaultPath};
 use std::fmt;
+use std::fs;
+use std::io;
 use std::path::{Component, Path, PathBuf};
 
 /// Top-level runtime directory reserved inside the configured worktree root.
@@ -48,6 +50,10 @@ impl WorktreeConfig {
     }
 
     /// Map a validated `VaultPath` to a local path under the configured root.
+    ///
+    /// When the root exists, this also rejects an existing symlink or
+    /// non-directory anywhere in the root/parent chain before callers can use
+    /// the returned path for filesystem access.
     pub fn vault_path_to_local(
         &self,
         vault_path: &VaultPath,
@@ -56,8 +62,9 @@ impl WorktreeConfig {
             return Err(WorktreePathError::ReservedRuntimePath);
         }
 
+        let segments: Vec<&str> = vault_path.segments().collect();
         let mut local_path = self.root.clone();
-        for segment in vault_path.segments() {
+        for segment in &segments {
             if segment.contains('\\') {
                 return Err(WorktreePathError::BackslashEscape);
             }
@@ -68,6 +75,7 @@ impl WorktreeConfig {
             return Err(WorktreePathError::LocalPathOutsideRoot);
         }
 
+        self.validate_existing_parent_chain(&segments)?;
         Ok(local_path)
     }
 
@@ -135,6 +143,25 @@ impl WorktreeConfig {
             .strip_prefix(&self.root)
             .map_err(|_| WorktreePathError::LocalPathOutsideRoot)
     }
+
+    fn validate_existing_parent_chain(
+        &self,
+        segments: &[&str],
+    ) -> Result<(), WorktreePathError> {
+        if !existing_directory_is_safe(&self.root)? {
+            return Ok(());
+        }
+
+        let mut current = self.root.clone();
+        for segment in segments.iter().take(segments.len().saturating_sub(1)) {
+            current.push(segment);
+            if !existing_directory_is_safe(&current)? {
+                return Ok(());
+            }
+        }
+
+        Ok(())
+    }
 }
 
 /// Safe, path-redacted failures from worktree configuration and path mapping.
@@ -152,7 +179,7 @@ pub enum WorktreePathError {
     LocalPathOutsideRoot,
     /// The local path points at the worktree root itself, not a file path.
     LocalPathIsRoot,
-    /// The local path contained an unsafe component such as traversal or an absolute prefix.
+    /// The local path contained an unsafe, symlinked, or non-directory component.
     UnsafeLocalComponent,
     /// A path used a backslash escape where vault-relative paths require `/` separators.
     BackslashEscape,
@@ -246,6 +273,19 @@ fn validate_root(root: &Path) -> Result<(), WorktreePathError> {
     Ok(())
 }
 
+fn existing_directory_is_safe(path: &Path) -> Result<bool, WorktreePathError> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => {
+            if metadata.file_type().is_symlink() || !metadata.file_type().is_dir() {
+                return Err(WorktreePathError::UnsafeLocalComponent);
+            }
+            Ok(true)
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(_) => Err(WorktreePathError::UnsafeLocalComponent),
+    }
+}
+
 fn relative_segments(relative: &Path) -> Result<Vec<String>, WorktreePathError> {
     let mut segments = Vec::new();
 
@@ -292,9 +332,29 @@ fn is_reserved_relative_segments(segments: &[String]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::ErrorKind;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_TEMP_ROOT_ID: AtomicU64 = AtomicU64::new(0);
 
     fn config() -> WorktreeConfig {
         WorktreeConfig::new("/srv/haze-vault/worktree").unwrap()
+    }
+
+    fn temp_root(name: &str) -> PathBuf {
+        let id = NEXT_TEMP_ROOT_ID.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!(
+            "haze-sync-path-mapping-{name}-{}-{id}",
+            std::process::id()
+        ))
+    }
+
+    fn remove_dir_if_exists(path: &Path) {
+        match fs::remove_dir_all(path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == ErrorKind::NotFound => {}
+            Err(error) => panic!("failed to clear path-mapping test root: {error}"),
+        }
     }
 
     #[test]
@@ -413,6 +473,29 @@ mod tests {
                 .unwrap_err(),
             WorktreePathError::BackslashEscape
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_existing_symlink_in_vault_parent_chain() {
+        use std::os::unix::fs::symlink;
+
+        let test_root = temp_root("symlink-parent");
+        let worktree_root = test_root.join("worktree");
+        let outside_root = test_root.join("outside");
+        remove_dir_if_exists(&test_root);
+        fs::create_dir_all(&worktree_root).unwrap();
+        fs::create_dir_all(&outside_root).unwrap();
+        symlink(&outside_root, worktree_root.join("Notes")).unwrap();
+        let config = WorktreeConfig::new(worktree_root).unwrap();
+        let vault_path = VaultPath::parse("Notes/a.md").unwrap();
+
+        assert_eq!(
+            config.vault_path_to_local(&vault_path).unwrap_err(),
+            WorktreePathError::UnsafeLocalComponent
+        );
+
+        remove_dir_if_exists(&test_root);
     }
 
     #[test]
