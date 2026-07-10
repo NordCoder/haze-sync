@@ -1,5 +1,51 @@
 # Decisions: deployment
 
+## 2026-07-09 — DEP-P5 separates host path classes
+
+Decision:
+
+Production-style Deployment guidance keeps persistent application data, user-visible worktree data, non-secret configuration, secrets, logs, backups, and runtime temp state in separate roots. The documented placeholder layout is:
+
+```text
+/srv/haze-sync/objects
+/srv/haze-vault/worktree
+/etc/haze-sync
+/opt/haze-sync/secrets
+/var/log/haze-sync
+/var/backups/haze-sync
+/run/haze-sync
+/var/tmp/haze-sync
+```
+
+The paths are examples, not automatically created resources. `HAZE_SYNC_OBJECT_STORE_PATH` and `HAZE_SYNC_WORKTREE_PATH` remain the accepted Server config keys.
+
+Rationale:
+
+Separating path classes reduces accidental recursive backups, self-ingestion, secret disclosure, unsafe cleanup, and permission broadening. It also lets operators give the Server, vault users, and backup operators only the access each role requires.
+
+Alternatives:
+
+- Store runtime data under the repository checkout.
+- Put object store, worktree, secrets, logs, and backups under one writable root.
+- Make persistent directories world-writable to avoid UID/GID coordination.
+- Add host bind mounts before Worktree and container identity contracts are accepted.
+
+Consequences:
+
+- Host deployment guidance must preserve path separation and least privilege.
+- Future container bind mounts must account for the Server image UID `10001` or explicitly coordinate another runtime identity.
+- The worktree write model remains deferred until the Worktree contract accepts it.
+- Backups must be operator-owned and outside service data roots.
+- Real secrets and runtime artifacts remain untracked.
+
+Affected contracts:
+
+- deploy/docs/host-directory-layout.md;
+- Server object-store and Worktree path config;
+- migration/backup/restore procedure;
+- future Worktree runtime and secret placement phases;
+- `.env.example` local placeholder guidance.
+
 ## 2026-07-09 — DEP-P4 uses operator-run manual SQLx migrations
 
 Decision:
@@ -58,15 +104,15 @@ Affected contracts:
 - Server/Storage/GDrive/Worktree integration phases;
 - github-ci validation boundaries.
 
-## 2026-07-05 — Current compose is local PostgreSQL scaffold only
+## 2026-07-05 — Current compose is a local PostgreSQL and Server scaffold
 
 Decision:
 
-`deploy/docker-compose.yml` is currently a local development PostgreSQL scaffold. It is not production deployment and does not start Haze Sync Server, GDrive adapter, Worktree runtime, or any sync service.
+`deploy/docker-compose.yml` is a local development scaffold that starts PostgreSQL and `haze-sync-server`. It is not production deployment and does not start the GDrive adapter, Worktree runtime, Obsidian runtime, reverse proxy/TLS, migration runner, or backup jobs.
 
 Rationale:
 
-The current compose file only provisions PostgreSQL with local bind address and placeholder defaults. Treating it as production-ready would hide missing services, secrets, migrations, object-store, worktree, backup, and reverse proxy setup.
+Local Compose now supports Server smoke workflows but still uses placeholder configuration, local-only host binds, Docker named volumes, disabled adapters, and no production access or secret flow. Treating it as production-ready would hide missing migrations, host path provisioning, provider services, Worktree authority, backups, and reverse proxy/TLS setup.
 
 Alternatives:
 
@@ -76,14 +122,16 @@ Alternatives:
 
 Consequences:
 
-- Documentation must label compose validation as syntax/local dependency validation only.
-- Future Server/GDrive service wiring needs dedicated phases.
+- Documentation must label compose validation and startup as local/prod-like smoke evidence only.
+- Future GDrive/Worktree/public-access wiring needs dedicated phases.
 - Local placeholder passwords must not become production values.
+- Production-style host paths remain documented but unwired until later accepted phases.
 
 Affected contracts:
 
 - docker-compose scaffold;
-- README deployment validation command;
+- Server packaging;
+- local/server compose runbooks;
 - deployment plan;
 - CI compose validation.
 
