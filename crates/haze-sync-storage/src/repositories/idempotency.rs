@@ -18,7 +18,7 @@ use std::{error::Error, fmt};
 const MAX_IDEMPOTENCY_KEY_LEN: usize = 512;
 
 /// New idempotency record ready to insert into `idempotency_records`.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct IdempotencyRecordInput {
     adapter_id: AdapterId,
     idempotency_key: String,
@@ -66,6 +66,30 @@ impl IdempotencyRecordInput {
     #[must_use]
     pub const fn response_json(&self) -> &Value {
         &self.response_json
+    }
+}
+
+impl<'de> Deserialize<'de> for IdempotencyRecordInput {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct SerializedInput {
+            adapter_id: AdapterId,
+            idempotency_key: String,
+            request_hash: Sha256,
+            response_json: Value,
+        }
+
+        let input = SerializedInput::deserialize(deserializer)?;
+        Self::new(
+            input.adapter_id,
+            input.idempotency_key,
+            input.request_hash,
+            input.response_json,
+        )
+        .map_err(|error| <D::Error as serde::de::Error>::custom(error))
     }
 }
 
