@@ -71,12 +71,17 @@ export function mapHttpStatusToCategory(status: number): ApiErrorCategory {
   return "internal";
 }
 
-export function createHttpError(status: number, endpoint: string, payload: unknown): ApiClientError {
+export function createHttpError(
+  status: number,
+  endpoint: string,
+  payload: unknown,
+  secrets: readonly string[] = [],
+): ApiClientError {
   return new ApiClientError({
     category: mapHttpStatusToCategory(status),
     status,
     endpoint,
-    message: safeErrorMessage(status, payload),
+    message: safeErrorMessage(status, payload, secrets),
   });
 }
 
@@ -104,9 +109,9 @@ export function createOfflineError(endpoint: string): ApiClientError {
   });
 }
 
-function safeErrorMessage(status: number, payload: unknown): string {
+function safeErrorMessage(status: number, payload: unknown, secrets: readonly string[]): string {
   if (isErrorResponseDto(payload)) {
-    return sanitizeStatusMessage(payload.error.message);
+    return sanitizeStatusMessage(payload.error.message, secrets);
   }
 
   switch (mapHttpStatusToCategory(status)) {
