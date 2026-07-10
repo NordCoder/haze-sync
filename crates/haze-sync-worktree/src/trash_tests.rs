@@ -65,11 +65,7 @@ fn tombstone_moves_file_and_persists_restore_ready_metadata() {
     let original_revision = revision("rev_before_delete");
     let tombstone_revision = revision("rev_tombstone");
     let mut state = WorktreeStateSnapshot::new();
-    state.record_present(
-        vault_path.clone(),
-        original_revision,
-        original_hash,
-    );
+    state.record_present(vault_path.clone(), original_revision, original_hash);
     let retained_at = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000);
     let policy = WorktreeTrashPolicy::new(Duration::from_secs(30 * 24 * 60 * 60)).unwrap();
     let manager = WorktreeTrashManager::new(config.clone(), policy);
