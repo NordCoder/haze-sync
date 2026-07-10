@@ -1,12 +1,12 @@
 REPORT_TYPE:
-IMPLEMENTATION
+CLEAN_CODE_REVIEW
 
 STATUS:
-SELF_ACCEPT_PENDING_CI
+CLEAN_ACCEPT
 
 AGENT:
-role: implementation-worker
-agent_execution_id: W1-OBS-P8-20260710-obsidian-plugin
+role: clean-code-reviewer
+agent_execution_id: W1-OBS-P8C-20260710-obsidian-plugin
 chat_name: obsidian-plugin persistent worker
 
 COMPONENT:
@@ -21,21 +21,17 @@ control_report_path: apps/haze-obsidian-plugin/control/report.md
 
 WAVE:
 id: W1
-phase_id: OBS-P8
-dependency_status: OBS-P7 implementation and clean-code review accepted; accepted clean-code source CI run 29080003119 was green before OBS-P8; fresh Component CI run 29082606406 is in progress for the final OBS-P8 source head
+phase_id: OBS-P8C
+dependency_status: OBS-P8 implementation completed; final implementation Component CI run 29082606406 for commit 87801f93c34f7ef14411af3c8d9b071462676f96 completed successfully; clean-code source Component CI run 29084771114 for commit f54a79b4a35c38d7b818cc323af0e166aa47b2c2 completed successfully
 
 SUMMARY:
-Implemented OBS-P8 explicit sync runner, offline/backoff state, optional best-effort automation, and sanitized status UX inside the Obsidian plugin component. Added a single lifecycle-owned runner that serializes manual full sync, scan-only, pull-only, interval, event-debounced, and retry requests so sync work cannot overlap. The runner owns and clears interval, event, retry, and follow-up timers, aborts active HTTP requests through AbortSignal on unload, and persists sanitized runtime state with last trigger/result timestamps, failure category, bounded exponential backoff, and next retry time. Added coordinated scan, push, pull/materialization, and conflict-refresh operations using existing Server/API abstractions and persisted idempotency/base/cursor state. Automatic triggers are disabled by default and explicitly documented as best-effort only while Obsidian keeps the plugin active; no mobile background guarantee is claimed. Dry-run performs scan and conflict inspection only, without server or vault-content mutations. Delete/tombstone pushes remain queued while confirmation protection is enabled, and when explicitly allowed they require a fresh Vault API absence check. Unreadable files preserve their previous known fact and cannot be misclassified as deletions. No provider integration, hidden telemetry, server runtime change, hard delete, destructive repair automation, workflow/dependency change, or sibling-component change was added.
+Reviewed the OBS-P8 explicit sync runner, persisted offline/backoff state, optional automation, sync operations, lifecycle cancellation, and status UX against the component contract, OBS-P8 plan, current source/docs, and branch diff. The implementation remains serialized, API-driven, dry-run-safe, lifecycle-owned, and honest about Obsidian/mobile background limitations. Made focused correctness and maintainability fixes: pending mutation idempotency keys now remain tied to the actual queued payload so a newer vault event cannot be cleared by an older in-flight response; event hints preserve file facts until a full scan reconciles them; reappearing paths cannot remain stale delete mutations; vault scans observe the runner-owned AbortSignal between files; automatic trigger coalescing produces at most one follow-up after a successful run and never immediately replays non-retryable failures; scan-only maintenance does not reset persisted network failure/backoff state; and plugin unload cancels owned work while preserving the runtime state and retry deadline that existed before an interrupted run. Runtime documentation was aligned with these semantics. No Server/Core policy, provider integration, hard deletion, workflow/dependency behavior, or sibling component was changed.
 
 CHANGED_FILES:
-- apps/haze-obsidian-plugin/src/sync-runtime-state.ts
-- apps/haze-obsidian-plugin/src/sync-runner.ts
+- apps/haze-obsidian-plugin/src/pending-queue.ts
 - apps/haze-obsidian-plugin/src/sync-operations.ts
-- apps/haze-obsidian-plugin/src/api-client/client.ts
-- apps/haze-obsidian-plugin/src/settings.ts
-- apps/haze-obsidian-plugin/src/settings-tab.ts
-- apps/haze-obsidian-plugin/src/plugin-data.ts
-- apps/haze-obsidian-plugin/src/main.ts
+- apps/haze-obsidian-plugin/src/sync-runner.ts
+- apps/haze-obsidian-plugin/src/vault-scanner.ts
 - apps/haze-obsidian-plugin/docs/sync-runtime.md
 - apps/haze-obsidian-plugin/control/report.md
 
@@ -43,21 +39,21 @@ BRANCH_AND_CONTROL:
 current_branch: component/obsidian-plugin
 base_branch: main
 base_sha: observed_current_main=c1e69a664388b0cba028170e8398b9088218957d; merge_base=1a82bea5c87953db378e5e03429326df38320ee8
-head_sha: 87801f93c34f7ef14411af3c8d9b071462676f96 before report write; report write creates final branch head
+head_sha: clean-code_source_head=f54a79b4a35c38d7b818cc323af0e166aa47b2c2; this report write creates the final branch head for this execution
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
 ci_skip_used: yes
-ci_skip_reason: final commit updates only apps/haze-obsidian-plugin/control/report.md after source/docs commits already triggered Component CI; skipped report-only workflow is not CI evidence
+ci_skip_reason: this final commit changes only apps/haze-obsidian-plugin/control/report.md; its skipped workflow is not CI evidence; CI evidence is Component CI run 29084771114 for clean-code source commit f54a79b4a35c38d7b818cc323af0e166aa47b2c2
 
 SCOPE:
 allowed_files_only: yes
 scope_expansion_used: no
 scope_expansion_rationale: none
 cross_component_changes: no
-forbidden_files_touched: no by this worker; branch-vs-main diff includes pre-existing workflow/control/log/docs history outside this execution
+forbidden_files_touched: no by this worker; branch-vs-main diff contains pre-existing workflow/control/log/docs/source history outside this clean-code execution
 
 CONTRACT:
 contract_read: yes
@@ -68,44 +64,45 @@ affected_components: none
 
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
-main_changes: Added sync-runtime-state.ts for persisted sanitized runner state and bounded retry/backoff calculation. Added sync-runner.ts for one-at-a-time execution, manual/interval/event/retry triggers, guarded scopes, timer ownership, automatic-trigger coalescing, manual backoff override, AbortController cancellation, and unload disposal. Added sync-operations.ts to perform full vault scan, stable-content push planning, confirmed-progress persistence, bounded remote pull/materialization, conditional pending-queue clearing, conflict-stop behavior, unreadable-file preservation, and verified path absence before delete requests. Extended the API client with optional AbortSignal propagation. Added backward-compatible automation settings and settings UI controls. Extended plugin data with runtime-state persistence. Rewired main.ts around the runner and added Sync now while retaining scan-only, pull-only, and conflict-center entry points. Added docs/sync-runtime.md.
-behavior_changes: Users can explicitly run Sync now. Full sync behavior follows configured mode: pull_only scans/pulls/refreshes conflicts; push_only scans/pushes/refreshes conflicts; bidirectional scans/pushes/pulls/refreshes conflicts; dry_run scans and inspects conflicts only; disabled blocks full sync. Optional interval and file-event triggers are off by default and operate only while the plugin is active. Event triggers are debounced hints and each run still performs a full scan. Retryable offline/rate-limit/server-unavailable failures enter persisted bounded backoff when automation is enabled; manual Sync now may retry immediately. Status text exposes sanitized runtime, pending, base, cursor, and conflict summaries. Existing conflict actions are disabled while a sync run is active.
-bugs_found: Implementation verification identified three safety risks before final report: unreadable files could otherwise look deleted during reconciliation; stale delete event hints could otherwise submit a tombstone after a path had reappeared; and automatic retry/follow-up timers needed explicit ownership and cleanup across reconfiguration/unload.
-bugs_fixed: Preserved last known facts for unreadable paths, added Vault API absence preflight before delete submission, and made all interval/event/retry/follow-up timers explicit runner-owned resources cleared during reconfiguration and unload.
-cleanups_made: Kept runtime state, execution coordination, concrete sync operations, settings UI, and plugin lifecycle wiring in separate modules. Existing pending queue, mutation planner, materializer, conflict center, base revision store, API client, and status abstractions remain the authoritative component-local building blocks.
-non_goals_preserved: no guaranteed mobile background sync; no hidden telemetry; no provider calls; no direct database access; no server runtime or route changes; no hard delete; no destructive repair automation; no semantic merge; no Worktree behavior; no workflow or dependency changes; no sibling component changes.
-deferred_work: clean-code review, fresh CI completion, fixer loop if CI fails, richer tests/fixtures, explicit per-delete confirmation UX if automated deletes are later expanded, packaging/E2E readiness, and production installation guidance in OBS-P9.
+main_changes: Reviewed and hardened pending mutation identity, event-hint reconciliation, vault scan cancellation, automatic trigger coalescing, retry/backoff preservation, unload interruption behavior, and sync runtime documentation. No public API route or conflict/delete policy vocabulary changed.
+behavior_changes: A new vault event always receives a new mutation idempotency key, while a scan reuses a key only when the queued operation and upload payload remain unchanged. Event hints retain the last file fact until scan reconciliation. Reappearing paths are converted away from stale delete intent. Successful old requests clear only the matching queued mutation identity. Vault scans stop between files when the runner-owned signal is aborted. Coalesced automatic triggers run once only after successful completion; retryable failures wait for backoff and non-retryable failures do not loop. Scan-only commands preserve network failure/backoff state. Unload clears timers, aborts owned requests/scans, and preserves the pre-run network state and retry deadline.
+bugs_found: New vault events reused an existing same-kind idempotency key and removed the queued file fact, allowing an older in-flight upload response to clear a newer local change. A reappearing path could retain stale delete intent. Coalesced automatic triggers could replay immediately after non-retryable failure. Scan-only success could reset network backoff. Unload marked runtime stopped and discarded a persisted retry deadline. Vault scans did not observe runner cancellation between files.
+bugs_fixed: Bound mutation keys to queued payload identity; preserved event-hint file facts; healed stale delete entries during scan; gated coalesced follow-up on actual pending work and successful completion; preserved network backoff across scan-only work and unload; made vault scans signal-aware.
+cleanups_made: Kept mutation reconciliation in pending-queue.ts, concrete operation progress in sync-operations.ts, lifecycle/timer state in sync-runner.ts, vault traversal cancellation in vault-scanner.ts, and user-facing runtime semantics in docs/sync-runtime.md.
+non_goals_preserved: no guaranteed mobile background sync; no hidden telemetry; no provider calls; no direct database access; no Server runtime or route changes; no local hard delete; no destructive repair automation; no semantic merge; no Worktree behavior; no workflow/dependency changes; no sibling component changes.
+deferred_work: OBS-P9 compatibility fixtures, mocked runner/queue tests, packaging/E2E readiness, explicit per-delete confirmation UX if later scoped, and broader integration verification with a test server and test vault.
 
 TESTS_AND_CHECKS:
 checks_run:
-- Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, and wave-plan project sources.
-- Read apps/haze-obsidian-plugin/control/state.md and verified status PROMPT_READY, active_agent_role implementation-worker, wave W1, phase OBS-P8.
-- Read active prompt and previous clean-code report.
-- Read component contract, OBS-P8 implementation-plan section, implementation log, dependency map, accepted API contract, and available Server contract.
-- Inspected current settings, settings tab, plugin-data, main lifecycle, pending queue, mutation planner, base revision store, API client/errors, materializer, conflict center/action-key state, local facts, scanner, and remote sync state.
-- Compared component/obsidian-plugin against main after final source changes; observed ahead_by=146, behind_by=7, merge_base=1a82bea5c87953db378e5e03429326df38320ee8 before this report write.
-- Manually reviewed concurrency locking, trigger coalescing, timer cleanup, unload cancellation, persisted backoff migration, manual retry behavior, mode gating, dry-run non-mutation, stable upload hashes, idempotency reuse, partial-progress persistence, newer-event queue protection, unreadable-file preservation, delete absence checks, bounded pull pagination, conflict-stop behavior, token/error sanitization, and mobile/background messaging.
-- Observed Component CI run 29082606406 for final code-bearing source commit 87801f93c34f7ef14411af3c8d9b071462676f96 with status in_progress and conclusion None.
+- Read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, chatgpt-gh-connector.md, and wave-plan project sources.
+- Read apps/haze-obsidian-plugin/control/state.md and verified status PROMPT_READY, active_agent_role clean-code-reviewer, wave W1, and phase OBS-P8C.
+- Read active control prompt and previous OBS-P8 implementation report.
+- Read component contract, OBS-P8 implementation-plan section, implementation log, dependency map, and sync-runtime documentation.
+- Inspected current sync-runtime-state.ts, sync-runner.ts, sync-operations.ts, pending-queue.ts, vault-scanner.ts, main.ts, settings.ts, settings-tab.ts, plugin-data.ts, API client AbortSignal handling, mutation planner, base revision store, remote materializer, and status output.
+- Confirmed implementation Component CI run 29082606406 completed successfully for implementation source commit 87801f93c34f7ef14411af3c8d9b071462676f96.
+- Compared component/obsidian-plugin against main after clean-code changes; observed ahead_by=162, behind_by=7, merge_base=1a82bea5c87953db378e5e03429326df38320ee8 before this report write.
+- Manually reviewed runner serialization, interval/event/retry/follow-up timer ownership, trigger coalescing, unload cancellation, retry state persistence, manual override, dry-run behavior, stable upload hashing, idempotency reuse, event-vs-in-flight races, partial progress persistence, unreadable-file preservation, stale-delete healing, delete absence checks, conflict-stop behavior, bounded pull pagination, sanitized status output, and mobile/background messaging.
+- Observed clean-code Component CI run 29084771114, run_number=1058, for source commit f54a79b4a35c38d7b818cc323af0e166aa47b2c2 with status completed and conclusion success.
 checks_not_run:
-- npm install --no-audit --no-fund: not run because repository work is constrained to the GitHub connector and local git/shell repository execution is not permitted.
-- npm run --workspace haze-obsidian-plugin typecheck: not run locally for the same connector-only reason.
-- npm run --workspace haze-obsidian-plugin build: not run locally for the same connector-only reason.
-ci_status: CI_PENDING
-workflow_urls: Component CI run_id=29082606406, run_number=995, status=in_progress, conclusion=None
+- npm install --no-audit --no-fund: not run because repository work is constrained to the GitHub connector and local repository shell execution is not permitted.
+- npm run --workspace haze-obsidian-plugin typecheck: not run locally; successful Component CI is the observed typecheck/build evidence.
+- npm run --workspace haze-obsidian-plugin build: not run locally; successful Component CI is the observed typecheck/build evidence.
+ci_status: CI_GREEN
+workflow_urls: Component CI run_id=29084771114, run_number=1058, status=completed, conclusion=success
 known_failures: none observed
 
 CI_DIAGNOSTICS:
 artifact_based_logs: not read
 artifact_name: none
 artifact_id: none
-workflow_run_id: 29082606406
+workflow_run_id: 29084771114
 workflow_run_attempt: unknown
-artifact_status: not_applicable_for_implementation_worker
+artifact_status: not_applicable_for_clean_code_review
 summary_read: no
 manifest_read: no
 logs_read: no
 raw_job_logs_used: no
-diagnostics_failure: none; active prompt explicitly prohibited CI diagnostics artifact reading unless instructed by a future prompt
+diagnostics_failure: none; the active prompt prohibited diagnostics artifact reading unless instructed by a future fixer prompt
 
 SAFETY_AND_SECRECY:
 secrets_committed: no
@@ -113,21 +110,26 @@ unsafe_public_output: no
 raw_errors_exposed: no
 provider_calls_added: no
 hard_delete_added: no
-background_jobs_added: no; optional timers exist only inside the active Obsidian plugin lifecycle and are explicitly best-effort
+background_jobs_added: no; optional timers remain best-effort and owned strictly by the active Obsidian plugin lifecycle
 
 ISSUES_FOUND:
-- Fresh CI for the final OBS-P8 code-bearing head is in progress.
-- Branch remains diverged from main: ahead_by=146, behind_by=7, merge_base=1a82bea5c87953db378e5e03429326df38320ee8 before this report write. No merge, rebase, cherry-pick, force-push, or history rewrite was performed.
-- Shell typecheck/build could not be run from the connector-only worker environment.
+- Fixed: newer local events could be cleared by older in-flight upload responses because same-kind event hints reused mutation identity.
+- Fixed: event hints could remove the queued file fact and leave upload planning incomplete until an unrelated scan.
+- Fixed: a path that reappeared could retain stale delete intent.
+- Fixed: coalesced automatic work could replay immediately after a non-retryable failure.
+- Fixed: scan-only maintenance could reset persisted network failure/backoff state.
+- Fixed: plugin unload could discard the existing retry deadline instead of preserving pre-run network state.
+- Fixed: long vault scans did not stop between files after runner cancellation.
+- Branch remains diverged from main: ahead_by=162, behind_by=7, merge_base=1a82bea5c87953db378e5e03429326df38320ee8 before this report write. No merge, rebase, cherry-pick, force-push, or history rewrite was performed.
 
 BLOCKERS:
-none for component-local OBS-P8 implementation; fresh CI remains pending
+none
 
 NEXT_RECOMMENDED_AGENT:
-clean-code-reviewer
+orchestrator
 
 FINAL_VERDICT:
-SELF_ACCEPT_PENDING_CI — OBS-P8 explicit lifecycle-safe sync runner, offline/backoff behavior, optional best-effort triggers, and sanitized status UX are implemented within obsidian-plugin scope; final source CI is still in progress.
+CLEAN_ACCEPT — OBS-P8C is complete; sync execution remains serialized and lifecycle-safe, pending mutation identity and progress persistence are race-safe, offline/backoff behavior is predictable, delete and unreadable-file protections are preserved, status output remains sanitized, and clean-code source CI is green.
 
 PUSHED:
 yes
