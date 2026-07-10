@@ -1,13 +1,13 @@
 REPORT_TYPE:
-FIX
+CLEAN_CODE_REVIEW
 
 STATUS:
-FIX_COMPLETE
+CLEAN_ACCEPT
 
 AGENT:
-role: fixer-worker
-agent_execution_id: W1-FIX-API-P6-CI
-chat_name: api — W1 FIX-API-P6-CI CI Fix
+role: clean-code-reviewer
+agent_execution_id: W1-API-P6C
+chat_name: api — W1 API-P6C Clean-Code Review
 
 COMPONENT:
 name: api
@@ -21,28 +21,41 @@ control_report_path: crates/haze-sync-api/control/report.md
 
 WAVE:
 id: W1
-phase_id: FIX-API-P6-CI
-dependency_status: active control state was PROMPT_READY; API-P6 code/docs head 613b58cbc9be6c20329b1dfb36d889c879e8f8d1 had red Component CI run 29084450470 attempt 1 with diagnostics artifact 8224162592
+phase_id: API-P6C
+dependency_status: API-P6 implementation and artifact-based formatter fixer were complete; post-fix Component CI run 29086605020 was green for code-bearing SHA c88e33a5f5f6bcca928bd0fcb119e56e2e6dde7d
 
 SUMMARY:
-Fixed the minimum API-P6 CI failure proven by diagnostics artifact 8224162592. The authoritative artifact identified only `rust-fmt` drift: one formatting hunk in crates/haze-sync-api/src/dto/server.rs and five formatting hunks in crates/haze-sync-api/src/routes/admin.rs. Applied exactly the rustfmt-prescribed layouts without changing server-info validation, protocol/capability semantics, operational check vocabulary, doctor summaries, cursor-presence behavior, pause support/state behavior, adapter runtime summaries, public JSON contracts, test assertions, dependencies, documentation, or component ownership boundaries. Code-bearing commits a3538575a0fe9603fd529e49d72b001559435013 and c88e33a5f5f6bcca928bd0fcb119e56e2e6dde7d triggered post-fix Component CI run 29086605020, run number 1099, which completed successfully with cargo fmt, cargo check, cargo test, cargo clippy, and diagnostics finalization all green.
+Reviewed the API-P6 server-info, admin/status, doctor-facing, adapter runtime, cursor-presence, and pause-support contracts plus the formatter-only CI correction. No product, test, or documentation changes were required. Server-info retains its pre-existing public fields and JSON shape while adding validated constructors, current protocol metadata, safe server-id validation, positive upload-limit/protocol checks, duplicate capability rejection, capability lookup, and explicit exact-version compatibility semantics. Operational status distinguishes `passed`, `failed`, `skipped`, `not_run`, and `placeholder` from coarse `ready`, `not_ready`, and `unknown` readiness. Doctor check names and adapter runtime states remain closed enums, so arbitrary raw errors, paths, SQL/provider labels, or cursor values cannot enter those fields. Cursor output remains presence-only; pause output remains support/state-only; adapter operational summaries remain additive and passive. Existing Server consumers continue to construct the unchanged `ServerInfoResponse`, `StatusSummaryResponse`, `AdapterSummary`, and `AdapterListResponse` surfaces without source changes. Public fields can still be filled directly, matching the established DTO style and source-compatibility requirement; the supplied constructors derive consistent status/readiness/timestamp and support/state combinations. Making those fields private or changing deserialization to enforce invariants would be a public contract change and was not justified in this review. No live checks, runtime readiness behavior, mutations, repair execution, provider calls, persistence, route wiring, dependency changes, workflow changes, or sibling-component changes were introduced. The CI correction contains only the six rustfmt-prescribed layout changes and has no behavioral effect.
 
 CHANGED_FILES:
+- crates/haze-sync-api/control/report.md
+
+REVIEWED_FILES:
 - crates/haze-sync-api/src/dto/server.rs
 - crates/haze-sync-api/src/routes/admin.rs
+- crates/haze-sync-api/docs/component-contract.md
+- crates/haze-sync-api/docs/implementation-plan.md
+- crates/haze-sync-api/docs/implementation-log.md
+- crates/haze-sync-api/docs/dependency-map.md
+- crates/haze-sync-api/docs/decisions.md
+- crates/haze-sync-api/control/prompt.md
 - crates/haze-sync-api/control/report.md
+- crates/haze-sync-server/docs/component-contract.md on component/server
+- crates/haze-sync-server/src/routes/v1.rs on component/server
+- crates/haze-sync-server/src/routes/admin.rs on component/server
+- crates/haze-sync-common/docs/component-contract.md on component/common
 
 BRANCH_AND_CONTROL:
 current_branch: component/api
 base_branch: main
 base_sha: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
-head_sha: c88e33a5f5f6bcca928bd0fcb119e56e2e6dde7d before this report-only commit
+head_sha: abacfd314d3a5fdb17b67776bed0069f7ccbe09a before this report-only commit; reviewed code-bearing SHA c88e33a5f5f6bcca928bd0fcb119e56e2e6dde7d had green CI
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
-ci_skip_used: yes, only for this final report-only commit; code-bearing fixer commits a3538575a0fe9603fd529e49d72b001559435013 and c88e33a5f5f6bcca928bd0fcb119e56e2e6dde7d did not skip CI
+ci_skip_used: yes, only for this report-only API-P6C commit
 ci_skip_reason: this commit updates only crates/haze-sync-api/control/report.md and cannot change executable behavior or validation outcome; the skipped workflow is not CI evidence
 
 SCOPE:
@@ -57,69 +70,70 @@ contract_read: yes
 contract_satisfied: yes
 contract_changes_requested: none
 contract_change_rationale: none
-affected_components: none
+affected_components: none; accepted Server/Common contracts were read only to verify compatibility
 
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- Applied the rustfmt-prescribed compact ServerInfoResponse::current test construction.
-- Applied the rustfmt-prescribed single-line readiness match arm.
-- Applied the rustfmt-prescribed multiline PauseStatusSummary consistency expression.
-- Applied the rustfmt-prescribed multiline cursor-presence JSON assertion.
-- Applied the rustfmt-prescribed multiline placeholder-count assertion.
-- Applied the rustfmt-prescribed compact AdapterOperationalSummary placeholder construction.
+- Performed correctness, clean-code, safety, compatibility, and contract review of API-P6 source, tests, docs, and formatter fix.
+- Confirmed server-info validation is additive and does not alter existing public fields or JSON vocabulary.
+- Confirmed doctor/check execution vocabulary honestly separates pass/fail from skipped, not-run, and placeholder outcomes.
+- Confirmed readiness remains a separate coarse value and constructors derive matching readiness/timestamp combinations.
+- Confirmed cursor values, raw runtime errors, database URLs, local paths, provider payloads, and token hashes are not representable in the new closed status fields.
+- Confirmed existing Server route code remains source-compatible with unchanged pre-P6 DTO construction surfaces.
+- Confirmed the fixer commits contain only rustfmt layout changes.
+- No product/code, test, or documentation edits were necessary.
 behavior_changes: none
-bugs_found:
-- API-P6 source did not match cargo fmt output in six artifact-reported locations.
-bugs_fixed:
-- Removed all formatter drift identified by the authoritative diagnostics artifact.
-cleanups_made: artifact-prescribed formatting only
+bugs_found: none requiring changes
+bugs_fixed: none by this reviewer
+cleanups_made: none; the current implementation is sufficiently cohesive and scoped for API-P6
 non_goals_preserved:
-- no live doctor or dependency checks
+- no live dependency or doctor checks
 - no Server readiness implementation
-- no pause/resume mutation
+- no adapter pause/resume mutation
 - no repair execution
 - no provider calls
-- no persistence, database, object-store, or operation-log access
+- no database, storage, object-store, or operation-log access
 - no Axum route or middleware wiring
-- no raw cursor, token hash, database URL, absolute path, provider payload, or raw error exposure
+- no raw cursor, token hash, database URL, absolute path, provider payload, or raw error output
 - no dependency or workflow changes
 - no sibling-component changes
 - no tests deleted or assertions weakened
 deferred_work:
-- API-P6 clean-code review remains for the normal lifecycle after Orchestrator accepts this fixer report.
+- Server remains responsible for executing live checks and mapping only sanitized outcomes into API DTOs.
+- CLI/doctor consumers may render the new operational vocabulary during later fan-in.
+- Any future decision to privatize DTO fields or enforce invariant-validating deserialization requires an explicit public contract/source-compatibility review.
+- API-P7 remains the planned phase for cross-language compatibility fixtures.
 
 TESTS_AND_CHECKS:
 checks_run:
-- Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, and chatgpt-gh-connector.md from Project Sources.
-- Read current control state, active FIX-API-P6-CI prompt, prior API-P6 report, component contract, API-P6 implementation-plan section, implementation log, dependency map, current API-P6 source/tests/docs, PR metadata, and code-bearing fixer diffs.
-- Listed diagnostics artifact ci-diag__component-api__wf-component-ci__run-29084450470__attempt-1 and confirmed artifact id 8224162592 was available and unexpired.
-- Downloaded and read artifact summary.md and manifest.json.
-- Read every failed-check file named by failed_checks: logs/rust-fmt.log and failures/rust-fmt.txt.
-- Verified fixer commit a3538575a0fe9603fd529e49d72b001559435013 contains only the server-info formatter hunk reported by the artifact.
-- Verified fixer commit c88e33a5f5f6bcca928bd0fcb119e56e2e6dde7d contains only the five admin/status formatter hunks reported by the artifact.
-- Observed post-fix Component CI run 29086605020, run number 1099, completed with conclusion success.
+- Read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, and chatgpt-gh-connector.md from Project Sources.
+- Read current API-P6C control state, active prompt, prior fixer report, API component contract, API-P6 plan section, implementation log, dependency map, and decisions.
+- Inspected current server-info DTO code/tests and admin/status/doctor/adapter DTO code/tests.
+- Compared pre-P6 code-bearing SHA 8a80d45685d29a681d37e0861ec8ea1ba2e734c7 with post-fix SHA c88e33a5f5f6bcca928bd0fcb119e56e2e6dde7d.
+- Compared post-fix code-bearing SHA c88e33a5f5f6bcca928bd0fcb119e56e2e6dde7d with current control head abacfd314d3a5fdb17b67776bed0069f7ccbe09a and confirmed intervening changes were control-only.
+- Read accepted Server and Common component contracts and inspected Server consumers for server-info and admin/status DTO source compatibility.
+- Observed Component CI run 29086605020, run number 1099, completed with conclusion success for c88e33a5f5f6bcca928bd0fcb119e56e2e6dde7d.
 - Observed cargo fmt, cargo check, cargo test, cargo clippy, and Finalize CI diagnostics completed with conclusion success.
 checks_not_run:
-- Local shell cargo checks were not run.
-Reason: repository work is constrained to the GitHub connector; authoritative artifact diagnostics and post-fix GitHub CI metadata were available.
+- Local shell cargo commands were not run.
+- CI diagnostics artifacts were not read.
+Reason: repository work is constrained to the GitHub connector; the active clean-code prompt does not authorize diagnostics-artifact access, and green CI metadata was directly observed.
 ci_status: CI_GREEN
 workflow_urls:
 - Component CI run 29086605020 completed successfully for c88e33a5f5f6bcca928bd0fcb119e56e2e6dde7d
-known_failures: none in post-fix CI
+known_failures: none in observed post-fix CI
 
 CI_DIAGNOSTICS:
-artifact_based_logs: yes
-artifact_name: ci-diag__component-api__wf-component-ci__run-29084450470__attempt-1
-artifact_id: 8224162592
-workflow_run_id: 29084450470
+artifact_based_logs: no
+artifact_name: none
+artifact_id: none
+workflow_run_id: 29086605020
 workflow_run_attempt: 1
-artifact_status: available, unexpired, downloaded, and readable; files were located at artifact root under summary.md, manifest.json, logs/, and failures/
-summary_read: yes, summary.md
-manifest_read: yes, manifest.json
-logs_read:
-- logs/rust-fmt.log
-- failures/rust-fmt.txt
+artifact_status: not read; active clean-code prompt did not authorize diagnostics-artifact access
+summary_read: no
+manifest_read: no
+logs_read: none
 raw_job_logs_used: no
 diagnostics_failure: none
 
@@ -132,7 +146,7 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- The previous implementation report correctly deferred root-cause identification; the authoritative artifact showed that the underlying failed check was rust-fmt rather than a product test, compile, or clippy failure.
+none requiring code or documentation changes
 
 BLOCKERS:
 none
@@ -141,7 +155,7 @@ NEXT_RECOMMENDED_AGENT:
 orchestrator
 
 FINAL_VERDICT:
-FIX_COMPLETE. The artifact-proven API-P6 rust-fmt failure was corrected with minimum API-local formatting changes, and post-fix Component CI is green.
+CLEAN_ACCEPT. API-P6 operational contracts are additive, source-compatible, passive, and public-safe; skipped/not-run/placeholder semantics are honest, Server/Common integration boundaries are preserved, the formatter correction is behavior-neutral, and post-fix Component CI is green.
 
 PUSHED:
 yes
