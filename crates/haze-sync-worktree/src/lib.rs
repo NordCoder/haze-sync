@@ -83,6 +83,8 @@ mod materializer_safety_tests;
 #[cfg(test)]
 mod reconciliation_tests;
 #[cfg(test)]
+mod trash_integrity_tests;
+#[cfg(test)]
 mod trash_tests;
 
 #[cfg(test)]
