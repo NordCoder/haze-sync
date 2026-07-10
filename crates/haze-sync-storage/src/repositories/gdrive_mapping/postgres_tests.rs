@@ -41,7 +41,10 @@ async fn gdrive_mapping_roundtrips_in_caller_owned_transaction() {
     .unwrap();
 
     assert_eq!(inserted.path, path.as_str());
-    assert_eq!(inserted.drive_file_id.as_deref(), Some(drive_file_id.as_str()));
+    assert_eq!(
+        inserted.drive_file_id.as_deref(),
+        Some(drive_file_id.as_str())
+    );
     assert_eq!(inserted.core_seq, Some(7));
     assert_eq!(
         get_gdrive_mapping_by_path(&mut *transaction, &path)
