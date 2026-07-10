@@ -20,5 +20,5 @@ ci_run_number: 979
 ci_run_attempt: 1
 known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
-blocker: STOR-P8 is accepted, but GDrive runtime/config/service topology and concrete persistence/secret/lifecycle fan-in are not accepted
-unblock_condition: accepted GDA-P7C plus accepted runtime/config fan-in, or a dedicated cross-component deployment topology contract
+blocker: GDA-P7C is implemented but formally red and runtime/config/service persistence and secret topology are not accepted
+unblock_condition: green GDA-P7C fixer completion plus an explicit runtime/config/deployment fan-in contract
