@@ -1,53 +1,40 @@
-# W1-WT-P8C — Worktree runtime-service clean-code review
+# W1-FIX-WT-P8C-CI — Worktree WT-P8C validation correction
 
 Component: worktree
 Path: crates/haze-sync-worktree
 Branch: component/worktree
 PR: #49
-Role: clean-code-reviewer
+Role: fixer-worker
 
-Work only through the GitHub connector. Do not merge the PR or change its lifecycle state.
+Use only the GitHub connector. Do not merge the PR or change its lifecycle state.
 
-## Context
+## Evidence
 
-WT-P8 implementation and artifact-based CI corrections are complete. Final source/test CI is green.
+The final WT-P8C source/test/docs head has a failed Component CI result.
 
-- code_bearing_sha: a300fc1e179ba2358f27ffec91778b6a52138720
-- workflow: Component CI
-- workflow_run_id: 29120582304
-- run_number: 1538
-- conclusion: success
+- code_bearing_sha: e02ce213390d689f933d578f87729062f1c64a3c
+- workflow_run_id: 29124728043
+- run_attempt: 1
+- artifact_id: 8239878384
+- artifact_name: ci-diag__component-worktree__wf-component-ci__run-29124728043__attempt-1
+- artifact_expires_at: 2026-07-11T21:28:37Z
 
-## Read
+Use the diagnostics artifact as the authoritative failure evidence.
 
-Read the project process files, current Worktree control files, WT-P8 runtime source/tests/docs, fixer changes, accepted adapter-mode and future Server-hosting boundaries, and PR diff. Do not read diagnostics artifacts unless a later fixer prompt explicitly requires them.
+## Required work
 
-## Task
+Read the project process files, current Worktree control files, WT-P8C source/tests/docs, PR diff, and every required file in artifact 8239878384. If the artifact is unavailable or incomplete, report FIX_BLOCKED_BY_LOGS.
 
-Review WT-P8 hostable runtime-service design and its CI corrections.
-
-Focus on:
-
-- explicit lifecycle and no hidden task ownership;
-- watcher events remaining path-free latency hints only;
-- startup, debounce, periodic recovery, cancellation, shutdown, and no-overlap behavior;
-- full-scan correctness requirements in importing modes;
-- mode capability interpretation and bounded cycle budgets;
-- executor-result validation and state advancement;
-- safe count-only status/error categories;
-- watcher degradation and retry scheduling;
-- module decomposition, test clarity, and readiness for later Worktree/Server fan-in.
+Apply only the smallest correction demonstrated by the artifact. Preserve watcher resource release after close/poll failure, operation-correct safe error categories, host-driven lifecycle, path-free watcher hints, authoritative scans, mode/budget enforcement, cancellation/shutdown behavior, focused regressions, and component boundaries.
 
 ## Allowed files
 
 - crates/haze-sync-worktree/src/**
-- crates/haze-sync-worktree/docs/**
+- crates/haze-sync-worktree/docs/** only when directly required by diagnostics
 - crates/haze-sync-worktree/control/report.md
 
-## Boundaries
+Do not change Server composition, concrete watcher selection, provider behavior, persistence ownership, shared workflows/dependencies, sibling components, or unrelated test expectations.
 
-No Server composition, concrete OS watcher selection, provider behavior, persistence ownership, Core/API policy changes, workflow/dependency changes, sibling changes, test deletion, or assertion weakening.
+Source/test/docs correction commits must run CI normally. A final report-only commit may skip CI.
 
-Source/test/docs review commits must run CI normally. A final report-only commit may skip CI.
-
-Write only crates/haze-sync-worktree/control/report.md using REPORT_TYPE CLEAN_CODE_REVIEW and phase_id WT-P8C.
+Write only crates/haze-sync-worktree/control/report.md using REPORT_TYPE FIX and phase_id FIX-WT-P8C-CI.
