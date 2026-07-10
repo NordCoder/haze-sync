@@ -13,9 +13,10 @@ pub const REDACTED: &str = "[REDACTED]";
 ///
 /// The wrapped value is intentionally accessible only through explicitly named
 /// sensitive accessors. Formatting this type never prints the wrapped value.
-/// The type intentionally does not implement serialization or secret lifecycle
-/// behavior such as hashing, verification, loading, persistence, or rotation.
-#[derive(Clone, Eq, Hash, PartialEq)]
+/// The type intentionally does not implement serialization, `std::hash::Hash`,
+/// or secret lifecycle behavior such as cryptographic hashing, verification,
+/// loading, persistence, or rotation.
+#[derive(Clone, Eq, PartialEq)]
 pub struct SecretString(String);
 
 impl SecretString {
