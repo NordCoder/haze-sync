@@ -29,11 +29,7 @@ fn scan_derives_known_base_candidates_and_respects_skipped_prefixes() {
     let mut state = WorktreeStateSnapshot::new();
     state.record_present(path("present.md"), revision("rev_present"), hash(1));
     state.record_present(path("deleted.md"), revision("rev_deleted"), hash(2));
-    state.record_present(
-        path("blocked/child.md"),
-        revision("rev_blocked"),
-        hash(3),
-    );
+    state.record_present(path("blocked/child.md"), revision("rev_blocked"), hash(3));
     state.record_tombstoned(path("already.md"), revision("rev_tombstone"));
     let scan = WorktreeScanResult {
         files: vec![snapshot("present.md")],
@@ -168,11 +164,8 @@ fn runner_preserves_known_and_null_base_semantics_and_updates_only_tombstones() 
     let null = WorktreeDeleteCandidate::new(path("null.md"), WorktreeBaseRevision::Null);
     let scan = WorktreeDeleteScan::from_candidates([known, null], 2).unwrap();
     let policy = WorktreeDeleteGuardPolicy::new(2, 10_000).unwrap();
-    let plan = WorktreeGuardedDeletePlan::evaluate(
-        scan,
-        policy,
-        WorktreeDeleteAuthorization::Guarded,
-    );
+    let plan =
+        WorktreeGuardedDeletePlan::evaluate(scan, policy, WorktreeDeleteAuthorization::Guarded);
     let mut state = WorktreeStateSnapshot::new();
     state.record_present(path("known.md"), revision("rev_known"), hash(1));
     let mut client = FakeClient::new([
