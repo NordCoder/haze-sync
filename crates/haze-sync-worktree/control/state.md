@@ -6,21 +6,17 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-worktree/control/prompt.md
 active_report: crates/haze-sync-worktree/control/report.md
-active_agent_role: fixer-worker
+active_agent_role: implementation-worker
 
 wave: W1
-phase: FIX-WT-P7C-CI
+phase: WT-P8
 
-implementation_status: SELF_ACCEPT_PENDING_CI
-clean_review_status: CLEAN_NEEDS_FIX
-ci_status: CI_RED
+implementation_status: PENDING
+clean_review_status: NOT_STARTED
+ci_status: CI_GREEN
 ci_workflow: Component CI
-ci_run_id: 29110274762
-ci_run_number: unknown
+ci_run_id: 29113546394
+ci_run_number: 1445
 ci_run_attempt: 1
-ci_artifact_id: 8234518397
-ci_artifact_name: ci-diag__component-worktree__wf-component-ci__run-29110274762__attempt-1
-ci_artifact_expires_at: 2026-07-11T17:16:36Z
-known_failed_checks:
-- diagnostics-artifact-required
+known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
