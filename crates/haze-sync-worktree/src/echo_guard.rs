@@ -271,9 +271,8 @@ impl WorktreeEchoGuard {
         let expired_paths: Vec<VaultPath> = self
             .entries
             .iter()
-            .filter_map(|(vault_path, entry)| {
-                is_expired(self.policy, entry.written_at, now).then(|| vault_path.clone())
-            })
+            .filter(|(_, entry)| is_expired(self.policy, entry.written_at, now))
+            .map(|(vault_path, _)| vault_path.clone())
             .collect();
 
         for vault_path in &expired_paths {
@@ -303,7 +302,8 @@ impl WorktreeEchoGuard {
         };
 
         cleanup_runtime_marker(&entry)?;
-        let exact_match = applied_revision.is_some_and(|revision| revision == &entry.marker.revision_id)
+        let exact_match = applied_revision
+            .is_some_and(|revision| revision == &entry.marker.revision_id)
             && applied_hash == Some(entry.marker.content_hash)
             && observed_hash == Some(entry.marker.content_hash);
 
