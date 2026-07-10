@@ -30,8 +30,12 @@ pub enum OperationLogError {
     ZeroLimit,
     /// A page limit exceeded the contract maximum.
     LimitTooLarge { max: u32 },
+    /// A changes page contains more rows than its applicable limit.
+    PageTooLarge { max: u32 },
     /// Operation rows must be strictly ordered by ascending sequence.
     NonMonotonicSequence,
+    /// A page that advertises more rows must advance its sequence.
+    NonAdvancingPage,
     /// Serialized page bounds do not match the ordered operation rows.
     InconsistentPageBounds,
     /// An operation kind string is not part of the V1 public contract.
@@ -50,8 +54,14 @@ impl fmt::Display for OperationLogError {
             Self::LimitTooLarge { max } => {
                 write!(formatter, "changes limit must not exceed {max}")
             }
+            Self::PageTooLarge { max } => {
+                write!(formatter, "changes page must not contain more than {max} rows")
+            }
             Self::NonMonotonicSequence => formatter
                 .write_str("operation log entries must be ordered by strictly increasing sequence"),
+            Self::NonAdvancingPage => {
+                formatter.write_str("changes page with has_more must advance its sequence")
+            }
             Self::InconsistentPageBounds => {
                 formatter.write_str("changes page bounds do not match its operation rows")
             }
@@ -354,13 +364,18 @@ pub struct ChangesPage {
 }
 
 impl ChangesPage {
-    /// Build a changes page after validating strict sequence ordering.
+    /// Build a changes page after validating its limit, progress, and ordering.
     pub fn new(
         query: ChangesQuery,
         changes: Vec<ChangeFeedEntry>,
         has_more: bool,
     ) -> Result<Self, OperationLogError> {
-        let to_seq = validate_change_order(query.since, &changes)?;
+        let to_seq = validate_page_shape(
+            query.since,
+            &changes,
+            has_more,
+            query.limit.value(),
+        )?;
 
         Ok(Self {
             from_seq: query.since,
@@ -385,8 +400,13 @@ impl<'de> Deserialize<'de> for ChangesPage {
         }
 
         let wire = ChangesPageWire::deserialize(deserializer)?;
-        let expected_to_seq = validate_change_order(wire.from_seq, &wire.changes)
-            .map_err(serde::de::Error::custom)?;
+        let expected_to_seq = validate_page_shape(
+            wire.from_seq,
+            &wire.changes,
+            wire.has_more,
+            MAX_CHANGES_LIMIT,
+        )
+        .map_err(serde::de::Error::custom)?;
         if wire.to_seq != expected_to_seq {
             return Err(serde::de::Error::custom(
                 OperationLogError::InconsistentPageBounds,
@@ -400,6 +420,23 @@ impl<'de> Deserialize<'de> for ChangesPage {
             changes: wire.changes,
         })
     }
+}
+
+fn validate_page_shape(
+    from_seq: OperationSequence,
+    changes: &[ChangeFeedEntry],
+    has_more: bool,
+    max_changes: u32,
+) -> Result<OperationSequence, OperationLogError> {
+    if changes.len() > max_changes as usize {
+        return Err(OperationLogError::PageTooLarge { max: max_changes });
+    }
+
+    if has_more && changes.is_empty() {
+        return Err(OperationLogError::NonAdvancingPage);
+    }
+
+    validate_change_order(from_seq, changes)
 }
 
 fn validate_change_order(
@@ -658,6 +695,42 @@ mod tests {
             "changes": [sample_change(12), sample_change(12)]
         });
         assert!(serde_json::from_value::<ChangesPage>(non_monotonic).is_err());
+    }
+
+    #[test]
+    fn changes_page_enforces_limit_and_progress() {
+        let query = ChangesQuery::new(10, 1).unwrap();
+        let full_page = ChangesPage::new(query, vec![sample_change(11)], true).unwrap();
+        assert_eq!(full_page.to_seq.value(), 11);
+        assert!(full_page.has_more);
+
+        assert_eq!(
+            ChangesPage::new(query, vec![sample_change(11), sample_change(12)], false),
+            Err(OperationLogError::PageTooLarge { max: 1 })
+        );
+        assert_eq!(
+            ChangesPage::new(query, Vec::new(), true),
+            Err(OperationLogError::NonAdvancingPage)
+        );
+
+        let non_advancing = json!({
+            "from_seq": 10,
+            "to_seq": 10,
+            "has_more": true,
+            "changes": []
+        });
+        assert!(serde_json::from_value::<ChangesPage>(non_advancing).is_err());
+
+        let oversized_changes: Vec<_> = (1..=i64::from(MAX_CHANGES_LIMIT) + 1)
+            .map(sample_change)
+            .collect();
+        let oversized = json!({
+            "from_seq": 0,
+            "to_seq": i64::from(MAX_CHANGES_LIMIT) + 1,
+            "has_more": false,
+            "changes": oversized_changes
+        });
+        assert!(serde_json::from_value::<ChangesPage>(oversized).is_err());
     }
 
     #[test]
