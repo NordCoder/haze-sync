@@ -1,51 +1,41 @@
-# W1-GDA-P8 — Delete candidate guardrails and mass-delete safety
+# W1-FIX-GDA-P8-CI — GDrive GDA-P8 validation correction
 
 Component: gdrive-adapter
 Path: crates/haze-gdrive-adapter
 Branch: component/gdrive-adapter
 PR: #50
-Role: implementation-worker
+Role: fixer-worker
 
-Work only through the GitHub connector. Do not merge the PR or change its lifecycle state.
+Use only the GitHub connector. Do not merge the PR or change its lifecycle state.
 
-## Context
+## Evidence
 
-GDA-P7 implementation, clean-code review, and artifact-based CI corrections are accepted. Final source CI is green.
+The final GDA-P8 source/test head has a failed Component CI result.
 
-- code_bearing_sha: f282fc6292826886520678e593b332bf3a46225b
-- workflow: Component CI
-- workflow_run_id: 29120606283
-- run_number: 1539
-- conclusion: success
+- code_bearing_sha: 46a8840e143f0c911dc02a3107d0546bfd8242ed
+- workflow_run_id: 29125187320
+- run_number: 1587
+- run_attempt: 1
+- artifact_id: 8240045016
+- artifact_name: ci-diag__component-gdrive-adapter__wf-component-ci__run-29125187320__attempt-1
+- artifact_expires_at: 2026-07-11T21:37:36Z
 
-The next implementation phase is GDA-P8 from crates/haze-gdrive-adapter/docs/implementation-plan.md.
+Use the diagnostics artifact as the authoritative failure evidence.
 
-## Read
+## Required work
 
-Read the project process files, current GDrive control files, GDA-P8 plan section, existing scan/change-feed/export/mapping/echo abstractions, accepted Core/API delete-guard contracts, accepted Storage state boundaries, and PR diff. Do not read diagnostics artifacts unless a later fixer prompt explicitly requires them.
+Read the project process files, current GDrive control files, GDA-P8 source/tests, PR diff, and every required file in artifact 8240045016. If the artifact is unavailable or incomplete, report FIX_BLOCKED_BY_LOGS.
 
-## Task
-
-Implement conservative Drive delete-candidate handling and mass-delete protection.
-
-- represent missing Drive files as candidates with safe timestamps/state rather than immediate deletes;
-- require confirmation across accepted scans or change cycles before delete submission;
-- distinguish disappearance from permission loss, folder movement, provider failure, and incomplete scans;
-- integrate accepted Core/API delete-guard semantics and adapter-specific count/ratio thresholds without replacing Core policy;
-- block and surface unsafe mass-delete conditions;
-- support manual unlock only through an already accepted audited contract; otherwise keep it unavailable;
-- add fake-provider tests for folder disappearance, auth scope loss, repeated absence, recovery, and mass-delete scenarios.
+Apply only the smallest correction demonstrated by the artifact. Preserve repeated authoritative absence, unreliable-scan blocking, movement versus disappearance classification, adapter count/ratio limits, injected Core delete guard, unavailable unaudited manual unlock, dry-run immutability, idempotent Core delete submission, mapping retirement only after accepted outcomes, redaction, and component boundaries.
 
 ## Allowed files
 
 - crates/haze-gdrive-adapter/src/**
-- crates/haze-gdrive-adapter/docs/**
+- crates/haze-gdrive-adapter/docs/** only when directly required by diagnostics
 - crates/haze-gdrive-adapter/control/report.md
 
-## Boundaries
+Do not add Drive hard delete, live credentials/provider wiring, direct Storage/DB ownership, concrete Server/API transport, background scheduling, shared workflow/dependency changes, sibling changes, or unrelated test changes.
 
-No immediate tombstone on first disappearance, Drive hard delete, adapter-local policy divergent from Core, unaudited manual override, live credentials/provider wiring, direct DB ownership, deployment files, workflow/dependency changes, sibling changes, test deletion, or assertion weakening.
+Source/test/docs correction commits must run CI normally. A final report-only commit may skip CI.
 
-Source/test/docs commits must run CI normally. A final report-only commit may skip CI.
-
-Write only crates/haze-gdrive-adapter/control/report.md using REPORT_TYPE IMPLEMENTATION and phase_id GDA-P8.
+Write only crates/haze-gdrive-adapter/control/report.md using REPORT_TYPE FIX and phase_id FIX-GDA-P8-CI.
