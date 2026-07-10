@@ -76,10 +76,7 @@ where
     assert_eq!(&decoded, value);
 }
 
-fn assert_complete_unique_wires<'a>(
-    actual: impl IntoIterator<Item = &'a str>,
-    expected: &[&str],
-) {
+fn assert_complete_unique_wires<'a>(actual: impl IntoIterator<Item = &'a str>, expected: &[&str]) {
     let actual_values = actual.into_iter().map(str::to_owned).collect::<Vec<_>>();
     let actual_set = actual_values.iter().cloned().collect::<BTreeSet<_>>();
     let expected_set = expected
