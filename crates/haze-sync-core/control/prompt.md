@@ -1,53 +1,50 @@
-# W1-CORE-P7 — Passive doctor and safety-report models
+# W1-FIX-CORE-P7-CI — Core CORE-P7 CI correction
 
 Component: core
 Path: crates/haze-sync-core
 Branch: component/core
 PR: #43
-Role: implementation-worker
+Role: fixer-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-CORE-P6 implementation, clean-code review, and artifact-based CI correction are accepted. Final source CI is green.
+CORE-P7 implementation completed, but its final code/docs Component CI run failed at diagnostics finalization.
 
-- code_bearing_sha: 90e2e03cfe41e36a072bdb87265eddc517f6fec6
+- code_bearing_sha: 6b6803d934a38883c0e0032a5f5a3917d4a99d43
 - workflow: Component CI
-- workflow_run_id: 29093462297
-- run_number: 1218
-- conclusion: success
+- workflow_run_id: 29103013245
+- run_number: 1278
+- run_attempt: 1
+- artifact_id: 8231629761
+- artifact_name: ci-diag__component-core__wf-component-ci__run-29103013245__attempt-1
+- artifact_expires_at: 2026-07-11T15:17:39Z
 
-The next implementation phase is CORE-P7 from crates/haze-sync-core/docs/implementation-plan.md.
+Use the diagnostics artifact as source of truth.
 
 ## Read
 
-Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current doctor models/tests, accepted Server/CLI diagnostic contracts, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt explicitly instructs it.
+Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current CORE-P7 source/tests/docs, and PR diff. Download artifact 8231629761 and read summary.md, manifest.json, and every failed-check log. If unavailable or unreadable, report FIX_BLOCKED_BY_LOGS.
 
 ## Task
 
-Implement CORE-P7: Passive doctor and safety-report models.
-
-- audit doctor statuses and aggregate summary rules;
-- model missing-blob, DB, object-store, cursor, mapping, token-sanity, and worktree-drift summaries where accepted;
-- represent passed, failed, skipped, not-run, and placeholder states honestly;
-- require all public details to be pre-redacted and safe;
-- add focused tests for aggregation, status precedence, skipped/not-run semantics, safe serialization, and redaction boundaries.
+Apply only the minimum artifact-proven correction for the CORE-P7 CI failure. Preserve passive doctor ownership, fixed safe messages, explicit skipped/not-run/placeholder states, deterministic aggregation, validating serialization, downstream contract documentation, all regression tests, and component boundaries.
 
 ## Allowed files
 
 - crates/haze-sync-core/src/doctor/**
-- crates/haze-sync-core/docs/**
+- crates/haze-sync-core/docs/** only if diagnostics prove a documentation issue
 - crates/haze-sync-core/control/report.md
 
-## Non-goals
+## Boundaries
 
-No live DB connection, filesystem/object-store probing, provider/OAuth validation, CLI command implementation, repair behavior, mutation, workflow/dependency changes, or sibling component changes.
+No live checks, CLI behavior, HTTP policy, persistence, provider behavior, repair execution, workflow/dependency changes, sibling changes, test deletion, or assertion weakening.
 
 ## CI trigger policy
 
-Product/source/test/docs commits must not skip CI. A final report-only commit may skip CI.
+Source/test/docs fixer commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only crates/haze-sync-core/control/report.md. Use report-template.md, REPORT_TYPE IMPLEMENTATION, phase_id CORE-P7.
+Write only crates/haze-sync-core/control/report.md. Use report-template.md, REPORT_TYPE FIX, phase_id FIX-CORE-P7-CI.
