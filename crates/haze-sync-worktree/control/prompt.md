@@ -1,55 +1,50 @@
-# W1-WT-P6 — Echo guard and worktree state reconciliation
+# W1-FIX-WT-P6-CI — Worktree WT-P6 CI correction
 
 Component: worktree
 Path: crates/haze-sync-worktree
 Branch: component/worktree
 PR: #49
-Role: implementation-worker
+Role: fixer-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-WT-P5 implementation, clean-code review, and CI fixer are accepted. Post-fix Component CI is green.
+WT-P6 implementation is complete, but its final code-bearing Component CI run failed.
 
-- code_bearing_sha: 1c762e0159525e11daa030358e08e3cb055627a5
+- code_bearing_sha: 1c8443795ab64cfb5fb2bfd016b3a4a23e3c9957
 - workflow: Component CI
-- workflow_run_id: 29084291087
-- run_number: 1033
-- conclusion: success
+- workflow_run_id: 29086948389
+- run_number: 1110
+- run_attempt: 1
+- artifact_id: 8225158699
+- artifact_name: ci-diag__component-worktree__wf-component-ci__run-29086948389__attempt-1
+- artifact_expires_at: 2026-07-11T10:39:40Z
 
-The next implementation phase is WT-P6 from crates/haze-sync-worktree/docs/implementation-plan.md.
+Use the diagnostics artifact as source of truth.
 
 ## Read
 
-Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current source/tests, accepted API/Storage/Server boundaries, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt explicitly instructs it.
+Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current WT-P6 source/tests, and PR diff. Download artifact 8225158699 and read summary.md, manifest.json, and every failed-check log. If unavailable or unreadable, report FIX_BLOCKED_BY_LOGS.
 
 ## Task
 
-Implement WT-P6: Echo guard and worktree state reconciliation.
-
-- define bounded echo-guard state from the last adapter write;
-- compare filesystem observations with the last applied revision, hash, and modification facts;
-- classify clean, dirty, missing, extra, conflict-materialized, and skipped files;
-- consume or expire echo markers without treating them as permanently authoritative;
-- integrate persisted worktree state only through an already accepted abstraction; do not add direct DB ownership;
-- expose safe reconciliation summaries without absolute local paths;
-- add focused tests for echo suppression, expiry, drift classification, and reconciliation state transitions.
+Apply only the minimum artifact-proven correction for the WT-P6 CI failure. Preserve bounded exact echo suppression, durable marker safety, reconciliation classifications, persisted-state abstraction, tests, and component boundaries.
 
 ## Allowed files
 
 - crates/haze-sync-worktree/src/**
-- crates/haze-sync-worktree/docs/**
+- crates/haze-sync-worktree/docs/** only if diagnostics prove a documentation issue
 - crates/haze-sync-worktree/control/report.md
 
-## Non-goals
+## Boundaries
 
-No direct DB ownership, Server status route implementation, repair execution, provider behavior, delete/trash phase work, watcher/runtime service work, workflow/dependency changes, or sibling-component changes.
+No direct DB ownership, Server runtime work, provider behavior, delete/trash phase work, watcher/runtime service work, Core policy changes, workflow/dependency changes, sibling changes, test deletion, or assertion weakening.
 
 ## CI trigger policy
 
-Product/source/docs commits must not skip CI. A final report-only commit may skip CI.
+Source/test/docs fixer commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only crates/haze-sync-worktree/control/report.md. Use report-template.md, REPORT_TYPE IMPLEMENTATION, phase_id WT-P6.
+Write only crates/haze-sync-worktree/control/report.md. Use report-template.md, REPORT_TYPE FIX, phase_id FIX-WT-P6-CI.
