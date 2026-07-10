@@ -6,21 +6,17 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-storage/control/prompt.md
 active_report: crates/haze-sync-storage/control/report.md
-active_agent_role: fixer-worker
+active_agent_role: clean-code-reviewer
 
 wave: W1
-phase: FIX-STOR-P9-CI
+phase: STOR-P9C
 
 implementation_status: SELF_ACCEPT_PENDING_CI
-clean_review_status: NOT_STARTED
-ci_status: CI_RED
+clean_review_status: PENDING
+ci_status: CI_GREEN
 ci_workflow: Component CI
-ci_run_id: 29116418343
-ci_run_number: 1502
+ci_run_id: 29120476441
+ci_run_number: 1536
 ci_run_attempt: 1
-ci_artifact_id: 8236830104
-ci_artifact_name: ci-diag__component-storage__wf-component-ci__run-29116418343__attempt-1
-ci_artifact_expires_at: 2026-07-11T19:00:35Z
-known_failed_checks:
-- diagnostics-artifact-required
+known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
