@@ -1,52 +1,58 @@
-# W1-FIX-STOR-P7-CI — Storage STOR-P7 CI correction
+# W1-STOR-P7C — Storage idempotency/cursor clean-code review
 
 Component: storage
 Path: crates/haze-sync-storage
 Branch: component/storage
 PR: #47
-Role: fixer-worker
+Role: clean-code-reviewer
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-STOR-P7 implementation is complete, but its final code/docs-bearing Component CI run failed.
+STOR-P7 implementation and its CI correction are complete. Follow-up Component CI is green.
 
-- code_bearing_sha: 83b0d2e620cbb420f147ece97aeeee4484bc6d7c
+- code_bearing_sha: 00f4cfaaac43d6c8eec09a49d6d0968e68a84226
 - workflow: Component CI
-- workflow_run_id: 29088574856
-- run_number: 1148
-- run_attempt: 1
-- artifact_id: 8225807379
-- artifact_name: ci-diag__component-storage__wf-component-ci__run-29088574856__attempt-1
-- artifact_expires_at: 2026-07-11T11:11:32Z
-
-Use the diagnostics artifact as source of truth.
+- workflow_run_id: 29090307985
+- run_number: 1173
+- conclusion: success
 
 ## Read
 
-Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current STOR-P7 source/tests/docs, and PR diff. Download artifact 8225807379 and read summary.md, manifest.json, and every failed-check log. If unavailable or unreadable, report FIX_BLOCKED_BY_LOGS.
+Read the process sources, component docs, current STOR-P7 source/tests/docs, prior fixer changes, accepted Core idempotency and cursor primitives, control files, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt explicitly instructs it.
 
 ## Task
 
-Apply only the minimum correction proven by the STOR-P7 diagnostics. Preserve idempotency repository outcomes, stored response handling, monotonic cursor updates, lower-sequence rejection, cursor-presence summaries, existing tests, and component boundaries.
+Review STOR-P7 repository support and the CI correction.
+
+Focus on:
+
+- first-write preservation and repeat-request behavior;
+- safe persisted response data;
+- validation of persisted identifiers and hashes;
+- atomic cursor initialization and monotonic updates;
+- lower-sequence rejection with metadata preservation;
+- public summaries that expose only cursor presence;
+- caller-owned transaction compatibility;
+- tests, docs, and component boundaries.
 
 ## Allowed files
 
 - crates/haze-sync-storage/src/repositories/idempotency/**
 - crates/haze-sync-storage/src/repositories/adapter_cursors/**
-- crates/haze-sync-storage/src/models/** only if diagnostics directly require it
-- crates/haze-sync-storage/docs/** only if diagnostics prove a documentation issue
+- crates/haze-sync-storage/src/models/** when directly relevant
+- crates/haze-sync-storage/docs/**
 - crates/haze-sync-storage/control/report.md
 
 ## Boundaries
 
-No HTTP middleware, adapter polling loop, provider calls, public admin rendering, Core policy changes, workflow/dependency changes, sibling changes, test deletion, or assertion weakening.
+No HTTP middleware, adapter polling, provider calls, public admin rendering, Core policy implementation, workflow/dependency changes, sibling changes, test deletion, or assertion weakening.
 
 ## CI trigger policy
 
-Source/test/docs fixer commits must not skip CI. A final report-only commit may skip CI.
+Source/test/docs clean-code commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only crates/haze-sync-storage/control/report.md. Use report-template.md, REPORT_TYPE FIX, phase_id FIX-STOR-P7-CI.
+Write only crates/haze-sync-storage/control/report.md. Use report-template.md, REPORT_TYPE CLEAN_CODE_REVIEW, phase_id STOR-P7C.
