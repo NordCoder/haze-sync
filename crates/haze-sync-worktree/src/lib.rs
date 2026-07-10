@@ -4,14 +4,18 @@
 //! the sync source of truth; later phases add scanning, importing, writing, and
 //! runtime behavior on top of these safe path-mapping primitives.
 
+mod echo_guard;
 mod hashing;
 mod import_planner;
 mod materializer;
-#[cfg(test)]
-mod materializer_safety_tests;
 mod path_mapping;
+mod reconciliation;
 mod scanner;
 
+pub use echo_guard::{
+    WorktreeEchoDecision, WorktreeEchoGuard, WorktreeEchoGuardError, WorktreeEchoGuardPolicy,
+    WorktreeEchoLoadSummary, WorktreeEchoRecordSummary,
+};
 pub use import_planner::{
     WorktreeAcceptedImport, WorktreeAppliedFileState, WorktreeAppliedPathState,
     WorktreeBaseRevision, WorktreeDeleteImport, WorktreeImportAction, WorktreeImportClient,
@@ -29,6 +33,13 @@ pub use path_mapping::{
     WorktreeConfig, WorktreePathError, ECHO_DIR_NAME, METADATA_DIR_NAME, TEMP_DIR_NAME,
     TRASH_DIR_NAME, WORKTREE_RUNTIME_DIR_NAME,
 };
+pub use reconciliation::{
+    WorktreeEchoStatus, WorktreeObservedFileState, WorktreeReconciliationEntry,
+    WorktreeReconciliationError, WorktreeReconciliationKind, WorktreeReconciliationReport,
+    WorktreeReconciliationRunError, WorktreeReconciliationRunner, WorktreeReconciliationState,
+    WorktreeReconciliationStateStore, WorktreeReconciliationStateTransition,
+    WorktreeReconciliationSummary, WorktreeReconciler,
+};
 pub use scanner::{
     StableFileDetector, StableFileObservation, StableFileState, WorktreeFileSnapshot,
     WorktreeScanError, WorktreeScanResult, WorktreeScanSkipReason, WorktreeScanSkipped,
@@ -43,6 +54,13 @@ pub const CRATE_ROLE: &str = "Built-in VPS worktree adapter foundations.";
 pub const fn package_name() -> &'static str {
     "haze-sync-worktree"
 }
+
+#[cfg(test)]
+mod echo_guard_tests;
+#[cfg(test)]
+mod materializer_safety_tests;
+#[cfg(test)]
+mod reconciliation_tests;
 
 #[cfg(test)]
 mod tests {
