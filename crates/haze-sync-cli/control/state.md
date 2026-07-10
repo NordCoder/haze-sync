@@ -20,5 +20,5 @@ ci_run_number: 1047
 ci_run_attempt: 1
 known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
-blocker: contract-backed bootstrap/sync operator endpoints and required adapter runtime boundaries are unavailable
-unblock_condition: accepted Server/API bootstrap/sync contracts plus required Worktree/GDrive runtime boundaries or dedicated fan-in contract
+blocker: WT-P8 and GDA-P7C are implemented but formally red and not fan-in accepted; Server/API operator contracts are unavailable
+unblock_condition: green WT-P8 and GDA-P7C acceptance plus Server/API bootstrap and sync contracts, or a dedicated CLI fan-in contract
