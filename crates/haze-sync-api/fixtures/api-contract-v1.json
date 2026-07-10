@@ -210,7 +210,7 @@
       }
     },
     "adapter_list": {
-      "total_count": 1,
+      "total_count": 2,
       "adapters": [
         {
           "adapter_id": "gdrive-adapter",
@@ -223,6 +223,14 @@
             "last_success_at": "2026-01-01T00:05:00Z",
             "has_external_cursor": true
           }
+        },
+        {
+          "adapter_id": "obsidian-plugin",
+          "role": "obsidian_plugin",
+          "mode": "bidirectional",
+          "enabled": true,
+          "last_seen_at": null,
+          "cursor": null
         }
       ]
     },
