@@ -1,59 +1,53 @@
-# W1-STOR-P6 — Conflict, tombstone, and delete repository support
+# W1-FIX-STOR-P6-CI — Storage STOR-P6 CI fix
 
 Component: storage
 Path: crates/haze-sync-storage
 Branch: component/storage
 PR: #47
-Role: implementation-worker
+Role: fixer-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-STOR-P5 implementation, fixer, and clean-code review are accepted. The clean-code code-bearing Component CI run is green.
+STOR-P6 implementation is complete, but its code/docs-bearing Component CI run is red.
 
-- code_bearing_sha: ff8c960dcd26ca5285df47d1d5446107caefaa6c
+- code_bearing_sha: d7f66d03428df551ee4a49bc13b0d997faaab79a
 - workflow: Component CI
-- workflow_run_id: 29067675101
-- run_number: 839
-- conclusion: success
-
-The next implementation phase is STOR-P6 from crates/haze-sync-storage/docs/implementation-plan.md.
+- workflow_run_id: 29080167290
+- run_number: 916
+- run_attempt: 1
+- artifact_id: 8222444064
+- artifact_name: ci-diag__component-storage__wf-component-ci__run-29080167290__attempt-1
+- artifact_expires_at: 2026-07-11T08:35:36Z
 
 ## Read
 
-Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current source, and PR diff. Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
+Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current source, and PR diff.
+
+Download diagnostics artifact 8222444064. Read `summary.md`, `manifest.json`, and every failed-check log. If it is missing, expired, malformed, or unreadable, report `FIX_BLOCKED_BY_LOGS`.
 
 ## Task
 
-Implement STOR-P6: Conflict, tombstone, and delete repository support.
-
-Follow the plan:
-
-- verify conflict row insertion, listing, lookup, and status update behavior;
-- verify tombstone insertion, lookup, and restore metadata behavior;
-- verify operation-log rows represent conflict, delete, and tombstone events safely;
-- reject unsupported conflict statuses and invalid persisted sizes through safe repository errors;
-- document that full `accept_conflict` content replacement remains a Core/API/Server fan-in responsibility;
-- keep transaction ownership with the caller.
+Fix the minimum artifact-proven cause of the STOR-P6 CI failure. Preserve passive conflict/tombstone repository semantics, caller-owned transactions, safe operation-log mapping, no-hard-delete behavior, and all STOR-P6 non-goals.
 
 ## Allowed files
 
 - crates/haze-sync-storage/src/repositories/conflicts/**
 - crates/haze-sync-storage/src/repositories/tombstones/**
 - crates/haze-sync-storage/src/repositories/operation_log/**
-- crates/haze-sync-storage/src/models/** only when directly required by this phase
-- crates/haze-sync-storage/docs/**
+- crates/haze-sync-storage/src/models/** only when directly required by diagnostics
+- crates/haze-sync-storage/docs/** only if diagnostics prove a docs-format issue
 - crates/haze-sync-storage/control/report.md
 
-## Non-goals
+## Forbidden changes
 
-No conflict policy, hard delete, filesystem/provider trash behavior, API handlers, retention cleanup job, workflow changes, dependency changes, or sibling component changes.
+No Core conflict policy, hard delete, filesystem/provider trash behavior, API handlers, retention cleanup execution, workflow changes, dependency changes, sibling component changes, test deletion, or assertion weakening.
 
 ## CI trigger policy
 
-Product/source/docs commits must not skip CI. A final report-only commit may skip CI.
+Product/source/docs fixer commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only the report to crates/haze-sync-storage/control/report.md. Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION and phase_id to STOR-P6.
+Write only the report to crates/haze-sync-storage/control/report.md. Use report-template.md. Set REPORT_TYPE to FIX and phase_id to FIX-STOR-P6-CI.
