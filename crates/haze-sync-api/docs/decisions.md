@@ -142,3 +142,34 @@ Affected contracts:
 - Obsidian plugin client plan;
 - adapter/client compatibility tests;
 - E2E testing strategy.
+
+## 2026-07-10 — Operational check execution and readiness are distinct public facts
+
+Decision:
+
+Doctor-facing and adapter-runtime DTOs represent check execution with the closed vocabulary `passed`, `failed`, `skipped`, `not_run`, and `placeholder`. Readiness remains a separate coarse value: `ready`, `not_ready`, or `unknown`. Fixed enums identify checks and runtime states; public DTOs do not accept arbitrary diagnostic labels or raw error text.
+
+Rationale:
+
+`unknown` readiness alone cannot distinguish an intentionally skipped check from a check that was never executed or a contract-only placeholder. Conflating those states would make operator output look more authoritative than it is. At the same time, arbitrary strings for check names, runtime states, or failure details would create a direct path for database URLs, local paths, provider payloads, cursors, and raw exceptions to leak into public JSON.
+
+Alternatives:
+
+- Treat every non-pass result as `not_ready`. Rejected because skipped and not-run checks are not evidence of dependency failure.
+- Keep only `unknown`. Rejected because it hides whether any check execution occurred.
+- Include raw diagnostic messages in API DTOs. Rejected because runtime details belong in private logs and component-owned diagnostics.
+
+Consequences:
+
+- Server may map real check outcomes into API summaries but remains responsible for executing checks and sanitizing runtime data.
+- CLI/doctor consumers can state explicitly that a check was skipped, not run, or is only a placeholder.
+- Failed public checks expose only fixed check kind, execution status, readiness, and optional timestamp; failure details remain private.
+- Adapter cursor output remains presence-only, and pause output remains support/state-only with no mutation intent.
+- Existing `StatusSummaryResponse`, `AdapterSummary`, and server-info struct construction remain source-compatible; P6 adds validated constructors and additive summary types.
+
+Affected contracts:
+
+- `crates/haze-sync-api/src/routes/admin.rs`;
+- `crates/haze-sync-api/src/dto/server.rs`;
+- future Server status/doctor mapping;
+- future CLI status/doctor rendering.
