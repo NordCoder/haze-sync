@@ -87,6 +87,30 @@ fn core_compatible_response_snapshot_is_preserved_verbatim() {
 }
 
 #[test]
+fn deserialized_input_uses_constructor_validation() {
+    let input = IdempotencyRecordInput::new(
+        AdapterId::parse("iphone-anna").unwrap(),
+        "iphone:op-1",
+        Sha256::parse(&"a".repeat(64)).unwrap(),
+        response_snapshot(),
+    )
+    .unwrap();
+    let mut serialized = serde_json::to_value(&input).unwrap();
+
+    assert_eq!(
+        serde_json::from_value::<IdempotencyRecordInput>(serialized.clone()).unwrap(),
+        input
+    );
+
+    serialized["idempotency_key"] = Value::String("contains space".to_owned());
+    let error = serde_json::from_value::<IdempotencyRecordInput>(serialized).unwrap_err();
+    let displayed = error.to_string();
+
+    assert!(displayed.contains("idempotency key is invalid"));
+    assert!(!displayed.contains("contains space"));
+}
+
+#[test]
 fn invalid_key_is_rejected() {
     assert_eq!(
         IdempotencyRecordInput::new(
