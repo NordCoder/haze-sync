@@ -1,59 +1,54 @@
-# W1-API-P5C — API conflict/delete clean-code review
+# W1-API-P6 — Admin/status and doctor-facing contract hardening
 
 Component: api
 Path: crates/haze-sync-api
 Branch: component/api
 PR: #44
-Role: clean-code-reviewer
+Role: implementation-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-API-P5 implementation and CI fixer are complete. Post-fix Component CI is green.
+API-P5 implementation, fixer, and clean-code review are accepted. Green CI evidence applies to the accepted code-bearing state.
 
 - code_bearing_sha: 8a80d45685d29a681d37e0861ec8ea1ba2e734c7
-- workflow: Component CI
 - workflow_run_id: 29079842861
 - run_number: 892
 - conclusion: success
 
+The next plan phase is API-P6.
+
 ## Read
 
-Read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, chatgpt-gh-connector.md, component docs/control files, current source, and PR diff. Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
+Read process sources, component docs/control files, current admin/server DTOs and route helpers, accepted Server/Common contracts, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt instructs it.
 
 ## Task
 
-Review API-P5 conflict and delete route-helper contracts plus the formatting fixer.
+Implement API-P6 admin/status and doctor-facing contract hardening.
 
-Focus areas:
-
-- bounded conflict-list status parsing and safe rejection;
-- complete supported conflict action vocabulary and payload validation;
-- conflict list/detail/resolve DTO roundtrips and safe metadata;
-- delete metadata parsing for known/null base revision and idempotency data;
-- verified-principal requirement and safe missing-principal mapping;
-- stable tombstoned/not_found/rejected/guard-blocked response vocabulary;
-- source compatibility of passive route-helper request parts;
-- preservation of API passivity: no conflict execution, tombstone creation, persistence, provider behavior, or mass-delete guard execution.
+- test server-info capabilities and version/protocol metadata;
+- harden admin status DTOs for readiness, adapter summaries, cursor presence, pause support, and sanitized runtime state;
+- represent skipped/not-run/placeholder status honestly;
+- prevent public DTOs from containing raw cursor values, token hashes, database URLs, absolute local paths, provider payloads, or raw errors;
+- keep mutation/admin actions out unless an accepted public contract already exists.
 
 ## Allowed files
 
-- crates/haze-sync-api/src/routes/conflicts/**
-- crates/haze-sync-api/src/routes/delete/**
-- crates/haze-sync-api/src/dto/conflicts/**
-- crates/haze-sync-api/src/dto/files/** when directly relevant
+- crates/haze-sync-api/src/routes/admin/**
+- crates/haze-sync-api/src/dto/server/**
+- crates/haze-sync-api/src/dto/common/** when shared status types live there
 - crates/haze-sync-api/docs/**
 - crates/haze-sync-api/control/report.md
 
-## Forbidden changes
+## Non-goals
 
-No route runtime implementation, persistence/database/object-store calls, conflict resolution execution, tombstone creation, provider/worktree deletion behavior, mass-delete execution, workflow changes, dependency changes, or sibling component changes.
+No live doctor checks, Server readiness implementation, adapter pause/resume mutation, repair execution, provider calls, workflow/dependency changes, or sibling changes.
 
 ## CI trigger policy
 
-Source/doc clean-code commits must not skip CI. A final report-only commit may skip CI.
+Source/docs commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only the report to crates/haze-sync-api/control/report.md. Use report-template.md. Set REPORT_TYPE to CLEAN_CODE_REVIEW and phase_id to API-P5C.
+Write only crates/haze-sync-api/control/report.md. Use REPORT_TYPE IMPLEMENTATION and phase_id API-P6.
