@@ -17,8 +17,7 @@ pub use model::{
     InMemoryDriveCursorStore,
 };
 pub use policy::{
-    ChangePollDebouncer, ChangePollTrigger, DebouncedPoll, ProviderBackoffPolicy,
-    RetryDisposition,
+    ChangePollDebouncer, ChangePollTrigger, DebouncedPoll, ProviderBackoffPolicy, RetryDisposition,
 };
 pub use provider::{DriveChangeFeedProvider, FakeDriveChangeFeedProvider};
 pub use runner::{classify_drive_changes, run_change_feed_cycle, ChangeFeedError};
