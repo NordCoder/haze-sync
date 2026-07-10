@@ -18,9 +18,10 @@ is active.
 - `dry_run`: full sync scans and reads the open-conflict list, but performs no server or vault-content mutations.
 
 Remote materialization still verifies revision/hash metadata and preserves dirty local
-files. Push requests retain persisted idempotency keys. Pending entries are removed
-only after a confirmed server outcome, and a newer event for the same path is not
-cleared by an older in-flight request.
+files. Push requests retain a persisted idempotency key while their payload remains
+unchanged. A new vault event or a scan that observes different upload content receives
+a new mutation key, so an older in-flight response cannot clear a newer pending change.
+Pending entries are removed only after a confirmed server outcome.
 
 Server delete/tombstone requests are not automated while `Confirm delete actions` is
 enabled. Those pending delete entries remain queued. Disabling that safety setting is
@@ -46,14 +47,17 @@ time.
 Offline, rate-limited, and server-unavailable failures use bounded exponential backoff.
 When any automatic trigger is enabled, the runner owns a retry timer and cancels it on
 reconfiguration or unload. Manual `Sync now` may retry immediately even during
-backoff. Non-retryable configuration, authorization, invalid-response, or internal
-failures remain visible and do not start an automatic retry loop.
+backoff. A local scan-only command does not reset network failure or retry state.
+Non-retryable configuration, authorization, invalid-response, or internal failures
+remain visible and do not start an automatic retry loop.
 
 ## Lifecycle and secrecy
 
 The runner owns interval, debounce, follow-up, and retry timers. Plugin unload clears
-all timers, aborts the active HTTP requests through `AbortSignal`, suppresses further
-work, and marks the runtime stopped in local state.
+all timers, aborts active HTTP requests through `AbortSignal`, stops long vault scans
+between files, and restores the runtime state that existed before an interrupted run.
+A persisted network backoff deadline is therefore not discarded merely because the
+plugin unloaded or the user ran a local scan.
 
 Status and notices contain only sanitized summaries. They do not expose auth tokens,
 idempotency keys, raw server bodies, stack traces, provider payloads, database URLs,
