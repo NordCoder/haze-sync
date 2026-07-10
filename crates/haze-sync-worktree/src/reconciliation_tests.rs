@@ -67,11 +67,7 @@ fn classifies_all_drift_kinds_and_updates_only_clean_observations() {
         revision("rev_conflict"),
         hash(5),
     );
-    applied.record_present(
-        path("blocked/child.md"),
-        revision("rev_blocked"),
-        hash(6),
-    );
+    applied.record_present(path("blocked/child.md"), revision("rev_blocked"), hash(6));
 
     let mut state = WorktreeReconciliationState::new(applied);
     state.record_observation(
@@ -89,12 +85,7 @@ fn classifies_all_drift_kinds_and_updates_only_clean_observations() {
             snapshot("clean.md", hash(1), 10, current_time),
             snapshot("dirty.md", hash(9), 11, current_time),
             snapshot("extra.md", hash(4), 12, current_time),
-            snapshot(
-                "_haze_conflicts/open/plan.md",
-                hash(5),
-                13,
-                current_time,
-            ),
+            snapshot("_haze_conflicts/open/plan.md", hash(5), 13, current_time),
         ],
         skipped: vec![WorktreeScanSkipped {
             vault_path: Some(path("blocked")),
@@ -102,7 +93,7 @@ fn classifies_all_drift_kinds_and_updates_only_clean_observations() {
         }],
     };
 
-    let policy = WorktreeEchoGuardPolicy::new(Duration::from_secs(3600), 16).unwrap();
+    let policy = WorktreeEchoGuardPolicy::new(Duration::from_secs(60), 16).unwrap();
     let mut guard = WorktreeEchoGuard::new(policy);
     guard
         .record(
@@ -126,8 +117,8 @@ fn classifies_all_drift_kinds_and_updates_only_clean_observations() {
         )
         .unwrap();
 
-    let report = WorktreeReconciler::reconcile(&mut state, &scan, &mut guard, current_time)
-        .unwrap();
+    let report =
+        WorktreeReconciler::reconcile(&mut state, &scan, &mut guard, current_time).unwrap();
     let summary = report.summary();
 
     assert_eq!(summary.clean, 1);
@@ -231,7 +222,8 @@ fn persisted_runner_saves_only_real_observation_transitions() {
     assert!(first.state_changed());
     assert_eq!(store.saves, 1);
 
-    let second = WorktreeReconciliationRunner::run(&mut store, &scan, &mut guard, observed).unwrap();
+    let second =
+        WorktreeReconciliationRunner::run(&mut store, &scan, &mut guard, observed).unwrap();
     assert!(!second.state_changed());
     assert_eq!(store.saves, 1);
 }
