@@ -6,18 +6,17 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-common/control/prompt.md
 active_report: crates/haze-sync-common/control/report.md
-active_agent_role: implementation-worker
+active_agent_role: clean-code-reviewer
 
 wave: W1
-phase: CMM-P5-RERUN
+phase: CMM-P5C
 
-implementation_status: PENDING
-clean_review_status: NOT_STARTED
+implementation_status: SELF_ACCEPT_PENDING_CI
+clean_review_status: PENDING
 ci_status: CI_GREEN
 ci_workflow: Component CI
-ci_run_id: 29028045014
+ci_run_id: 29038641448
 ci_run_number: unknown
 ci_run_attempt: 1
 known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
-rerun_reason: previous active report did not close CMM-P5
