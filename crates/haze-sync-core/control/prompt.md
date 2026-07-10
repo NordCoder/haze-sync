@@ -1,54 +1,29 @@
-# W1-CORE-P8C — Core compatibility-fixture clean-code review
+# W1-CORE-COMPLETE-FAN-IN — Core component plan complete
 
 Component: core
 Path: crates/haze-sync-core
 Branch: component/core
 PR: #43
-Role: clean-code-reviewer
+Role: none
 
-Work only through the GitHub connector. Do not merge the PR or change its lifecycle state.
+This is a hold notice, not an executable worker prompt.
 
-## Context
+## Accepted state
 
-CORE-P8 implementation and artifact-based CI correction are complete. Final fixture/test/docs CI is green.
+Core phases CORE-P1 through CORE-P8, required fixer cycles, and clean-code reviews are complete. Final compatibility fixture/test/docs head is green.
 
-- code_bearing_sha: c2229f75f4fed31215f3a6f4b7f21ac41155d8e8
+- code_bearing_sha: aef27fbce707de9c4da39235a959fe5a66f13139
 - workflow: Component CI
-- workflow_run_id: 29120367603
-- run_number: 1529
+- workflow_run_id: 29124808611
+- run_number: 1575
 - conclusion: success
 
-## Read
+CORE-P8 compatibility fixtures remain deterministic, language-neutral, public-type round-tripped, semantically recomputed, secret-free, and separate from API/runtime ownership. Offline doctor examples preserve skipped-not-ok honesty.
 
-Read the project process files, current Core control files, CORE-P8 fixture catalog, integration tests, compatibility documentation, fixer correction, accepted API fixture guidance, and PR diff. Do not read diagnostics artifacts unless a later fixer prompt explicitly requires them.
+## Hold reason
 
-## Task
+The Core implementation plan has no remaining component-local phase. Further work must be explicitly scoped as cross-component fan-in, compatibility maintenance, integration correction, or release hardening. Do not invent another Core implementation phase.
 
-Review CORE-P8 compatibility fixtures and integration-contract examples.
+## Unblock condition
 
-Focus on:
-
-- language-neutral deterministic fixture shape;
-- strict canonical serialization and public-type roundtrips;
-- semantic recomputation through public Core APIs;
-- accepted-write, same-content, conflict-saved, hash mismatch, tombstone, delete guard, idempotency, cursor, and doctor examples;
-- safe synthetic paths, IDs, headers, and absence of raw bytes or secrets;
-- conflict-saved serialized-tag versus public-status documentation;
-- stable semantic contracts versus internal details;
-- downstream usability without API DTO duplication or private-Core coupling.
-
-## Allowed files
-
-- crates/haze-sync-core/tests/**
-- crates/haze-sync-core/fixtures/**
-- crates/haze-sync-core/docs/**
-- crates/haze-sync-core/src/** only if directly required to correct a fixture helper or public re-export
-- crates/haze-sync-core/control/report.md
-
-## Boundaries
-
-No API DTO duplication, TypeScript generation, Server/Storage/adapter runtime integration, persistence/provider behavior, workflow/dependency changes, sibling changes, test deletion, or assertion weakening.
-
-Source/test/fixture/docs review commits must run CI normally. A final report-only commit may skip CI.
-
-Write only crates/haze-sync-core/control/report.md using REPORT_TYPE CLEAN_CODE_REVIEW and phase_id CORE-P8C.
+Only an explicit Orchestrator fan-in/integration prompt within Core ownership may reactivate this component. Do not launch a worker from this hold notice.
