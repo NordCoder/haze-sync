@@ -262,8 +262,8 @@ impl Tombstone {
 
     /// Validate retention and restore metadata after persistence/API mapping.
     pub fn validate_metadata(&self) -> Result<(), TombstoneServiceError> {
-        validate_retention(self.created_at.clone(), &self.retention)?;
-        validate_restore_metadata(self.created_at.clone(), &self.restore)
+        validate_retention(self.created_at, &self.retention)?;
+        validate_restore_metadata(self.created_at, &self.restore)
     }
 
     /// Classify restore readiness without creating revisions or mutating storage.
@@ -279,7 +279,7 @@ impl Tombstone {
         ) {
             (Some(restored_at), Some(restored_by), Some(restore_revision_id)) => {
                 Ok(RestoreEligibility::AlreadyRestored {
-                    restored_at: restored_at.clone(),
+                    restored_at: *restored_at,
                     restored_by: restored_by.clone(),
                     restore_revision_id: restore_revision_id.clone(),
                 })
@@ -303,19 +303,19 @@ impl Tombstone {
             self.restore.restore_revision_id.as_ref(),
         ) {
             return Ok(RetentionCleanupEligibility::NotEligibleRestored {
-                restored_at: restored_at.clone(),
+                restored_at: *restored_at,
                 restore_revision_id: restore_revision_id.clone(),
             });
         }
 
         if evaluated_at < self.retention.retention_until {
             return Ok(RetentionCleanupEligibility::RetainedUntil {
-                retention_until: self.retention.retention_until.clone(),
+                retention_until: self.retention.retention_until,
             });
         }
 
         Ok(RetentionCleanupEligibility::EligibleAfterRetention {
-            retention_until: self.retention.retention_until.clone(),
+            retention_until: self.retention.retention_until,
         })
     }
 }
@@ -336,7 +336,7 @@ impl TombstoneService {
         &self,
         input: TombstoneCreationInput,
     ) -> Result<Tombstone, TombstoneServiceError> {
-        validate_retention(input.created_at.clone(), &input.retention)?;
+        validate_retention(input.created_at, &input.retention)?;
 
         Ok(Tombstone {
             tombstone_id: input.tombstone_id,
