@@ -1,13 +1,13 @@
 REPORT_TYPE:
-IMPLEMENTATION
+FIX
 
 STATUS:
-SELF_NEEDS_FIX
+FIX_COMPLETE
 
 AGENT:
-role: implementation-worker
-agent_execution_id: W1-CORE-P8
-chat_name: core — W1 CORE-P8 Implementation
+role: fixer-worker
+agent_execution_id: W1-FIX-CORE-P8-CI
+chat_name: core — W1 FIX-CORE-P8-CI CI Fix
 
 COMPONENT:
 name: core
@@ -21,34 +21,30 @@ control_report_path: crates/haze-sync-core/control/report.md
 
 WAVE:
 id: W1
-phase_id: CORE-P8
-dependency_status: CORE-P7 implementation, clean-code review, and artifact-based CI correction were complete. Final pre-P8 source CI run 29113629870 on 6bb7da230d18e68c023117498cefcd9ea81137e7 was green before CORE-P8 began.
+phase_id: FIX-CORE-P8-CI
+dependency_status: control state was PROMPT_READY for fixer-worker and supplied failed Component CI run 29116378264 attempt 1 plus diagnostics artifact 8236809649.
 
 SUMMARY:
-Implemented the CORE-P8 compatibility fixture catalog without changing production Core source. Added one versioned, language-neutral JSON catalog containing synthetic public examples for accepted revision write, same-content ignore, conflict-saved preservation, hash mismatch, tombstone metadata, delete-guard manual-unlock block, idempotency replay and conflict, all three cursor update outcomes, and healthy/partial passive doctor summaries. Added an integration test that deserializes every example into current public Core types, requires canonical byte-for-byte pretty serialization, recomputes the represented decisions through public Core APIs, verifies semantic statuses and invariant-sensitive fields, and scans for secret-bearing, raw-byte, unsafe-path, token, and database markers. Added documentation separating stable semantic fields/vocabulary from Rust internals, persistence/runtime details, API-owned DTOs, and textual JSON formatting. The docs explicitly explain the current conflict_saved compatibility nuance: the serialized Rust tag remains rejected_stale_or_unknown_base while UpsertOutcome::public_status() returns conflict_saved when the nested preservation plan is present. No src/** files, sibling components, API DTOs, runtime integrations, workflows, or dependencies were changed. Final code/docs head 14b92f467b5806d31ec14723b5857e64660fdf06 passed cargo fmt, cargo check, cargo test, and cargo clippy in Component CI run 29116378264, run number 1501. The workflow nevertheless concluded failure at Finalize CI diagnostics and published artifact 8236809649. The artifact was not downloaded or read because the active role is implementation-worker.
+Downloaded and read diagnostics artifact 8236809649 for CORE-P8 Component CI run 29116378264. Read summary.md, manifest.json, failures/rust-fmt.txt, and logs/rust-fmt.log, the complete set declared by failed_checks. The artifact proved one formatter-only failure in crates/haze-sync-core/tests/compatibility_fixtures.rs: rustfmt required the X-Revision-Id BTreeMap insertion to use a single-line layout. Verified that the branch had received only Orchestrator control-slot commits after failed code/docs head 14b92f467b5806d31ec14723b5857e64660fdf06, so the fixture catalog, test semantics, and documentation were unchanged. Applied exactly the formatter-selected layout in source commit c2229f75f4fed31215f3a6f4b7f21ac41155d8e8. No fixture values, assertions, public-type roundtrips, semantic recomputation, secrecy checks, production Core code, docs, workflows, dependencies, API DTOs, or sibling components changed. Final source head c2229f75f4fed31215f3a6f4b7f21ac41155d8e8 passed Component CI run 29120367603, run number 1529, completely.
 
 CHANGED_FILES:
-- crates/haze-sync-core/fixtures/compatibility/v1/core-compatibility.json
 - crates/haze-sync-core/tests/compatibility_fixtures.rs
-- crates/haze-sync-core/docs/compatibility-fixtures.md
 - crates/haze-sync-core/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/core
 base_branch: main
 base_sha: PR #43 base observed as 1a82bea5c87953db378e5e03429326df38320ee8
-head_sha: final fixture/test/docs head before this report-only commit was 14b92f467b5806d31ec14723b5857e64660fdf06
-source_fixture_test_docs_commits:
-- 1a728e4393b2c17e3281188d7e00e7e0f38c3762
-- 8d6f2674a8034390496565cada844224757a92a7
-- 14b92f467b5806d31ec14723b5857e64660fdf06
+head_sha: final source fixer head before this report-only commit was c2229f75f4fed31215f3a6f4b7f21ac41155d8e8
+source_fix_commits:
+- c2229f75f4fed31215f3a6f4b7f21ac41155d8e8
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
 ci_skip_used: yes
-ci_skip_reason: used [skip ci] only for this final report-only commit. Fixture, integration-test, and documentation commits did not skip CI. This skipped report commit is not CI evidence.
+ci_skip_reason: used [skip ci] only for this final report-only commit. The test correction commit did not use CI skip. Final CI evidence is successful Component CI run 29120367603 on source head c2229f75f4fed31215f3a6f4b7f21ac41155d8e8.
 
 SCOPE:
 allowed_files_only: yes
@@ -61,62 +57,55 @@ CONTRACT:
 contract_read: yes
 contract_satisfied: yes
 contract_changes_requested: no
-contract_change_rationale: none; fixtures consume existing public Core serialization and decision APIs without adding runtime DTOs or changing public behavior
-affected_components: core only; downstream API, Server, Storage, CLI, and adapter mapping guidance is documented but no sibling file was modified
+contract_change_rationale: none; the diagnostics required only rustfmt layout correction in the existing CORE-P8 integration test
+affected_components: core only
 
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- added a versioned compatibility fixture catalog under fixtures/compatibility/v1
-- covered accepted write, same-content, conflict_saved, hash mismatch, tombstone, delete guard, idempotency replay/conflict, cursor outcomes, and two doctor summary states
-- used only synthetic relative paths, public IDs, fixed timestamps, hashes, counts, safe headers, and public JSON bodies
-- added strict integration tests that deserialize fixtures into public types and compare canonical reserialization exactly
-- recomputed revision outcomes with a small in-test implementation of the existing public repository/content-store/operation-log traits
-- recomputed tombstone, delete-guard, idempotency fingerprint/replay, cursor, and doctor outcomes through public Core APIs
-- verified serialized conflict_saved metadata omits incoming raw bytes
-- scanned fixture text for credentials, authorization/idempotency headers, tokens, raw content/bytes fields, database URLs, and absolute-path markers
-- documented stable semantic fields, internal details, downstream mapping ownership, versioning, and the conflict_saved semantic-status rule
-behavior_changes: none in production Core; this adds compatibility evidence and downstream examples only
-bugs_found: none in public Core behavior during CORE-P8 implementation
-bugs_fixed: none
-cleanups_made: consolidated all required V1 examples into one canonical fixture catalog rather than adding production fixture helpers or multiple ad hoc DTOs
-non_goals_preserved: no API DTO duplication, TypeScript generation, Server route tests, Storage repository tests, adapter runtime tests, persistence, provider behavior, live checks, workflow/dependency changes, sibling edits, or production src changes
-deferred_work: fixer-worker must inspect diagnostics artifact 8236809649 for failed Component CI run 29116378264; after a green follow-up run, CORE-P8 should proceed to clean-code review
+- changed one BTreeMap header insertion from rustfmt-rejected multiline layout to rustfmt-selected single-line layout
+behavior_changes: none
+bugs_found: one rustfmt layout mismatch in the CORE-P8 compatibility integration test
+bugs_fixed: the single artifact-proven formatting failure
+cleanups_made: rustfmt-only layout normalization
+non_goals_preserved: no fixture catalog changes, assertion changes, semantic changes, production source changes, API DTOs, TypeScript generation, runtime integrations, persistence/provider behavior, workflows, dependencies, or sibling changes
+deferred_work: none for CORE-P8 CI; Orchestrator may advance CORE-P8 to clean-code review using successful run 29120367603 as final source CI evidence
 
 TESTS_AND_CHECKS:
 checks_run:
-- read implementation manifest, report template, implementation-worker prompt, and GitHub connector protocol from Project Sources
-- read active control state, prompt, previous report, component contract, CORE-P8 implementation plan, implementation log, and dependency map
-- read current public revision, tombstone, delete-guard, idempotency, operation-log/cursor, and doctor models plus serde contracts
-- read accepted API/sync/conflict/delete/testing guidance from project documentation
-- inspected PR #43 metadata and verified only Orchestrator control commits followed the accepted CORE-P7C source head before CORE-P8 edits
-- verified the final CORE-P8 diff contains exactly one fixture catalog, one integration test, and one documentation file
-- observed Component CI run 29116378264 on final code/docs head 14b92f467b5806d31ec14723b5857e64660fdf06
+- read implementation manifest, report template, fixer-worker prompt, GitHub connector protocol, active control state/prompt/report, component contract, implementation plan, dependency map, current CORE-P8 fixture/test/docs, and PR context
+- downloaded diagnostics artifact 8236809649
+- read summary.md and manifest.json
+- read failures/rust-fmt.txt and logs/rust-fmt.log
+- verified the branch differed from failed head only through Orchestrator control commits before the fixer edit
+- verified fixer diff contains only one formatter fragment in compatibility_fixtures.rs
+- observed Component CI run 29120367603, run number 1529, on source head c2229f75f4fed31215f3a6f4b7f21ac41155d8e8
 - observed cargo fmt success
-- observed cargo check success, proving no new public Core re-export or production helper was required
-- observed cargo test success, including canonical roundtrip, algorithm recomputation, semantic-status, invariant, and secrecy checks
+- observed cargo check success
+- observed cargo test success, including CORE-P8 canonical fixture, semantic recomputation, and secrecy tests
 - observed cargo clippy success
-- observed Finalize CI diagnostics failure
-- observed workflow conclusion failure
-- listed diagnostics artifact metadata without downloading or reading its contents
+- observed Finalize CI diagnostics success
+- observed workflow conclusion success
 checks_not_run:
-- local repository cargo commands were not available or used as acceptance evidence; Component CI supplied product-check evidence
-ci_status: CI_RED for Component CI run 29116378264 despite cargo fmt/check/test/clippy success; Finalize CI diagnostics failed
-workflow_urls: failed Component CI run 29116378264
-known_failures: Finalize CI diagnostics failed; root cause was not inspected in implementation-worker role
+- local repository cargo commands were not used as acceptance evidence because repository work is GitHub-connector-only
+ci_status: CI_GREEN for Component CI run 29120367603, run number 1529
+workflow_urls: failed source run 29116378264; successful follow-up run 29120367603
+known_failures: none remaining for final source fixer head
 
 CI_DIAGNOSTICS:
-artifact_based_logs: no
+artifact_based_logs: yes
 artifact_name: ci-diag__component-core__wf-component-ci__run-29116378264__attempt-1
 artifact_id: 8236809649
 workflow_run_id: 29116378264
 workflow_run_attempt: 1
-artifact_status: metadata observed; artifact is available, unexpired, and expires at 2026-07-11T18:59:37Z; contents were not downloaded or read because the active implementation-worker prompt prohibits diagnostics artifact reading
-summary_read: no
-manifest_read: no
-logs_read: none
+artifact_status: downloaded and readable; contained every file declared by failed_checks
+summary_read: yes
+manifest_read: yes
+logs_read:
+- failures/rust-fmt.txt
+- logs/rust-fmt.log
 raw_job_logs_used: no
-diagnostics_failure: not inspected; workflow metadata shows Finalize CI diagnostics failed after all Rust product checks succeeded
+diagnostics_failure: rustfmt required one single-line BTreeMap insertion layout in tests/compatibility_fixtures.rs; no semantic, fixture, documentation, or cross-component failure was present
 
 SAFETY_AND_SECRECY:
 secrets_committed: no
@@ -127,20 +116,18 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- The existing public conflict-saved Rust serialization keeps status=rejected_stale_or_unknown_base for source compatibility; documentation and tests require downstream mappers to use public_status()=conflict_saved when the nested plan exists.
-- StoredIdempotencyRecord is intentionally excluded from public fixtures because it contains the raw validated idempotency key; only safe replay/conflict outcomes are represented.
-- Canonical textual JSON is enforced for reviewable fixture drift, but documentation states that downstream protocols should map by fields and semantics rather than byte offsets or object order.
-- Remaining: Component CI run 29116378264 is formally red because Finalize CI diagnostics failed; artifact 8236809649 requires fixer-worker triage.
+- GitHub workflow step metadata for the failed run showed product checks as successful, while the authoritative artifact recorded the rustfmt failure.
+- The correction remained strictly formatter-only.
 - This final report-only commit uses CI skip and is not CI evidence.
 
 BLOCKERS:
-Component CI is formally red until artifact-based fixer triage and a green follow-up run.
+none
 
 NEXT_RECOMMENDED_AGENT:
-fixer-worker
+orchestrator
 
 FINAL_VERDICT:
-SELF_NEEDS_FIX. CORE-P8 compatibility fixtures, strict public-model/semantic stability tests, secrecy checks, and downstream mapping documentation are implemented without production source or sibling changes. Final code/docs head 14b92f467b5806d31ec14723b5857e64660fdf06 passed cargo fmt, cargo check, cargo test, and cargo clippy, but Component CI run 29116378264 concluded failure at Finalize CI diagnostics. Fixer-worker must use diagnostics artifact 8236809649 as source of truth.
+FIX_COMPLETE. The complete diagnostics artifact proved one rustfmt layout mismatch in the CORE-P8 integration test. It was corrected without changing fixture data, semantic assertions, public contracts, production code, or documentation. Final source head c2229f75f4fed31215f3a6f4b7f21ac41155d8e8 passed Component CI run 29120367603 completely. Orchestrator may advance CORE-P8 to clean-code review.
 
 PUSHED:
 yes
