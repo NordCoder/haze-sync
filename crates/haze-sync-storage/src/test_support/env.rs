@@ -3,23 +3,28 @@
 use super::TestSupportError;
 use std::{env, fmt};
 
-/// Preferred environment variable for real PostgreSQL storage tests.
+/// Required environment variable for real PostgreSQL storage tests.
 pub const HAZE_SYNC_TEST_DATABASE_URL_ENV: &str = "HAZE_SYNC_TEST_DATABASE_URL";
 
-/// Fallback environment variable accepted only after the same safety checks.
+/// General application database variable that test support deliberately ignores.
+///
+/// The constant remains available for callers that need to explain the policy,
+/// but storage test helpers never read this variable implicitly.
 pub const DATABASE_URL_ENV: &str = "DATABASE_URL";
 
-/// Source environment variable for a test database URL.
+/// Source label for an explicitly supplied test database URL.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TestDatabaseUrlSource {
     /// URL came from `HAZE_SYNC_TEST_DATABASE_URL`.
     HazeSyncTestDatabaseUrl,
-    /// URL came from `DATABASE_URL`.
+    /// URL was supplied explicitly by a caller that labels it as `DATABASE_URL`.
+    ///
+    /// Storage test helpers do not read `DATABASE_URL` automatically.
     DatabaseUrl,
 }
 
 impl TestDatabaseUrlSource {
-    /// Returns the environment variable name.
+    /// Returns the source label.
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
@@ -31,7 +36,7 @@ impl TestDatabaseUrlSource {
 
 /// A validated PostgreSQL URL for test-only database helpers.
 ///
-/// Formatting this value always redacts the original URL. Use
+/// Formatting this value always redacts the original URL and database name. Use
 /// `as_sensitive_str` only when passing the URL to a database client.
 #[derive(Clone, Eq, PartialEq)]
 pub struct TestDatabaseUrl {
@@ -41,26 +46,27 @@ pub struct TestDatabaseUrl {
 }
 
 impl TestDatabaseUrl {
-    /// Reads `HAZE_SYNC_TEST_DATABASE_URL`, falling back to `DATABASE_URL` when
-    /// the preferred variable is unset or empty.
+    /// Discovers an optional URL from `HAZE_SYNC_TEST_DATABASE_URL` only.
+    ///
+    /// This helper is intended for configuration inspection. Executable
+    /// integration tests should use [`Self::require_from_env`] so missing
+    /// configuration fails explicitly rather than being reported as a pass.
     pub fn from_env() -> Result<Option<Self>, TestSupportError> {
-        for source in [
+        parse_optional_config_value(
             TestDatabaseUrlSource::HazeSyncTestDatabaseUrl,
-            TestDatabaseUrlSource::DatabaseUrl,
-        ] {
-            match env::var(source.name()) {
-                Ok(value) if value.trim().is_empty() => continue,
-                Ok(value) => return Self::parse_explicit(source, value).map(Some),
-                Err(env::VarError::NotPresent) => continue,
-                Err(env::VarError::NotUnicode(_)) => {
-                    return Err(TestSupportError::EnvironmentVariableNotUnicode {
-                        name: source.name(),
-                    });
-                }
-            }
-        }
+            read_test_database_url_env()?,
+        )
+    }
 
-        Ok(None)
+    /// Requires an explicit `HAZE_SYNC_TEST_DATABASE_URL` value.
+    ///
+    /// `DATABASE_URL` is intentionally ignored to prevent destructive test
+    /// helpers from accidentally targeting an application or production database.
+    pub fn require_from_env() -> Result<Self, TestSupportError> {
+        require_config_value(
+            TestDatabaseUrlSource::HazeSyncTestDatabaseUrl,
+            read_test_database_url_env()?,
+        )
     }
 
     /// Parses and validates an explicitly supplied test database URL.
@@ -84,7 +90,7 @@ impl TestDatabaseUrl {
         &self.raw_url
     }
 
-    /// Returns the source environment variable.
+    /// Returns the source label.
     #[must_use]
     pub const fn source(&self) -> TestDatabaseUrlSource {
         self.source
@@ -103,7 +109,7 @@ impl TestDatabaseUrl {
             .raw_url
             .split_once("://")
             .map_or("postgres", |(scheme, _)| scheme);
-        format!("{scheme}://<redacted>/{}", self.database_name)
+        format!("{scheme}://<redacted>/<test-database>")
     }
 }
 
@@ -113,7 +119,6 @@ impl fmt::Debug for TestDatabaseUrl {
             .debug_struct("TestDatabaseUrl")
             .field("source", &self.source.name())
             .field("url", &self.redacted())
-            .field("database_name", &self.database_name)
             .finish()
     }
 }
@@ -124,30 +129,74 @@ impl fmt::Display for TestDatabaseUrl {
     }
 }
 
+fn read_test_database_url_env() -> Result<Option<String>, TestSupportError> {
+    match env::var(HAZE_SYNC_TEST_DATABASE_URL_ENV) {
+        Ok(value) => Ok(Some(value)),
+        Err(env::VarError::NotPresent) => Ok(None),
+        Err(env::VarError::NotUnicode(_)) => {
+            Err(TestSupportError::EnvironmentVariableNotUnicode {
+                name: HAZE_SYNC_TEST_DATABASE_URL_ENV,
+            })
+        }
+    }
+}
+
+fn parse_optional_config_value(
+    source: TestDatabaseUrlSource,
+    value: Option<String>,
+) -> Result<Option<TestDatabaseUrl>, TestSupportError> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    if value.trim().is_empty() {
+        return Ok(None);
+    }
+
+    TestDatabaseUrl::parse_explicit(source, value).map(Some)
+}
+
+fn require_config_value(
+    source: TestDatabaseUrlSource,
+    value: Option<String>,
+) -> Result<TestDatabaseUrl, TestSupportError> {
+    let value = value.ok_or(TestSupportError::MissingTestDatabaseUrl)?;
+    if value.trim().is_empty() {
+        return Err(TestSupportError::MissingTestDatabaseUrl);
+    }
+
+    TestDatabaseUrl::parse_explicit(source, value)
+}
+
 fn extract_safe_database_name(raw_url: &str) -> Result<String, TestSupportError> {
+    if raw_url.trim().len() != raw_url.len() || raw_url.chars().any(char::is_control) {
+        return Err(TestSupportError::InvalidDatabaseUrl);
+    }
+
     let (scheme, rest) = raw_url
         .split_once("://")
         .ok_or(TestSupportError::InvalidDatabaseUrl)?;
     if scheme != "postgres" && scheme != "postgresql" {
         return Err(TestSupportError::UnsupportedDatabaseUrlScheme);
     }
+    if rest.contains('#') {
+        return Err(TestSupportError::InvalidDatabaseUrl);
+    }
 
-    let without_fragment = rest.split('#').next().unwrap_or(rest);
-    let without_query = without_fragment
-        .split('?')
-        .next()
-        .unwrap_or(without_fragment);
-    let path_start = without_query
-        .find('/')
+    let without_query = rest.split_once('?').map_or(rest, |(path, _)| path);
+    let (_, database_name) = without_query
+        .split_once('/')
         .ok_or(TestSupportError::MissingDatabaseName)?;
-    let database_name = without_query[path_start + 1..]
-        .split('/')
-        .next()
-        .unwrap_or_default()
-        .trim();
 
     if database_name.is_empty() {
         return Err(TestSupportError::MissingDatabaseName);
+    }
+    if database_name.contains('/')
+        || database_name.contains('%')
+        || !database_name
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '_' | '-' | '.'))
+    {
+        return Err(TestSupportError::InvalidDatabaseUrl);
     }
 
     validate_test_database_name(database_name)?;
@@ -156,6 +205,10 @@ fn extract_safe_database_name(raw_url: &str) -> Result<String, TestSupportError>
 
 fn validate_test_database_name(database_name: &str) -> Result<(), TestSupportError> {
     let lower = database_name.to_ascii_lowercase();
+    let tokens: Vec<_> = lower
+        .split(|character: char| !character.is_ascii_alphanumeric())
+        .filter(|token| !token.is_empty())
+        .collect();
     let blocked_exact = [
         "postgres",
         "template0",
@@ -169,17 +222,21 @@ fn validate_test_database_name(database_name: &str) -> Result<(), TestSupportErr
         "primary",
         "live",
     ];
+    let blocked_token = tokens.iter().any(|token| {
+        matches!(
+            *token,
+            "prod" | "production" | "live" | "main" | "primary" | "default"
+        )
+    });
+    let has_test_marker = tokens.iter().any(|token| {
+        *token == "test"
+            || token
+                .strip_prefix("test")
+                .is_some_and(|suffix| !suffix.is_empty() && suffix.chars().all(|ch| ch.is_ascii_digit()))
+    });
 
-    let unsafe_name = blocked_exact.contains(&lower.as_str())
-        || lower.contains("prod")
-        || lower.contains("production")
-        || lower.contains("live")
-        || !lower.contains("test");
-
-    if unsafe_name {
-        return Err(TestSupportError::UnsafeDatabaseName {
-            database_name: database_name.to_owned(),
-        });
+    if blocked_exact.contains(&lower.as_str()) || blocked_token || !has_test_marker {
+        return Err(TestSupportError::UnsafeDatabaseName);
     }
 
     Ok(())
@@ -190,7 +247,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_and_redacts_test_database_url() {
+    fn parses_and_fully_redacts_test_database_url() {
         let raw = "postgres://haze_sync:placeholder_password@localhost:5432/haze_sync_test?sslmode=disable";
         let url =
             TestDatabaseUrl::parse_explicit(TestDatabaseUrlSource::HazeSyncTestDatabaseUrl, raw)
@@ -201,46 +258,86 @@ mod tests {
         assert_eq!(url.source(), TestDatabaseUrlSource::HazeSyncTestDatabaseUrl);
         assert!(!format!("{url:?}").contains("placeholder_password"));
         assert!(!url.to_string().contains("placeholder_password"));
-        assert!(url.to_string().contains("<redacted>"));
+        assert!(!url.to_string().contains("haze_sync_test"));
+        assert_eq!(url.to_string(), "postgres://<redacted>/<test-database>");
     }
 
     #[test]
-    fn rejects_non_postgres_urls() {
-        let result = TestDatabaseUrl::parse_explicit(
-            TestDatabaseUrlSource::HazeSyncTestDatabaseUrl,
-            "mysql://localhost/haze_sync_test",
-        );
-
-        assert_eq!(result, Err(TestSupportError::UnsupportedDatabaseUrlScheme));
-    }
-
-    #[test]
-    fn rejects_database_without_test_marker() {
-        let result = TestDatabaseUrl::parse_explicit(
-            TestDatabaseUrlSource::HazeSyncTestDatabaseUrl,
-            "postgres://localhost/haze_sync",
-        );
-
+    fn required_configuration_rejects_missing_or_blank_values() {
         assert_eq!(
-            result,
-            Err(TestSupportError::UnsafeDatabaseName {
-                database_name: "haze_sync".to_owned()
-            })
+            require_config_value(TestDatabaseUrlSource::HazeSyncTestDatabaseUrl, None),
+            Err(TestSupportError::MissingTestDatabaseUrl)
+        );
+        assert_eq!(
+            require_config_value(
+                TestDatabaseUrlSource::HazeSyncTestDatabaseUrl,
+                Some("   ".to_owned())
+            ),
+            Err(TestSupportError::MissingTestDatabaseUrl)
+        );
+        assert_eq!(
+            parse_optional_config_value(TestDatabaseUrlSource::HazeSyncTestDatabaseUrl, None),
+            Ok(None)
         );
     }
 
     #[test]
-    fn rejects_obviously_production_database_names() {
-        let result = TestDatabaseUrl::parse_explicit(
-            TestDatabaseUrlSource::DatabaseUrl,
-            "postgresql://localhost/prod_test",
-        );
-
+    fn rejects_non_postgres_or_ambiguous_urls() {
         assert_eq!(
-            result,
-            Err(TestSupportError::UnsafeDatabaseName {
-                database_name: "prod_test".to_owned()
-            })
+            TestDatabaseUrl::parse_explicit(
+                TestDatabaseUrlSource::HazeSyncTestDatabaseUrl,
+                "mysql://localhost/haze_sync_test"
+            ),
+            Err(TestSupportError::UnsupportedDatabaseUrlScheme)
         );
+        assert_eq!(
+            TestDatabaseUrl::parse_explicit(
+                TestDatabaseUrlSource::HazeSyncTestDatabaseUrl,
+                "postgres://localhost/haze_sync_test/extra"
+            ),
+            Err(TestSupportError::InvalidDatabaseUrl)
+        );
+        assert_eq!(
+            TestDatabaseUrl::parse_explicit(
+                TestDatabaseUrlSource::HazeSyncTestDatabaseUrl,
+                "postgres://localhost/haze%5fsync%5ftest"
+            ),
+            Err(TestSupportError::InvalidDatabaseUrl)
+        );
+    }
+
+    #[test]
+    fn rejects_database_without_standalone_test_marker() {
+        for database_name in ["haze_sync", "contest", "latest", "attestation"] {
+            let result = TestDatabaseUrl::parse_explicit(
+                TestDatabaseUrlSource::HazeSyncTestDatabaseUrl,
+                format!("postgres://localhost/{database_name}"),
+            );
+
+            assert_eq!(result, Err(TestSupportError::UnsafeDatabaseName));
+        }
+    }
+
+    #[test]
+    fn rejects_obviously_production_database_names_even_with_test_marker() {
+        for database_name in ["prod_test", "production_test", "live_test", "test_primary"] {
+            let result = TestDatabaseUrl::parse_explicit(
+                TestDatabaseUrlSource::DatabaseUrl,
+                format!("postgresql://localhost/{database_name}"),
+            );
+
+            assert_eq!(result, Err(TestSupportError::UnsafeDatabaseName));
+        }
+    }
+
+    #[test]
+    fn accepts_numbered_test_database_names() {
+        let url = TestDatabaseUrl::parse_explicit(
+            TestDatabaseUrlSource::HazeSyncTestDatabaseUrl,
+            "postgres://localhost/haze_sync_test42",
+        )
+        .unwrap();
+
+        assert_eq!(url.database_name(), "haze_sync_test42");
     }
 }
