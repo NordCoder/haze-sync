@@ -228,6 +228,18 @@ fn cursor_summary_covers_missing_orphaned_invalid_stale_and_valid_states() {
 }
 
 #[test]
+fn cursor_anomalies_are_not_masked_by_an_empty_adapter_scope() {
+    assert_eq!(
+        adapter_cursor_check(AdapterCursorCheckInput::new(0, 0, 1, 0)).status(),
+        DoctorCheckStatus::Failed
+    );
+    assert_eq!(
+        adapter_cursor_check(AdapterCursorCheckInput::new(0, 0, 0, 1)).status(),
+        DoctorCheckStatus::Warning
+    );
+}
+
+#[test]
 fn mapping_and_worktree_summaries_use_counts_without_provider_or_path_data() {
     let mapping = gdrive_mapping_check(GdriveMappingCheckInput::new(true, 10, 0, 0, 2));
     assert_eq!(mapping.status(), DoctorCheckStatus::Warning);
@@ -253,6 +265,62 @@ fn mapping_and_worktree_summaries_use_counts_without_provider_or_path_data() {
     ] {
         assert!(!serialized.contains(forbidden));
     }
+}
+
+#[test]
+fn disabled_checks_do_not_preserve_unperformed_live_facts() {
+    let db = db_connectivity_check(DbConnectivityCheckInput {
+        metadata_configured: false,
+        live_check_enabled: true,
+        connectivity_verified: Some(true),
+    });
+    assert!(matches!(
+        db.details(),
+        DoctorCheckDetails::DbConnectivity(DbConnectivityDetails {
+            metadata_configured: false,
+            live_check_performed: false,
+            connectivity_verified: None,
+        })
+    ));
+
+    let object_store = object_store_exists_writable_check(ObjectStoreExistsWritableInput {
+        configured: false,
+        exists: Some(true),
+        writable: Some(true),
+    });
+    assert!(matches!(
+        object_store.details(),
+        DoctorCheckDetails::ObjectStoreExistsWritable(ObjectStoreExistsWritableDetails {
+            configured: false,
+            exists: None,
+            writable: None,
+        })
+    ));
+
+    let mapping = gdrive_mapping_check(GdriveMappingCheckInput::new(false, 5, 2, 1, 3));
+    assert!(matches!(
+        mapping.details(),
+        DoctorCheckDetails::GdriveMapping(GdriveMappingDetails {
+            configured: false,
+            mapping_count: 0,
+            unknown_revision_count: 0,
+            duplicate_drive_file_id_count: 0,
+            unmapped_item_count: 0,
+        })
+    ));
+
+    let worktree = worktree_drift_check(WorktreeDriftCheckInput::new(false, 5, 1, 2, 3, 4));
+    assert!(matches!(
+        worktree.details(),
+        DoctorCheckDetails::WorktreeDrift(WorktreeDriftDetails {
+            configured: false,
+            tracked_path_count: 0,
+            unknown_revision_count: 0,
+            missing_path_count: 0,
+            content_mismatch_count: 0,
+            unexpected_path_count: 0,
+        })
+    ));
 }
 
 #[test]
@@ -318,6 +386,73 @@ fn result_deserialization_rejects_arbitrary_messages_and_mismatched_details() {
         }
     });
     assert!(serde_json::from_value::<DoctorCheckResult>(mismatched_details).is_err());
+}
+
+#[test]
+fn result_deserialization_rejects_semantically_contradictory_details() {
+    let false_missing_blob_ok = json!({
+        "check_id": "missing_blobs",
+        "status": "ok",
+        "message": "no missing blobs detected",
+        "details": {
+            "kind": "missing_blobs",
+            "input_count": 1,
+            "missing_count": 1,
+            "sample_hashes": []
+        }
+    });
+    assert!(serde_json::from_value::<DoctorCheckResult>(false_missing_blob_ok).is_err());
+
+    let false_cursor_ok = json!({
+        "check_id": "adapter_cursors",
+        "status": "ok",
+        "message": "adapter cursors are valid",
+        "details": {
+            "kind": "adapter_cursors",
+            "expected_adapter_count": 0,
+            "cursor_count": 0,
+            "missing_cursor_count": 0,
+            "orphaned_cursor_count": 0,
+            "invalid_cursor_count": 1,
+            "stale_cursor_count": 0
+        }
+    });
+    assert!(serde_json::from_value::<DoctorCheckResult>(false_cursor_ok).is_err());
+
+    let impossible_token_counts = json!({
+        "check_id": "adapter_token_sanity",
+        "status": "failed",
+        "message": "enabled adapter has invalid role",
+        "details": {
+            "kind": "adapter_token_sanity",
+            "enabled_adapter_count": 1,
+            "missing_token_hash_count": 0,
+            "invalid_role_count": 2
+        }
+    });
+    assert!(serde_json::from_value::<DoctorCheckResult>(impossible_token_counts).is_err());
+}
+
+#[test]
+fn serialization_rejects_inconsistent_public_compatibility_fields() {
+    let mut result = healthy_missing_blob_check();
+    result.check_id = DoctorCheckId::DbConnectivity;
+    assert!(serde_json::to_string(&result).is_err());
+
+    let mut result = healthy_missing_blob_check();
+    result.message = DoctorCheckMessage::DatabaseConnectivityVerified;
+    assert!(serde_json::to_string(&result).is_err());
+
+    let mut report = DoctorReport::from_results(vec![healthy_missing_blob_check()]);
+    report.summary.status = DoctorCheckStatus::Failed;
+    assert!(serde_json::to_string(&report).is_err());
+
+    let mut report = DoctorReport::from_results(vec![
+        healthy_missing_blob_check(),
+        worktree_drift_check(WorktreeDriftCheckInput::new(false, 0, 0, 0, 0, 0)),
+    ]);
+    report.checks.reverse();
+    assert!(serde_json::to_string(&report).is_err());
 }
 
 #[test]
