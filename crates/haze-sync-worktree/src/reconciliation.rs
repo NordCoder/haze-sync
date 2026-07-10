@@ -342,6 +342,7 @@ impl WorktreeReconciler {
     ) -> Result<WorktreeReconciliationReport, WorktreeReconciliationError> {
         let local_files = stable_files_by_path(&scan.files)?;
         let skipped_prefixes = skipped_prefixes(&scan.skipped);
+        let scan_is_incomplete = has_unscoped_filesystem_error(&scan.skipped);
         let expired = echo_guard.expire(now)?;
         let applied_paths: Vec<(VaultPath, WorktreeAppliedPathState)> = state
             .applied_state()
@@ -392,7 +393,8 @@ impl WorktreeReconciler {
         }
 
         for (vault_path, applied) in &applied_paths {
-            if local_files.contains_key(vault_path)
+            if scan_is_incomplete
+                || local_files.contains_key(vault_path)
                 || covered_by_skipped_prefix(vault_path, &skipped_prefixes)
             {
                 continue;
@@ -482,6 +484,12 @@ fn stable_files_by_path(
         }
     }
     Ok(by_path)
+}
+
+fn has_unscoped_filesystem_error(skipped: &[WorktreeScanSkipped]) -> bool {
+    skipped.iter().any(|entry| {
+        entry.vault_path.is_none() && entry.reason == WorktreeScanSkipReason::FilesystemError
+    })
 }
 
 fn skipped_prefixes(skipped: &[WorktreeScanSkipped]) -> Vec<&VaultPath> {
