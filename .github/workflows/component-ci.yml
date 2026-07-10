@@ -72,3 +72,59 @@ jobs:
           compression-level: 9
           if-no-files-found: ignore
           include-hidden-files: false
+
+  obsidian-node:
+    name: Obsidian Node validation
+    if: >-
+      ${{
+        (github.event_name == 'pull_request' && github.head_ref == 'component/obsidian-plugin') ||
+        (github.event_name == 'workflow_dispatch' && github.ref_name == 'component/obsidian-plugin')
+      }}
+    runs-on: ubuntu-latest
+    env:
+      HAZE_COMPONENT: obsidian-plugin
+      HAZE_COMPONENT_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
+      HAZE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      HAZE_WORKFLOW_SLUG: component-ci
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install Node dependencies
+        shell: bash
+        run: bash .github/scripts/ci-run.sh node-install npm ci
+
+      - name: Run Obsidian Node tests
+        shell: bash
+        run: bash .github/scripts/ci-run.sh node-test npm test --workspace haze-obsidian-plugin
+
+      - name: Typecheck Obsidian plugin
+        shell: bash
+        run: bash .github/scripts/ci-run.sh node-typecheck npm run typecheck --workspace haze-obsidian-plugin
+
+      - name: Build Obsidian plugin
+        shell: bash
+        run: bash .github/scripts/ci-run.sh node-build npm run build --workspace haze-obsidian-plugin
+
+      - name: Finalize CI diagnostics
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: bash .github/scripts/ci-finalize.sh
+
+      - name: Upload CI diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-diag__component-${{ env.HAZE_COMPONENT }}__wf-${{ env.HAZE_WORKFLOW_SLUG }}__run-${{ github.run_id }}__attempt-${{ github.run_attempt }}
+          path: ci-diagnostics/
+          retention-days: 1
+          compression-level: 9
+          if-no-files-found: ignore
+          include-hidden-files: false
