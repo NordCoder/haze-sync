@@ -10,6 +10,8 @@ import {
   syncBackoffRemainingMs,
 } from "./sync-runtime-state";
 
+export type SyncRunScope = "full" | "scan_only" | "pull_only";
+
 export interface SyncAutomationConfig {
   intervalMs: number | null;
   eventDelayMs: number | null;
@@ -28,7 +30,7 @@ export interface SyncRequestResult {
 
 export interface SyncRunnerOptions {
   initialState: SyncRuntimeState;
-  execute(trigger: SyncTrigger, signal: AbortSignal): Promise<SyncExecutionResult>;
+  execute(trigger: SyncTrigger, scope: SyncRunScope, signal: AbortSignal): Promise<SyncExecutionResult>;
   onStateChange(state: SyncRuntimeState): void;
 }
 
@@ -86,7 +88,7 @@ export class SyncRunner {
     }, this.automation.eventDelayMs);
   }
 
-  async request(trigger: SyncTrigger): Promise<SyncRequestResult> {
+  async request(trigger: SyncTrigger, scope: SyncRunScope = "full"): Promise<SyncRequestResult> {
     if (this.disposed) {
       return { status: "stopped", state: this.state };
     }
@@ -109,7 +111,7 @@ export class SyncRunner {
     this.abortController = controller;
     this.updateState(markSyncStarted(this.state, trigger, new Date().toISOString()));
 
-    const run = this.executeRun(trigger, controller.signal);
+    const run = this.executeRun(trigger, scope, controller.signal);
     this.runningPromise = run;
 
     try {
@@ -146,9 +148,13 @@ export class SyncRunner {
     this.updateState(markSyncStopped(this.state, new Date().toISOString()));
   }
 
-  private async executeRun(trigger: SyncTrigger, signal: AbortSignal): Promise<SyncRequestResult> {
+  private async executeRun(
+    trigger: SyncTrigger,
+    scope: SyncRunScope,
+    signal: AbortSignal,
+  ): Promise<SyncRequestResult> {
     try {
-      const result = await this.execute(trigger, signal);
+      const result = await this.execute(trigger, scope, signal);
       if (signal.aborted || this.disposed) {
         return { status: "stopped", state: this.state };
       }
