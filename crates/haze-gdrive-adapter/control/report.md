@@ -1,13 +1,13 @@
 REPORT_TYPE:
-FIX
+IMPLEMENTATION
 
 STATUS:
-FIX_COMPLETE
+SELF_ACCEPT_PENDING_CI
 
 AGENT:
-role: fixer-worker
-agent_execution_id: W1-FIX-GDA-P6C-CI
-chat_name: gdrive-adapter — W1 GDA-P6C CI Fix
+role: implementation-worker
+agent_execution_id: W1-GDA-P7-implementation
+chat_name: gdrive-adapter — W1 GDA-P7 Core Export
 
 COMPONENT:
 name: gdrive-adapter
@@ -21,36 +21,40 @@ control_report_path: crates/haze-gdrive-adapter/control/report.md
 
 WAVE:
 id: W1
-phase_id: FIX-GDA-P6C-CI
-dependency_status: Active control state was PROMPT_READY with active_agent_role fixer-worker and phase FIX-GDA-P6C-CI. CI_RED metadata identified Component CI run 29102945025 attempt 1 and diagnostics artifact 8231605963. The active fixer prompt required the artifact to be used as source of truth. Concrete durable cursor persistence remains an explicit Storage/Server/API fan-in concern and was not changed.
+phase_id: GDA-P7
+dependency_status: Active control state was PROMPT_READY with active_agent_role implementation-worker and phase GDA-P7. The preceding GDA-P6C fixer source commit 4604182f01acc30cf4f689ac3a3216d0f5cc1298 had green Component CI run 29107022381. Concrete Storage mapping persistence remains deferred until STOR-P8 acceptance or a dedicated fan-in contract; GDA-P7 uses injected Core/provider/state boundaries only.
 
 SUMMARY:
-Fixed the minimum artifact-proven GDA-P6C CI failures. The diagnostics artifact identified cargo-test and cargo-clippy compilation failures caused by test-only imports lost during the change-feed module split, plus rust-fmt differences in the change-feed facade, model, and runner. Restored explicit imports for AdapterMode, ImportExecution, DriveChangeCursor, EchoGuard, SafeTimestamp, ProviderError, ProviderErrorCategory, Duration, and BTreeSet in src/change_feed/tests.rs. Applied exactly the formatter-requested layout changes in src/change_feed.rs, src/change_feed/model.rs, and src/change_feed/runner.rs. Full-scan supersession, deterministic reconciliation, replay-safe processor semantics, success-only cursor persistence, provider-token redaction, public re-exports, focused assertions, and injected persistence boundaries were preserved. Post-fix Component CI run 29107022381 completed successfully, including cargo fmt, cargo check, cargo test, cargo clippy, and diagnostics finalization. No product behavior, dependencies, docs/contracts, workflows, sibling components, live provider integration, provider mutation, Core/API policy, background runtime, or concrete Storage/DB wiring changed.
+Implemented the GDA-P7 Core-to-Google-Drive export planner and fake-first apply runner. Added normalized accepted Core change/page and revision-content models; an injected Core export client; an injected mapping, folder-target, and Core cursor state store; a replay-safe Drive export provider boundary using stable Core operation IDs and revision preconditions; provider/Core retry classification; source path/revision/size/SHA-256 verification before mutation; create, update, and trash planning; export_only, bidirectional, dry-run, and non-exporting mode behavior; mapping and echo updates only after confirmed provider success and successful mapping persistence; batch cursor advancement only after every submit item succeeds; and focused tests for create/update/trash success, dry-run, mode filtering, source mismatch, provider conflict, rate limit retry, mapping-save replay, cursor-save replay, missing tombstone mapping, and byte redaction. No live Google client, OAuth, concrete HTTP, Storage/DB access, Core policy, hard delete, scheduler, workflow, dependency, sibling, or contract changes were added.
 
 CHANGED_FILES:
-- crates/haze-gdrive-adapter/src/change_feed.rs
-- crates/haze-gdrive-adapter/src/change_feed/model.rs
-- crates/haze-gdrive-adapter/src/change_feed/runner.rs
-- crates/haze-gdrive-adapter/src/change_feed/tests.rs
+- crates/haze-gdrive-adapter/src/export.rs
+- crates/haze-gdrive-adapter/src/export/core.rs
+- crates/haze-gdrive-adapter/src/export/model.rs
+- crates/haze-gdrive-adapter/src/export/provider.rs
+- crates/haze-gdrive-adapter/src/export/runner.rs
+- crates/haze-gdrive-adapter/src/export/state_store.rs
+- crates/haze-gdrive-adapter/src/export/tests.rs
+- crates/haze-gdrive-adapter/src/lib.rs
 - crates/haze-gdrive-adapter/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/gdrive-adapter
 base_branch: main
 base_sha: current main observed as c1e69a664388b0cba028170e8398b9088218957d; PR base_sha remains 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
-head_sha: 4604182f01acc30cf4f689ac3a3216d0f5cc1298 before writing this report; the report itself is written by a later GitHub contents API commit with [skip ci]
+head_sha: 79a02e1f42084b8396148aba668388b5e7f441cb before writing this report; the report itself is written by a later GitHub contents API commit with [skip ci]
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
 ci_skip_used: yes for the report-only commit only
-ci_skip_reason: the final commit changes only crates/haze-gdrive-adapter/control/report.md and cannot change executable behavior or validation outcome. All four source/test fixer commits were non-skipped and triggered PR Component CI.
+ci_skip_reason: the final commit changes only crates/haze-gdrive-adapter/control/report.md and cannot change executable behavior or validation outcome. Every product/source/test commit was non-skipped and triggered PR Component CI.
 
 SCOPE:
 allowed_files_only: yes
 scope_expansion_used: no
-scope_expansion_rationale: none
+scope_expansion_rationale: none; all implementation remains inside crates/haze-gdrive-adapter/src/** plus the required active report
 cross_component_changes: no
 forbidden_files_touched: no
 
@@ -59,113 +63,118 @@ contract_read: yes
 contract_satisfied: yes
 contract_changes_requested: no
 contract_change_rationale: none
-affected_components: none
+affected_components:
+- Core/API: represented only by an injected accepted-change and revision-download client boundary; no sibling code or DTO ownership changed.
+- Storage/Server: future fan-in owners for concrete durable mapping/cursor persistence; no concrete wiring or direct database access was added.
 
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- Restored explicit test imports removed from lexical scope by the GDA-P6C internal module decomposition.
-- Imported AdapterMode, ImportExecution, DriveChangeCursor, EchoGuard, EchoGuardEntry, SafeTimestamp, ProviderError, ProviderErrorCategory, Duration, and BTreeSet from their owning modules.
-- Applied artifact-requested rustfmt layout to src/change_feed.rs, src/change_feed/model.rs, and src/change_feed/runner.rs.
-- Preserved the change_feed public facade and all existing public re-exports.
-- Preserved full-scan fallback supersession and deterministic reconciliation behavior.
-- Preserved replay-safe processor documentation and cursor-save ordering after successful processing only.
-- Preserved provider cursor token redaction and all focused regression assertions.
-behavior_changes: none
-bugs_found:
-- The GDA-P6C module split removed parent-module imports that the child tests had previously obtained through use super::*, causing 30 unresolved-type/import compiler errors in cargo test and cargo clippy.
-- rustfmt reported four layout differences across the facade, model, and runner.
-bugs_fixed:
-- Added the missing explicit test imports without changing tests or assertions.
-- Fixed every formatter difference listed in logs/rust-fmt.log.
-cleanups_made: artifact-requested formatting and explicit test dependency imports only
+- Added CoreExportChange for accepted upsert revisions and tombstones, CoreExportPage with monotonic sequence validation, and CoreFileContent with redacted Debug output.
+- Added CoreExportClient and FakeCoreExportClient for injected GET /changes-style pages and revision byte downloads without concrete HTTP wiring.
+- Added ExportStateStore and InMemoryExportStateStore for injected Core cursor, file mapping, and provider-folder target resolution without direct Storage ownership.
+- Added DriveExportProvider and FakeDriveExportProvider with create/update/trash operations, stable operation-id replay deduplication, provider revision preconditions, safe categorized errors, bounded retry policy, and redacted content-bearing request Debug output.
+- Added plan_core_export to enforce mode behavior, skip already-confirmed mapping sequences, choose create/update/trash, require safe create targets, and verify Core source path, revision, declared hash, declared size, actual byte length, and actual SHA-256 before provider mutation.
+- Added run_export_cycle to read one accepted Core page, plan/apply each item, persist confirmed mapping state before recording echo state, and persist the Core cursor only after the entire submit page succeeds.
+- Create/update confirmations record provider ID/version and accepted Core revision/sequence in GDriveMapping. Tombstone confirmations retain the mapping, clear the Core revision, record the tombstone sequence, and mark the confirmed provider trash version without hard deletion.
+- Mapping persistence failure after provider success leaves echo/cursor unchanged; retry uses the stable operation ID to receive the same provider receipt without duplicating the create/update/trash mutation.
+- Cursor persistence failure after confirmed mapping save replays the page; mapping sequence checks suppress repeated provider mutation and allow the cursor save to complete on retry.
+- Dry-run verifies source bytes and plans provider work but performs no provider mutation and consumes no durable Core cursor. Disabled, read_only, and import_only modes skip export without downloading content or consuming the cursor.
+- Added public crate re-exports for the GDA-P7 planner, runner, fake clients/providers, state boundary, retry/error vocabulary, and models.
+behavior_changes:
+- The crate now provides an executable fake-first Core-to-Drive export cycle boundary; it is not wired into the runtime binary or any live service.
+- Export-capable submit modes can create, update, or trash through an injected provider and persist confirmed state through an injected store.
+- Provider conflicts are non-retryable; rate limits/transient failures use bounded retry dispositions; authentication failures request reauthentication.
+- Core export cursor advancement occurs only after a full submit page is successfully processed and persisted.
+bugs_found: none in pre-existing GDA-P2 through GDA-P6 code during this implementation phase
+bugs_fixed: none outside the new GDA-P7 implementation
+cleanups_made:
+- Separated export responsibilities into model, Core client, provider, state store, runner, and test modules from the start.
+- Used custom Debug implementations for raw Core/provider content containers and content-bearing provider requests.
+- Reused accepted AdapterMode, ContentSha256, VaultPath, CoreChangeCursor, GDriveMapping, DriveStateObservation, CoreStateObservation, EchoGuard, and EchoGuardEntry abstractions.
 non_goals_preserved:
-- No live Google Drive provider client or OAuth wiring.
-- No provider upload/update/trash/delete mutation.
-- No GDA-P7 outbound export runner.
-- No Core/API execution or conflict/delete/revision policy.
-- No concrete Storage repository, SQLx, database URL, migration, or direct DB ownership.
-- No background thread/task, scheduler, webhook, or public callback infrastructure.
-- No workflow/dependency changes.
-- No sibling component changes.
+- No Core conflict/delete/revision policy decisions.
+- No Drive hard delete; tombstones map only to provider trash.
+- No Google Docs/Sheets/Slides conversion, shortcuts, or shared-drive support.
+- No real Google SDK, OAuth, credentials, provider network calls, or raw provider payloads.
+- No direct Storage repository, SQLx, database URL, migration, or concrete Server/API wiring.
+- No background scheduler, runtime loop, webhook, plugin, or worktree behavior.
+- No workflow, dependency, contract, main-branch, or sibling-component changes.
 - No test deletion or assertion weakening.
 deferred_work:
-- Orchestrator may now close the GDA-P6C fixer lifecycle and schedule the next accepted phase.
-- Concrete durable cursor persistence remains a future accepted Storage/Server/API fan-in decision.
-- Live provider wiring, Core/API work execution, outbound export apply, scheduling/runtime integration, and delete guardrails remain later phases.
+- Concrete Core/API HTTP transport and authentication remain future integration work.
+- Concrete durable mapping/cursor persistence remains blocked on STOR-P8 acceptance or a dedicated fan-in contract.
+- Real Google Drive create/update/trash implementation and provider-native precondition/idempotency mechanics remain future provider wiring.
+- Runtime scheduling, operation-log pagination loop ownership, status/doctor exposure, outbound metrics, and deployment wiring remain later phases.
+- GDA-P8 delete-candidate and mass-delete guardrails remain a separate phase.
+- Clean-code review should inspect conservative missing-mapping tombstone behavior, operation-ID redaction boundaries, fake-provider replay accounting, and module/API surface before lifecycle acceptance.
 
 TESTS_AND_CHECKS:
 checks_run:
-- Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, active component control state/prompt/report, component contract, GDA-P6 implementation-plan context, dependency map, current GDA-P6C source/tests, PR metadata, changed-file scope, and branch comparison.
-- Listed diagnostics artifact 8231605963 for Component CI run 29102945025 attempt 1 and confirmed it was unexpired and matched head SHA 6dd7e29db71925442a7197f08e95d163c17f728f.
-- Downloaded diagnostics artifact 8231605963.
-- Read summary.md, manifest.json, failures/cargo-test.txt, failures/cargo-clippy.txt, failures/rust-fmt.txt, logs/cargo-test.log, logs/cargo-clippy.log, and logs/rust-fmt.log.
-- Confirmed artifact failed_checks: cargo-test exit 101, cargo-clippy exit 101, rust-fmt exit 1.
-- Confirmed cargo-test and cargo-clippy shared the same unresolved-import cause in src/change_feed/tests.rs.
-- Updated src/change_feed.rs in non-skipped source commit 452a91f7d6146ab3f6b1058b7dab8ae50c3b1018.
-- Updated src/change_feed/runner.rs in non-skipped source commit 525a1681b70bd41774d7e350a41278c4882a4fb2.
-- Updated src/change_feed/model.rs in non-skipped source commit b1ba7fd6abb0696d0ac704085ce3d534fac0c5b2.
-- Updated src/change_feed/tests.rs in final non-skipped source/test commit 4604182f01acc30cf4f689ac3a3216d0f5cc1298.
-- Re-read final test imports and all formatter-targeted source locations through the GitHub connector.
-- Observed PR #50 head 4604182f01acc30cf4f689ac3a3216d0f5cc1298 before this report commit; PR remains open, draft, unmerged, and mergeable.
-- Observed Component CI run 29107022381, run number 1347, for final source commit 4604182f01acc30cf4f689ac3a3216d0f5cc1298.
-- Observed Rust workspace job 86409990130 completed successfully.
+- Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, active component control state/prompt/report, component contract, implementation plan/log, dependency map, decisions, accepted project domain/Core API/sync/delete/GDrive adapter documentation, current change-feed/mapping/echo/hash/provider abstractions, public exports, PR metadata, changed-file scope, and branch comparison.
+- Did not read CI diagnostics artifacts because the active implementation prompt prohibits artifact reading outside a future fixer prompt.
+- Created src/export/model.rs in non-skipped source commit 64821a5c444c9702a20f86d952404fce8f7d0776.
+- Created src/export/core.rs in non-skipped source commit 4147038c35c26d1775ed6274b1c61afa3c525d8c.
+- Created the initial src/export/provider.rs in non-skipped source commit 10f671dd4e5ce7ca1b2673a908d63eeb835af0f6.
+- Created src/export/state_store.rs in non-skipped source commit 2970485a8913763d2cba225579a95b1bd94ce8af.
+- Isolated export-specific provider errors/retries in non-skipped source commit 0154b1380fdf06dc24fbb0d040392665b38a3f7b.
+- Created src/export/runner.rs in non-skipped source commit 7eeec02483c553f9b80749015fc869dae53722be.
+- Created src/export.rs facade in non-skipped source commit b62f9224e7b16dca781a2435f1ed104ce8cfb709.
+- Created src/export/tests.rs in non-skipped test commit a47793a9b2094afc68a9e0df939d472339c6f7c1.
+- Updated src/lib.rs public module/re-exports in final non-skipped source commit 79a02e1f42084b8396148aba668388b5e7f441cb.
+- Observed PR #50 head 79a02e1f42084b8396148aba668388b5e7f441cb before this report commit; PR remained open, draft, unmerged, and mergeable.
+- Observed Component CI run 29110469626, run number 1420, for final GDA-P7 source commit 79a02e1f42084b8396148aba668388b5e7f441cb.
 - Observed cargo fmt success.
 - Observed cargo check success.
-- Observed cargo test success, including GDA-P6C fallback/replay/redaction tests.
+- Observed cargo test success, including all new GDA-P7 fake Core/provider/state tests.
 - Observed cargo clippy success.
-- Observed Finalize CI diagnostics success; diagnostics upload was correctly skipped because no checks failed.
-- Compared component/gdrive-adapter against current main; connector reported branch diverged, ahead by 150 and behind by 12, with merge base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2.
+- Observed Finalize CI diagnostics failure and Upload CI diagnostics success.
+- Compared component/gdrive-adapter against current main; connector reported branch diverged, ahead by 164 and behind by 12, with merge base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2.
 checks_not_run:
-- No local repository shell checks were run because repository operations are constrained to the GitHub connector. GitHub Component CI supplied the authoritative checks.
-ci_status: CI_GREEN
+- No local repository shell checks were run because repository operations are constrained to the GitHub connector. GitHub Component CI supplied the authoritative validation steps.
+ci_status: CI_RED
 workflow_urls:
-- https://github.com/NordCoder/haze-sync/actions/runs/29102945025
 - https://github.com/NordCoder/haze-sync/actions/runs/29107022381
+- https://github.com/NordCoder/haze-sync/actions/runs/29110469626
 known_failures:
-- Previous run 29102945025: cargo-test and cargo-clippy failed on unresolved test imports; rust-fmt reported four formatting differences.
-- No failures observed in post-fix run 29107022381.
+- Final GDA-P7 run 29110469626 is overall failure because Finalize CI diagnostics failed.
+- All visible Rust product validation steps passed: cargo fmt, cargo check, cargo test, and cargo clippy.
 
 CI_DIAGNOSTICS:
-artifact_based_logs: yes
-artifact_name: ci-diag__component-gdrive-adapter__wf-component-ci__run-29102945025__attempt-1
-artifact_id: 8231605963
-workflow_run_id: 29102945025
+artifact_based_logs: no
+artifact_name: not read
+artifact_id: not read
+workflow_run_id: 29110469626
 workflow_run_attempt: 1
-artifact_status: found, downloaded, unexpired, and readable; digest sha256:98c2d48922011cb5f08a7948d3ca27cde4d69f16bf8af8421d51363627050e9d
-summary_read: yes, summary.md
-manifest_read: yes, manifest.json
-logs_read:
-- failures/cargo-test.txt
-- failures/cargo-clippy.txt
-- failures/rust-fmt.txt
-- logs/cargo-test.log
-- logs/cargo-clippy.log
-- logs/rust-fmt.log
+artifact_status: not inspected; active implementation prompt explicitly prohibits diagnostics artifact reading
+summary_read: no
+manifest_read: no
+logs_read: none
 raw_job_logs_used: no
-diagnostics_failure: none
+diagnostics_failure: workflow metadata reports Finalize CI diagnostics failure; exact artifact cause is deferred to the orchestrator/fixer lifecycle
 
 SAFETY_AND_SECRECY:
 secrets_committed: no
 unsafe_public_output: no
 raw_errors_exposed: no
-provider_calls_added: no
+provider_calls_added: injected fake-first create/update/trash provider boundary only; no live network calls
 hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- Control state listed diagnostics-artifact-required, while the artifact manifest identified cargo-test, cargo-clippy, and rust-fmt as the actual failed checks. The artifact was used as source of truth.
-- The diagnostics archive stored files at its root rather than under the documented ci-diagnostics/ prefix, but all required files were present and readable.
+- Component CI product checks are green, but the diagnostics finalizer made run 29110469626 overall red. Artifact content was not read in this implementation phase.
+- Missing provider mapping for a Core tombstone is treated as a safe no-op and can advance a submit cursor; clean-code review should confirm this conservative consistency tradeoff against future reconciliation behavior.
+- Stable Core operation IDs are used as fake-provider replay keys; clean-code review should confirm safe Debug/public-output treatment before live provider wiring.
 - Branch is behind current main by 12 commits; no merge, rebase, branch update, PR readiness change, or merge was performed.
 
 BLOCKERS:
-none
+none for fake-first GDA-P7 implementation; diagnostics finalizer requires normal orchestrator/fixer triage before CI acceptance
 
 NEXT_RECOMMENDED_AGENT:
-orchestrator
+clean-code-reviewer
 
 FINAL_VERDICT:
-FIX_COMPLETE. The artifact-proven GDA-P6C unresolved-import and rustfmt failures were fixed without changing behavior, weakening tests, expanding scope, or crossing persistence/provider/Core boundaries. Final source commit 4604182f01acc30cf4f689ac3a3216d0f5cc1298 has green Component CI run 29107022381.
+SELF_ACCEPT_PENDING_CI. GDA-P7 now provides a tested, provider-safe, hash-verifying, mode-aware, replay-safe Core-to-Drive export planner and apply runner behind injected Core/provider/persistence boundaries. All visible Rust product checks passed. Overall CI remains red only at diagnostics finalization and must continue through clean-code review and normal orchestrator/fixer lifecycle.
 
 PUSHED:
 yes
