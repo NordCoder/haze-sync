@@ -281,3 +281,36 @@ Affected contracts:
 - locks;
 - Server transaction fan-in;
 - Core write-decision boundary.
+
+## 2026-07-10 — Conflict acceptance and restore remain fan-in workflows
+
+Decision:
+
+Storage exposes passive primitives for conflict insertion, bounded listing, lookup, guarded lifecycle status updates, tombstone insertion, lookup, one-shot `restored_at` updates, and related operation-log rows. Full `accept_conflict` content replacement and file restoration remain Core/API/Server fan-in workflows composed inside caller-owned transactions.
+
+Rationale:
+
+Accepting a conflict can require reading preserved revisions, selecting replacement content, updating the current revision, materializing or removing backup paths, resolving metadata, and appending operation-log entries. Restoring a tombstone can similarly require Core delete guards, object metadata updates, and adapter-visible operations. Storage can persist each decided fact but must not choose the accepted version, bypass base-revision policy, move files, or infer whether a restore is safe.
+
+Alternatives:
+
+- Add a Storage `accept_conflict` service that chooses and installs replacement content.
+- Treat setting `conflicts.status = resolved` as sufficient to replace file content.
+- Let tombstone `restored_at` updates implicitly clear object deletion state.
+- Perform conflict or restore operation-log appends outside the caller transaction.
+
+Consequences:
+
+- Core owns conflict acceptance and restore/delete policy.
+- Server/API fan-in must coordinate content, object/revision metadata, conflict/tombstone metadata, and operation-log writes atomically.
+- Storage lifecycle updates are guarded metadata transitions only.
+- Physical trash movement, retention cleanup, and hard delete remain out of scope.
+
+Affected contracts:
+
+- conflicts repository;
+- tombstones repository;
+- operation_log repository;
+- Core conflict/delete policy;
+- API conflict actions;
+- Server transaction fan-in.
