@@ -28,4 +28,6 @@ pub use runner::{
 pub use state_store::{ExportStateError, ExportStateStore, InMemoryExportStateStore};
 
 #[cfg(test)]
+mod clean_code_tests;
+#[cfg(test)]
 mod tests;
