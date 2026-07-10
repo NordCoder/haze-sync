@@ -263,7 +263,10 @@ impl<'a> MappingIndexes<'a> {
             {
                 return Err(FullScanError::DuplicateMappingDriveFileId);
             }
-            if by_path.insert(mapping.vault_path.clone(), mapping).is_some() {
+            if by_path
+                .insert(mapping.vault_path.clone(), mapping)
+                .is_some()
+            {
                 return Err(FullScanError::DuplicateMappingPath);
             }
         }
