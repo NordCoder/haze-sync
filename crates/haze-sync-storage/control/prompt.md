@@ -1,59 +1,60 @@
-# W1-STOR-P8C — Storage mapping and worktree state clean-code review
+# W1-STOR-P9 — Storage test-support and integration harness hardening
 
 Component: storage
 Path: crates/haze-sync-storage
 Branch: component/storage
 PR: #47
-Role: clean-code-reviewer
+Role: implementation-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-STOR-P8 implementation and artifact-based CI correction are complete. Final source CI is green.
+STOR-P8 implementation, formatter correction, and clean-code review are accepted. Final source/test CI is green.
 
-- code_bearing_sha: 0a0a399db83603a87c730c5a44c11cb58c2176e8
+- code_bearing_sha: 1a53e555a933ee2c81ce4843be4506b2ad713f17
 - workflow: Component CI
-- workflow_run_id: 29110120192
-- run_number: 1402
+- workflow_run_id: 29113692274
+- run_number: 1453
 - conclusion: success
+
+The next implementation phase is STOR-P9 from crates/haze-sync-storage/docs/implementation-plan.md.
 
 ## Read
 
-Read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, chatgpt-gh-connector.md, component docs/control files, current GDrive mapping and Worktree state repositories/tests, fixer changes, accepted adapter/worktree persistence boundaries, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt explicitly instructs it.
+Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current `test-support` feature gates and helpers, storage repository tests, CI documentation, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt explicitly instructs it.
 
 ## Task
 
-Review STOR-P8 mapping and Worktree state persistence plus the formatter correction.
+Implement STOR-P9: Storage test-support and integration harness hardening.
 
-Focus on:
-
-- full-fact upsert and lookup semantics;
-- caller-owned executor and transaction boundaries;
-- canonical path, opaque provider identifier, checksum, revision, sequence, boolean, and timestamp validation;
-- safe repository errors without raw provider values or paths;
-- duplicate/unique mapping behavior;
-- adapter policy remaining outside Storage;
-- feature-gated PostgreSQL roundtrip tests and unit tests;
-- module boundaries, duplication, documentation, and non-goal preservation.
+- audit the `test-support` feature and ensure production builds do not depend on test-only helpers;
+- provide focused helpers for safe test database setup, isolation, cleanup, and deterministic fixture state where accepted;
+- require an explicitly supplied test-only database URL and reject production-looking or missing configuration safely;
+- make unavailable-database behavior explicit: skip only when the contract says not-run, never convert setup failure into a pass;
+- avoid provider credentials, external vaults, production secrets, or live services;
+- document exact commands and environment requirements for feature-gated Storage integration tests;
+- add unit tests for configuration validation and helper behavior that do not require a live database.
 
 ## Allowed files
 
-- crates/haze-sync-storage/src/repositories/gdrive_mapping/**
-- crates/haze-sync-storage/src/repositories/worktree_state/**
-- crates/haze-sync-storage/src/repositories/mod.rs
-- crates/haze-sync-storage/src/models/** only when directly required by review findings
+- crates/haze-sync-storage/src/test_support/**
 - crates/haze-sync-storage/docs/**
 - crates/haze-sync-storage/control/report.md
 
-## Boundaries
+Only if directly required to keep the test-support feature correctly isolated:
 
-No provider calls, credential loading, provider identity interpretation, adapter mode or sync policy, filesystem behavior, public rendering, schema/migration expansion, workflow/dependency changes, sibling changes, test deletion, or assertion weakening.
+- crates/haze-sync-storage/src/lib.rs
+- crates/haze-sync-storage/Cargo.toml
+
+## Non-goals
+
+No production migration deployment, provider credentials, external vault access, product repository semantics, schema expansion, CI workflow edits, Server fan-in, workflow/dependency changes, or sibling component changes.
 
 ## CI trigger policy
 
-Source/test/docs clean-code commits must not skip CI. A final report-only commit may skip CI.
+Product/source/test/docs commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only crates/haze-sync-storage/control/report.md. Use report-template.md, REPORT_TYPE CLEAN_CODE_REVIEW, phase_id STOR-P8C.
+Write only crates/haze-sync-storage/control/report.md. Use report-template.md, REPORT_TYPE IMPLEMENTATION, phase_id STOR-P9.
