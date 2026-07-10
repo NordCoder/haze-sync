@@ -46,8 +46,8 @@ sibling_branch_modified: no
 control_prompt_read: crates/haze-sync-storage/control/prompt.md
 control_report_written: crates/haze-sync-storage/control/report.md
 control_files_archived_by_worker: no
-ci_skip_used: yes for the final report-only commit only
-ci_skip_reason: final commit updates only crates/haze-sync-storage/control/report.md; all source/test/docs review commits used normal CI and source/docs head aa59064d641f4850f7c70fa615e638b52613dd95 completed Component CI run 29124956486 successfully
+ci_skip_used: yes for final report-only commits only
+ci_skip_reason: final commits update only crates/haze-sync-storage/control/report.md; all source/test/docs review commits used normal CI and source/docs head aa59064d641f4850f7c70fa615e638b52613dd95 completed Component CI run 29124956486 successfully
 
 SCOPE:
 allowed_files_only: yes
@@ -61,7 +61,7 @@ contract_read: yes
 contract_satisfied: no at the workspace dependency boundary; Storage's local cfg gate is correct, but Server enables the test-support feature in its normal production dependency declaration
 contract_changes_requested: no semantic Storage contract expansion; a cross-component dependency correction is required so Server uses default Storage features normally and enables test-support only as a dev-dependency or dedicated test harness
 contract_change_rationale: Cargo features are enabled by dependents; the current Server normal dependency defeats Storage's invariant that test support is not part of the production dependency graph
- affected_components: storage and server
+affected_components: storage and server
 
 IMPLEMENTATION_OR_REVIEW:
 completed: yes for all in-scope review and corrections; final clean acceptance blocked by the cross-component dependency declaration
@@ -129,7 +129,7 @@ ISSUES_FOUND:
 - Optional PostgreSQL tests remain intentionally not run when the dedicated variable is absent; mandatory tests must use the required/prepare APIs.
 - Live PostgreSQL roundtrips were not executed because no dedicated database is available through the connector workflow.
 - Branch remains diverged from main: main head c1e69a664388b0cba028170e8398b9088218957d, merge base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2, component branch ahead 218 and behind 12 before report write.
-- The final report-only commit uses [skip ci] and is not CI evidence.
+- The final report-only commits use [skip ci] and are not CI evidence.
 
 BLOCKERS:
 - Cross-component Server dependency correction required to remove Storage `test-support` from the production dependency graph
@@ -138,7 +138,7 @@ NEXT_RECOMMENDED_AGENT:
 orchestrator, then the Server component owner for the dependency-only correction and workspace CI rerun
 
 FINAL_VERDICT:
-CLEAN_BLOCKED_BY_CONTRACT. STOR-P9 test-support code is locally hardened, documented, and green in Component CI run 29124956486. However, the accepted production-isolation contract is currently violated because Server enables `test-support` in its normal dependency declaration. That sibling dependency edit is outside this review's allowed scope, so clean acceptance must wait for orchestrator-directed Server correction and CI verification. The report-only commit uses CI skip and must not be treated as CI evidence.
+CLEAN_BLOCKED_BY_CONTRACT. STOR-P9 test-support code is locally hardened, documented, and green in Component CI run 29124956486. However, the accepted production-isolation contract is currently violated because Server enables `test-support` in its normal dependency declaration. That sibling dependency edit is outside this review's allowed scope, so clean acceptance must wait for orchestrator-directed Server correction and CI verification. The report-only commits use CI skip and must not be treated as CI evidence.
 
 PUSHED:
 yes
