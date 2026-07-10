@@ -65,7 +65,9 @@ impl TestNamespace {
     /// Produces an operation id suitable for fixture rows.
     #[must_use]
     pub fn operation_id(&self, label: &str) -> String {
-        self.child_id(&format!("op-{label}"))
+        let operation_id = format!("op_{}", self.child_id(&format!("op-{label}")));
+        debug_assert!(operation_id.len() <= MAX_SHARED_IDENTIFIER_LEN);
+        operation_id
     }
 
     /// Produces a request id suitable for harness diagnostics.
@@ -127,6 +129,7 @@ fn sanitize_path_segment(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use haze_sync_common::{AdapterId, OperationId, VaultPath};
 
     #[test]
     fn unique_ids_include_sanitized_prefix() {
@@ -139,28 +142,32 @@ mod tests {
     }
 
     #[test]
-    fn namespace_builds_stable_related_fixture_identifiers() {
+    fn namespace_builds_stable_contract_valid_fixture_values() {
         let namespace = TestNamespace::new("Pg Fixture");
+        let adapter_id = namespace.adapter_id("iphone");
+        let operation_id = namespace.operation_id("put file");
+        let vault_path = namespace.vault_path("Folder/Note.md");
 
-        assert!(namespace.adapter_id("iphone").contains(namespace.id()));
-        assert_eq!(
-            namespace.operation_id("put file"),
-            namespace.operation_id("put file")
-        );
-        assert!(namespace.operation_id("put file").contains("op-put-file"));
+        assert!(adapter_id.contains(namespace.id()));
+        assert_eq!(operation_id, namespace.operation_id("put file"));
+        assert!(operation_id.contains("op-put-file"));
         assert!(namespace.request_id("upload").contains("req-upload"));
         assert!(namespace.vault_path("note").ends_with("/note.md"));
-        assert!(namespace
-            .vault_path("Folder/Note.md")
-            .ends_with("/folder-note.md"));
+        assert!(vault_path.ends_with("/folder-note.md"));
+
+        AdapterId::parse(&adapter_id).expect("fixture adapter id should satisfy Common");
+        OperationId::parse(&operation_id).expect("fixture operation id should satisfy Common");
+        VaultPath::parse(&vault_path).expect("fixture vault path should satisfy Common");
     }
 
     #[test]
     fn generated_shared_identifiers_remain_bounded() {
         let namespace = TestNamespace::new(&"prefix".repeat(50));
         let child = namespace.child_id(&"label".repeat(100));
+        let operation_id = namespace.operation_id(&"operation".repeat(100));
 
         assert!(child.len() <= MAX_SHARED_IDENTIFIER_LEN);
+        assert!(operation_id.len() <= MAX_SHARED_IDENTIFIER_LEN);
         assert!(namespace.id().len() < child.len());
     }
 }
