@@ -10,7 +10,7 @@ import {
   applyUploadOutcome,
 } from "./base-revision-store";
 import type { LocalFileFact } from "./local-file-facts";
-import { sha256Hex } from "./local-file-facts";
+import { sha256ContentHash } from "./local-file-facts";
 import { planPendingMutations } from "./mutation-planner";
 import type { LocalSyncState, PendingQueueEntry } from "./pending-queue";
 import { reconcileFullScan } from "./pending-queue";
@@ -39,6 +39,7 @@ export interface PushOperationResult {
   uploaded: number;
   deleted: number;
   sameContent: number;
+  alreadyAbsent: number;
   conflicts: number;
   rejected: number;
   skipped: number;
@@ -92,6 +93,7 @@ export async function pushPendingChanges(input: {
     uploaded: 0,
     deleted: 0,
     sameContent: 0,
+    alreadyAbsent: 0,
     conflicts: 0,
     rejected: 0,
     skipped: 0,
@@ -129,15 +131,25 @@ export async function pushPendingChanges(input: {
         mutation.request.contentHash,
       );
 
-      if (update.baseUpdated) {
-        workingBaseState = update.state;
-        result.uploaded += update.outcome === "accepted" ? 1 : 0;
-        result.sameContent += update.outcome === "same_content" ? 1 : 0;
-        await input.onProgress(progressForEntry(mutation.queueEntry, workingBaseState));
-      } else if (update.outcome === "conflict_saved") {
-        result.conflicts += 1;
-      } else {
-        result.rejected += 1;
+      switch (update.outcome) {
+        case "accepted":
+          workingBaseState = update.state;
+          result.uploaded += 1;
+          await input.onProgress(progressForEntry(mutation.queueEntry, workingBaseState));
+          break;
+        case "same_content":
+          result.sameContent += 1;
+          await input.onProgress(progressForEntry(mutation.queueEntry, workingBaseState));
+          break;
+        case "conflict_saved":
+          result.conflicts += 1;
+          break;
+        case "not_found":
+        case "rejected":
+        case "unauthorized":
+        case "server_unavailable":
+          result.rejected += 1;
+          break;
       }
       continue;
     }
@@ -145,14 +157,26 @@ export async function pushPendingChanges(input: {
     const response = await input.client.deleteFile(mutation.request);
     assertMatchingPath(response.path, mutation.path);
     const update = applyDeleteOutcome(workingBaseState, response, observedAt);
-    if (update.baseUpdated) {
-      workingBaseState = update.state;
-      result.deleted += 1;
-      await input.onProgress(progressForEntry(mutation.queueEntry, workingBaseState));
-    } else if (update.outcome === "conflict_saved") {
-      result.conflicts += 1;
-    } else {
-      result.rejected += 1;
+    switch (update.outcome) {
+      case "accepted":
+        workingBaseState = update.state;
+        result.deleted += 1;
+        await input.onProgress(progressForEntry(mutation.queueEntry, workingBaseState));
+        break;
+      case "not_found":
+        workingBaseState = update.state;
+        result.alreadyAbsent += 1;
+        await input.onProgress(progressForEntry(mutation.queueEntry, workingBaseState));
+        break;
+      case "conflict_saved":
+        result.conflicts += 1;
+        break;
+      case "same_content":
+      case "rejected":
+      case "unauthorized":
+      case "server_unavailable":
+        result.rejected += 1;
+        break;
     }
   }
 
@@ -184,9 +208,13 @@ export async function pullRemoteChanges(input: {
 
   for (let page = 0; page < maxPages; page += 1) {
     assertNotAborted(input.signal);
+    const expectedFromSequence = remoteSyncState.changeCursor ?? 0;
     const response = await fetchRemoteChangePage(input.client, remoteSyncState, { limit: 50 });
+    if (response.from_seq !== expectedFromSequence) {
+      throw createInvalidResponseError("/v1/changes");
+    }
     result.pages += 1;
-    result.hasMore = Boolean(response.has_more);
+    result.hasMore = response.has_more;
 
     for (const change of response.changes) {
       assertNotAborted(input.signal);
@@ -302,7 +330,7 @@ async function readStableUploadBodies(
 
     const body = await vault.readBinary(file);
     assertNotAborted(signal);
-    if (await sha256Hex(body) === entry.file.contentHash) {
+    if (await sha256ContentHash(body) === entry.file.contentHash) {
       bodies.set(entry.path, body);
     }
   }
