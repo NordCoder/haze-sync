@@ -7,10 +7,12 @@ import {
   applyDeleteOutcome,
   applyUploadOutcome,
   createDefaultBaseRevisionState,
+  getBaseRevisionId,
   mergeBaseRevisionState,
 } from "../src/base-revision-store";
 import { CONFLICT_ACTION_DEFINITIONS } from "../src/conflict-center";
 import { normalizeStoredContentHash } from "../src/content-hash";
+import { planPendingMutations } from "../src/mutation-planner";
 import {
   createDefaultLocalSyncState,
   mergeLocalSyncState,
@@ -82,6 +84,23 @@ test("canonical base outcomes do not invent missing revision metadata", () => {
   );
   assert.equal(missing.outcome, "not_found");
   assert.equal(missing.state.byPath["Notes/a.md"].serverDeleted, true);
+  assert.equal(missing.state.byPath["Notes/a.md"].revisionId, null);
+  assert.equal(getBaseRevisionId(missing.state, "Notes/a.md"), null);
+
+  const recreated = reconcileFullScan(
+    createDefaultLocalSyncState(),
+    [fact("Notes/a.md", HASH_B)],
+    "2026-01-01T00:03:00Z",
+  ).state;
+  const plan = planPendingMutations(recreated.pendingQueue, missing.state, {
+    makeUploadBody: () => "fixture-body",
+  });
+  assert.equal(plan.planned.length, 1);
+  const upload = plan.planned[0];
+  assert.equal(upload.kind, "upload");
+  if (upload.kind === "upload") {
+    assert.equal(upload.request.baseRevisionId, null);
+  }
 });
 
 test("legacy persisted hex hashes migrate in base and pending state readers", () => {
@@ -97,9 +116,18 @@ test("legacy persisted hex hashes migrate in base and pending state readers", ()
         serverDeleted: false,
         updatedAt: "2026-01-01T00:00:00Z",
       },
+      "Notes/deleted.md": {
+        path: "Notes/deleted.md",
+        revisionId: "rev_stale",
+        contentHash: legacy,
+        serverDeleted: true,
+        updatedAt: "2026-01-01T00:00:00Z",
+      },
     },
   });
   assert.equal(base.byPath["Notes/a.md"].contentHash, `sha256:${legacy}`);
+  assert.equal(base.byPath["Notes/deleted.md"].revisionId, null);
+  assert.equal(base.byPath["Notes/deleted.md"].contentHash, null);
 
   const local = mergeLocalSyncState({
     knownFiles: {
