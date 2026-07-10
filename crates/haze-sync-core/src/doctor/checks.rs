@@ -1,8 +1,7 @@
 use super::types::{
-    AdapterCursorDetails, AdapterTokenSanityDetails, DbConnectivityDetails,
-    DoctorCheckDetails, DoctorCheckId, DoctorCheckMessage, DoctorCheckResult,
-    DoctorCheckStatus, GdriveMappingDetails, MissingBlobDetectionDetails,
-    ObjectStoreExistsWritableDetails, WorktreeDriftDetails,
+    AdapterCursorDetails, AdapterTokenSanityDetails, DbConnectivityDetails, DoctorCheckDetails,
+    DoctorCheckId, DoctorCheckMessage, DoctorCheckResult, DoctorCheckStatus, GdriveMappingDetails,
+    MissingBlobDetectionDetails, ObjectStoreExistsWritableDetails, WorktreeDriftDetails,
 };
 use haze_sync_common::ContentHash;
 
@@ -186,10 +185,7 @@ pub fn missing_blob_detection_check(input: MissingBlobDetectionInput) -> DoctorC
         sample_hashes,
     };
     let (status, message) = if missing_count == 0 {
-        (
-            DoctorCheckStatus::Ok,
-            DoctorCheckMessage::NoMissingBlobs,
-        )
+        (DoctorCheckStatus::Ok, DoctorCheckMessage::NoMissingBlobs)
     } else {
         (
             DoctorCheckStatus::Failed,
