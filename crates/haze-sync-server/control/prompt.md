@@ -1,54 +1,37 @@
-# W1-FIX-SRV-P6C-CI — Server clean-code CI correction
+# W1-SRV-P7-BLOCKED — Worktree runtime dependency gate
 
 Component: server
 Path: crates/haze-sync-server
 Branch: component/server
 PR: #45
-Role: fixer-worker
+Role: none
 
-Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
+This is a hold notice, not an executable worker prompt.
 
-## Context
+## Accepted state
 
-SRV-P6C clean-code review made source/test changes, but the corresponding Component CI run failed.
+SRV-P6 implementation, clean-code review, and CI fixer are complete. Post-fix Component CI is green.
 
-- source_commit: 3ab500d1b4764c0b2775eb14d0c7be3ff6e7f57b
+- code_bearing_sha: ef615905b996f9eaac249a663ec8c945b508a653
 - workflow: Component CI
-- workflow_run_id: 29067613093
-- run_number: 826
-- run_attempt: 1
-- artifact_id: 8217733996
-- artifact_name: ci-diag__component-server__wf-component-ci__run-29067613093__attempt-1
-- artifact_expires_at: 2026-07-11T03:49:44Z
+- workflow_run_id: 29079795947
+- run_number: 890
+- conclusion: success
 
-## Read
+## Blocked next phase
 
-Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, relevant source/tests, and PR diff.
+The next Server plan phase is SRV-P7: Worktree runtime composition fan-in.
 
-Download artifact 8217733996. Read `summary.md`, `manifest.json`, and each failed-check log. If the artifact is unavailable or cannot be interpreted, report `FIX_BLOCKED_BY_LOGS`.
+Do not start SRV-P7 yet. The Worktree implementation plan places the hostable runtime-service abstraction in WT-P8 and the explicit Server-hosted fan-in/doctor boundary in WT-P9. Worktree is currently only entering WT-P5 clean-code review.
 
-## Task
+Starting SRV-P7 now would either duplicate Worktree-owned runtime logic inside Server or invent an unaccepted cross-component contract.
 
-Apply the smallest Server-local correction required by the SRV-P6C diagnostics. Preserve readiness-first admin status behavior, best-effort optional metadata, safe public summaries, read-only operational semantics, and all SRV-P6 non-goals.
+## Unblock condition
 
-## Allowed files
+Orchestrator may replace this hold only after:
 
-- crates/haze-sync-server/src/routes/admin.rs
-- crates/haze-sync-server/src/routes/admin/**
-- crates/haze-sync-server/src/readiness/**
-- crates/haze-sync-server/src/db/**
-- crates/haze-sync-server/src/http/**
-- crates/haze-sync-server/docs/** only when diagnostics identify a docs-format issue
-- crates/haze-sync-server/control/report.md
+- WT-P8 runtime-service abstraction is implemented and clean-code/CI accepted;
+- any required WT-P9 Server-hosted boundary is explicitly available or a dedicated cross-component fan-in prompt is approved;
+- Worktree config, lifecycle, status, and mode contracts needed by Server are concrete and readable.
 
-## Boundaries
-
-Do not add admin state changes, repair execution, token lifecycle changes, provider calls, new doctor/metrics surfaces, workflow changes, dependency changes, or sibling component changes.
-
-## CI trigger policy
-
-Source/test/docs correction commits must not skip CI. A final report-only commit may skip CI.
-
-## Report
-
-Write only the report to crates/haze-sync-server/control/report.md. Use report-template.md. Set REPORT_TYPE to FIX and phase_id to FIX-SRV-P6C-CI.
+Until then, do not modify Server source or report for SRV-P7.
