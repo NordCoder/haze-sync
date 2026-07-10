@@ -1,6 +1,16 @@
 export { HazeSyncApiClient } from "./client";
 export type { HazeSyncApiClientOptions, HttpTransport } from "./client";
 export {
+  API_CONTRACT_FIXTURE_SCHEMA_VERSION,
+  isApiContractFixture,
+  parseApiContractFixture,
+} from "./compatibility-fixture";
+export type {
+  ApiContractFixtureV1,
+  ApiVocabularyFixture,
+  ConflictResolutionFixtureEntry,
+} from "./compatibility-fixture";
+export {
   ApiClientError,
   createConfigurationError,
   createHttpError,
