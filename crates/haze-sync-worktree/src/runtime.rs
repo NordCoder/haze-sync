@@ -620,9 +620,7 @@ where
             | WorktreeRuntimeWatcherState::Failed(WorktreeWatcherFailure::Poll) => {
                 match self.watcher.shutdown() {
                     Ok(()) => WorktreeRuntimeWatcherState::Stopped,
-                    Err(_) => {
-                        WorktreeRuntimeWatcherState::Failed(WorktreeWatcherFailure::Shutdown)
-                    }
+                    Err(_) => WorktreeRuntimeWatcherState::Failed(WorktreeWatcherFailure::Shutdown),
                 }
             }
             WorktreeRuntimeWatcherState::Disabled
