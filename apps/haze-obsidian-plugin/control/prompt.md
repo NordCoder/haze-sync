@@ -1,31 +1,54 @@
-# W1-OBS-P9-BLOCKED — API compatibility fixture dependency gate
+# W1-OBS-P9 — Compatibility, packaging, and E2E readiness
 
 Component: obsidian-plugin
 Path: apps/haze-obsidian-plugin
 Branch: component/obsidian-plugin
 PR: #51
-Role: none
+Role: implementation-worker
 
-This is a hold notice, not an executable worker prompt.
+Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
-## Accepted state
+## Context
 
-OBS-P8 implementation and clean-code review are accepted. Clean-code source CI is green.
+OBS-P8 implementation and clean-code review are accepted. API-P7 compatibility fixtures and API-P7C clean-code review are now accepted with green CI, so the previous OBS-P9 dependency gate is satisfied.
 
-- code_bearing_sha: f54a79b4a35c38d7b818cc323af0e166aa47b2c2
-- workflow: Component CI
-- workflow_run_id: 29084771114
-- run_number: 1058
-- conclusion: success
+- obsidian_code_bearing_sha: f54a79b4a35c38d7b818cc323af0e166aa47b2c2
+- obsidian_ci_run_id: 29084771114
+- api_fixture_code_bearing_sha: 3109c0fd9b456ca5fd8db099cd83843dae44cef9
+- api_fixture_ci_run_id: 29093081652
+- api_fixture_ci_conclusion: success
 
-## Blocked next phase
+The next implementation phase is OBS-P9 from apps/haze-obsidian-plugin/docs/implementation-plan.md.
 
-The next plan phase is OBS-P9: compatibility, packaging, and E2E readiness.
+## Read
 
-OBS-P9 requires stable API fixture examples for downstream DTO compatibility checks. The corresponding API compatibility phase is API-P7, which has not yet been accepted. Starting OBS-P9 now would force the plugin to invent fixture ownership or duplicate unstable API examples.
+Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, the accepted API compatibility fixture and guidance, current TypeScript DTO mirrors/client/tests, packaging configuration, plugin manifest, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt explicitly instructs it.
 
-## Unblock condition
+## Task
 
-Unblock when API-P7 compatibility fixtures are accepted with green CI, or when an explicit cross-component fixture contract provides equivalent stable examples.
+Implement OBS-P9: Compatibility, packaging, and E2E readiness.
 
-Until then, do not run a worker for this component and do not modify product files.
+- consume the accepted API-P7 language-neutral fixture in TypeScript compatibility tests;
+- align plugin DTO mirrors with exact canonical API fields and closed vocabularies;
+- remove permissive fallback types where fixture-backed closed unions exist;
+- add mocked API client tests for representative scan, push, pull, conflict, delete, status, and doctor flows where current abstractions support them;
+- verify or document typecheck/build expectations through available CI/tooling;
+- document local installation and test-vault/test-server procedures;
+- make generated bundle tracking policy explicit without committing generated artifacts unless accepted;
+- prepare deterministic local E2E scenarios using synthetic data only.
+
+## Allowed files
+
+- apps/haze-obsidian-plugin/**
+
+## Non-goals
+
+No production marketplace release, real user vault data, secrets in fixtures, generated artifacts committed without explicit policy, API fixture ownership changes, Server/Core runtime changes, provider behavior, workflow changes, or sibling component changes.
+
+## CI trigger policy
+
+Source/test/docs/config commits must not skip CI. A final report-only commit may skip CI.
+
+## Report
+
+Write only apps/haze-obsidian-plugin/control/report.md. Use report-template.md, REPORT_TYPE IMPLEMENTATION, phase_id OBS-P9.
