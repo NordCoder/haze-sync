@@ -2,18 +2,17 @@ import type {
   ConflictDto,
   ConflictResolutionAction,
   HazeSyncApiClient,
-  ResolveConflictResponseDto,
 } from "./api-client";
 import type { BaseRevisionState } from "./base-revision-store";
-import { markRemoteBaseRevision } from "./base-revision-store";
-import { sanitizeStatusMessage } from "./status";
-import { classifyVaultPath } from "./vault-paths";
+import { sanitizeStatusMessage } from "./safe-text";
 
 export interface ConflictActionDefinition {
   action: ConflictResolutionAction;
   label: string;
   description: string;
   confirmation: string | null;
+  available: boolean;
+  unavailableReason?: string;
 }
 
 export const CONFLICT_ACTION_DEFINITIONS: readonly ConflictActionDefinition[] = [
@@ -22,24 +21,29 @@ export const CONFLICT_ACTION_DEFINITIONS: readonly ConflictActionDefinition[] = 
     label: "Accept current",
     description: "Keep the current authoritative server version and close the competing conflict revision.",
     confirmation: "The competing conflict revision may stop being available as an open conflict after the server confirms this action.",
+    available: true,
   },
   {
     action: "accept_conflict",
     label: "Accept conflict",
     description: "Promote the conflicting revision through the server conflict-resolution endpoint.",
-    confirmation: "The current authoritative server content may be replaced after the server confirms this action.",
+    confirmation: null,
+    available: false,
+    unavailableReason: "Reserved by the API contract; the current Server does not execute this promotion flow.",
   },
   {
     action: "keep_both",
     label: "Keep both",
     description: "Ask the server to preserve both versions using its supported conflict policy.",
     confirmation: null,
+    available: true,
   },
   {
     action: "mark_resolved",
     label: "Mark resolved",
     description: "Close the conflict without choosing a version in this client.",
     confirmation: "Use this only when the conflict has already been handled elsewhere. The conflict will no longer appear as open after server confirmation.",
+    available: true,
   },
 ] as const;
 
@@ -49,15 +53,16 @@ export interface ConflictCenterItem {
   conflictPath: string;
   status: string;
   sourceAdapter: string;
+  policyApplied: string;
   createdAt: string;
-  resolvedAt: string;
+  updatedAt: string;
 }
 
 export interface ConflictResolutionResult {
   serverConfirmed: boolean;
   baseUpdated: boolean;
   baseRevisionState: BaseRevisionState;
-  status: "resolved" | "kept_both" | "rejected";
+  status: "resolved" | "rejected";
   message: string;
 }
 
@@ -80,52 +85,31 @@ export async function resolveConflictThroughServer(
   action: ConflictResolutionAction,
   idempotencyKey: string,
   baseRevisionState: BaseRevisionState,
-  observedAt: string,
 ): Promise<ConflictResolutionResult> {
+  const definition = CONFLICT_ACTION_DEFINITIONS.find((candidate) => candidate.action === action);
+  if (definition === undefined || !definition.available) {
+    throw new Error("Conflict resolution action is not executable by the current Server contract.");
+  }
+
   const response = await client.resolveConflict({
-    conflictId: item.conflict.id,
-    action,
+    conflictId: item.conflict.conflict_id,
+    resolution: action,
     idempotencyKey,
   });
 
-  if (response.conflict_id !== item.conflict.id) {
-    throw new Error("Conflict resolution response did not match the requested conflict.");
-  }
-
-  if (!isConfirmedResolution(response)) {
-    return {
-      serverConfirmed: false,
-      baseUpdated: false,
-      baseRevisionState,
-      status: "rejected",
-      message: "The server did not confirm the conflict action.",
-    };
-  }
-
-  const revisionId = response.revision_id ?? null;
-  const path = classifyVaultPath(item.conflict.original_path);
-  if (!path.included || revisionId === null) {
-    return {
-      serverConfirmed: true,
-      baseUpdated: false,
-      baseRevisionState,
-      status: response.status,
-      message: "The server confirmed the conflict action. Base metadata will refresh during a later sync pass.",
-    };
+  if (
+    response.conflict_id !== item.conflict.conflict_id ||
+    response.resolution !== action
+  ) {
+    throw new Error("Conflict resolution response did not match the requested conflict action.");
   }
 
   return {
     serverConfirmed: true,
-    baseUpdated: true,
-    baseRevisionState: markRemoteBaseRevision(
-      baseRevisionState,
-      path.path,
-      revisionId,
-      null,
-      observedAt,
-    ),
-    status: response.status,
-    message: "The server confirmed the conflict action and local base revision metadata was refreshed.",
+    baseUpdated: false,
+    baseRevisionState,
+    status: "resolved",
+    message: "The server confirmed the conflict action. Base metadata will refresh during a later sync pass.",
   };
 }
 
@@ -133,31 +117,24 @@ function toConflictCenterItem(conflict: ConflictDto, secrets: string[]): Conflic
   return {
     conflict,
     originalPath: safeDisplayText(conflict.original_path, "Path unavailable", 240, secrets),
-    conflictPath: safeDisplayText(
-      conflict.conflict_path,
-      "Server-managed conflict copy (path not provided)",
-      240,
-      secrets,
-    ),
+    conflictPath: safeDisplayText(conflict.conflict_path, "Conflict path unavailable", 240, secrets),
     status: safeDisplayText(conflict.status, "Unknown", 48, secrets),
     sourceAdapter: safeDisplayText(conflict.source_adapter_id, "Not provided", 128, secrets),
+    policyApplied: safeDisplayText(conflict.policy_applied, "Not provided", 128, secrets),
     createdAt: safeTimestamp(conflict.created_at),
-    resolvedAt: safeTimestamp(conflict.resolved_at),
+    updatedAt: safeTimestamp(conflict.updated_at),
   };
 }
 
 function compareConflictItems(left: ConflictCenterItem, right: ConflictCenterItem): number {
-  return left.originalPath.localeCompare(right.originalPath) || left.conflict.id.localeCompare(right.conflict.id);
+  return (
+    left.originalPath.localeCompare(right.originalPath) ||
+    left.conflict.conflict_id.localeCompare(right.conflict.conflict_id)
+  );
 }
 
-function isConfirmedResolution(
-  response: ResolveConflictResponseDto,
-): response is ResolveConflictResponseDto & { status: "resolved" | "kept_both" } {
-  return response.status === "resolved" || response.status === "kept_both";
-}
-
-function safeTimestamp(value: string | null | undefined): string {
-  if (value === undefined || value === null || value.trim().length === 0) {
+function safeTimestamp(value: string | undefined): string {
+  if (value === undefined || value.trim().length === 0) {
     return "Not provided";
   }
 
@@ -170,12 +147,12 @@ function safeTimestamp(value: string | null | undefined): string {
 }
 
 function safeDisplayText(
-  value: string | null | undefined,
+  value: string | undefined,
   fallback: string,
   maxLength: number,
   secrets: string[],
 ): string {
-  if (value === undefined || value === null) {
+  if (value === undefined) {
     return fallback;
   }
 
