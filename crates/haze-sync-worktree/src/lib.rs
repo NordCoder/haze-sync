@@ -6,6 +6,7 @@
 
 mod delete_guard;
 mod echo_guard;
+mod file_import;
 mod hashing;
 mod import_planner;
 mod materializer;
@@ -25,13 +26,15 @@ pub use echo_guard::{
     WorktreeEchoDecision, WorktreeEchoGuard, WorktreeEchoGuardError, WorktreeEchoGuardPolicy,
     WorktreeEchoLoadSummary, WorktreeEchoRecordSummary,
 };
+pub use file_import::{
+    WorktreeImportPlan, WorktreeImportPlanner, WorktreeImportRunner, WorktreeImportSubmission,
+    WorktreeImportSubmissionReport,
+};
 pub use import_planner::{
     WorktreeAcceptedImport, WorktreeAppliedFileState, WorktreeAppliedPathState,
     WorktreeBaseRevision, WorktreeDeleteImport, WorktreeImportAction, WorktreeImportClient,
-    WorktreeImportFile, WorktreeImportOutcome, WorktreeImportPlan, WorktreeImportPlanError,
-    WorktreeImportPlanner, WorktreeImportRejection, WorktreeImportRunner,
-    WorktreeImportSubmission, WorktreeImportSubmissionReport, WorktreePutImport,
-    WorktreeStateSnapshot, WorktreeTombstoneState, WorktreeUnchangedFile,
+    WorktreeImportFile, WorktreeImportOutcome, WorktreeImportPlanError, WorktreeImportRejection,
+    WorktreePutImport, WorktreeStateSnapshot, WorktreeTombstoneState, WorktreeUnchangedFile,
 };
 pub use materializer::{
     AtomicWorktreeWriter, WorktreeDeferredMaterialization, WorktreeEchoMarker,
@@ -73,6 +76,8 @@ pub const fn package_name() -> &'static str {
 mod delete_guard_tests;
 #[cfg(test)]
 mod echo_guard_tests;
+#[cfg(test)]
+mod file_import_tests;
 #[cfg(test)]
 mod materializer_safety_tests;
 #[cfg(test)]
