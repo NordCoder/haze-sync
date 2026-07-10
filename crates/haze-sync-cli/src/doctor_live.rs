@@ -88,10 +88,7 @@ pub struct ReadinessSummary {
 pub trait DoctorReadClient {
     fn fetch_health(&self, server_url: &ServerUrl) -> Result<HealthSummary, ServerReadError>;
 
-    fn fetch_readiness(
-        &self,
-        server_url: &ServerUrl,
-    ) -> Result<ReadinessSummary, ServerReadError>;
+    fn fetch_readiness(&self, server_url: &ServerUrl) -> Result<ReadinessSummary, ServerReadError>;
 
     fn fetch_status(&self, server_url: &ServerUrl) -> Result<StatusSummary, ServerReadError>;
 }
@@ -337,14 +334,14 @@ mod tests {
 
     impl DoctorReadClient for FakeDoctorClient {
         fn fetch_health(&self, _server_url: &ServerUrl) -> Result<HealthSummary, ServerReadError> {
-            self.health.clone()
+            self.health
         }
 
         fn fetch_readiness(
             &self,
             _server_url: &ServerUrl,
         ) -> Result<ReadinessSummary, ServerReadError> {
-            self.readiness.clone()
+            self.readiness
         }
 
         fn fetch_status(&self, _server_url: &ServerUrl) -> Result<StatusSummary, ServerReadError> {
