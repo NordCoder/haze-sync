@@ -6,6 +6,14 @@ import {
   BaseRevisionState,
   createDefaultBaseRevisionState,
 } from "./base-revision-store";
+import {
+  ConflictActionKeyState,
+  clearConflictActionKey,
+  conflictServerContext,
+  createDefaultConflictActionKeyState,
+  prepareConflictActionKey,
+  retainOpenConflictActionKeys,
+} from "./conflict-action-keys";
 import type { ConflictCenterItem, ConflictResolutionResult } from "./conflict-center";
 import { loadOpenConflictItems, resolveConflictThroughServer } from "./conflict-center";
 import { ConflictCenterModal } from "./conflict-center-modal";
@@ -45,6 +53,7 @@ export default class HazeSyncPlugin extends Plugin {
   private localState: LocalSyncState = createDefaultLocalSyncState();
   private baseRevisionState: BaseRevisionState = createDefaultBaseRevisionState();
   private remoteSyncState: RemoteSyncState = createDefaultRemoteSyncState();
+  private conflictActionKeyState: ConflictActionKeyState = createDefaultConflictActionKeyState();
   private readonly remoteEchoSuppressor = new RemoteEchoSuppressor();
   private pendingDataSave: Promise<void> = Promise.resolve();
   private serverOpenConflictCount?: number;
@@ -86,6 +95,7 @@ export default class HazeSyncPlugin extends Plugin {
     this.localState = data.localState;
     this.baseRevisionState = data.baseRevisionState;
     this.remoteSyncState = data.remoteSyncState;
+    this.conflictActionKeyState = data.conflictActionKeyState;
   }
 
   async saveSettings(): Promise<void> {
@@ -295,6 +305,7 @@ export default class HazeSyncPlugin extends Plugin {
 
     new ConflictCenterModal(this.app, {
       loadOpenConflicts: () => this.loadOpenConflicts(),
+      prepareConflictAction: (item, action) => this.prepareOpenConflictAction(item, action),
       resolveConflict: (item, action, idempotencyKey) =>
         this.resolveOpenConflict(item, action, idempotencyKey),
       canResolveConflicts: () => this.canResolveConflicts(),
@@ -303,10 +314,57 @@ export default class HazeSyncPlugin extends Plugin {
 
   private async loadOpenConflicts(): Promise<ConflictCenterItem[]> {
     const client = HazeSyncApiClient.fromSettings(this.settings);
-    const items = await loadOpenConflictItems(client);
+    const items = await loadOpenConflictItems(client, [this.settings.authToken]);
+    const retainedKeys = retainOpenConflictActionKeys(
+      this.conflictActionKeyState,
+      this.currentConflictServerContext(),
+      new Set(items.map((item) => item.conflict.id)),
+    );
+
+    if (retainedKeys !== this.conflictActionKeyState) {
+      this.conflictActionKeyState = retainedKeys;
+      try {
+        await this.persistPluginData();
+      } catch {
+        // Stale-key cleanup is best effort and must not hide the server conflict list.
+      }
+    }
+
     this.serverOpenConflictCount = items.length;
     this.refreshSettingsStatus();
     return items;
+  }
+
+  private async prepareOpenConflictAction(
+    item: ConflictCenterItem,
+    action: ConflictResolutionAction,
+  ): Promise<string> {
+    if (!this.canResolveConflicts()) {
+      throw new Error("Conflict resolution is disabled by the current sync mode.");
+    }
+
+    const previousState = this.conflictActionKeyState;
+    const prepared = prepareConflictActionKey(
+      previousState,
+      this.currentConflictServerContext(),
+      item.conflict.id,
+      action,
+      new Date().toISOString(),
+    );
+    this.conflictActionKeyState = prepared.state;
+
+    if (prepared.state !== previousState) {
+      try {
+        await this.persistPluginData();
+      } catch (error) {
+        if (this.conflictActionKeyState === prepared.state) {
+          this.conflictActionKeyState = previousState;
+        }
+        throw error;
+      }
+    }
+
+    return prepared.idempotencyKey;
   }
 
   private async resolveOpenConflict(
@@ -327,13 +385,29 @@ export default class HazeSyncPlugin extends Plugin {
       new Date().toISOString(),
     );
 
-    if (result.serverConfirmed) {
-      this.baseRevisionState = result.baseRevisionState;
-      await this.persistPluginData();
-      this.refreshSettingsStatus();
+    if (!result.serverConfirmed) {
+      return result;
     }
 
-    return result;
+    this.baseRevisionState = result.baseRevisionState;
+    this.conflictActionKeyState = clearConflictActionKey(
+      this.conflictActionKeyState,
+      this.currentConflictServerContext(),
+      item.conflict.id,
+      action,
+    );
+
+    try {
+      await this.persistPluginData();
+      this.refreshSettingsStatus();
+      return result;
+    } catch {
+      this.refreshSettingsStatus();
+      return {
+        ...result,
+        message: "The server confirmed the conflict action, but local metadata could not be saved. Refresh the conflict center before taking another action.",
+      };
+    }
   }
 
   private canResolveConflicts(): boolean {
@@ -342,6 +416,10 @@ export default class HazeSyncPlugin extends Plugin {
       this.settings.syncMode !== "disabled" &&
       this.settings.syncMode !== "dry_run"
     );
+  }
+
+  private currentConflictServerContext(): string {
+    return conflictServerContext(this.settings.serverUrl, this.settings.adapterId);
   }
 
   private recordVaultEventHint(file: TAbstractFile, kind: PendingChangeKind, pathOverride?: string): void {
@@ -366,7 +444,13 @@ export default class HazeSyncPlugin extends Plugin {
   }
 
   private persistPluginData(): Promise<void> {
-    const data = serializePluginData(this.settings, this.localState, this.baseRevisionState, this.remoteSyncState);
+    const data = serializePluginData(
+      this.settings,
+      this.localState,
+      this.baseRevisionState,
+      this.remoteSyncState,
+      this.conflictActionKeyState,
+    );
     const write = this.pendingDataSave.then(
       () => this.saveData(data),
       () => this.saveData(data),
