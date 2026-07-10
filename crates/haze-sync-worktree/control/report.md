@@ -1,12 +1,12 @@
 REPORT_TYPE:
-IMPLEMENTATION
+FIX
 
 STATUS:
-BLOCKED_BY_TOOLING
+FIX_COMPLETE
 
 AGENT:
-role: implementation-worker
-agent_execution_id: W1-WT-P6-worktree-implementation-20260710
+role: fixer-worker
+agent_execution_id: W1-FIX-WT-P6-CI-worktree-fixer-20260710
 chat_name: worktree persistent component worker
 
 COMPONENT:
@@ -21,32 +21,32 @@ control_report_path: crates/haze-sync-worktree/control/report.md
 
 WAVE:
 id: W1
-phase_id: WT-P6
-dependency_status: control state was PROMPT_READY; active role was implementation-worker; WT-P5 implementation/clean-code/fixer lifecycle was accepted; post-fix Component CI run 29084291087 was green.
+phase_id: FIX-WT-P6-CI
+dependency_status: control state was PROMPT_READY; active role was fixer-worker; exact workflow run 29086948389 and artifact 8225158699 were present, available, unexpired, and matched code-bearing head 1c8443795ab64cfb5fb2bfd016b3a4a23e3c9957.
 
 SUMMARY:
-Implemented WT-P6 echo guard and Worktree state reconciliation inside the Worktree component. Added a bounded TTL/capacity echo guard that can load durable markers written by the WT-P5 materializer, validates reserved runtime directory safety, parses bounded marker files, removes malformed/expired/evicted/stale/consumed Worktree-owned markers, and suppresses only one exact revision/hash echo. Added explicit reconciliation state that combines last-applied Core state with revision/hash/size/mtime observation facts, deterministic classification of clean, dirty, missing, extra, conflict-materialized, and skipped entries, skipped-prefix protection against false missing reports, safe count-only summaries, observation transitions, and an abstract load/save store trait without direct DB ownership. Added focused tests for durable one-shot echo suppression, expiry, capacity eviction, all drift classes, stale markers, skipped-prefix handling, duplicate scan rejection, and persisted state transitions. Final code-bearing Component CI run 29086948389 reported cargo fmt/check/test/clippy success but overall failure at Finalize CI diagnostics. This implementation-worker role did not read the diagnostics artifact, so a fixer-worker must use the artifact as source of truth.
+Fixed the minimum artifact-proven WT-P6 CI failures. The diagnostics artifact listed rust-fmt, cargo-test, and cargo-clippy. Applied the complete rustfmt diff across WT-P6 source/tests/exports, replaced the clippy-reported bool::then filter_map with filter plus map, elided the needless stable_files_by_path lifetime, and corrected the reconciliation expiry fixture from a 3600-second TTL to a 60-second TTL. The fixture now preserves the intended exact and stale markers at age 30 seconds while expiring the marker at age 1030 seconds. No assertion was removed or weakened, and bounded exact echo suppression, durable marker safety, reconciliation classifications, persisted-state abstraction, tests, and component boundaries were preserved. Post-fix Component CI run 29088387939 completed successfully.
 
 CHANGED_FILES:
 - crates/haze-sync-worktree/src/echo_guard.rs
 - crates/haze-sync-worktree/src/echo_guard_tests.rs
+- crates/haze-sync-worktree/src/lib.rs
 - crates/haze-sync-worktree/src/reconciliation.rs
 - crates/haze-sync-worktree/src/reconciliation_tests.rs
-- crates/haze-sync-worktree/src/lib.rs
 - crates/haze-sync-worktree/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/worktree
 base_branch: main
-base_sha: GitHub compare_commits after WT-P6 source commits observed base c1e69a664388b0cba028170e8398b9088218957d and merge base 1a82bea5c87953db378e5e03429326df38320ee8.
-head_sha: 1c8443795ab64cfb5fb2bfd016b3a4a23e3c9957 before this report-only commit; this report write creates a later control-only commit.
+base_sha: GitHub compare_commits after the fix observed base c1e69a664388b0cba028170e8398b9088218957d and merge base 1a82bea5c87953db378e5e03429326df38320ee8.
+head_sha: 4d1fc6ea706fb61d700877189317279343502285 before this report-only commit; this report write creates a later control-only commit.
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes; crates/haze-sync-worktree/control/prompt.md on component/worktree
-control_report_written: yes; crates/haze-sync-worktree/control/report.md replaced with this IMPLEMENTATION report
+control_report_written: yes; crates/haze-sync-worktree/control/report.md replaced with this FIX report
 control_files_archived_by_worker: no
-ci_skip_used: yes for this final report-only commit; no for WT-P6 source/test commits
-ci_skip_reason: this commit changes only crates/haze-sync-worktree/control/report.md and cannot affect executable behavior or validation outcome; all WT-P6 source/test commits were pushed without CI skip
+ci_skip_used: yes for this final report-only commit; no for source/test fixer commits
+ci_skip_reason: this final commit changes only crates/haze-sync-worktree/control/report.md and cannot affect executable behavior or validation outcome; all fixer source/test commits triggered CI without skip
 
 SCOPE:
 allowed_files_only: yes
@@ -57,97 +57,97 @@ forbidden_files_touched: no
 
 CONTRACT:
 contract_read: yes
-contract_satisfied: yes for implemented WT-P6 source semantics
+contract_satisfied: yes; fixes preserve exact bounded echo suppression, safe reconciliation facts, abstract persistence ownership, and all WT-P6 component boundaries
 contract_changes_requested: no
 contract_change_rationale: none
 affected_components: worktree only
 
 IMPLEMENTATION_OR_REVIEW:
-completed: yes for WT-P6 source implementation
+completed: yes
 main_changes:
-- Added WorktreeEchoGuardPolicy with non-zero TTL and capacity validation.
-- Added bounded WorktreeEchoGuard state keyed by VaultPath and retaining only the newest last-adapter-write marker per path.
-- Added durable marker loading from the reserved `_haze_runtime/echo` directory without following symlinked/non-directory runtime chains.
-- Bounded marker reads to 4 KiB and parsed only the WT-P5 version/path/revision/content_hash format.
-- Removed Worktree-owned malformed, expired, duplicate, capacity-evicted, stale, and successfully consumed marker files.
-- Required exact marker revision, applied content hash, and stable observed content hash before one-shot echo suppression.
-- Added WorktreeReconciliationState containing accepted WorktreeStateSnapshot plus revision/hash/size/mtime observation facts.
-- Added WorktreeReconciliationStateStore as the only persisted-state integration boundary; no SQLx, Storage repository, API route, or Server lifecycle implementation was added.
-- Added deterministic reconciliation entries and summaries for clean, dirty, missing, extra, conflict-materialized, and skipped filesystem facts.
-- Prevented a skipped path/directory prefix from causing false Missing classifications for tracked descendants.
-- Bound observation facts to the current applied revision/hash so stale metadata cannot influence a newer authoritative state.
-- Updated observation state only for stable local content matching current applied authoritative content.
-- Added WorktreeReconciliationRunner to load/reconcile/save through the abstract store and save only when observation transitions exist.
-- Exported WT-P6 public APIs from lib.rs.
-- Added focused tests covering durable marker consumption, one-shot suppression, expiry, capacity, stale markers, all drift classes, safe skipped-prefix behavior, duplicate paths, and store transitions.
-behavior_changes: Worktree can now consume adapter-write echo markers and emit explicit safe drift facts/state transitions without treating marker files or local mtimes as authoritative over Core.
-bugs_found: no pre-existing source defect outside WT-P6 scope; implementation self-check replaced a test-only Option::is_none_or use with a Rust-1.75-compatible map_or form before final CI.
-bugs_fixed: none outside new WT-P6 behavior
-cleanups_made: separated echo lifecycle, reconciliation policy, and focused tests into dedicated modules; persistence integration remains trait-based and component-neutral
-non_goals_preserved: yes; no direct DB ownership, no Server status route, no repair execution, no provider behavior, no delete/trash behavior, no watcher/runtime service, no workflow/dependency changes, no sibling-component changes, no Core conflict/delete policy, and no hard delete of user files
+- Read the active FIX-WT-P6-CI prompt, previous implementation report, required process sources, component docs, current WT-P6 source/tests, and branch diff.
+- Fetched exact diagnostics artifact metadata for workflow run 29086948389 and artifact 8225158699.
+- Downloaded and read summary.md, manifest.json, all three failure markers, and all three failed-check logs.
+- Applied the rustfmt-provided formatting changes in echo_guard.rs, echo_guard_tests.rs, lib.rs, reconciliation.rs, and reconciliation_tests.rs.
+- Replaced filter_map plus bool::then in WorktreeEchoGuard::expire with the clippy-requested filter plus map sequence.
+- Elided the needless explicit lifetime in stable_files_by_path.
+- Corrected the reconciliation expiry fixture TTL from 3600 seconds to 60 seconds so clean/stale markers aged 30 seconds remain active while the 1030-second-old marker expires.
+- Preserved every assertion, including echo_suppressed, echo_stale, and echo_expired counts.
+- Verified source commit diffs and observed post-fix Component CI run 29088387939 complete successfully.
+behavior_changes: none in production behavior; only lint/format cleanup and correction of the test fixture timing policy
+bugs_found: test fixture expected a 1030-second-old marker to expire under a 3600-second TTL, so echo_expired was 0 instead of the asserted 1
+bugs_fixed: corrected the test's TTL to match its intended age boundaries; resolved two clippy findings and all rustfmt mismatches
+cleanups_made: replaced filter_map bool::then with filter/map and removed a needless explicit lifetime
+non_goals_preserved: yes; no direct DB ownership, Server runtime work, provider behavior, delete/trash behavior, watcher/runtime service work, Core policy changes, workflow/dependency changes, sibling changes, test deletion, assertion weakening, or user-file hard delete
 deferred_work:
-- Concrete Storage/Server persistence implementation for WorktreeReconciliationState remains a fan-in task; WT-P6 exposes only the accepted abstraction.
-- Runtime orchestration that loads markers, scans, reconciles, and schedules imports remains a later Server-hosted Worktree runtime phase.
-- Full descriptor-relative/O_NOFOLLOW protection against adversarial path replacement races remains the documented platform-specific hardening limitation.
-- Persisted-state backends may compact observation records that no longer match applied state; current reconciliation ignores mismatched observations safely.
-- Core tombstone materialization and local trash/retention remain WT-P7.
+- No fixer follow-up is required for this artifact-proven failure.
+- WT-P6 clean-code review remains the next normal lifecycle gate.
 
 TESTS_AND_CHECKS:
 checks_run:
-- Read Project Source implementation-manifest.md, report-template.md, implementation-worker-prompt.md, and chatgpt-gh-connector.md from the available /mnt/data files.
-- GitHub connector read of current control state, active WT-P6 prompt, prior fixer report, component contract, implementation plan, implementation log, dependency map, decisions, current scanner/import/materializer/path source, and API/Storage/Server boundary docs.
-- GitHub connector read-back of WT-P6 source/tests and lib.rs exports.
-- GitHub connector compare_commits from main to component/worktree after WT-P6 source commits.
-- GitHub Component CI run 29086948389 for final code-bearing head 1c8443795ab64cfb5fb2bfd016b3a4a23e3c9957.
-- Observed cargo fmt success in run 29086948389.
-- Observed cargo check success in run 29086948389.
-- Observed cargo test success in run 29086948389, including the new WT-P6 tests.
-- Observed cargo clippy success in run 29086948389.
+- Read Project Source implementation-manifest.md, report-template.md, fixer-worker-prompt.md, and chatgpt-gh-connector.md from the available suffixed /mnt/data files.
+- GitHub connector read of current control state, active prompt, prior implementation report, component docs, WT-P6 source/tests, and branch diff.
+- Diagnostics artifact inspection for artifact 8225158699.
+- Read summary.md and manifest.json.
+- Read every failed-check failure marker and log named by the manifest: failures/cargo-clippy.txt, logs/cargo-clippy.log, failures/cargo-test.txt, logs/cargo-test.log, failures/rust-fmt.txt, and logs/rust-fmt.log.
+- GitHub connector fetch_commit verification for the source fixer commits, including final source head 4d1fc6ea706fb61d700877189317279343502285.
+- GitHub connector fetch_commit_workflow_runs and fetch_workflow_run_jobs for post-fix run 29088387939.
+- Observed cargo fmt success.
+- Observed cargo check success.
+- Observed cargo test success, including classifies_all_drift_kinds_and_updates_only_clean_observations.
+- Observed cargo clippy success.
+- Observed Finalize CI diagnostics success.
 checks_not_run:
-- local cargo fmt/check/test/clippy: not run; repository work is restricted to GitHub connector access and no local repository checkout was used.
-- CI diagnostics artifact for run 29086948389: not read; the active implementation-worker prompt explicitly prohibits diagnostics artifact inspection.
-ci_status: CI_RED; final code-bearing run 29086948389 failed at Finalize CI diagnostics despite visible fmt/check/test/clippy success
+- local cargo fmt/check/test/clippy: not run; repository operations are restricted to the GitHub connector and no local repository checkout was used.
+ci_status: CI_GREEN; Component CI run 29088387939 completed with conclusion success
 workflow_urls:
-- https://github.com/NordCoder/haze-sync/actions/runs/29084291087
 - https://github.com/NordCoder/haze-sync/actions/runs/29086948389
+- https://github.com/NordCoder/haze-sync/actions/runs/29088387939
 known_failures:
-- run 29086948389: overall workflow failure at Finalize CI diagnostics; detailed failed check must be determined from the diagnostics artifact by a fixer-worker
+- original run 29086948389: rust-fmt exit_code 1, cargo-test exit_code 101, cargo-clippy exit_code 101
+- cargo-test failure: reconciliation_tests::classifies_all_drift_kinds_and_updates_only_clean_observations expected echo_expired 1 but observed 0 because the fixture TTL exceeded marker age
+- cargo-clippy failures: filter_map_bool_then in echo_guard.rs and needless_lifetimes in reconciliation.rs
 
 CI_DIAGNOSTICS:
-artifact_based_logs: no
-artifact_name: not read
-artifact_id: not read
-workflow_run_id: 29086948389 for workflow/job metadata only
-workflow_run_attempt: not read
-artifact_status: not read; active implementation prompt explicitly prohibited diagnostics artifact reading
-summary_read: no
-manifest_read: no
-logs_read: none
+artifact_based_logs: yes
+artifact_name: ci-diag__component-worktree__wf-component-ci__run-29086948389__attempt-1
+artifact_id: 8225158699
+workflow_run_id: 29086948389
+workflow_run_attempt: 1
+artifact_status: available, not expired, downloaded, extracted, and readable
+summary_read: yes; summary.md read
+manifest_read: yes; manifest.json read
+logs_read:
+- failures/cargo-clippy.txt
+- logs/cargo-clippy.log
+- failures/cargo-test.txt
+- logs/cargo-test.log
+- failures/rust-fmt.txt
+- logs/rust-fmt.log
 raw_job_logs_used: no
-diagnostics_failure: Finalize CI diagnostics failed according to workflow metadata; detailed cause requires the next fixer-worker artifact pass
+diagnostics_failure: none; artifact was complete and all listed failed-check files were readable
 
 SAFETY_AND_SECRECY:
 secrets_committed: no
-unsafe_public_output: no; reconciliation facts expose only VaultPath, safe enums, hashes/revisions, timestamps, sizes, and counts; errors contain no absolute paths or raw I/O messages
+unsafe_public_output: no
 raw_errors_exposed: no
 provider_calls_added: no
-hard_delete_added: no; only Worktree-owned echo marker metadata may be removed during consume/expiry/cleanup
+hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- Final source CI run is red only at diagnostics finalization according to visible metadata; artifact-based source of truth was unavailable to this role by prompt.
-- Current API/Storage/Server contracts do not provide a concrete Worktree state repository, so WT-P6 correctly stops at an abstract state-store trait.
-- Echo suppression is intentionally exact, bounded, and one-shot; a missing/mismatched/expired marker never hides dirty content.
+- The only behavioral test issue was an inconsistent expiry fixture; production echo-guard expiration logic was not changed.
+- Post-fix CI is green for every configured check.
 - Branch remains diverged from main according to compare_commits; no merge, rebase, reset, history rewrite, PR readiness decision, workflow edit, or main/sibling branch modification was performed.
 
 BLOCKERS:
-- BLOCKED_BY_TOOLING: WT-P6 source implementation and tests are complete, but Component CI run 29086948389 is red and requires a fixer-worker to read the diagnostics artifact and apply the minimum artifact-proven correction.
+- No fixer blocker.
 
 NEXT_RECOMMENDED_AGENT:
-fixer-worker
+clean-code-reviewer
 
 FINAL_VERDICT:
-WT-P6 source implementation is complete and internally accepted. Echo suppression is bounded and non-authoritative, reconciliation is explicit/testable/safe, and persisted state is abstracted without direct DB ownership. CI acceptance is blocked only by run 29086948389 diagnostics finalization and requires an artifact-based fixer pass.
+FIX_COMPLETE. All artifact-proven WT-P6 formatting, test-fixture, and clippy failures were corrected without weakening tests or changing production semantics, and post-fix Component CI run 29088387939 completed successfully.
 
 PUSHED:
 yes
