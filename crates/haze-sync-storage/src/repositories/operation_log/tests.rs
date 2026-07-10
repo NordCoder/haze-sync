@@ -146,8 +146,7 @@ fn change(seq: i64) -> ChangeFeedRow {
         path: "Notes/today.md".to_owned(),
         revision_id: Some(format!("rev_01JSTORP5{seq}")),
         content_sha256: Some(
-            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-                .to_owned(),
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_owned(),
         ),
         size_bytes: Some(42),
         tombstone_id: None,
