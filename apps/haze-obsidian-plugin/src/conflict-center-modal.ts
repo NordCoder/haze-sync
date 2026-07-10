@@ -7,10 +7,10 @@ import {
   ConflictCenterItem,
   ConflictResolutionResult,
 } from "./conflict-center";
-import { generateConflictResolutionIdempotencyKey } from "./idempotency-keys";
 
 export interface ConflictCenterController {
   loadOpenConflicts(): Promise<ConflictCenterItem[]>;
+  prepareConflictAction(item: ConflictCenterItem, action: ConflictResolutionAction): Promise<string>;
   resolveConflict(
     item: ConflictCenterItem,
     action: ConflictResolutionAction,
@@ -28,25 +28,30 @@ interface PendingConfirmation {
 export class ConflictCenterModal extends Modal {
   private items: ConflictCenterItem[] = [];
   private loading = false;
+  private closed = true;
   private busyKey?: string;
   private statusMessage?: string;
   private pendingConfirmation?: PendingConfirmation;
-  private readonly actionKeys = new Map<string, string>();
 
   constructor(app: App, private readonly controller: ConflictCenterController) {
     super(app);
   }
 
   onOpen(): void {
+    this.closed = false;
     void this.reload();
   }
 
   onClose(): void {
+    this.closed = true;
     this.contentEl.empty();
-    this.actionKeys.clear();
   }
 
   private async reload(preserveMessage = false): Promise<void> {
+    if (this.closed) {
+      return;
+    }
+
     this.loading = true;
     this.pendingConfirmation = undefined;
     if (!preserveMessage) {
@@ -66,6 +71,10 @@ export class ConflictCenterModal extends Modal {
   }
 
   private render(): void {
+    if (this.closed) {
+      return;
+    }
+
     this.contentEl.empty();
     this.contentEl.createEl("h2", { text: "Haze Sync conflict center" });
     this.contentEl.createEl("p", {
@@ -173,13 +182,36 @@ export class ConflictCenterModal extends Modal {
       return;
     }
 
-    const idempotencyKey = this.idempotencyKeyFor(item, definition.action);
+    const actionKey = this.actionMapKey(item, definition.action);
+    this.busyKey = actionKey;
+    this.statusMessage = `Preparing ${definition.label.toLowerCase()} request…`;
+    this.render();
+
+    let idempotencyKey: string | undefined;
+    try {
+      idempotencyKey = await this.controller.prepareConflictAction(item, definition.action);
+    } catch {
+      this.statusMessage = "The conflict action could not be prepared safely. No request was sent.";
+    } finally {
+      this.busyKey = undefined;
+    }
+
+    if (this.closed) {
+      return;
+    }
+
+    if (idempotencyKey === undefined) {
+      this.render();
+      return;
+    }
+
     if (definition.confirmation !== null) {
       this.pendingConfirmation = {
         item,
         definition,
         idempotencyKey,
       };
+      this.statusMessage = undefined;
       this.render();
       return;
     }
@@ -207,8 +239,9 @@ export class ConflictCenterModal extends Modal {
       this.statusMessage = result.message;
 
       if (result.serverConfirmed) {
-        this.actionKeys.delete(actionKey);
-        await this.reload(true);
+        if (!this.closed) {
+          await this.reload(true);
+        }
         return;
       }
     } catch {
@@ -217,18 +250,6 @@ export class ConflictCenterModal extends Modal {
       this.busyKey = undefined;
       this.render();
     }
-  }
-
-  private idempotencyKeyFor(item: ConflictCenterItem, action: ConflictResolutionAction): string {
-    const mapKey = this.actionMapKey(item, action);
-    const existing = this.actionKeys.get(mapKey);
-    if (existing !== undefined) {
-      return existing;
-    }
-
-    const created = generateConflictResolutionIdempotencyKey(action);
-    this.actionKeys.set(mapKey, created);
-    return created;
   }
 
   private actionMapKey(item: ConflictCenterItem, action: ConflictResolutionAction): string {
