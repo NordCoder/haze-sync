@@ -11,9 +11,7 @@ use crate::drive::{
     ProviderError,
 };
 use crate::scan::ImportExecution;
-use crate::state::{
-    DriveChangeCursor, DriveEchoObservation, EchoDecision, EchoGuard, StateError,
-};
+use crate::state::{DriveChangeCursor, DriveEchoObservation, EchoDecision, EchoGuard, StateError};
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt;
