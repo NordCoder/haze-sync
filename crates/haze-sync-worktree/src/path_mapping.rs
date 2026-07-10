@@ -52,8 +52,8 @@ impl WorktreeConfig {
     /// Map a validated `VaultPath` to a local path under the configured root.
     ///
     /// When the root exists, this also rejects an existing symlink or
-    /// non-directory anywhere in the root/parent chain before callers can use
-    /// the returned path for filesystem access.
+    /// non-directory anywhere in the configured root or vault-parent chain
+    /// before callers can use the returned path for filesystem access.
     pub fn vault_path_to_local(
         &self,
         vault_path: &VaultPath,
@@ -148,7 +148,7 @@ impl WorktreeConfig {
         &self,
         segments: &[&str],
     ) -> Result<(), WorktreePathError> {
-        if !existing_directory_is_safe(&self.root)? {
+        if !existing_root_chain_is_safe(&self.root)? {
             return Ok(());
         }
 
@@ -271,6 +271,22 @@ fn validate_root(root: &Path) -> Result<(), WorktreePathError> {
     }
 
     Ok(())
+}
+
+fn existing_root_chain_is_safe(root: &Path) -> Result<bool, WorktreePathError> {
+    let mut ancestors: Vec<&Path> = root
+        .ancestors()
+        .filter(|ancestor| !ancestor.as_os_str().is_empty())
+        .collect();
+    ancestors.reverse();
+
+    for ancestor in ancestors {
+        if !existing_directory_is_safe(ancestor)? {
+            return Ok(false);
+        }
+    }
+
+    Ok(true)
 }
 
 fn existing_directory_is_safe(path: &Path) -> Result<bool, WorktreePathError> {
@@ -473,6 +489,27 @@ mod tests {
                 .unwrap_err(),
             WorktreePathError::BackslashEscape
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_existing_symlink_in_configured_root_chain() {
+        use std::os::unix::fs::symlink;
+
+        let test_root = temp_root("symlink-root");
+        let outside_root = test_root.join("outside");
+        remove_dir_if_exists(&test_root);
+        fs::create_dir_all(outside_root.join("worktree")).unwrap();
+        symlink(&outside_root, test_root.join("root-link")).unwrap();
+        let config = WorktreeConfig::new(test_root.join("root-link/worktree")).unwrap();
+        let vault_path = VaultPath::parse("a.md").unwrap();
+
+        assert_eq!(
+            config.vault_path_to_local(&vault_path).unwrap_err(),
+            WorktreePathError::UnsafeLocalComponent
+        );
+
+        remove_dir_if_exists(&test_root);
     }
 
     #[cfg(unix)]
