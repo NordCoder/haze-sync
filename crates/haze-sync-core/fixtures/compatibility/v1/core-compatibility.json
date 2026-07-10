@@ -125,7 +125,7 @@
         "outcome": "rejected_regression"
       }
     ],
-    "doctor_summary_healthy": {
+    "doctor_summary_offline": {
       "summary": {
         "status": "skipped",
         "total_checks": 2,
