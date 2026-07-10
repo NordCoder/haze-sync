@@ -1,56 +1,56 @@
-# W1-CORE-P4C — Core conflict primitives clean-code review
+# W1-CORE-P5 — Tombstone, delete guard, restore, and retention classifiers
 
 Component: core
 Path: crates/haze-sync-core
 Branch: component/core
 PR: #43
-Role: clean-code-reviewer
+Role: implementation-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-CORE-P4 implementation and CI fixer are complete. Follow-up Component CI is green.
+CORE-P4 implementation, fixer, and clean-code review are accepted. The clean-code code-bearing Component CI run is green.
 
+- code_bearing_sha: 6ff7583831a83069f2032c2dea4a51c7dea0c634
 - workflow: Component CI
-- workflow_run_id: 29038598984
-- run_number: unknown
+- workflow_run_id: 29067684021
+- run_number: 840
 - conclusion: success
+
+The next implementation phase is CORE-P5 from crates/haze-sync-core/docs/implementation-plan.md.
 
 ## Read
 
-Read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, chatgpt-gh-connector.md, component docs/control files, relevant current source, and PR diff. Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
+Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, relevant current source, and PR diff. Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
 
 ## Task
 
-Review CORE-P4 conflict preservation and resolution primitives plus the CI fixer.
+Implement CORE-P5: Tombstone, delete guard, restore, and retention classifiers.
 
-Focus areas:
+Follow the plan:
 
-- conflict-copy path generation and conflict-area recursion handling;
-- preservation of current revision while saving conflict copies;
-- pure decision primitives for accept_current, accept_conflict, keep_both, and mark_resolved;
-- storage/API-neutral plan outputs;
-- metadata-only versus current-revision-creating action clarity;
-- test and docs clarity;
-- preservation of non-goals.
+- harden tombstone metadata validation and retention-window tests;
+- test restore-ready metadata and add pure restore/retention eligibility classifiers where required;
+- test delete-guard count/ratio thresholds, zero totals, exact boundaries, overflow safety, and scoped unlock mismatch;
+- keep all outputs deterministic, public-safe, storage-neutral, and adapter-neutral;
+- keep physical deletion and trash movement outside Core.
 
 ## Allowed files
 
-- crates/haze-sync-core/src/conflict_service/**
-- crates/haze-sync-core/src/policy_engine/**
-- crates/haze-sync-core/src/conflict_saved_planner/**
+- crates/haze-sync-core/src/tombstone_service/**
+- crates/haze-sync-core/src/delete_guard/**
 - crates/haze-sync-core/docs/**
 - crates/haze-sync-core/control/report.md
 
-## Forbidden changes
+## Non-goals
 
-No route wiring, repository implementation, object-store writes, API DTO ownership changes, Obsidian UI behavior, workflow changes, or sibling component changes.
+No hard-delete cleanup, filesystem trash behavior, provider calls, tombstone repository, CLI parsing, API/Server route wiring, workflow changes, dependency changes, or sibling component changes.
 
 ## CI trigger policy
 
-Source/doc clean-code commits must not skip CI. A final report-only commit may skip CI.
+Product/source/docs commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only the report to crates/haze-sync-core/control/report.md. Use report-template.md. Set REPORT_TYPE to CLEAN_CODE_REVIEW and phase_id to CORE-P4C.
+Write only the report to crates/haze-sync-core/control/report.md. Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION and phase_id to CORE-P5.
