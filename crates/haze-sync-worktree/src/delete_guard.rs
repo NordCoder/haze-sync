@@ -10,7 +10,7 @@ use crate::{
     WorktreeImportClient, WorktreeImportOutcome, WorktreeScanResult, WorktreeScanSkipReason,
     WorktreeStateSnapshot,
 };
-use haze_sync_common::{VaultPath};
+use haze_sync_common::VaultPath;
 use std::collections::BTreeSet;
 use std::fmt;
 
@@ -68,8 +68,7 @@ impl WorktreeDeleteScan {
             .filter(|(_, path_state)| matches!(path_state, WorktreeAppliedPathState::Present(_)))
             .count();
         let complete = !scan.skipped.iter().any(|entry| {
-            entry.vault_path.is_none()
-                && entry.reason == WorktreeScanSkipReason::FilesystemError
+            entry.vault_path.is_none() && entry.reason == WorktreeScanSkipReason::FilesystemError
         });
 
         if !complete {
@@ -125,11 +124,7 @@ impl WorktreeDeleteScan {
                 });
             }
         }
-        candidates.sort_by(|left, right| {
-            left.vault_path
-                .as_str()
-                .cmp(right.vault_path.as_str())
-        });
+        candidates.sort_by(|left, right| left.vault_path.as_str().cmp(right.vault_path.as_str()));
         Ok(Self {
             candidates,
             tracked_present_count,
@@ -182,9 +177,7 @@ impl WorktreeDeletePlanError {
             Self::DuplicateScanPath { .. } => {
                 "delete planning received duplicate stable scan paths"
             }
-            Self::DuplicateCandidate { .. } => {
-                "delete planning received duplicate candidate paths"
-            }
+            Self::DuplicateCandidate { .. } => "delete planning received duplicate candidate paths",
         }
     }
 }
@@ -513,6 +506,6 @@ fn delete_ratio_basis_points(delete_count: usize, tracked_present_count: usize) 
     }
     let numerator = (delete_count as u128) * RATIO_SCALE_BASIS_POINTS;
     let denominator = tracked_present_count as u128;
-    let ceiling = (numerator + denominator - 1) / denominator;
+    let ceiling = numerator.div_ceil(denominator);
     ceiling.min(u128::from(u32::MAX)) as u32
 }
