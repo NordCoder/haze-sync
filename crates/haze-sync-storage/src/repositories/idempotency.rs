@@ -89,7 +89,7 @@ impl<'de> Deserialize<'de> for IdempotencyRecordInput {
             input.request_hash,
             input.response_json,
         )
-        .map_err(|error| <D::Error as serde::de::Error>::custom(error))
+        .map_err(<D::Error as serde::de::Error>::custom)
     }
 }
 
