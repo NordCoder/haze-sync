@@ -1,16 +1,16 @@
-# W1-API-P6C — API operational contract clean-code review
+# W1-API-P7 — Cross-component compatibility fixtures
 
 Component: api
 Path: crates/haze-sync-api
 Branch: component/api
 PR: #44
-Role: clean-code-reviewer
+Role: implementation-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-API-P6 implementation and CI fixer are complete. Post-fix Component CI is green.
+API-P6 implementation, CI fixer, and clean-code review are accepted. Post-fix Component CI is green.
 
 - code_bearing_sha: c88e33a5f5f6bcca928bd0fcb119e56e2e6dde7d
 - workflow: Component CI
@@ -18,32 +18,34 @@ API-P6 implementation and CI fixer are complete. Post-fix Component CI is green.
 - run_number: 1099
 - conclusion: success
 
+The next implementation phase is API-P7 from crates/haze-sync-api/docs/implementation-plan.md. Its acceptance is required to unblock Obsidian OBS-P9 compatibility work.
+
 ## Read
 
-Read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, chatgpt-gh-connector.md, component docs/control files, current API-P6 source/tests/docs, accepted Server/Common operational contracts, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt explicitly instructs it.
+Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, all current public DTOs/routes, accepted Common fixtures, downstream Server/CLI/Obsidian contract expectations, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt explicitly instructs it.
 
 ## Task
 
-Review API-P6 operational status and diagnostic contract hardening plus the CI correction.
+Implement API-P7: Cross-component compatibility fixtures.
 
-Focus on server-info metadata, readiness vocabulary, adapter summaries, cursor-presence state, pause-support summaries, skipped/not-run/placeholder semantics, public-safe DTO fields, passive API ownership, source compatibility, tests, and documentation.
+- add stable JSON fixtures for server-info, file PUT outcomes, file metadata, changes pages, conflict list/resolve, delete outcomes, public errors, and admin/status summaries where the public contract exists;
+- add Rust tests asserting fixture deserialization, serialization, vocabulary, and stable public shape;
+- document downstream TypeScript mirror guidance for Obsidian without editing TypeScript in this phase;
+- use placeholder/synthetic values only and exclude provider-specific or runtime-sensitive payloads;
+- keep client behavior outside API.
 
 ## Allowed files
 
-- crates/haze-sync-api/src/routes/admin/**
-- crates/haze-sync-api/src/dto/server/**
-- crates/haze-sync-api/src/dto/common/** when directly relevant
-- crates/haze-sync-api/docs/**
-- crates/haze-sync-api/control/report.md
+- crates/haze-sync-api/**
 
-## Boundaries
+## Non-goals
 
-No live dependency checks, Server runtime implementation, adapter mutations, repair execution, provider calls, persistence, runtime route wiring, workflow/dependency changes, or sibling component changes.
+No TypeScript edits, generated client pipeline, Server route tests, provider-specific real payloads, runtime implementation, sibling component changes, workflow changes, or public contract expansion solely to make fixtures easier.
 
 ## CI trigger policy
 
-Source/test/docs clean-code commits must not skip CI. A final report-only commit may skip CI.
+Product/tests/docs/fixture commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only crates/haze-sync-api/control/report.md. Use report-template.md, REPORT_TYPE CLEAN_CODE_REVIEW, phase_id API-P6C.
+Write only crates/haze-sync-api/control/report.md. Use report-template.md, REPORT_TYPE IMPLEMENTATION, phase_id API-P7.
