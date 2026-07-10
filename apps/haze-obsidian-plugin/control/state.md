@@ -2,31 +2,25 @@
 
 component: obsidian-plugin
 branch: component/obsidian-plugin
-status: PROMPT_READY
+status: BLOCKED_BY_DEPENDENCY
 
 active_prompt: apps/haze-obsidian-plugin/control/prompt.md
 active_report: apps/haze-obsidian-plugin/control/report.md
-active_agent_role: fixer-worker
+active_agent_role: none
 
 wave: W1
-phase: FIX-OBS-P9-NODE-CI
+phase: OBS-COMPLETE-FAN-IN
 
-implementation_status: WORKFLOW_IMPLEMENTED_NODE_FIX_REQUIRED
-clean_review_status: CLEAN_NEEDS_FIX
-ci_status: CI_RED
+implementation_status: SELF_ACCEPT
+clean_review_status: CLEAN_ACCEPT
+ci_status: CI_GREEN
 ci_workflow: Component CI
-ci_run_id: 29113089168
-ci_run_number: 1439
+ci_run_id: 29120283487
+ci_run_number: 1528
 ci_run_attempt: 1
-ci_artifact_id: 8235526638
-ci_artifact_name: ci-diag__component-obsidian-plugin__wf-component-ci__run-29113089168__attempt-1
-ci_artifact_expires_at: 2026-07-11T18:02:18Z
-known_failed_checks:
-- node-test
-- node-typecheck
-- node-build
-node_validation_status: FIX_REQUIRED
+known_failed_checks: []
+node_validation_status: GREEN
 merge_resolution_commit: 0cf1e56e759824761ce608a45b25317d963b2257
-pr_mergeable: true
-branch_behind_main: 0
 architect_status: ARCHITECT_ACCEPT
+blocker: component-local implementation plan is complete; only explicitly scoped fan-in, real Server E2E, compatibility, packaging, or release work remains
+unblock_condition: explicit Orchestrator fan-in/integration or release prompt within Obsidian ownership
