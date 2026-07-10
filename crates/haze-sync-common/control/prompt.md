@@ -1,48 +1,52 @@
-# W1-CMM-P6C — Common compatibility fixture clean-code review
+# W1-FIX-CMM-P6C-CI — Common fixture-review CI correction
 
 Component: common
 Path: crates/haze-sync-common
 Branch: component/common
 PR: #46
-Role: clean-code-reviewer
+Role: fixer-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-CMM-P6 implementation and CI fixer are complete. Final fixture/test/docs-bearing Component CI is green.
+CMM-P6C clean-code review changed tests/docs. Its final code-bearing Component CI run failed.
 
-- code_bearing_sha: 30b796ce4993d944adad0d13c0110cc62e0b34e0
-- workflow_run_id: 29081853439
-- run_number: 958
-- conclusion: success
+- code_bearing_sha: 4dd1896932c2d4114b2f9b16d86ad1bf5b8e3b81
+- workflow: Component CI
+- workflow_run_id: 29084340110
+- run_number: 1036
+- run_attempt: 1
+- artifact_id: 8224118461
+- artifact_name: ci-diag__component-common__wf-component-ci__run-29084340110__attempt-1
+- artifact_expires_at: 2026-07-11T09:51:35Z
+
+Use the diagnostics artifact as source of truth.
 
 ## Read
 
-Read process sources, component docs/control files, current fixture/tests/docs, Common primitives, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt instructs it.
+Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current compatibility fixture tests/docs, and PR diff. Download artifact 8224118461 and read summary.md, manifest.json, and every failed-check log. If unavailable or unreadable, report FIX_BLOCKED_BY_LOGS.
 
 ## Task
 
-Review CMM-P6 shared primitive compatibility fixtures plus the formatting correction.
-
-Focus on fixture completeness, stable wire vocabularies, VaultPath/hash/ID examples, adapter role/mode capability expectations, validation-error safety, Rust fixture tests, downstream mirroring guidance, deterministic secret-free examples, and Common ownership boundaries.
+Apply only the minimum artifact-proven correction for the CMM-P6C CI failure. Preserve strict fixture schema validation, complete unique unordered vocabulary checks, JSON-safe roundtrip assertions, fixture values, production Common behavior, downstream guidance, and all component non-goals.
 
 ## Allowed files
 
-- crates/haze-sync-common/fixtures/**
 - crates/haze-sync-common/tests/**
-- crates/haze-sync-common/docs/**
-- crates/haze-sync-common/src/** when directly relevant to review findings
+- crates/haze-sync-common/docs/** only if diagnostics prove a documentation issue
+- crates/haze-sync-common/fixtures/** only if diagnostics directly prove a fixture defect
+- crates/haze-sync-common/src/** only if diagnostics directly prove a production defect
 - crates/haze-sync-common/control/report.md
 
 ## Boundaries
 
-No TypeScript edits, generated client pipeline, API DTO ownership, Core policy, runtime/provider behavior, workflow/dependency changes, or sibling changes.
+No TypeScript edits, generated client pipeline, API DTO ownership, Core policy, runtime/provider behavior, workflow/dependency changes, sibling changes, fixture coverage removal, test deletion, or assertion weakening.
 
 ## CI trigger policy
 
-Source/tests/docs clean-code commits must not skip CI. A final report-only commit may skip CI.
+Source/tests/docs/fixture fixer commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only crates/haze-sync-common/control/report.md. Use REPORT_TYPE CLEAN_CODE_REVIEW and phase_id CMM-P6C.
+Write only crates/haze-sync-common/control/report.md. Use report-template.md, REPORT_TYPE FIX, phase_id FIX-CMM-P6C-CI.
