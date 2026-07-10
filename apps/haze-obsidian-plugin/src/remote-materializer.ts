@@ -20,6 +20,7 @@ import {
   RemoteSyncState,
   advanceRemoteCursor,
   applyRemoteMetadataChange,
+  clearRemoteConflictForChange,
   markRemotePullAttempt,
   recordRemoteConflict,
   recordRemoteTombstone,
@@ -219,8 +220,13 @@ async function materializeDelete(input: RemoteMaterializationInput, path: string
     return queueConflict(input, local.reason);
   }
 
+  const clearedConflictState = clearRemoteConflictForChange(
+    input.remoteSyncState,
+    input.change,
+    input.observedAt,
+  );
   const remoteSyncState = advanceRemoteCursor(
-    recordRemoteTombstone(input.remoteSyncState, input.change, null, input.observedAt),
+    recordRemoteTombstone(clearedConflictState, input.change, null, input.observedAt),
     input.change.seq,
     input.observedAt,
   );
@@ -272,10 +278,15 @@ function remoteApplied(
   contentHash: ContentHash,
   wroteLocalFile: boolean,
 ): RemoteMaterializationResult {
+  const clearedConflictState = clearRemoteConflictForChange(
+    input.remoteSyncState,
+    input.change,
+    input.observedAt,
+  );
   return {
     status: wroteLocalFile ? "applied" : "no_op",
     baseRevisionState: markRemoteBaseRevision(input.baseRevisionState, path, revisionId, contentHash, input.observedAt),
-    remoteSyncState: advanceRemoteCursor(input.remoteSyncState, input.change.seq, input.observedAt),
+    remoteSyncState: advanceRemoteCursor(clearedConflictState, input.change.seq, input.observedAt),
     path,
   };
 }
