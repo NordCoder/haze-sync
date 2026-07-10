@@ -79,7 +79,7 @@ test("PUT and DELETE requests preserve idempotency and base revision headers", a
 
   const put = await client.putFile({
     path: "Notes/fixture.md",
-    body: new Uint8Array([1, 2, 3]).buffer,
+    body: "fixture-body",
     contentHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     baseRevisionId: "rev_fixture_0001",
     idempotencyKey: "put-key",
@@ -130,13 +130,13 @@ test("invalid or permissive legacy payloads fail as invalid responses", async ()
   );
 });
 
-test("canonical public error messages redact the configured token", async () => {
+test("canonical public errors redact configured token and idempotency key", async () => {
   const client = clientWithTransport(() =>
     jsonResponse(
       {
         error: {
           code: "validation_error",
-          message: "Request included synthetic-test-token",
+          message: "Request included synthetic-test-token and mutation-secret-key",
         },
       },
       422,
@@ -144,11 +144,19 @@ test("canonical public error messages redact the configured token", async () => 
   );
 
   await assert.rejects(
-    () => client.getServerInfo(),
+    () =>
+      client.putFile({
+        path: "Notes/fixture.md",
+        body: "fixture-body",
+        contentHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        baseRevisionId: null,
+        idempotencyKey: "mutation-secret-key",
+      }),
     (error: unknown) =>
       error instanceof ApiClientError &&
       error.category === "rejected" &&
       error.message.includes("[redacted]") &&
-      !error.message.includes("synthetic-test-token"),
+      !error.message.includes("synthetic-test-token") &&
+      !error.message.includes("mutation-secret-key"),
   );
 });
