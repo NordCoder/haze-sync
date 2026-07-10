@@ -5,6 +5,7 @@ import test from "node:test";
 
 import {
   CONFLICT_RESOLUTION_ACTIONS,
+  isChangesResponseDto,
   parseApiContractFixture,
 } from "../src/api-client";
 
@@ -54,5 +55,18 @@ test("fixture parser rejects unknown fields and vocabulary drift", () => {
         operation_kinds: ["upsert_file", "unknown_operation"],
       },
     }),
+  );
+});
+
+test("change page validator rejects unordered sequences that could skip cursor work", () => {
+  const fixture = parseApiContractFixture(readJson(VENDORED_FIXTURE_PATH));
+  const [first, second, third] = fixture.changes_page.changes;
+
+  assert.equal(
+    isChangesResponseDto({
+      ...fixture.changes_page,
+      changes: [second, first, third],
+    }),
+    false,
   );
 });
