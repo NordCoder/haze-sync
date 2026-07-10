@@ -46,10 +46,10 @@ async fn worktree_state_roundtrips_in_caller_owned_transaction() {
         WorktreeStateUpsert {
             path: &path,
             last_applied_revision_id: None,
-            last_seen_sha256: Some(&hash),
-            last_seen_mtime: Some(seen_mtime),
+            last_seen_sha256: None,
+            last_seen_mtime: None,
             dirty: false,
-            last_scanned_at: Some(scanned_at),
+            last_scanned_at: None,
             last_written_by_adapter: true,
         },
     )
@@ -58,7 +58,9 @@ async fn worktree_state_roundtrips_in_caller_owned_transaction() {
 
     assert!(!updated.dirty);
     assert!(updated.last_written_by_adapter);
-    assert_eq!(updated.last_seen_sha256, Some(hash.to_string()));
+    assert!(updated.last_seen_sha256.is_none());
+    assert!(updated.last_seen_mtime.is_none());
+    assert!(updated.last_scanned_at.is_none());
 
     transaction.rollback().await.unwrap();
 }
