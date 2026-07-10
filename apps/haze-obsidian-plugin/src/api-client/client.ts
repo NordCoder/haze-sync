@@ -120,6 +120,7 @@ export class HazeSyncApiClient {
         baseRevisionId: request.baseRevisionId,
         contentType: request.contentType ?? "application/octet-stream",
       }),
+      redactionSecrets: [request.idempotencyKey],
       validate: isPutFileResponseDto,
     });
   }
@@ -130,6 +131,7 @@ export class HazeSyncApiClient {
         idempotencyKey: request.idempotencyKey,
         baseRevisionId: request.baseRevisionId,
       }),
+      redactionSecrets: [request.idempotencyKey],
       validate: isDeleteFileResponseDto,
     });
   }
@@ -152,6 +154,7 @@ export class HazeSyncApiClient {
           idempotencyKey: request.idempotencyKey,
           contentType: "application/json",
         }),
+        redactionSecrets: [request.idempotencyKey],
         validate: isResolveConflictResponseDto,
       },
     );
@@ -225,7 +228,7 @@ export class HazeSyncApiClient {
         response.status,
         endpointForReport(url),
         await readJsonPayload(response),
-        [this.config.authToken],
+        [this.config.authToken, ...(options.redactionSecrets ?? [])],
       );
     }
 
@@ -236,6 +239,7 @@ export class HazeSyncApiClient {
 interface RequestRawOptions {
   body?: BodyInit;
   headers?: Headers;
+  redactionSecrets?: readonly string[];
 }
 
 interface RequestJsonOptions<T> extends RequestRawOptions {
