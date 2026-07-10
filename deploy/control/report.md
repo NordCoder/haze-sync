@@ -6,7 +6,7 @@ CLEAN_ACCEPT
 
 AGENT:
 role: clean-code-reviewer
-agent_execution_id: W1-DEP-P4C-deployment-clean-code-review
+agent_execution_id: W1-DEP-P4C-RERUN-deployment-clean-code-review
 chat_name: deployment — W1 DEP-P3 Implementation
 
 COMPONENT:
@@ -21,11 +21,11 @@ control_report_path: deploy/control/report.md
 
 WAVE:
 id: W1
-phase_id: DEP-P4C
-dependency_status: ready; control state was PROMPT_READY, active_prompt matched deploy/control/prompt.md, active_agent_role was clean-code-reviewer, and Component CI metadata for DEP-P4 code/docs-bearing commit was green in active state/prompt
+phase_id: DEP-P4C-RERUN
+dependency_status: ready; refreshed control state was PROMPT_READY, active_prompt matched deploy/control/prompt.md, active_agent_role was clean-code-reviewer, and Component CI metadata for the DEP-P4 code/docs-bearing commit was green
 
 SUMMARY:
-Reviewed DEP-P4 database migrations, backup, and restore runbook. The runbook is clean-code accepted: migration execution owner is explicit and secret-safe, pre-migration stopped/quiesced writer requirements are clear, PostgreSQL backup/restore examples use placeholders and operator-owned paths, object-store backup coordination and restore order are documented, and the dry-run/checklist section is useful. No automatic migration runner, deploy script, production DB URL, credential, backup artifact, hard-delete cleanup, workflow change, or sibling component change was added. No source/docs changes were required during this clean-code review. Component CI success metadata was present for the DEP-P4 code/docs-bearing head before this report-only commit.
+Executed the explicitly refreshed DEP-P4C rerun and reviewed the current DEP-P4 database migrations, backup, and restore documentation. The result remains clean-code accepted. Migration execution ownership is explicit and secret-safe; pre-migration backup and stopped/quiesced writer requirements are coherent; PostgreSQL examples use placeholders and operator-owned paths; database and object-store consistency requirements are clear; restore ordering and destructive-operation warnings are explicit; and the dry-run checklist is useful. No automatic migration runner, deploy script, production database URL, real credential, backup/restore artifact, hard-delete cleanup, workflow change, or sibling-component change was introduced. No source/docs changes were required in this rerun. Green Component CI metadata applies to the DEP-P4 code/docs-bearing head before this final report-only skipped-CI commit.
 
 CHANGED_FILES:
 - deploy/control/report.md
@@ -33,17 +33,17 @@ CHANGED_FILES:
 BRANCH_AND_CONTROL:
 current_branch: component/deployment
 base_branch: main
-base_sha: c1e69a664388b0cba028170e8398b9088218957d from GitHub compare main...component/deployment during final review
-head_sha: not separately fetched after final compare; report write creates the final report-only commit
+base_sha: c1e69a664388b0cba028170e8398b9088218957d from final GitHub compare
+head_sha: not separately fetched; final report write creates an additional report-only commit
 merge_base_sha: 1a82bea5c87953db378e5e03429326df38320ee8
-branch_status: diverged; ahead_by 62 and behind_by 7 before this report-only update
+branch_status: diverged; ahead_by 66 and behind_by 7 before this report-only update
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
 ci_skip_used: yes
-ci_skip_reason: final report-only control commit; no source/docs/scripts/workflow/deployment artifact changes were made by this clean-code reviewer
+ci_skip_reason: final report-only control commit; no source/docs/scripts/workflow/deployment artifact changes were made during the rerun
 
 SCOPE:
 allowed_files_only: yes
@@ -62,54 +62,46 @@ affected_components: deployment only
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- Reviewed deploy/docs/migrations-backup-restore.md against DEP-P4 plan and deployment contract.
-- Reviewed deploy/docs/decisions.md manual migration policy decision.
-- Reviewed deploy/docs/local-compose.md and deploy/docs/server-compose.md cross-links and no-auto-migration language.
-- Reviewed deploy/docs/implementation-log.md DEP-P4 entry.
-- Reviewed PR #52 changed filenames and branch compare metadata.
-- Confirmed no source/docs changes were needed during clean-code review.
-behavior_changes: none by this clean-code review pass
+- Re-reviewed deploy/docs/migrations-backup-restore.md against the refreshed DEP-P4C-RERUN prompt.
+- Re-reviewed deploy/docs/decisions.md manual operator-run SQLx migration policy.
+- Re-checked DEP-P4 plan and deployment contract requirements for secrecy, consistency, ownership, and non-goals.
+- Re-checked current PR #52 changed filenames and branch compare metadata.
+- Confirmed no source/docs cleanup or correction was required.
+behavior_changes: none
 bugs_found:
 - No clean-code, contract, secrecy, or safety blocker found.
-- No command example was proven by shell execution because this worker is GitHub-connector-only.
+- Command examples were not shell-executed because this worker is GitHub-connector-only.
 bugs_fixed: none
-cleanups_made: none; no safe source/docs cleanup was necessary
+cleanups_made: none
 non_goals_preserved:
 - No automatic migration runner.
 - No deploy scripts.
-- No production DB URLs.
+- No production database URLs or credentials.
 - No backup archives or restore artifacts committed.
 - No hard-delete cleanup.
-- No real credentials or TLS/private keys.
-- No provider services.
-- No Worktree runtime.
 - No workflow changes.
-- No sibling component changes.
+- No sibling-component changes.
+- No provider services or Worktree runtime enablement.
 deferred_work:
-- External shell/Docker/sqlx/PostgreSQL command validation remains useful before using the runbook operationally.
-- Future DEP-P5 should define host directory permissions and production backup path layout.
-- A future accepted CLI, Server entry point, or deploy script can replace manual SQLx migration execution if explicitly scoped.
+- External shell/Docker/sqlx/PostgreSQL command validation remains useful before operational use.
+- DEP-P5 may define host directory permissions and production backup path layout.
+- A future accepted CLI, Server entry point, or deploy script may replace manual SQLx execution only when explicitly scoped.
 
 TESTS_AND_CHECKS:
 checks_run:
-- Read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, chatgpt-gh-connector.md, and wave-plan guidance from provided Project Source context.
-- Read deploy/control/state.md from component/deployment.
-- Read deploy/control/prompt.md from component/deployment.
-- Read DEP-P4 implementation report from deploy/control/report.md before overwriting it.
-- Read deploy/docs/component-contract.md.
+- Read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, chatgpt-gh-connector.md, and wave-plan guidance from Project Source context.
+- Read refreshed deploy/control/state.md and deploy/control/prompt.md from component/deployment.
+- Read the existing DEP-P4C report before replacing it with the explicit rerun report.
+- Read deploy/docs/migrations-backup-restore.md in full.
+- Read deploy/docs/decisions.md DEP-P4 migration decision.
 - Read DEP-P4 section of deploy/docs/implementation-plan.md.
-- Read deploy/docs/implementation-log.md.
-- Read deploy/docs/dependency-map.md.
-- Read deploy/docs/migrations-backup-restore.md.
-- Read deploy/docs/decisions.md DEP-P4 decision.
-- Read deploy/docs/local-compose.md and deploy/docs/server-compose.md cross-links.
-- Listed PR #52 changed filenames through GitHub connector.
-- Compared component/deployment against main through GitHub connector after review.
-- Observed active control state/prompt Component CI success metadata for DEP-P4 code/docs-bearing head: workflow `Component CI`, workflow_run_id `29034814421`, run_number `690`, run_attempt `1`, conclusion success / CI_GREEN.
+- Read relevant deploy/docs/component-contract.md secrecy, ownership, consistency, and test obligations.
+- Listed current PR #52 changed filenames through GitHub connector.
+- Compared component/deployment against main through GitHub connector.
+- Observed active control state/prompt Component CI success metadata: workflow `Component CI`, workflow_run_id `29034814421`, run_number `690`, run_attempt `1`, conclusion success / CI_GREEN.
 checks_not_run:
-- docker compose -f deploy/docker-compose.yml config was not run because this worker is constrained to the GitHub connector and has no shell/Docker execution channel.
-- pg_dump, pg_restore, docker volume, docker run, curl, sqlx migrate, restore/dry-run commands, and Markdown lint were not run for the same tooling reason.
-ci_status: CI_GREEN observed from active control state/prompt metadata for the DEP-P4 code/docs-bearing head before this report-only skipped-CI commit; skipped report commit is not CI evidence
+- docker compose, pg_dump, pg_restore, docker volume, docker run, curl, sqlx migrate, restore/dry-run commands, and Markdown lint were not run because the worker has no shell/Docker execution channel.
+ci_status: CI_GREEN for the DEP-P4 code/docs-bearing head from active control metadata; this final report-only skipped-CI commit is not CI evidence
 workflow_urls: none fetched
 known_failures: none in active control state
 
@@ -119,7 +111,7 @@ artifact_name: not applicable
 artifact_id: not applicable
 workflow_run_id: 29034814421 from active control state/prompt metadata only
 workflow_run_attempt: 1
-artifact_status: not applicable; active clean-code prompt did not instruct reading CI diagnostics artifacts
+artifact_status: not applicable; active prompt explicitly did not authorize CI diagnostics artifacts
 summary_read: no
 manifest_read: no
 logs_read: no
@@ -135,21 +127,21 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- Shell/Docker/sqlx/PostgreSQL command syntax was not executed by this reviewer due to GitHub connector-only tooling.
-- The branch remains diverged from main and behind by 7 commits according to final compare; this reviewer did not rebase, merge, or update branch history because branch management is orchestrator-owned.
-- The PR includes inherited control log files and workflow changes from earlier deployment phases; this reviewer did not alter them because prompt scope did not require or authorize cleanup.
+- Operational command syntax was not shell-executed by this GitHub-connector-only reviewer.
+- The branch remains diverged from main and behind by 7 commits; no rebase, merge, or branch-history modification was performed.
+- The PR contains inherited control-log and workflow changes from prior phases; this rerun did not alter them.
 
 BLOCKERS:
 - No clean-code blocker.
 - No contract blocker.
-- No secrecy/safety blocker.
-- No tooling blocker for this clean-code report; shell execution remains unavailable, but active state/prompt included green Component CI metadata for the DEP-P4 code/docs-bearing head.
+- No secrecy or safety blocker.
+- No blocker to closing DEP-P4C-RERUN.
 
 NEXT_RECOMMENDED_AGENT:
 orchestrator
 
 FINAL_VERDICT:
-CLEAN_ACCEPT. DEP-P4 migration/backup/restore runbook is clean-code accepted, secret-safe, consistency-aware, and stays inside Deployment scope. Orchestrator should interpret this final report-only skipped-CI commit correctly and proceed with the next control-slot decision.
+CLEAN_ACCEPT. DEP-P4C-RERUN is complete. The migration/backup/restore runbook remains explicit, secret-safe, consistency-aware, operationally cautious, and within Deployment scope. The final report-only commit uses CI skip and must not be treated as CI evidence.
 
 PUSHED:
 yes
