@@ -1,52 +1,27 @@
-# W1-FIX-CMM-P6C-CI — Common fixture-review CI correction
+# W1-CMM-COMPLETE-FAN-IN — Common component plan complete
 
 Component: common
 Path: crates/haze-sync-common
 Branch: component/common
 PR: #46
-Role: fixer-worker
+Role: none
 
-Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
+This is a hold notice, not an executable worker prompt.
 
-## Context
+## Accepted state
 
-CMM-P6C clean-code review changed tests/docs. Its final code-bearing Component CI run failed.
+Common phases CMM-P1 through CMM-P6, clean-code review, and the final CI fixer are complete. Post-fix Component CI is green.
 
-- code_bearing_sha: 4dd1896932c2d4114b2f9b16d86ad1bf5b8e3b81
+- code_bearing_sha: a3941f35bac9544bf55be608010da6f3d1e6ac94
 - workflow: Component CI
-- workflow_run_id: 29084340110
-- run_number: 1036
-- run_attempt: 1
-- artifact_id: 8224118461
-- artifact_name: ci-diag__component-common__wf-component-ci__run-29084340110__attempt-1
-- artifact_expires_at: 2026-07-11T09:51:35Z
+- workflow_run_id: 29086420405
+- run_number: 1095
+- conclusion: success
 
-Use the diagnostics artifact as source of truth.
+## Hold reason
 
-## Read
+The Common component implementation plan has no remaining component-local phase. Further work must be explicitly scoped as cross-component compatibility/fan-in, integration correction, or release hardening. Do not invent another Common implementation phase.
 
-Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current compatibility fixture tests/docs, and PR diff. Download artifact 8224118461 and read summary.md, manifest.json, and every failed-check log. If unavailable or unreadable, report FIX_BLOCKED_BY_LOGS.
+## Unblock condition
 
-## Task
-
-Apply only the minimum artifact-proven correction for the CMM-P6C CI failure. Preserve strict fixture schema validation, complete unique unordered vocabulary checks, JSON-safe roundtrip assertions, fixture values, production Common behavior, downstream guidance, and all component non-goals.
-
-## Allowed files
-
-- crates/haze-sync-common/tests/**
-- crates/haze-sync-common/docs/** only if diagnostics prove a documentation issue
-- crates/haze-sync-common/fixtures/** only if diagnostics directly prove a fixture defect
-- crates/haze-sync-common/src/** only if diagnostics directly prove a production defect
-- crates/haze-sync-common/control/report.md
-
-## Boundaries
-
-No TypeScript edits, generated client pipeline, API DTO ownership, Core policy, runtime/provider behavior, workflow/dependency changes, sibling changes, fixture coverage removal, test deletion, or assertion weakening.
-
-## CI trigger policy
-
-Source/tests/docs/fixture fixer commits must not skip CI. A final report-only commit may skip CI.
-
-## Report
-
-Write only crates/haze-sync-common/control/report.md. Use report-template.md, REPORT_TYPE FIX, phase_id FIX-CMM-P6C-CI.
+An explicit Orchestrator prompt defines a concrete fan-in/integration issue within Common ownership, with affected components and contract boundaries identified.
