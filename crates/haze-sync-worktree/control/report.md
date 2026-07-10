@@ -116,7 +116,8 @@ CI_DIAGNOSTICS:
 artifact_based_logs: no
 artifact_name: not read
 artifact_id: not read
-workflow_run_id: 29067712825 for workflow/job metadata only\ nworkflow_run_attempt: not read
+workflow_run_id: 29067712825 for workflow/job metadata only
+workflow_run_attempt: not read
 artifact_status: not read; active implementation prompt explicitly prohibited diagnostics artifact reading
 summary_read: no
 manifest_read: no
