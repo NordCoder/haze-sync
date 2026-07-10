@@ -39,8 +39,8 @@ fn scan(
 
 #[test]
 fn full_scan_plans_new_modified_missing_and_unsupported_entries() {
-    let notes_folder = DriveMetadata::new_special("folder-notes", "Notes", MIME_GOOGLE_FOLDER)
-        .with_parent("root");
+    let notes_folder =
+        DriveMetadata::new_special("folder-notes", "Notes", MIME_GOOGLE_FOLDER).with_parent("root");
     let new_file = DriveMetadata::new_file("new", "new.md", MIME_TEXT_MARKDOWN)
         .with_parent("folder-notes")
         .with_size_bytes(3)
@@ -89,12 +89,7 @@ fn full_scan_plans_new_modified_missing_and_unsupported_entries() {
     unchanged_mapping.drive_modified_time = Some(timestamp("2026-07-10T08:02:00Z"));
     unchanged_mapping.delete_candidate_since = Some(timestamp("2026-07-09T08:00:00Z"));
 
-    let mut missing_mapping = mapping(
-        "Notes/missing.md",
-        "missing",
-        "folder-notes",
-        "missing.md",
-    );
+    let mut missing_mapping = mapping("Notes/missing.md", "missing", "folder-notes", "missing.md");
     missing_mapping.core_revision = Some("rev-missing".to_owned());
     let mappings = [modified_mapping, unchanged_mapping, missing_mapping];
 
@@ -134,9 +129,7 @@ fn full_scan_plans_new_modified_missing_and_unsupported_entries() {
     assert!(!plan.has_immediate_delete_actions());
     assert!(plan.unsupported.iter().any(|entry| {
         entry.reason
-            == ScanSkipReason::ProviderUnsupported(
-                UnsupportedEntryReason::GoogleWorkspaceDocument,
-            )
+            == ScanSkipReason::ProviderUnsupported(UnsupportedEntryReason::GoogleWorkspaceDocument)
     }));
     assert!(plan
         .unsupported
@@ -146,8 +139,7 @@ fn full_scan_plans_new_modified_missing_and_unsupported_entries() {
 
 #[test]
 fn non_import_modes_prevent_downloads() {
-    let metadata =
-        DriveMetadata::new_file("new", "new.md", MIME_TEXT_MARKDOWN).with_parent("root");
+    let metadata = DriveMetadata::new_file("new", "new.md", MIME_TEXT_MARKDOWN).with_parent("root");
     let provider = FakeDriveProvider::new().with_child("root", metadata);
 
     for mode in [
@@ -254,7 +246,10 @@ fn mapped_identity_path_change_is_not_sent_as_content_modification() {
     assert!(plan.delete_candidates.is_empty());
     assert!(plan.unsupported.iter().any(|entry| {
         entry.reason == ScanSkipReason::MappingIdentityPathChanged
-            && entry.path.as_ref().is_some_and(|path| path.as_str() == "renamed.md")
+            && entry
+                .path
+                .as_ref()
+                .is_some_and(|path| path.as_str() == "renamed.md")
     }));
 }
 
@@ -302,16 +297,15 @@ fn size_mismatch_aborts_plan_before_any_core_side_effect() {
         .with_child("root", metadata)
         .with_content("file", b"short".to_vec());
 
-    let error = scan(&provider, AdapterMode::ImportOnly, false, &[])
-        .expect_err("size mismatch must fail");
+    let error =
+        scan(&provider, AdapterMode::ImportOnly, false, &[]).expect_err("size mismatch must fail");
 
     assert_eq!(error, FullScanError::ContentSizeMismatch);
 }
 
 #[test]
 fn folder_cycle_is_skipped_safely() {
-    let cycle =
-        DriveMetadata::new_special("root", "cycle", MIME_GOOGLE_FOLDER).with_parent("root");
+    let cycle = DriveMetadata::new_special("root", "cycle", MIME_GOOGLE_FOLDER).with_parent("root");
     let provider = FakeDriveProvider::new().with_child("root", cycle);
 
     let plan = scan(&provider, AdapterMode::ImportOnly, false, &[]).expect("cycle is skipped");
