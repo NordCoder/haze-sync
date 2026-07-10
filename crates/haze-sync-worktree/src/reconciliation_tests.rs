@@ -173,10 +173,12 @@ fn classifies_all_drift_kinds_and_updates_only_clean_observations() {
         entry(&report, "_haze_conflicts/open/plan.md").kind,
         WorktreeReconciliationKind::ConflictMaterialized
     );
-    assert!(report
-        .entries()
-        .iter()
-        .all(|entry| entry.vault_path.as_ref().is_none_or(|path| path.as_str() != "blocked/child.md")));
+    assert!(report.entries().iter().all(|entry| {
+        entry
+            .vault_path
+            .as_ref()
+            .map_or(true, |path| path.as_str() != "blocked/child.md")
+    }));
 
     assert_eq!(report.transitions().len(), 2);
     assert_eq!(
