@@ -16,7 +16,10 @@ async fn dependency_free_admin_status_reports_checked_readiness() {
     let json = serde_json::to_string(&payload).expect("status should serialize");
 
     assert_eq!(payload.server_status, ServerStatus::NotReady);
-    assert_eq!(payload.db_readiness_state, DependencyReadinessState::NotReady);
+    assert_eq!(
+        payload.db_readiness_state,
+        DependencyReadinessState::NotReady
+    );
     assert_eq!(
         payload.object_store_readiness_state,
         DependencyReadinessState::NotReady
@@ -31,18 +34,16 @@ async fn dependency_free_admin_status_reports_checked_readiness() {
 async fn unavailable_database_keeps_admin_status_readable() {
     let pool = PgPoolOptions::new().connect_lazy_with(PgConnectOptions::new());
     pool.close().await;
-    let state = ServerAppState::new(
-        Some(pool),
-        None,
-        None,
-        crate::state::AuthState::Disabled,
-    );
+    let state = ServerAppState::new(Some(pool), None, None, crate::state::AuthState::Disabled);
 
     let payload = status_from_state(&state).await;
     let json = serde_json::to_string(&payload).expect("status should serialize");
 
     assert_eq!(payload.server_status, ServerStatus::NotReady);
-    assert_eq!(payload.db_readiness_state, DependencyReadinessState::NotReady);
+    assert_eq!(
+        payload.db_readiness_state,
+        DependencyReadinessState::NotReady
+    );
     assert_eq!(payload.last_operation_sequence, None);
     assert_eq!(payload.adapter_count, None);
     assert_no_sensitive_leaks(&json);
