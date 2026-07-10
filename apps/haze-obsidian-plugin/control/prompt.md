@@ -1,40 +1,79 @@
-# W1-OBS-P9-NODE-CI-BLOCKED — PR merge-conflict validation gate
+# W1-FIX-OBS-P9-NODE-CI — Obsidian Node validation correction
 
 Component: obsidian-plugin
 Path: apps/haze-obsidian-plugin
 Branch: component/obsidian-plugin
 PR: #51
-Role: none
+Role: fixer-worker
 
-This is a hold notice, not an executable worker prompt.
+Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
-## Implemented state
+## Context
 
-The Obsidian-specific Node validation job has been added to `.github/workflows/component-ci.yml` without changing the existing Rust job.
+The authorized merge-conflict resolution is complete.
 
-- workflow_code_bearing_sha: 161b412bb57546c28bf0aa7fb0d9408f5b74536d
-- required checks: npm ci, plugin test, typecheck, and build
-- diagnostics integration: existing ci-run.sh, ci-finalize.sh, and one-day artifact convention
-- product or package changes: none
+- merge_commit: 0cf1e56e759824761ce608a45b25317d963b2257
+- PR #51 mergeable: true
+- branch behind main: 0
+- workflow: Component CI
+- workflow_run_id: 29113089168
+- run_number: 1439
+- run_attempt: 1
+- Rust job: success
+- Obsidian Node validation job: failure
+- artifact_id: 8235526638
+- artifact_name: ci-diag__component-obsidian-plugin__wf-component-ci__run-29113089168__attempt-1
+- artifact_expires_at: 2026-07-11T18:02:18Z
 
-## Blocker
+Use the diagnostics artifact as source of truth.
 
-PR #51 currently reports:
+## Artifact-proven failure
 
-- state: open
-- draft: true
-- mergeable: false
-- merge_commit_sha: null
+`node-test`, `node-typecheck`, and `node-build` all fail from the same TypeScript error:
 
-No pull-request workflow run or status checks were created for the workflow change. Therefore the Node commands and Rust regression job remain unexecuted for this head.
+```text
+apps/haze-obsidian-plugin/tests/api-client.test.ts:23
+TS2322: Type 'Response | Promise<Response>' is not assignable to type 'Promise<Response>'.
+```
 
-Resolving the branch conflict requires an explicitly authorized integration action. Do not merge, rebase, update the branch from main, rewrite history, or change PR lifecycle state from this hold notice.
+The helper currently permits synchronous or asynchronous handlers, while `HttpTransport` requires a `Promise<Response>` return.
 
-## Unblock condition
+## Read
 
-One of the following must happen:
+Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, current control files, apps/haze-obsidian-plugin/tests/api-client.test.ts, the `HttpTransport` declaration, package scripts, merged Component CI workflow, PR diff, and every file in artifact 8235526638: summary.md, manifest.json, failure markers, and logs.
 
-1. the user explicitly authorizes the required branch integration/conflict-resolution operation, after which Component CI must run and exact Rust/Node job and step conclusions must be inspected; or
-2. an accepted external validation path produces independently observable successful results for npm ci, plugin test, typecheck, and build, while the workflow change is separately validated through an authorized integration path.
+## Task
 
-If a created Node run fails, assign a scoped fixer using that run's exact diagnostics evidence. Do not launch a component worker from this hold notice.
+Apply only the minimum correction needed to make the test helper satisfy `HttpTransport` while preserving support for both synchronous and asynchronous test handlers. Prefer normalizing the handler result to `Promise<Response>` at the transport boundary rather than weakening the production transport type.
+
+Then allow Component CI to run and verify:
+
+- Rust workspace job remains green;
+- npm ci succeeds;
+- plugin tests succeed;
+- plugin typecheck succeeds;
+- plugin build succeeds;
+- Node diagnostics finalization succeeds.
+
+If a new check fails, do not broaden scope beyond artifact-proven evidence; report the exact new run and artifact for Orchestrator triage.
+
+## Allowed files
+
+- apps/haze-obsidian-plugin/tests/api-client.test.ts
+- apps/haze-obsidian-plugin/control/report.md
+
+Only if the artifact proves the declared production contract itself is wrong:
+
+- apps/haze-obsidian-plugin/src/api-client/**
+
+## Boundaries
+
+No workflow changes, dependency upgrades, product behavior changes, API vocabulary changes, generated output, test deletion, assertion weakening, PR lifecycle action, merge, sibling changes, or secrets.
+
+## CI trigger policy
+
+The test/source correction commit must not skip CI. A final report-only commit may skip CI only after the code-bearing correction has observable workflow evidence.
+
+## Report
+
+Write only apps/haze-obsidian-plugin/control/report.md. Use report-template.md, REPORT_TYPE FIX, phase_id FIX-OBS-P9-NODE-CI.
