@@ -132,7 +132,11 @@ fn in_memory_marker_expires_and_cannot_suppress_later_observation() {
     let mut guard = WorktreeEchoGuard::new(policy);
     let written_at = SystemTime::UNIX_EPOCH + Duration::from_secs(10);
     guard
-        .record(marker("a.md", "rev_expiring", hash(1)), written_at, written_at)
+        .record(
+            marker("a.md", "rev_expiring", hash(1)),
+            written_at,
+            written_at,
+        )
         .unwrap();
 
     let now = written_at + Duration::from_secs(61);
