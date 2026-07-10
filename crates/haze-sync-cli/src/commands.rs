@@ -7,7 +7,7 @@
 //! output is commonly copied into logs, tickets, and chat.
 
 use crate::{
-    doctor::{self, DoctorCliCommand, DoctorCommand, DoctorMode, DoctorParseError},
+    doctor::{self, DoctorCliCommand, DoctorCommand, DoctorParseError},
     server_api::ReadCommandMode,
 };
 use std::fmt;
@@ -184,6 +184,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::doctor::DoctorMode;
 
     #[test]
     fn status_command_parses() {
