@@ -48,6 +48,8 @@ backup operator: root or a dedicated backup account
 
 These names are examples. Operators may choose different names, but the resulting access model must preserve the same boundaries.
 
+Any group granted read access to secret files must be dedicated to the exact runtime identities that require those secrets. Do not reuse a broad operator, login, or shared application group for secret access.
+
 The current server container runs as the non-root user `haze-sync` with numeric UID `10001`. A future host bind mount must therefore either:
 
 - grant the container UID `10001` the required access; or
@@ -62,13 +64,13 @@ Do not make persistent directories world-writable to work around UID/GID mismatc
 | `/srv/haze-sync/objects` | persistent application data | Server object store | `haze-sync:haze-sync` | `0750` | required with PostgreSQL metadata |
 | `/srv/haze-vault/worktree` | user-visible worktree data | future Worktree runtime and authorized vault users | `<vault-owner>:haze-vault` | `2770` when shared-group writes are required | back up when it may contain authoritative or unreplicated content |
 | `/etc/haze-sync` | non-secret configuration | operator and service | `root:haze-sync` | `0750` | back up sanitized configuration where useful |
-| `/opt/haze-sync/secrets` | secret material | operator and explicitly authorized service processes | `root:haze-sync` | directory `0750`; files `0640` or stricter | back up separately through an encrypted/secret-manager process |
+| `/opt/haze-sync/secrets` | secret material | operator and explicitly authorized service processes | `root:<dedicated-secret-group>` | prefer directory `0700` and files `0600`; use `0750`/`0640` only when dedicated group access is required | back up separately through an encrypted/secret-manager process |
 | `/var/log/haze-sync` | service logs | service and log operator | `haze-sync:haze-sync` or logging agent group | `0750` | not required for state recovery |
 | `/var/backups/haze-sync` | database/object-store/worktree backup sets | backup operator | `root:<backup-group>` | `0700` or narrowly scoped `0750` | recovery source; copy off-host according to operator policy |
 | `/run/haze-sync` | short-lived runtime state | service | `haze-sync:haze-sync` | `0750` or stricter | never back up |
 | `/var/tmp/haze-sync` | optional large temporary workspace | service | `haze-sync:haze-sync` | `0700` | never back up |
 
-Permission values are conservative examples, not a substitute for host-specific security review.
+Permission values are conservative examples, not a substitute for host-specific security review. Group-readable secret modes are acceptable only when the group is dedicated and contains no unrelated identities.
 
 ## Separation invariants
 
@@ -139,6 +141,8 @@ Rules:
 - never place real secrets in tracked `.env.example`;
 - never commit production `.env`, OAuth token files, TLS private keys, database URLs, or credential exports;
 - secret files should be readable only by the operator and the exact runtime identity that needs them;
+- prefer owner-only `0700` directories and `0600` files when one identity can consume the secret;
+- use group-readable `0750` directories and `0640` files only with a dedicated secret group containing the exact authorized identities;
 - secret directories must not be writable by the service unless a future rotation contract explicitly requires it;
 - do not print secret file contents or rendered database URLs in reports, logs, or CI artifacts;
 - prefer a secret manager or encrypted operator backup over copying plaintext secrets into general backup archives.
@@ -236,6 +240,7 @@ Before starting a host deployment:
 [ ] Worktree root ownership matches the accepted Worktree mode.
 [ ] Config and secret roots are separate.
 [ ] Secret files are not service-writable unless explicitly required.
+[ ] Any group-readable secret uses a dedicated group with only authorized identities.
 [ ] Backup root is operator-owned and outside data/config/temp paths.
 [ ] Runtime temp paths contain no persistent data.
 [ ] HAZE_SYNC_OBJECT_STORE_PATH matches the approved object-store root.
@@ -247,33 +252,48 @@ Before starting a host deployment:
 
 ## Read-only validation examples
 
-Inspect ownership and modes without printing file contents:
+Run these checks only on an authorized target host. They print path metadata, not file contents.
+
+Inspect ownership and modes, including missing expected roots:
 
 ```bash
-stat -c '%U:%G %a %n' \
+for path in \
   /srv/haze-sync/objects \
   /srv/haze-vault/worktree \
   /etc/haze-sync \
   /opt/haze-sync/secrets \
   /var/log/haze-sync \
   /var/backups/haze-sync \
-  /run/haze-sync
+  /run/haze-sync \
+  /var/tmp/haze-sync
+do
+  if [ -e "$path" ]; then
+    stat -c '%U:%G %a %n' "$path"
+  else
+    printf 'MISSING %s\n' "$path"
+  fi
+done
 ```
 
-Check for world-writable directories in the approved roots:
+Check all approved roots for world-writable directories while safely skipping roots that are not provisioned yet:
 
 ```bash
-find \
+for root in \
   /srv/haze-sync \
   /srv/haze-vault \
   /etc/haze-sync \
   /opt/haze-sync \
   /var/log/haze-sync \
   /var/backups/haze-sync \
-  -xdev -type d -perm -0002 -print
+  /run/haze-sync \
+  /var/tmp/haze-sync
+do
+  [ -e "$root" ] || continue
+  find "$root" -xdev -type d -perm -0002 -print
+done
 ```
 
-Any output requires operator review. Do not attach recursive directory listings, secret file names, ACL dumps, or raw configuration to public reports.
+Any `MISSING` line or world-writable path requires operator review. Do not attach recursive directory listings, secret file names, ACL dumps, or raw configuration to public reports.
 
 ## Non-goals preserved
 
