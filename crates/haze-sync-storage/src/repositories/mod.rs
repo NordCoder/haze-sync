@@ -7,11 +7,13 @@
 pub mod adapter_cursors;
 pub mod conflicts;
 pub mod content_blobs;
+pub mod gdrive_mapping;
 pub mod idempotency;
 pub mod objects;
 pub mod operation_log;
 pub mod revisions;
 pub mod tombstones;
+pub mod worktree_state;
 
 pub use idempotency::{
     check_or_store_idempotency_record, compare_request_fingerprint, insert_idempotency_record,
@@ -38,6 +40,14 @@ pub enum RepositoryError {
     InvalidSequence,
     /// Query page limits must be between one and the configured maximum.
     InvalidLimit { max: u32 },
+    /// A persisted vault path is invalid or noncanonical.
+    InvalidPath,
+    /// A persisted or caller-provided identifier is invalid.
+    InvalidIdentifier,
+    /// A persisted or caller-provided hash is invalid.
+    InvalidHash,
+    /// Provider metadata text does not fit the storage-safe shape.
+    InvalidProviderMetadata,
     /// An operation kind string is not part of the V1 contract vocabulary.
     InvalidOperationKind,
     /// A conflict status string is not part of the V1 contract vocabulary.
@@ -58,6 +68,10 @@ impl RepositoryError {
         match self {
             Self::InvalidSequence => "invalid_sequence",
             Self::InvalidLimit { .. } => "invalid_limit",
+            Self::InvalidPath => "invalid_storage_path",
+            Self::InvalidIdentifier => "invalid_storage_identifier",
+            Self::InvalidHash => "invalid_storage_hash",
+            Self::InvalidProviderMetadata => "invalid_provider_metadata",
             Self::InvalidOperationKind => "invalid_operation_kind",
             Self::InvalidConflictStatus => "invalid_conflict_status",
             Self::CursorRegression => "cursor_regression",
@@ -72,6 +86,10 @@ impl RepositoryError {
         match self {
             Self::InvalidSequence => "sequence must be non-negative",
             Self::InvalidLimit { .. } => "limit is outside the supported range",
+            Self::InvalidPath => "storage path is invalid",
+            Self::InvalidIdentifier => "storage identifier is invalid",
+            Self::InvalidHash => "storage hash is invalid",
+            Self::InvalidProviderMetadata => "provider metadata is invalid",
             Self::InvalidOperationKind => "operation kind is not supported",
             Self::InvalidConflictStatus => "conflict status is not supported",
             Self::CursorRegression => "cursor update would move backwards",
@@ -175,6 +193,10 @@ mod tests {
             RepositoryError::InvalidLimit {
                 max: MAX_CHANGES_LIMIT,
             },
+            RepositoryError::InvalidPath,
+            RepositoryError::InvalidIdentifier,
+            RepositoryError::InvalidHash,
+            RepositoryError::InvalidProviderMetadata,
             RepositoryError::InvalidOperationKind,
             RepositoryError::InvalidConflictStatus,
             RepositoryError::CursorRegression,
@@ -188,6 +210,10 @@ mod tests {
             [
                 "invalid_sequence",
                 "invalid_limit",
+                "invalid_storage_path",
+                "invalid_storage_identifier",
+                "invalid_storage_hash",
+                "invalid_provider_metadata",
                 "invalid_operation_kind",
                 "invalid_conflict_status",
                 "cursor_regression",
