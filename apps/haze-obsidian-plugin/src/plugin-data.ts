@@ -11,6 +11,11 @@ import {
 import { LocalSyncState, createDefaultLocalSyncState, mergeLocalSyncState } from "./pending-queue";
 import { RemoteSyncState, createDefaultRemoteSyncState, mergeRemoteSyncState } from "./remote-sync-state";
 import { PluginSettings, mergePluginSettings } from "./settings";
+import {
+  SyncRuntimeState,
+  createDefaultSyncRuntimeState,
+  mergeSyncRuntimeState,
+} from "./sync-runtime-state";
 
 export interface HazeSyncPluginData {
   settings: PluginSettings;
@@ -18,6 +23,7 @@ export interface HazeSyncPluginData {
   baseRevisionState: BaseRevisionState;
   remoteSyncState: RemoteSyncState;
   conflictActionKeyState: ConflictActionKeyState;
+  syncRuntimeState: SyncRuntimeState;
 }
 
 export function parsePluginData(rawData: unknown): HazeSyncPluginData {
@@ -28,7 +34,8 @@ export function parsePluginData(rawData: unknown): HazeSyncPluginData {
       "localState" in rawData ||
       "baseRevisionState" in rawData ||
       "remoteSyncState" in rawData ||
-      "conflictActionKeyState" in rawData
+      "conflictActionKeyState" in rawData ||
+      "syncRuntimeState" in rawData
     )
   ) {
     return {
@@ -37,6 +44,7 @@ export function parsePluginData(rawData: unknown): HazeSyncPluginData {
       baseRevisionState: mergeBaseRevisionState(rawData.baseRevisionState),
       remoteSyncState: mergeRemoteSyncState(rawData.remoteSyncState),
       conflictActionKeyState: mergeConflictActionKeyState(rawData.conflictActionKeyState),
+      syncRuntimeState: mergeSyncRuntimeState(rawData.syncRuntimeState),
     };
   }
 
@@ -46,6 +54,7 @@ export function parsePluginData(rawData: unknown): HazeSyncPluginData {
     baseRevisionState: createDefaultBaseRevisionState(),
     remoteSyncState: createDefaultRemoteSyncState(),
     conflictActionKeyState: createDefaultConflictActionKeyState(),
+    syncRuntimeState: createDefaultSyncRuntimeState(),
   };
 }
 
@@ -55,6 +64,7 @@ export function serializePluginData(
   baseRevisionState: BaseRevisionState,
   remoteSyncState: RemoteSyncState,
   conflictActionKeyState: ConflictActionKeyState,
+  syncRuntimeState: SyncRuntimeState,
 ): HazeSyncPluginData {
   return {
     settings,
@@ -62,6 +72,7 @@ export function serializePluginData(
     baseRevisionState,
     remoteSyncState,
     conflictActionKeyState,
+    syncRuntimeState,
   };
 }
 
