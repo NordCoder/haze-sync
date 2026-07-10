@@ -79,6 +79,7 @@ export async function pushPendingChanges(input: {
   localState: LocalSyncState;
   baseRevisionState: BaseRevisionState;
   signal: AbortSignal;
+  allowDeletes: boolean;
   onProgress(progress: PushOperationProgress): Promise<void>;
 }): Promise<PushOperationResult> {
   const uploadBodies = await readStableUploadBodies(input.vault, input.localState.pendingQueue, input.signal);
@@ -111,8 +112,12 @@ export async function pushPendingChanges(input: {
 
   for (const mutation of plan.planned) {
     assertNotAborted(input.signal);
-    const observedAt = new Date().toISOString();
+    if (mutation.kind === "delete" && !input.allowDeletes) {
+      result.skipped += 1;
+      continue;
+    }
 
+    const observedAt = new Date().toISOString();
     if (mutation.kind === "upload") {
       const response = await input.client.putFile(mutation.request);
       assertMatchingPath(response.path, mutation.path);
