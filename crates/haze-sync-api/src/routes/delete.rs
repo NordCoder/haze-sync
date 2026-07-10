@@ -181,10 +181,7 @@ impl DeleteFileAuthRequirement {
     }
 
     /// Validate the role carried by an already verified adapter principal.
-    pub fn validate_principal(
-        self,
-        principal: &AdapterPrincipal,
-    ) -> Result<(), DeleteRouteError> {
+    pub fn validate_principal(self, principal: &AdapterPrincipal) -> Result<(), DeleteRouteError> {
         self.validate_role(principal.role())
     }
 }
@@ -532,7 +529,10 @@ mod tests {
             "Projects/Haze/old.md"
         );
         assert_eq!(
-            authenticated.request().base_revision_id().map(RevisionId::as_str),
+            authenticated
+                .request()
+                .base_revision_id()
+                .map(RevisionId::as_str),
             Some("rev_123")
         );
     }
