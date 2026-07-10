@@ -1,4 +1,4 @@
-# W1-SRV-P7-BLOCKED — Worktree runtime dependency gate
+# W1-SRV-P7-BLOCKED — Worktree runtime acceptance gate
 
 Component: server
 Path: crates/haze-sync-server
@@ -10,30 +10,20 @@ This is a hold notice, not an executable worker prompt.
 
 ## Accepted state
 
-SRV-P6 implementation, clean-code review, and CI fixer are complete. Post-fix Component CI is green.
+SRV-P6 implementation, clean-code review, and CI correction are accepted with green CI.
 
-- code_bearing_sha: ef615905b996f9eaac249a663ec8c945b508a653
-- workflow: Component CI
-- workflow_run_id: 29079795947
-- run_number: 890
-- conclusion: success
-
-Worktree WT-P7 implementation, clean-code review, and CI correction are accepted. Worktree is now queued for WT-P8, which owns the hostable watcher/runtime-service abstraction.
+Worktree WT-P8 is now implemented. Its host-driven runtime service, watcher-hint scheduling, mode handling, lifecycle, bounded work, and safe status contracts are present. However, the final WT-P8 source/docs head is formally red and has been routed to `FIX-WT-P8-CI` using artifact `8236750926`. WT-P8 has not yet completed fixer and clean-code acceptance.
 
 ## Blocked next phase
 
-The next Server plan phase is SRV-P7: Worktree runtime composition fan-in.
+The next Server phase is SRV-P7: Worktree runtime composition fan-in.
 
-Do not start SRV-P7 while WT-P8 is only queued. Server must not duplicate Worktree-owned scan/watcher/runtime logic or invent lifecycle, mode, status, cancellation, or configuration contracts before they are implemented and reviewed.
+Server must not mount or duplicate Worktree runtime behavior until:
 
-WT-P9 owns the doctor/repair and explicit Server-hosted fan-in boundary unless a dedicated cross-component contract is approved earlier.
+- WT-P8 completes its fixer and clean-code lifecycle with green CI;
+- Worktree config, lifecycle, cancellation, mode, status, and hosting boundaries are accepted;
+- WT-P9 provides the explicit Server-hosted doctor/fan-in boundary, or a dedicated equivalent fan-in contract is approved.
 
 ## Unblock condition
 
-Orchestrator may replace this hold only after:
-
-- WT-P8 runtime-service abstraction is implemented, clean-code reviewed, and green in CI;
-- the required WT-P9 Server-hosted boundary is accepted, or a dedicated cross-component fan-in prompt defines the equivalent contract;
-- Worktree config, lifecycle, cancellation, status, mode, and safe diagnostics boundaries needed by Server are concrete and readable.
-
-Until then, do not modify Server source or report for SRV-P7.
+WT-P8 clean-code/CI acceptance plus the required WT-P9 or dedicated Worktree/Server fan-in contract. Until then, do not launch a worker from this hold notice.
