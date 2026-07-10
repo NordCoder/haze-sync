@@ -1,13 +1,13 @@
 REPORT_TYPE:
-IMPLEMENTATION
+FIX
 
 STATUS:
-SELF_ACCEPT_PENDING_CI
+FIX_COMPLETE
 
 AGENT:
-role: implementation-worker
-agent_execution_id: W1-GDA-P8-implementation
-chat_name: gdrive-adapter — W1 GDA-P8 Delete Guardrails
+role: fixer-worker
+agent_execution_id: W1-FIX-GDA-P8-CI
+chat_name: gdrive-adapter — W1 GDA-P8 CI Fix
 
 COMPONENT:
 name: gdrive-adapter
@@ -21,39 +21,35 @@ control_report_path: crates/haze-gdrive-adapter/control/report.md
 
 WAVE:
 id: W1
-phase_id: GDA-P8
-dependency_status: Active control state was PROMPT_READY with active_agent_role implementation-worker and phase GDA-P8. The preceding GDA-P7C fixer source commit f282fc6292826886520678e593b332bf3a46225b had green Component CI run 29120606283. Accepted Core/API delete-guard semantics and STOR-P8 persistence boundaries were read; concrete cross-component runtime and durable repository wiring remains deferred to explicit fan-in and was not added.
+phase_id: FIX-GDA-P8-CI
+dependency_status: Active control state was PROMPT_READY with active_agent_role fixer-worker and phase FIX-GDA-P8-CI. The assigned failed Component CI run was 29125187320 attempt 1 with diagnostics artifact 8240045016. Durable delete-candidate persistence and concrete runtime wiring remain explicit fan-in concerns and were not changed.
 
 SUMMARY:
-Implemented conservative Drive delete-candidate reconciliation and mass-delete safety behind injected Core and state-store boundaries. Authoritative full-scan output can now be normalized into complete or unreliable delete evidence. A first confirmed Drive absence only records a candidate timestamp; a later authoritative scan with a distinct observation timestamp is required before any Core delete request can be proposed. Recovery clears candidate state, while a provider identity observed at a different path is surfaced as movement rather than disappearance. Authentication loss, unavailable/missing roots or folders, provider failures, duplicate/cyclic scan evidence, and ambiguous scan facts block reconciliation without candidate or delete mutation. Confirmed candidates pass adapter-specific count and ratio limits and then an injected Core delete guard; Core remains the delete arbiter. Manual unlock is intentionally unavailable because no audited adapter-facing fan-in contract was supplied. Submit mode sends idempotent Core delete requests and retires mappings only after Core Tombstoned or NotFound responses. Dry-run produces previews without state or Core delete mutation. Added fake-provider, fake-Core, and in-memory-state tests for first/repeated absence, recovery, folder movement/disappearance, auth scope loss, provider/incomplete scan failures, count/ratio mass-delete blocks, unavailable manual unlock, dry-run, Core unsafe-delete rejection, and idempotency-key redaction. No Drive hard delete, Core policy replacement, live provider/OAuth wiring, direct database ownership, concrete Server/API transport, background scheduling, workflow, dependency, sibling, or contract changes were added.
+Fixed the minimum artifact-proven GDA-P8 CI failure. Diagnostics artifact 8240045016 showed that the only failed check was cargo fmt --all --check. Applied exactly the formatter-requested layout changes in delete_guard/model.rs, delete_guard/runner.rs, and delete_guard/tests.rs. No behavior, test assertions, delete-candidate state transitions, scan reliability classification, movement-versus-disappearance handling, adapter count/ratio thresholds, injected Core delete guard, manual-unlock availability, dry-run immutability, idempotent Core delete submission, mapping retirement ordering, redaction, provider behavior, dependencies, workflows, contracts, docs, or sibling components changed. Final Component CI run 29127127665 is fully green.
 
 CHANGED_FILES:
-- crates/haze-gdrive-adapter/src/delete_guard.rs
-- crates/haze-gdrive-adapter/src/delete_guard/core.rs
 - crates/haze-gdrive-adapter/src/delete_guard/model.rs
 - crates/haze-gdrive-adapter/src/delete_guard/runner.rs
-- crates/haze-gdrive-adapter/src/delete_guard/state_store.rs
 - crates/haze-gdrive-adapter/src/delete_guard/tests.rs
-- crates/haze-gdrive-adapter/src/lib.rs
 - crates/haze-gdrive-adapter/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/gdrive-adapter
 base_branch: main
 base_sha: current main observed as c1e69a664388b0cba028170e8398b9088218957d; PR base_sha remains 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
-head_sha: 46a8840e143f0c911dc02a3107d0546bfd8242ed before writing this report; the report itself is written by a later report-only GitHub contents API commit with [skip ci]
+head_sha: 0120134b3c1a7b446b6c1c96953ce9abe4971d55 before writing this report; the report itself is written by a later report-only commit with [skip ci]
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
 ci_skip_used: yes for the final report-only commit only
-ci_skip_reason: the final commit changes only crates/haze-gdrive-adapter/control/report.md and cannot change executable behavior or validation results. Every source/test/export commit was non-skipped and triggered Component CI normally.
+ci_skip_reason: only crates/haze-gdrive-adapter/control/report.md changes in the final commit. All three source/test formatting commits were non-skipped and received normal Component CI.
 
 SCOPE:
 allowed_files_only: yes
 scope_expansion_used: no
-scope_expansion_rationale: none; all implementation and tests remain inside the assigned gdrive-adapter source tree and GDA-P8 scope
+scope_expansion_rationale: none
 cross_component_changes: no
 forbidden_files_touched: no
 
@@ -62,115 +58,96 @@ contract_read: yes
 contract_satisfied: yes
 contract_changes_requested: no
 contract_change_rationale: none
-affected_components:
-- Core/API delete guard and DELETE response semantics are represented only through an injected adapter boundary; no Core/API source or policy was changed.
-- Storage/Server remains the owner of concrete durable mapping/delete-candidate fan-in; no repository implementation, migration, SQLx, or direct database access was added.
+affected_components: none
 
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- Added a focused delete_guard module facade with model, injected Core gateway, reconciliation runner, injected candidate-state store, and tests.
-- Added DeleteScanObservation with explicit Complete and Unreliable evidence. FullScanError provider categories distinguish permission loss, root/folder disappearance, provider failure, and incomplete scan.
-- Converted FullScanPlan facts into delete evidence while treating duplicate-provider and folder-cycle evidence as incomplete and preserving scan-blocked mapping identities.
-- Detected MappingIdentityPathChanged as provider identity movement, surfaced it as an operator-safe notice, and cleared any stale candidate at the old mapped path instead of proposing a delete.
-- Required a first authoritative absence to mark GDriveMapping.delete_candidate_since and a later authoritative scan timestamp to confirm it.
-- Added ambiguity rejection for duplicate candidate path/identity, observation timestamp mismatch, simultaneous recovery and absence, or overlap between movement and absence facts.
-- Applied existing adapter DeleteSafetyConfig count and ratio thresholds before invoking the injected Core guard.
-- Added injected CoreDeleteGateway with adapter/run-scoped guard request and Core DELETE request/response vocabulary matching accepted semantics.
-- Kept manual unlock unavailable; no unlock token, flag, or bypass is accepted by the adapter boundary.
-- Added stable SHA-256-derived Core delete operation IDs while redacting them from Debug output.
-- Retired mapping state only after Core Tombstoned or NotFound. Rejected deletes preserve mappings; UnsafeDelete stops remaining submissions in the batch.
-- Added mode enforcement: ImportOnly/Bidirectional submit, DryRun or dry_run flag preview, Disabled/ReadOnly/ExportOnly block delete processing.
-- Added fake Core idempotent replay and safe error boundaries plus in-memory mapping/candidate persistence with identity validation.
-behavior_changes:
-- A missing Drive file can no longer progress beyond candidate marking on its first authoritative absence.
-- A second authoritative absence can only become a Core delete proposal after adapter count/ratio limits and Core guard approval.
-- Permission/auth loss, provider failures, missing root/folder access, incomplete scans, and ambiguous facts do not mark or confirm candidates.
-- Provider identity movement clears old candidate state and never becomes a disappearance delete in the same scan.
-- Dry-run evaluates and previews confirmed candidates but performs no state or Core delete mutation.
-- No Drive-side delete or trash call is performed by GDA-P8.
+- Applied rustfmt layout to CompleteDeleteScan::from_full_scan and DeleteBlockReason in src/delete_guard/model.rs.
+- Applied rustfmt layout to confirmed-absence notice construction in src/delete_guard/runner.rs.
+- Applied rustfmt layout to imports, helper construction, scan_observation calls, folder metadata construction, mass-delete setup, and dry-run invocation in src/delete_guard/tests.rs.
+behavior_changes: none
+bugs_found:
+- GDA-P8 source and tests contained formatting that did not match cargo fmt --all --check.
+bugs_fixed:
+- Every formatter difference listed in logs/rust-fmt.log was applied exactly.
+cleanups_made: artifact-requested formatting only
 non_goals_preserved:
-- No immediate Core tombstone on first disappearance.
-- No Drive hard delete or provider-side deletion.
+- No immediate delete on first Drive disappearance.
+- No Drive trash or hard-delete operation.
 - No adapter-local replacement or bypass of Core delete policy.
-- No unaudited manual unlock or admin mutation route.
-- No real Google SDK, OAuth credentials, network provider calls, or raw provider payloads.
-- No concrete HTTP/Server/API transport.
-- No direct Storage repository, SQLx, database URL, migration, or direct DB ownership.
-- No background task, scheduler, webhook, deployment, workflow, or dependency changes.
-- No sibling component changes.
+- No unaudited manual unlock.
+- No live Google SDK, OAuth, credentials, network provider wiring, or raw provider payloads.
+- No concrete Server/API transport, Storage repository, SQLx, migration, or direct database ownership.
+- No background scheduling, workflow, dependency, sibling, contract, or documentation changes.
 - No test deletion or assertion weakening.
 deferred_work:
-- Concrete audited manual-unlock delivery remains unavailable until an explicit Core/API/Server fan-in contract exists.
-- Durable mapping/delete-candidate persistence remains an accepted but unwired Storage/Server fan-in concern.
-- Live provider metadata/runtime integration, status/doctor exposure, metrics, scheduling, and E2E wiring remain later phases.
-- The orchestrator/fixer must triage the diagnostics-finalizer failure from Component CI run 29125187320; this implementation worker did not read diagnostics artifacts.
+- Orchestrator may close the GDA-P8 fixer lifecycle and schedule clean-code review.
+- Durable candidate/mapping persistence, live provider/runtime integration, audited manual-unlock fan-in, status/doctor, and E2E wiring remain later work.
 
 TESTS_AND_CHECKS:
 checks_run:
-- Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, and the development wave plan from Project Sources.
-- Read current control state, exact GDA-P8 prompt, preceding fixer report, component contract, GDA-P8 implementation-plan section, dependency map, current scan/change-feed/export/mapping abstractions, adapter delete-safety configuration, accepted Core delete guard, accepted API DELETE DTO/response contract, Storage boundary context, PR metadata, and branch diff.
-- Did not read CI diagnostics artifacts because the active implementation prompt prohibits it.
-- Created src/delete_guard.rs in non-skipped source commit ad6c882714e9e6c19eb2a0bc7260180887bdb940.
-- Created src/delete_guard/model.rs in non-skipped source commit a04dc68675d2f17cf29298355c93ba062cc40362.
-- Created src/delete_guard/core.rs in non-skipped source commit cab9993e95340ef8507e3cd65a55aacfb16f1c19.
-- Created src/delete_guard/state_store.rs in non-skipped source commit 12d4f7cc5627ca839311f369614919e493737434.
-- Created src/delete_guard/runner.rs in non-skipped source commit d70f84afa9c4967c4a7fe2478ffe6fafa8991d8f.
-- Created src/delete_guard/tests.rs in non-skipped test commit 2bc6e8eb2a48b810bc2c8587f91c01aa796c6f60.
-- Updated src/lib.rs with final public module/exports in non-skipped source commit 46a8840e143f0c911dc02a3107d0546bfd8242ed.
-- Observed PR #50 at source head 46a8840e143f0c911dc02a3107d0546bfd8242ed; PR remained open, draft, unmerged, and mergeable.
-- Observed Component CI run 29125187320, run number 1587, job 86469143563 for final GDA-P8 source head.
+- Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, development wave plan, active control state/prompt/report, GDA-P8 plan and contract context, current delete-guard source/tests, PR metadata, and branch comparison.
+- Confirmed diagnostics artifact 8240045016 was unexpired and matched source head 46a8840e143f0c911dc02a3107d0546bfd8242ed.
+- Downloaded diagnostics artifact 8240045016.
+- Read summary.md, manifest.json, failures/rust-fmt.txt, and logs/rust-fmt.log.
+- Confirmed the only failed check was rust-fmt exit 1 for cargo fmt --all --check.
+- Updated src/delete_guard/model.rs in non-skipped source commit f14e5e13773ef1fd946f1d0a37baabeef0025a22.
+- Updated src/delete_guard/runner.rs in non-skipped source commit d6c001ebd99fcf16d2e0739a96652d5ad3d6343b.
+- Updated src/delete_guard/tests.rs in final non-skipped source/test commit 0120134b3c1a7b446b6c1c96953ce9abe4971d55.
+- Observed Component CI run 29127127665, run number 1619, job 86475026490 for final source head 0120134b3c1a7b446b6c1c96953ce9abe4971d55.
 - Observed cargo fmt success.
 - Observed cargo check success.
-- Observed cargo test success, including first/repeated absence, recovery, movement, auth/provider/incomplete scan, count/ratio guard, unavailable manual unlock, dry-run, unsafe Core rejection, and redaction tests.
+- Observed cargo test success, preserving GDA-P8 safety regressions.
 - Observed cargo clippy success.
-- Observed Finalize CI diagnostics failure and Upload CI diagnostics success.
-- Compared component/gdrive-adapter against current main; connector reported the branch diverged, ahead by 202 and behind by 12, with merge base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2.
+- Observed Finalize CI diagnostics success; diagnostics upload was skipped because no checks failed.
+- Observed PR #50 remained open, draft, unmerged, and mergeable at source head 0120134b3c1a7b446b6c1c96953ce9abe4971d55.
+- Compared component/gdrive-adapter against current main; connector reported branch diverged, ahead by 211 and behind by 12, with merge base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2.
 checks_not_run:
-- No local repository shell checks were run because repository operations are constrained to the GitHub connector.
-ci_status: CI_RED
+- No local repository shell checks were run because repository operations are constrained to the GitHub connector. GitHub Component CI supplied authoritative validation.
+ci_status: CI_GREEN
 workflow_urls:
-- https://github.com/NordCoder/haze-sync/actions/runs/29120606283
 - https://github.com/NordCoder/haze-sync/actions/runs/29125187320
+- https://github.com/NordCoder/haze-sync/actions/runs/29127127665
 known_failures:
-- Final GDA-P8 Component CI run 29125187320 is overall failure because Finalize CI diagnostics failed.
-- All visible Rust product validation steps passed: cargo fmt, cargo check, cargo test, and cargo clippy.
+- Assigned run 29125187320: rust-fmt failed on formatter-only layout differences.
+- No failures observed in final run 29127127665.
 
 CI_DIAGNOSTICS:
-artifact_based_logs: no
-artifact_name: not read
-artifact_id: not read
+artifact_based_logs: yes
+artifact_name: ci-diag__component-gdrive-adapter__wf-component-ci__run-29125187320__attempt-1
+artifact_id: 8240045016
 workflow_run_id: 29125187320
 workflow_run_attempt: 1
-artifact_status: not inspected; active implementation prompt explicitly prohibits reading CI diagnostics artifacts
-summary_read: no
-manifest_read: no
-logs_read: none
+artifact_status: found, downloaded, unexpired, readable, and matched the assigned source SHA; digest sha256:b39fd5b055860d2b0becee540f8b99310a0b1136d0436b346a8dad3aeebfd2bf
+summary_read: yes
+manifest_read: yes
+logs_read:
+- failures/rust-fmt.txt
+- logs/rust-fmt.log
 raw_job_logs_used: no
-diagnostics_failure: workflow metadata reports Finalize CI diagnostics failure; exact artifact cause intentionally deferred to the fixer-worker lifecycle
+diagnostics_failure: none
 
 SAFETY_AND_SECRECY:
 secrets_committed: no
 unsafe_public_output: no
 raw_errors_exposed: no
-provider_calls_added: no Drive mutation calls; only an injected Core guard/delete boundary was added
+provider_calls_added: no
 hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- Concrete audited manual unlock is not available at the adapter boundary; the implementation correctly remains fail-closed when Core requires it.
-- Durable candidate/mapping persistence is still an explicit fan-in concern rather than adapter-owned direct database access.
-- Component CI product checks are green, but diagnostics finalization made run 29125187320 overall red. Artifact content was not read in this implementation phase.
-- Branch is behind current main by 12 commits; no merge, rebase, branch update, PR readiness change, or merge was performed.
+- The diagnostics archive stored required files at archive root rather than under ci-diagnostics/, but all required evidence was present and readable.
+- Branch remains behind current main by 12 commits; no merge, rebase, branch update, PR readiness change, or merge was performed.
 
 BLOCKERS:
-none for GDA-P8 implementation semantics; CI finalizer requires orchestrator/fixer triage before lifecycle completion
+none
 
 NEXT_RECOMMENDED_AGENT:
 orchestrator
 
 FINAL_VERDICT:
-SELF_ACCEPT_PENDING_CI. GDA-P8 now treats Drive disappearance conservatively, requires repeated authoritative absence, distinguishes provider/access/movement/incomplete-scan conditions, applies adapter and Core mass-delete guards, keeps manual unlock unavailable without an audited contract, and never performs Drive hard deletes. All visible Rust product checks passed; overall CI remains red only at diagnostics finalization and must proceed through the orchestrator/fixer lifecycle.
+FIX_COMPLETE. The artifact-proven GDA-P8 rustfmt failure was corrected without behavior change, test weakening, scope expansion, or cross-component work. Final source commit 0120134b3c1a7b446b6c1c96953ce9abe4971d55 has green Component CI run 29127127665.
 
 PUSHED:
 yes
