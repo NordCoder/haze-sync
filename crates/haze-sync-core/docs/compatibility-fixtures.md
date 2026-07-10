@@ -27,7 +27,7 @@ The V1 catalog covers:
 - idempotency replay for the same request;
 - idempotency conflict for a different request fingerprint;
 - advanced, unchanged, and rejected-regression operation-log cursor outcomes;
-- a passive doctor report with an intentionally skipped live DB check;
+- an offline passive doctor report with an intentionally skipped live DB check;
 - a passive doctor report containing explicit `not_run` and `placeholder` states.
 
 All identifiers, paths, timestamps, hashes, counts, and JSON bodies are synthetic.
@@ -61,6 +61,11 @@ rely on:
 - cursor updates being monotonic classifications only;
 - doctor summary counts matching the ordered checks and preserving distinct
   `skipped`, `not_run`, and `placeholder` semantics.
+
+The `doctor_summary_offline` example is deliberately not named healthy: its
+aggregate status is `skipped` because the live DB check was not performed. A
+consumer may describe the report as having no failures, but it must not map
+`skipped` to `ok` or claim that the skipped dependency was verified.
 
 The `conflict_saved` example deserves special attention. The current Rust enum
 retains the serialized tag `rejected_stale_or_unknown_base` for compatibility,
