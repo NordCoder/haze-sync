@@ -32,7 +32,6 @@ export interface LocalScanOperationResult {
 export interface PushOperationProgress {
   path: string;
   operationIdempotencyKey: string;
-  queueVersion: number;
   baseRevisionState: BaseRevisionState;
 }
 
@@ -235,14 +234,9 @@ export function clearPendingChangeIfCurrent(
   state: LocalSyncState,
   path: string,
   operationIdempotencyKey: string,
-  queueVersion: number,
 ): LocalSyncState {
   const current = state.pendingQueue[path];
-  if (
-    current === undefined ||
-    current.operationIdempotencyKey !== operationIdempotencyKey ||
-    current.version !== queueVersion
-  ) {
+  if (current === undefined || current.operationIdempotencyKey !== operationIdempotencyKey) {
     return state;
   }
 
@@ -261,7 +255,6 @@ function progressForEntry(
   return {
     path: entry.path,
     operationIdempotencyKey: entry.operationIdempotencyKey,
-    queueVersion: entry.version,
     baseRevisionState,
   };
 }
