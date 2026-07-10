@@ -2,23 +2,23 @@
 
 component: server
 branch: component/server
-status: BLOCKED_BY_DEPENDENCY
+status: PROMPT_READY
 
 active_prompt: crates/haze-sync-server/control/prompt.md
 active_report: crates/haze-sync-server/control/report.md
-active_agent_role: none
+active_agent_role: implementation-worker
 
 wave: W1
-phase: SRV-P7-BLOCKED
+phase: SRV-STOR-TEST-SUPPORT-FAN-IN
 
-implementation_status: NOT_STARTED
-clean_review_status: CLEAN_ACCEPT
-ci_status: CI_GREEN
+implementation_status: PENDING
+clean_review_status: NOT_STARTED
+ci_status: CI_GREEN_BASELINE
 ci_workflow: Component CI
 ci_run_id: 29079795947
 ci_run_number: 890
 ci_run_attempt: 1
 known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
-blocker: WT-P8 fixer is green but WT-P8C clean-code acceptance and WT-P9 Server fan-in boundary are unavailable
-unblock_condition: green WT-P8C acceptance plus required WT-P9 or a dedicated Worktree/Server fan-in contract
+fan_in_scope: remove Storage test-support from Server production dependency while preserving dev/test access
+post_phase_hold: SRV-P7 remains blocked until WT-P8C acceptance and WT-P9 or dedicated Worktree/Server fan-in contract
