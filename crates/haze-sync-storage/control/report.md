@@ -1,13 +1,13 @@
 REPORT_TYPE:
-IMPLEMENTATION
+FIX
 
 STATUS:
-SELF_ACCEPT_PENDING_CI
+FIX_COMPLETE
 
 AGENT:
-role: implementation-worker
-agent_execution_id: W1-STOR-P6-storage-conflict-tombstone-delete-support
-chat_name: storage — W1 STOR-P6 Implementation
+role: fixer-worker
+agent_execution_id: W1-FIX-STOR-P6-CI-storage-ci-fix
+chat_name: storage — W1 FIX-STOR-P6-CI CI Fix
 
 COMPONENT:
 name: storage
@@ -21,32 +21,29 @@ control_report_path: crates/haze-sync-storage/control/report.md
 
 WAVE:
 id: W1
-phase_id: STOR-P6
-dependency_status: active prompt state was PROMPT_READY; active_prompt matched crates/haze-sync-storage/control/prompt.md; active role was implementation-worker; STOR-P5 implementation, fixer, and clean-code review were accepted; active state recorded Component CI run 29067675101 as CI_GREEN before this phase
+phase_id: FIX-STOR-P6-CI
+dependency_status: active prompt state was PROMPT_READY; active_prompt matched crates/haze-sync-storage/control/prompt.md; active role was fixer-worker; STOR-P6 implementation report status was SELF_ACCEPT_PENDING_CI; active state recorded Component CI run 29080167290 as CI_RED with diagnostics artifact 8222444064
 
 SUMMARY:
-Implemented STOR-P6 conflict, tombstone, and delete repository support within storage scope. Added typed caller-decided conflict insertion, bounded status listing, lookup, safe persisted-status validation, and guarded open-to-resolved/open-to-ignored metadata updates. Added one-shot tombstone restore metadata updates without clearing retention or performing content restoration. Extended operation-log changes-feed mapping to reject invalid negative persisted sizes through `RepositoryError::InvalidSizeBytes`, added conflict/delete/restore event metadata tests, and expanded the feature-gated PostgreSQL flow test to cover conflict, tombstone, lifecycle-update, and operation-feed roundtrips inside one caller-owned transaction. Documented that full `accept_conflict` content replacement and restore orchestration remain Core/API/Server fan-in responsibilities. No conflict policy, hard delete, provider/filesystem trash behavior, API handler, retention cleanup job, workflow change, dependency change, or sibling component change was added.
+Fixed the minimum artifact-proven causes of the STOR-P6 CI failure inside storage scope. Diagnostics showed that changing `ConflictRepository::list_by_status` from the existing two-argument consumer contract to a three-argument limit API broke the storage DB harness and Server consumers, while rustfmt also reported layout differences in `conflicts.rs` and `operation_log.rs`. Restored the compatible two-argument `list_by_status` method using the repository maximum page size, retained explicit bounded behavior as `list_by_status_limited`, updated the STOR-P6 internal PostgreSQL flow test to use the bounded method, and applied every reported rustfmt change. No Server, sibling-component, workflow, dependency, conflict-policy, hard-delete, provider/filesystem trash, API-handler, retention-cleanup, or schema change was made.
 
 CHANGED_FILES:
 - crates/haze-sync-storage/src/repositories/conflicts.rs
-- crates/haze-sync-storage/src/repositories/tombstones.rs
 - crates/haze-sync-storage/src/repositories/operation_log.rs
-- crates/haze-sync-storage/docs/decisions.md
-- crates/haze-sync-storage/docs/implementation-log.md
 - crates/haze-sync-storage/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/storage
 base_branch: main
 base_sha: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
-head_sha: d7f66d03428df551ee4a49bc13b0d997faaab79a before report write; report write creates the next branch head
+head_sha: b47bf13f652e0287c6153e6b0c969140920b796e before report write; report write creates the next branch head
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: crates/haze-sync-storage/control/prompt.md
 control_report_written: crates/haze-sync-storage/control/report.md
 control_files_archived_by_worker: no
 ci_skip_used: yes for the final report-only commit only
-ci_skip_reason: final commit updates only crates/haze-sync-storage/control/report.md; product/source/docs commits did not use CI skip and triggered Component CI
+ci_skip_reason: final commit updates only crates/haze-sync-storage/control/report.md; both source fixer commits did not use CI skip and triggered Component CI
 
 SCOPE:
 allowed_files_only: yes
@@ -65,56 +62,57 @@ affected_components: storage only
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- Added `NewConflict` using validated `ConflictId`, `RevisionId`, `AdapterId`, and `VaultPath` inputs while leaving policy/materialization decisions with callers.
-- Added conflict insertion returning persisted metadata.
-- Changed conflict status listing to use shared bounded limit validation.
-- Added safe validation of persisted conflict status strings before returning rows.
-- Added guarded open-to-resolved and open-to-ignored metadata updates; repeated or competing updates return no row instead of overwriting an already-closed conflict.
-- Added one-shot tombstone `restored_at` updates guarded by `restored_at is null` while retaining deletion and retention metadata.
-- Preserved tombstone repository prohibition on hard delete, cleanup, provider calls, or implicit object restoration.
-- Updated operation changes-page row mapping to reject negative persisted revision sizes as `InvalidSizeBytes` rather than returning unsafe or invalid data.
-- Added unit coverage for conflict status vocabulary, bounded conflict listing, typed conflict inputs, guarded tombstone restore SQL, delete/restore/conflict operation references, and persisted-size validation.
-- Expanded the existing feature-gated PostgreSQL flow test to cover conflict insert/list/get/resolve, tombstone insert/get/active-list/restore, operation-log conflict/delete/resolve/restore rows, and changes-page outputs inside one caller-owned transaction.
-- Documented that `accept_conflict` content replacement and restore flows require Core policy plus API/Server transaction fan-in.
-- Added a STOR-P6 implementation-log entry.
-behavior_changes: Storage now exposes missing passive conflict insertion and tombstone restore metadata primitives; conflict lists are bounded; invalid persisted conflict statuses and negative changes-feed sizes are rejected through safe repository errors
-bugs_found: existing conflict reads could return unsupported persisted status strings without validation; the tombstone repository lacked restore metadata support; changes-feed row mapping did not independently reject invalid negative persisted sizes
-bugs_fixed: added persisted conflict-status validation, one-shot restore metadata update, bounded conflict listing, and safe persisted-size validation
-cleanups_made: centralized conflict row mapping through safe repository errors and reused a private guarded conflict lifecycle update helper
-non_goals_preserved: no conflict resolution/acceptance policy, no hard delete, no filesystem/provider trash move, no API route handler, no retention cleanup job, no workflow/dependency changes, no sibling component changes
-deferred_work: Component CI verification is pending; clean-code review should inspect lifecycle-update naming, operation-log integration test size, and transaction-boundary documentation before final acceptance
+- Restored the existing `ConflictRepository::list_by_status(executor, status)` public contract used by storage integration tests and Server routes.
+- Implemented the compatible method by delegating to the bounded query with `MAX_CHANGES_LIMIT`, preserving bounded repository behavior.
+- Exposed explicit caller-selected pagination as `list_by_status_limited(executor, status, limit)` with shared `validate_limit` enforcement.
+- Updated only the internal STOR-P6 PostgreSQL flow test to call `list_by_status_limited(..., 10)`.
+- Applied artifact-reported rustfmt layout to conflict row mapping, persisted-size mapping, guarded lifecycle assertions, and changes-feed reference assertions.
+behavior_changes: existing consumers compile against the restored two-argument conflict listing API; callers that need a smaller validated page can use the separate limited method; passive conflict semantics remain unchanged
+bugs_found: STOR-P6 introduced an incompatible method-signature change that broke existing storage and Server consumers; source formatting did not match rustfmt
+bugs_fixed: restored source compatibility without modifying consumers or weakening bounded query behavior; applied all reported formatting changes
+cleanups_made: documented the compatibility and bounded conflict-listing methods separately
+non_goals_preserved: no Core conflict policy, no hard delete, no filesystem/provider trash behavior, no API handlers, no retention cleanup execution, no workflow/dependency changes, no sibling component changes, no test deletion, no assertion weakening
+deferred_work: new Component CI run 29082024073 is pending for the source-fix head; clean-code review may proceed only after orchestrator evaluates that run
 
 TESTS_AND_CHECKS:
 checks_run:
-- Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, and wave-plan background from Project Sources.
-- Read storage control state, active prompt, previous report, component contract, implementation plan, implementation log, dependency map, decisions, conflict/tombstone/operation-log repositories, row models, test support, relevant migrations, shared identifier types, PR metadata, and main..component/storage compare metadata through GitHub connector.
-- Static verification of allowed-file scope, caller-owned executor/transaction use, safe error mapping, absence of hard-delete SQL, and preservation of Core/API/Server ownership boundaries.
-- GitHub workflow-run lookup for code/docs head d7f66d03428df551ee4a49bc13b0d997faaab79a observed Component CI run 29080167290 with status in_progress and conclusion none.
-- GitHub PR #47 metadata lookup showed open draft PR head d7f66d03428df551ee4a49bc13b0d997faaab79a before report write.
-- GitHub compare main..component/storage reported the branch remains diverged with merge base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2.
+- Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, and chatgpt-gh-connector.md from Project Sources.
+- Read current storage control state, active prompt, previous implementation report, component contract, implementation plan, dependency map, relevant source, and PR metadata through GitHub connector.
+- Downloaded diagnostics artifact 8222444064 and read summary.md, manifest.json, all four failure markers, and every failed-check log: cargo-check, cargo-test, cargo-clippy, and rust-fmt.
+- Verified cargo-check, cargo-test, and cargo-clippy all failed from missing third arguments after the incompatible `list_by_status` signature change; no additional compiler or clippy diagnostic was present.
+- Applied every diff listed in the rust-fmt log.
+- GitHub workflow-run lookup for source-fix commit b47bf13f652e0287c6153e6b0c969140920b796e observed Component CI run 29082024073 with status pending and conclusion none.
+- GitHub PR #47 metadata lookup showed open draft PR head b47bf13f652e0287c6153e6b0c969140920b796e before report write.
 checks_not_run:
 - cargo fmt --all --check locally
-- cargo check -p haze-sync-storage locally
-- cargo test -p haze-sync-storage locally
-- cargo test -p haze-sync-storage --features test-support locally
+- cargo check --workspace locally
+- cargo test --workspace locally
 - cargo clippy --workspace --all-targets -- -D warnings locally
-ci_status: CI_PENDING for Component CI run 29080167290 on code/docs head d7f66d03428df551ee4a49bc13b0d997faaab79a
+ci_status: CI_PENDING for Component CI run 29082024073 on source-fix commit b47bf13f652e0287c6153e6b0c969140920b796e
 workflow_urls:
-- prior accepted run: Component CI 29067675101, run_number 839, conclusion success
-- new STOR-P6 run: Component CI 29080167290, run_number 916, status in_progress, conclusion none
+- failed run: Component CI 29080167290, run_number 916, attempt 1, artifact 8222444064
+- new source-fix run: Component CI 29082024073, run_number 972, status pending, conclusion none
 known_failures:
-- none observed for STOR-P6 at report time; CI remains in progress
+- From artifact 8222444064: cargo-check/cargo-test/cargo-clippy failed because existing two-argument `list_by_status` consumers no longer compiled; rust-fmt failed on specified formatting diffs
 
 CI_DIAGNOSTICS:
-artifact_based_logs: no; active role is implementation-worker and prompt explicitly prohibited reading CI diagnostics artifacts unless a future active prompt instructs it
-artifact_name: none
-artifact_id: none
-workflow_run_id: 29080167290 from workflow metadata only, not a diagnostics artifact source
-workflow_run_attempt: unknown from commit workflow-run lookup
-artifact_status: not applicable
-summary_read: no
-manifest_read: no
-logs_read: none
+artifact_based_logs: yes
+artifact_name: ci-diag__component-storage__wf-component-ci__run-29080167290__attempt-1
+artifact_id: 8222444064
+workflow_run_id: 29080167290
+workflow_run_attempt: 1
+artifact_status: downloaded, extracted, and read successfully
+summary_read: yes
+manifest_read: yes
+logs_read:
+- failures/cargo-check.txt
+- failures/cargo-clippy.txt
+- failures/cargo-test.txt
+- failures/rust-fmt.txt
+- logs/cargo-check.log
+- logs/cargo-clippy.log
+- logs/cargo-test.log
+- logs/rust-fmt.log
 raw_job_logs_used: no
 diagnostics_failure: none
 
@@ -127,19 +125,18 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- Branch remains diverged from main: compare reported merge base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2 and main head c1e69a664388b0cba028170e8398b9088218957d before report write.
-- Shell commands against the repository were not run because this worker is restricted to the GitHub connector; Component CI is the pending verification source.
-- The feature-gated PostgreSQL flow test skips when no explicit safe test database URL is configured, matching existing storage test-support behavior.
-- The final report-only commit uses [skip ci] and is not CI evidence. Product/source/docs commits did not skip CI.
+- The failed run proved that the STOR-P6 implementation changed a repository method already consumed outside the immediate edited modules. The fix preserved source compatibility within the allowed storage file instead of editing Server or other consumer files.
+- Shell commands against the repository were not run because this worker is restricted to the GitHub connector; the new Component CI run is the verification source.
+- The final report-only commit uses [skip ci] and is not CI evidence. Source fixer commits did not skip CI.
 
 BLOCKERS:
-none for implementation; CI verification is pending
+none for the fix; CI verification is pending
 
 NEXT_RECOMMENDED_AGENT:
-clean-code-reviewer
+orchestrator
 
 FINAL_VERDICT:
-SELF_ACCEPT_PENDING_CI. STOR-P6 is implemented within storage scope with passive conflict insertion/read/lifecycle primitives, tombstone restore metadata support, safe operation-log size validation, conflict/delete/restore operation coverage, caller-owned transaction integration tests, and explicit Core/API/Server fan-in documentation. Component CI run 29080167290 is in progress for the code/docs head; the final report-only commit used CI skip and must not be treated as CI evidence.
+FIX_COMPLETE. All artifact-proven STOR-P6 failures were fixed inside allowed storage files: conflict listing compatibility was restored while retaining bounded listing support, and every rustfmt diff was applied. Component CI run 29082024073 is pending for the source-fix commit; the final report-only commit used CI skip and must not be treated as CI evidence.
 
 PUSHED:
 yes
