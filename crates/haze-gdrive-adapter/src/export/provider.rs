@@ -456,10 +456,8 @@ impl DriveExportProvider for FakeDriveExportProvider {
             .get(&request.file_id)
             .ok_or_else(|| provider_not_found("update_file"))?;
         if current.trashed
-            || request
-                .expected_revision_token
-                .as_deref()
-                .is_none_or(|expected| expected != current.revision_token)
+            || request.expected_revision_token.as_deref()
+                != Some(current.revision_token.as_str())
         {
             return Err(provider_conflict("update_file"));
         }
@@ -499,11 +497,7 @@ impl DriveExportProvider for FakeDriveExportProvider {
             .files_by_id
             .get(&request.file_id)
             .ok_or_else(|| provider_not_found("trash_file"))?;
-        if request
-            .expected_revision_token
-            .as_deref()
-            .is_none_or(|expected| expected != current.revision_token)
-        {
+        if request.expected_revision_token.as_deref() != Some(current.revision_token.as_str()) {
             return Err(provider_conflict("trash_file"));
         }
 
