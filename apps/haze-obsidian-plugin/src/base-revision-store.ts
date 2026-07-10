@@ -6,6 +6,7 @@ import type {
   RevisionId,
   VaultPath,
 } from "./api-client";
+import { normalizeStoredContentHash } from "./content-hash";
 
 export interface BaseRevisionEntry {
   path: VaultPath;
@@ -46,7 +47,7 @@ export function mergeBaseRevisionState(rawState: unknown): BaseRevisionState {
   }
 
   return {
-    byPath: readRecord(rawState.byPath, isBaseRevisionEntry),
+    byPath: readBaseRevisionEntries(rawState.byPath),
   };
 }
 
@@ -209,32 +210,44 @@ function mutationOutcomeFromApiErrorCategory(category: ApiErrorCategory): Server
   }
 }
 
-function readRecord<T>(value: unknown, predicate: (item: unknown) => item is T): Record<string, T> {
+function readBaseRevisionEntries(value: unknown): Record<VaultPath, BaseRevisionEntry> {
   if (!isRecord(value)) {
     return {};
   }
 
-  const result: Record<string, T> = {};
+  const result: Record<VaultPath, BaseRevisionEntry> = {};
   for (const [key, item] of Object.entries(value)) {
-    if (predicate(item)) {
-      result[key] = item;
+    const entry = readBaseRevisionEntry(item);
+    if (entry !== undefined) {
+      result[key] = entry;
     }
   }
   return result;
 }
 
-function isBaseRevisionEntry(value: unknown): value is BaseRevisionEntry {
-  if (!isRecord(value)) {
-    return false;
+function readBaseRevisionEntry(value: unknown): BaseRevisionEntry | undefined {
+  if (
+    !isRecord(value) ||
+    typeof value.path !== "string" ||
+    !(typeof value.revisionId === "string" || value.revisionId === null) ||
+    typeof value.serverDeleted !== "boolean" ||
+    typeof value.updatedAt !== "string"
+  ) {
+    return undefined;
   }
 
-  return (
-    typeof value.path === "string" &&
-    (typeof value.revisionId === "string" || value.revisionId === null) &&
-    (typeof value.contentHash === "string" || value.contentHash === null) &&
-    typeof value.serverDeleted === "boolean" &&
-    typeof value.updatedAt === "string"
-  );
+  const contentHash = value.contentHash === null ? null : normalizeStoredContentHash(value.contentHash);
+  if (contentHash === undefined) {
+    return undefined;
+  }
+
+  return {
+    path: value.path,
+    revisionId: value.revisionId,
+    contentHash,
+    serverDeleted: value.serverDeleted,
+    updatedAt: value.updatedAt,
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
