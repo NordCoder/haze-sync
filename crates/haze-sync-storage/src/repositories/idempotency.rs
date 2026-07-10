@@ -1,9 +1,11 @@
 //! PostgreSQL repository helpers for idempotency records.
 //!
 //! The repository stores only adapter-scoped idempotency keys, SHA-256 request
-//! fingerprints, and safe JSON response snapshots. It does not store raw request
-//! bodies, file bytes, sensitive values, provider payloads, database URLs, or
-//! runtime details.
+//! fingerprints, and safe JSON response snapshots. Callers must serialize the
+//! accepted Core stored-response primitive before persistence; Storage preserves
+//! that snapshot verbatim and never renders it as a public response. This module
+//! does not store raw request bodies, file bytes, sensitive values, provider
+//! payloads, database URLs, or runtime details.
 
 use crate::{models::IdempotencyRecordRow, schema::table_names};
 use chrono::{DateTime, Utc};
@@ -26,6 +28,9 @@ pub struct IdempotencyRecordInput {
 
 impl IdempotencyRecordInput {
     /// Creates a new record input from safe idempotency metadata.
+    ///
+    /// `response_json` must be a safe serialized Core stored-response snapshot.
+    /// Storage intentionally does not inspect or render its public body.
     pub fn new(
         adapter_id: AdapterId,
         idempotency_key: impl Into<String>,
@@ -80,7 +85,11 @@ pub enum IdempotencyStoreOutcome {
     AlreadyExists { record: IdempotencyRecordRow },
 }
 
-/// Outcome of checking or storing an idempotency record.
+/// Storage classification produced by checking or storing an idempotency row.
+///
+/// These categories mirror Core's new/replay/conflict decision vocabulary while
+/// returning persisted facts for Server fan-in. Storage does not generate an HTTP
+/// replay or choose a public error response.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "outcome", rename_all = "snake_case")]
 pub enum IdempotencyRepositoryOutcome {
@@ -187,6 +196,10 @@ pub async fn insert_idempotency_record(
 }
 
 /// Checks an incoming idempotent request, storing it when no prior record exists.
+///
+/// Same-key/same-fingerprint requests return the original persisted snapshot;
+/// same-key/different-fingerprint requests return the original row as conflict
+/// evidence. Neither path overwrites the first writer's response snapshot.
 pub async fn check_or_store_idempotency_record(
     connection: &mut PgConnection,
     input: &IdempotencyRecordInput,
@@ -237,6 +250,17 @@ fn outcome_from_existing_record(
 }
 
 fn record_from_row(row: PgRow) -> Result<IdempotencyRecordRow, IdempotencyRepositoryError> {
+    let adapter_id: String = row
+        .try_get("adapter_id")
+        .map_err(|_| IdempotencyRepositoryError::DatabaseOperationFailed)?;
+    AdapterId::parse(&adapter_id)
+        .map_err(|_| IdempotencyRepositoryError::DatabaseOperationFailed)?;
+
+    let idempotency_key: String = row
+        .try_get("idempotency_key")
+        .map_err(|_| IdempotencyRepositoryError::DatabaseOperationFailed)?;
+    validate_idempotency_key(&idempotency_key)?;
+
     let request_hash: String = row
         .try_get("request_hash")
         .map_err(|_| IdempotencyRepositoryError::DatabaseOperationFailed)?;
@@ -244,12 +268,8 @@ fn record_from_row(row: PgRow) -> Result<IdempotencyRecordRow, IdempotencyReposi
         .map_err(|_| IdempotencyRepositoryError::InvalidStoredRequestHash)?;
 
     Ok(IdempotencyRecordRow {
-        adapter_id: row
-            .try_get("adapter_id")
-            .map_err(|_| IdempotencyRepositoryError::DatabaseOperationFailed)?,
-        idempotency_key: row
-            .try_get("idempotency_key")
-            .map_err(|_| IdempotencyRepositoryError::DatabaseOperationFailed)?,
+        adapter_id,
+        idempotency_key,
         request_hash,
         response_json: row
             .try_get("response_json")
@@ -275,51 +295,7 @@ fn validate_idempotency_key(key: &str) -> Result<(), IdempotencyRepositoryError>
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use chrono::TimeZone;
-    use serde_json::json;
+mod tests;
 
-    fn row(request_hash: &Sha256) -> IdempotencyRecordRow {
-        IdempotencyRecordRow {
-            adapter_id: "iphone-anna".to_owned(),
-            idempotency_key: "iphone:op-1".to_owned(),
-            request_hash: request_hash.to_string(),
-            response_json: json!({ "status": "accepted" }),
-            created_at: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
-        }
-    }
-
-    #[test]
-    fn compare_request_fingerprint_detects_same_request() {
-        let hash = Sha256::parse(&"a".repeat(64)).unwrap();
-        assert_eq!(
-            compare_request_fingerprint(&row(&hash), &hash).unwrap(),
-            IdempotencyRequestComparison::SameRequest
-        );
-    }
-
-    #[test]
-    fn compare_request_fingerprint_detects_different_request() {
-        let stored = Sha256::parse(&"a".repeat(64)).unwrap();
-        let incoming = Sha256::parse(&"b".repeat(64)).unwrap();
-        assert_eq!(
-            compare_request_fingerprint(&row(&stored), &incoming).unwrap(),
-            IdempotencyRequestComparison::DifferentRequest
-        );
-    }
-
-    #[test]
-    fn invalid_key_is_rejected() {
-        assert_eq!(
-            IdempotencyRecordInput::new(
-                AdapterId::parse("iphone-anna").unwrap(),
-                "contains space",
-                Sha256::parse(&"a".repeat(64)).unwrap(),
-                json!({}),
-            )
-            .unwrap_err(),
-            IdempotencyRepositoryError::InvalidKey
-        );
-    }
-}
+#[cfg(all(test, feature = "test-support"))]
+mod postgres_tests;
