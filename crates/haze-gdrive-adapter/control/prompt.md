@@ -1,50 +1,55 @@
-# W1-FIX-GDA-P5C-CI — GDrive clean-code CI correction
+# W1-GDA-P6 — Change feed polling and reconciliation loop
 
 Component: gdrive-adapter
 Path: crates/haze-gdrive-adapter
 Branch: component/gdrive-adapter
 PR: #50
-Role: fixer-worker
+Role: implementation-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-GDA-P5C clean-code review changed source/tests. Its final code-bearing Component CI run failed.
+GDA-P5 implementation, clean-code review, and artifact-based CI fixer are complete. Post-fix Component CI is green.
 
-- code_bearing_sha: 21954425a2a78b0fa5ce437d0882d205974311fe
+- code_bearing_sha: c19ce18b9c0035e0be98f75fe9a75e5589d705ca
 - workflow: Component CI
-- workflow_run_id: 29086780265
-- run_number: 1106
-- run_attempt: 1
-- artifact_id: 8225096800
-- artifact_name: ci-diag__component-gdrive-adapter__wf-component-ci__run-29086780265__attempt-1
-- artifact_expires_at: 2026-07-11T10:36:42Z
+- workflow_run_id: 29088281762
+- run_number: 1136
+- conclusion: success
 
-Use the diagnostics artifact as source of truth.
+The next implementation phase is GDA-P6 from crates/haze-gdrive-adapter/docs/implementation-plan.md.
 
 ## Read
 
-Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current GDA-P5C source/tests, and PR diff. Download artifact 8225096800 and read summary.md, manifest.json, and every failed-check log. If unavailable or unreadable, report FIX_BLOCKED_BY_LOGS.
+Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current scan/mapping/cursor/retry abstractions, accepted Storage cursor boundary, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt explicitly instructs it.
 
 ## Task
 
-Apply only the minimum artifact-proven correction for the GDA-P5C CI failure. Preserve request-content redaction, provider-segment validation, mapping identity/path conflict handling, conservative delete-candidate suppression, tests, and component boundaries.
+Implement GDA-P6: Change feed polling and reconciliation loop.
+
+- poll Drive changes through accepted provider abstractions using cursor state;
+- classify change entries into safe scan/import/export work;
+- fall back to full scan when the cursor is invalidated;
+- debounce and coalesce duplicate or reordered entries safely;
+- advance persisted cursor only after successful processing through an accepted abstraction;
+- classify retry/backoff for provider limits and failures;
+- add focused tests for cursor invalidation, duplicate/reordered entries, success-only advancement, and full-scan fallback.
 
 ## Allowed files
 
 - crates/haze-gdrive-adapter/src/**
-- crates/haze-gdrive-adapter/docs/** only if diagnostics prove a documentation issue
+- crates/haze-gdrive-adapter/docs/**
 - crates/haze-gdrive-adapter/control/report.md
 
-## Boundaries
+## Non-goals
 
-No export phase work, live provider integration, Core policy changes, immediate deletion behavior, direct DB ownership, workflow/dependency changes, sibling changes, test deletion, or assertion weakening.
+No webhook/public callback infrastructure, change-feed-only correctness claim, provider deletion side effects, direct DB writes, Core conflict policy, export apply runner from GDA-P7, workflow/dependency changes, or sibling-component changes.
 
 ## CI trigger policy
 
-Source/test/docs fixer commits must not skip CI. A final report-only commit may skip CI.
+Product/source/docs commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only crates/haze-gdrive-adapter/control/report.md. Use report-template.md, REPORT_TYPE FIX, phase_id FIX-GDA-P5C-CI.
+Write only crates/haze-gdrive-adapter/control/report.md. Use report-template.md, REPORT_TYPE IMPLEMENTATION, phase_id GDA-P6.
