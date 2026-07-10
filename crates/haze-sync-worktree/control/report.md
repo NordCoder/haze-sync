@@ -1,12 +1,12 @@
 REPORT_TYPE:
-FIX
+CLEAN_CODE_REVIEW
 
 STATUS:
-FIX_COMPLETE
+CLEAN_BLOCKED_BY_TOOLING
 
 AGENT:
-role: fixer-worker
-agent_execution_id: W1-FIX-WT-P7-CI-worktree-fixer-20260710
+role: clean-code-reviewer
+agent_execution_id: W1-WT-P7C-worktree-clean-code-20260710
 chat_name: worktree persistent component worker
 
 COMPONENT:
@@ -21,33 +21,32 @@ control_report_path: crates/haze-sync-worktree/control/report.md
 
 WAVE:
 id: W1
-phase_id: FIX-WT-P7-CI
-dependency_status: control state was PROMPT_READY; active role was fixer-worker; WT-P7 implementation was complete; exact failing workflow run 29103228383 and artifact 8231727075 were available, unexpired, and matched code-bearing head 3156b1723b942b94568c846bcbf11915bbfe881e.
+phase_id: WT-P7C
+dependency_status: control state was PROMPT_READY; active role was clean-code-reviewer; WT-P7 implementation and artifact-based fixer pass were complete; accepted code-bearing head e9e7120916ff26ad7e6f4443bad3db2752f4acb1 had green Component CI run 29107152621 before this review.
 
 SUMMARY:
-Applied the minimum artifact-proven WT-P7 CI corrections. The diagnostics artifact listed rust-fmt, cargo-test, and cargo-clippy. Applied the complete rustfmt output to the affected Worktree source/tests. Replaced the artifact-flagged manual ceiling division with integer div_ceil. Isolated the private pre-WT-P7 import-planner compatibility implementation from dead-code linting while preserving the public put-only import boundary and all tests. Fixed the failing restore-metadata integrity regression by binding the retained byte length into the durable trash record identifier and recomputing that identifier on load. No assertions or tests were removed or weakened. Post-fix Component CI run 29107152621 completed successfully across cargo fmt, cargo check, cargo test, cargo clippy, and diagnostics finalization.
+Reviewed and cleaned WT-P7 guarded deletes, public put-only imports, retained trash, restore metadata, and fixer changes. Removed the obsolete hidden import planner/runner that still inferred deletes and had been masked with allow(dead_code), leaving one public put-only planner and one explicit guarded-delete boundary. Hardened durable trash records so load_record validates safe metadata and retained-file parent chains, rejects symlinked runtime parents, binds the retention deadline into the record identifier, verifies retained bytes against recorded hash and size, handles extreme timestamps without panicking, rejects non-whole-second retention that the metadata format cannot round-trip, and synchronizes both directories after rollback rename. Added focused regressions for the preserved put-only validation boundary, retention tampering, missing/changed retained bytes, extreme timestamps, and symlinked metadata parents. Final code-bearing Component CI run 29110274762 reported cargo fmt/check/test/clippy success but failed at Finalize CI diagnostics. This clean-code role did not read the diagnostics artifact, so an artifact-based fixer-worker pass is required.
 
 CHANGED_FILES:
-- crates/haze-sync-worktree/src/delete_guard.rs
-- crates/haze-sync-worktree/src/delete_guard_tests.rs
-- crates/haze-sync-worktree/src/file_import_tests.rs
+- crates/haze-sync-worktree/src/import_planner.rs
 - crates/haze-sync-worktree/src/lib.rs
+- crates/haze-sync-worktree/src/file_import_tests.rs
 - crates/haze-sync-worktree/src/trash.rs
-- crates/haze-sync-worktree/src/trash_tests.rs
+- crates/haze-sync-worktree/src/trash_integrity_tests.rs
 - crates/haze-sync-worktree/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/worktree
 base_branch: main
-base_sha: GitHub compare_commits after the fix observed base c1e69a664388b0cba028170e8398b9088218957d and merge base 1a82bea5c87953db378e5e03429326df38320ee8.
-head_sha: e9e7120916ff26ad7e6f4443bad3db2752f4acb1 before this report-only commit; this report write creates a later control-only commit.
+base_sha: GitHub compare_commits after the review observed base c1e69a664388b0cba028170e8398b9088218957d and merge base 1a82bea5c87953db378e5e03429326df38320ee8.
+head_sha: bec979eb6bebb94fa94920aa8b2af73d03c71669 before this report-only commit; this report write creates a later control-only commit.
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes; crates/haze-sync-worktree/control/prompt.md on component/worktree
-control_report_written: yes; crates/haze-sync-worktree/control/report.md replaced with this FIX report
+control_report_written: yes; crates/haze-sync-worktree/control/report.md replaced with this CLEAN_CODE_REVIEW report
 control_files_archived_by_worker: no
-ci_skip_used: yes for this final report-only commit; no for source/test fixer commits
-ci_skip_reason: this final commit changes only crates/haze-sync-worktree/control/report.md and cannot affect executable behavior or validation outcome; every source/test fixer commit triggered Component CI without skip
+ci_skip_used: yes for this final report-only commit; no for any source/test clean-review commit
+ci_skip_reason: this final commit changes only crates/haze-sync-worktree/control/report.md and cannot affect executable behavior or validation outcome; all source/test clean-review commits triggered Component CI without skip
 
 SCOPE:
 allowed_files_only: yes
@@ -58,105 +57,103 @@ forbidden_files_touched: no
 
 CONTRACT:
 contract_read: yes
-contract_satisfied: yes; fixes preserve Worktree as a non-authoritative materialized replica, guarded local-delete submission, explicit known/null base semantics, public put-only imports, reversible retained trash, safe restore metadata, root/path safety, Core delete authority, and all WT-P7 non-goals
+contract_satisfied: yes; Worktree remains a non-authoritative materialized replica, local absences remain guarded Core/API facts, public file imports remain put-only, Core remains delete arbiter, trash remains retained and root-bound, and no direct Storage/DB, Server, provider, watcher, workflow, or hard-delete ownership was added
 contract_changes_requested: no
 contract_change_rationale: none
 affected_components: worktree only
 
 IMPLEMENTATION_OR_REVIEW:
-completed: yes
+completed: yes for code review, cleanup, bug fixes, and focused tests; blocked only on CI diagnostics finalization
 main_changes:
-- Read active FIX-WT-P7-CI prompt, prior implementation report, required process sources, component contract/plan/dependency map, current WT-P7 source/tests, and phase/branch diff.
-- Fetched exact artifact metadata for workflow run 29103228383 and artifact 8231727075.
-- Downloaded and read summary.md and manifest.json.
-- Read every failure marker and log named by failed_checks: cargo-clippy, cargo-test, and rust-fmt.
-- Applied every rustfmt diff listed by the artifact in delete_guard.rs, delete_guard_tests.rs, file_import_tests.rs, lib.rs, trash.rs, and trash_tests.rs.
-- Replaced the manual basis-point ceiling expression with u128::div_ceil as required by clippy.
-- Added a scoped dead_code allowance to the private compatibility import_planner module because WT-P7 introduced a separate public put-only planner while retaining the prior internal implementation and its tests for later clean-code consolidation.
-- Preserved the public file-import API from exposing or inferring delete actions.
-- Added retained file size to trash record-id derivation and recomputation, so editing metadata size invalidates the integrity-bound record.
-- Preserved the existing tampered_restore_metadata_fails_record_id_integrity_check assertion unchanged; it now passes for the intended reason.
-- Observed post-fix Component CI run 29107152621 complete successfully.
-behavior_changes: durable trash record IDs now bind retained byte length in addition to vault path, tombstone revision, content hash, and retained timestamp; malformed size metadata is rejected on record load
+- Read the active WT-P7C prompt, latest fixer report, required process sources, component contract/plan/log/dependency map, current WT-P7 source/tests, fixer changes, PR metadata, and phase/branch diff.
+- Reviewed candidate derivation, known/null base semantics, threshold/manual-unlock behavior, public import surface, retained move ordering, rollback, metadata integrity, path safety, state advancement, tests, redaction, and non-goals.
+- Removed the private pre-WT-P7 WorktreeImportPlanner, WorktreeImportRunner, plan/submission types, delete inference, and duplicate internal tests from import_planner.rs.
+- Removed the scoped allow(dead_code) that had hidden that obsolete implementation.
+- Kept import_planner.rs as the shared state/request/outcome/client contract module consumed by the public put-only file-import planner and guarded delete runner.
+- Preserved and expanded put-only tests for unstable and duplicate local facts after the hidden planner removal.
+- Required WorktreeTrashPolicy retention to be non-zero whole seconds, matching the durable metadata precision and avoiding silent subsecond truncation.
+- Added safe SystemTime checked construction for untrusted metadata timestamps and rejected non-positive retention intervals.
+- Bound retention_until to the trash record identifier in addition to path, tombstone revision, content hash, retained size, and retained-at timestamp.
+- Validated existing runtime/metadata directory chains before opening metadata, rejecting symlinked or non-directory parents.
+- Validated existing trash/record/vault-parent chains before reading retained content.
+- Changed load_record to validate retained file presence, regular-file safety, hash, and byte length before returning a restore-ready record.
+- Added safe retained-file missing and mismatch error categories with vault-relative context only.
+- Updated rollback_move to fsync both the restored source parent and the vacated retained-file parent.
+- Added focused tests for metadata size/deadline tampering, retained content mismatch/missing, extreme timestamps, and symlinked metadata parents.
+behavior_changes: load_record now returns only records whose metadata and retained bytes are both safe and consistent; retention deadlines are integrity-bound; unsupported subsecond retention is rejected explicitly; the obsolete internal unguarded delete planner no longer exists
 bugs_found:
-- trash record integrity did not bind the metadata size field, allowing size-only metadata tampering to pass record-id validation
-- private compatibility planner code generated dead-code failures after the public put-only planner split
-bugs_fixed:
-- bound size into record-id derivation/recomputation
-- isolated private compatibility planner code from dead-code linting without exposing it publicly or changing put-only behavior
-cleanups_made: applied rustfmt output and used standard integer div_ceil
-non_goals_preserved: yes; no Core policy change, hard-delete cleanup, provider behavior, CLI repair work, direct DB mutation, watcher/runtime service, Server hosting, workflow/dependency change, sibling change, test deletion, assertion weakening, or PR lifecycle action
+- an obsolete hidden planner still inferred deletes and duplicated public planning/runner code while allow(dead_code) masked it
+- metadata parent directories were not revalidated on load, so a symlinked metadata parent could redirect file access outside the configured root
+- retention_until was not bound into the record identifier and could be altered without failing integrity validation
+- metadata timestamp conversion used unchecked SystemTime addition and could panic on extreme untrusted values
+- load_record validated metadata but not whether retained content still existed or matched recorded hash/size
+- rollback rename synchronized only the restored source parent and not the vacated trash parent
+- arbitrary subsecond retention could not round-trip through whole-second metadata
+bugs_fixed: all listed same-component findings were corrected with focused regressions
+cleanups_made: removed more than five hundred lines of obsolete planner/runner duplication and its contradictory hidden delete tests; clarified import module responsibility as shared contracts only
+non_goals_preserved: yes; no Core tombstone policy, hard-delete cleanup, provider calls, CLI repair work, direct DB mutation, watcher/runtime service, Server hosting, workflow/dependency change, sibling change, assertion weakening, or PR lifecycle action
 deferred_work:
-- Clean-code review may consolidate the retained private compatibility import-planner implementation with the public put-only planner; this fixer did not broaden beyond the artifact-proven lint failure.
-- Physical trash cleanup and restore execution remain deferred as specified by WT-P7.
+- Physical trash cleanup and restore execution remain deferred by WT-P7.
+- True no-follow TOCTOU hardening for final file opens still requires platform-specific file-descriptor primitives or an accepted dependency and remains outside this phase.
+- Concrete Server/Core composition remains a later fan-in task.
+- CI diagnostics for run 29110274762 must be inspected by the next fixer-worker.
 
 TESTS_AND_CHECKS:
 checks_run:
-- Read Project Source implementation-manifest.md, report-template.md, fixer-worker-prompt.md, and chatgpt-gh-connector.md from available /mnt/data files.
-- GitHub connector reads of active control state/prompt/report, component contract/plan/dependency map, current source/tests, PR metadata, and branch/phase diffs.
-- Diagnostics artifact 8231727075 inspection.
-- Read summary.md and manifest.json.
-- Read failures/cargo-clippy.txt and logs/cargo-clippy.log.
-- Read failures/cargo-test.txt and logs/cargo-test.log.
-- Read failures/rust-fmt.txt and logs/rust-fmt.log.
-- Component CI run 29107152621 for source head e9e7120916ff26ad7e6f4443bad3db2752f4acb1.
+- Read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, and chatgpt-gh-connector.md from the available /mnt/data project sources.
+- GitHub connector reads of control state/prompt/report, component contract/plan/dependency map, current import/delete/trash/path source and tests, fixer changes, PR metadata, and relevant phase/branch diffs.
+- Added/updated focused tests for public put-only behavior, unstable facts, duplicate facts, metadata size tampering, retention deadline tampering, retained hash mismatch, missing retained content, extreme metadata timestamps, and symlinked metadata parents.
+- Component CI run 29110274762 for final source head bec979eb6bebb94fa94920aa8b2af73d03c71669.
 - Observed cargo fmt success.
 - Observed cargo check success.
-- Observed cargo test success, including tampered_restore_metadata_fails_record_id_integrity_check.
+- Observed cargo test success, including all new WT-P7C regressions.
 - Observed cargo clippy success.
-- Observed Finalize CI diagnostics success.
 checks_not_run:
-- local cargo fmt/check/test/clippy: not run; repository operations were restricted to the GitHub connector and no local repository checkout was used.
-ci_status: CI_GREEN; Component CI run 29107152621 completed with conclusion success
+- local cargo fmt/check/test/clippy: not run; repository operations are restricted to the GitHub connector and no local repository checkout was used.
+- diagnostics artifact for run 29110274762: not read; the active clean-code-reviewer prompt prohibits diagnostics artifact inspection.
+ci_status: CI_RED; final code-bearing run 29110274762 failed at Finalize CI diagnostics despite visible cargo fmt/check/test/clippy success
 workflow_urls:
-- https://github.com/NordCoder/haze-sync/actions/runs/29103228383
 - https://github.com/NordCoder/haze-sync/actions/runs/29107152621
+- https://github.com/NordCoder/haze-sync/actions/runs/29110274762
 known_failures:
-- original run 29103228383: rustfmt diffs in WT-P7 files
-- original run 29103228383: cargo test failure in tampered_restore_metadata_fails_record_id_integrity_check because size-only metadata tampering did not alter the record id
-- original run 29103228383: cargo clippy dead-code findings for the private prior planner implementation and manual_div_ceil in delete_guard.rs
+- run 29110274762: overall workflow failure at Finalize CI diagnostics; exact failed check must be determined from the diagnostics artifact by a fixer-worker
 
 CI_DIAGNOSTICS:
-artifact_based_logs: yes
-artifact_name: ci-diag__component-worktree__wf-component-ci__run-29103228383__attempt-1
-artifact_id: 8231727075
-workflow_run_id: 29103228383
-workflow_run_attempt: 1
-artifact_status: available, not expired, downloaded, extracted, and readable; artifact head matched 3156b1723b942b94568c846bcbf11915bbfe881e
-summary_read: yes; summary.md read
-manifest_read: yes; manifest.json read
-logs_read:
-- failures/cargo-clippy.txt
-- logs/cargo-clippy.log
-- failures/cargo-test.txt
-- logs/cargo-test.log
-- failures/rust-fmt.txt
-- logs/rust-fmt.log
+artifact_based_logs: no
+artifact_name: not read
+artifact_id: not read
+workflow_run_id: 29110274762 for workflow/job metadata only
+workflow_run_attempt: not read
+artifact_status: not read; active clean-code-reviewer prompt prohibits diagnostics artifact inspection
+summary_read: no
+manifest_read: no
+logs_read: none
 raw_job_logs_used: no
-diagnostics_failure: none; artifact was complete and every failed-check marker/log listed by manifest.json was readable
+diagnostics_failure: Finalize CI diagnostics failed according to workflow metadata; detailed cause requires the next fixer-worker artifact pass
 
 SAFETY_AND_SECRECY:
 secrets_committed: no
-unsafe_public_output: no; errors and reports remain path-redacted or vault-relative
+unsafe_public_output: no; errors and records expose vault-relative or count-only facts and no absolute paths
 raw_errors_exposed: no
 provider_calls_added: no
-hard_delete_added: no
+hard_delete_added: no; only Worktree-owned metadata/temp cleanup remains, while retained user content is never deleted by this phase
 background_jobs_added: no
 
 ISSUES_FOUND:
-- The public WT-P7 file-import boundary remains put-only; the prior planner implementation remains private and is explicitly isolated pending clean-code consolidation.
-- Trash metadata integrity must bind every restore-critical field represented as authoritative metadata; retained byte size is now included.
-- All artifact-proven format, test, and lint failures are resolved on the post-fix source head.
+- The previous compatibility planner was not merely unused duplication: it retained an internal unguarded delete-inference path that contradicted WT-P7's explicit boundary and has now been removed.
+- Restore metadata is useful only when retained bytes are still present and consistent; load_record now validates both halves of the record.
+- Parent-directory validation is necessary on reads as well as writes because reserved runtime paths can be modified after materialization.
+- Integrity validation must cover retention deadline and byte length, not only path/revision/hash/start time.
 - Branch remains diverged from main according to compare_commits; no merge, rebase, reset, history rewrite, PR readiness decision, workflow edit, or main/sibling branch modification was performed.
 
 BLOCKERS:
-- None.
+- CLEAN_BLOCKED_BY_TOOLING: WT-P7C cleanup and focused tests are complete, and visible cargo fmt/check/test/clippy steps pass, but Component CI run 29110274762 is red and requires a fixer-worker to read the diagnostics artifact and apply only the artifact-proven correction.
 
 NEXT_RECOMMENDED_AGENT:
-orchestrator
+fixer-worker
 
 FINAL_VERDICT:
-FIX_COMPLETE. The exact artifact-proven rustfmt, cargo-test, and cargo-clippy failures were corrected without removing tests, weakening assertions, exposing an unguarded delete path, or broadening component ownership. Post-fix Component CI run 29107152621 completed successfully across cargo fmt, cargo check, cargo test, cargo clippy, and diagnostics finalization.
+CLEAN_BLOCKED_BY_TOOLING. WT-P7 guarded delete and retained-trash code is materially cleaner and safer: the hidden unguarded planner is removed, restore metadata and retained bytes are validated together, retention is integrity-bound, read paths reject unsafe parents, and focused regressions pass. Final source CI passes visible cargo fmt, cargo check, cargo test, and cargo clippy steps, but workflow run 29110274762 failed at diagnostics finalization and requires an artifact-based fixer pass.
 
 PUSHED:
 yes
