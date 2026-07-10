@@ -325,6 +325,15 @@ impl WorktreeEchoGuard {
         };
 
         let candidate_is_newer = entry_order_key(&candidate) >= entry_order_key(&existing);
+        if existing == candidate {
+            self.entries.insert(vault_path, existing);
+            return Ok(None);
+        }
+        if candidate.runtime_path.is_some() && existing.runtime_path == candidate.runtime_path {
+            self.entries.insert(vault_path, candidate);
+            return Ok(Some(existing));
+        }
+
         if candidate_is_newer {
             cleanup_runtime_marker(&existing)?;
             self.entries.insert(vault_path, candidate);
