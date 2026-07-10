@@ -2,6 +2,34 @@
 
 ## Entries
 
+### 2026-07-10 — W1/STOR-P8 adapter mapping and worktree state repository support
+
+Agent:
+Implementation Worker
+
+Branch:
+component/storage
+
+Prompt:
+crates/haze-sync-storage/control/prompt.md
+
+Report:
+crates/haze-sync-storage/control/report.md
+
+Commit(s):
+See component/storage branch history for the implementation commits.
+
+Summary:
+Added passive repository support for the existing `gdrive_mapping` and `worktree_state` tables without moving adapter semantics into Storage. Google Drive mapping helpers now upsert complete caller-decided fact sets by normalized vault path and read mappings by path or opaque Drive file id. Worktree helpers upsert and read complete materialization-state fact sets. Repository inputs use shared validated path, revision, and SHA-256 types; persisted rows are revalidated for canonical paths, identifiers, hashes, non-negative Core sequences, provider metadata shape, and typed UTC timestamps before crossing the Storage boundary. Added safe repository error variants plus focused unit and feature-gated PostgreSQL transaction roundtrips. Provider calls, identity interpretation, echo handling, delete-candidate decisions, import/export direction, filesystem scans, materialization, and dirty-state semantics remain outside Storage.
+
+Status:
+SELF_ACCEPT_PENDING_CI
+
+Follow-ups:
+Use Component CI for workspace fmt/check/test/clippy verification. Run the feature-gated PostgreSQL tests with an explicit safe test database URL, then perform the mandatory clean-code review.
+
+---
+
 ### 2026-07-10 — W1/STOR-P7 idempotency and cursor repository support
 
 Agent:
