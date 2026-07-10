@@ -8,7 +8,7 @@ pub mod env;
 pub mod ids;
 pub mod object_root;
 
-#[cfg(feature = "test-support")]
+#[cfg(any(test, feature = "test-support"))]
 pub mod postgres;
 
 pub use env::{
@@ -17,7 +17,7 @@ pub use env::{
 pub use ids::{unique_test_id, TestNamespace};
 pub use object_root::TestObjectRoot;
 
-#[cfg(feature = "test-support")]
+#[cfg(any(test, feature = "test-support"))]
 pub use postgres::{
     apply_storage_migrations, clean_storage_tables, connect_required_test_database_from_env,
     connect_test_database_from_env, prepare_test_database_from_env, PostgresTestContext,
