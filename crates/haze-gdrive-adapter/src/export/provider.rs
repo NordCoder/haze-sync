@@ -1,7 +1,116 @@
-use crate::drive::{ProviderError, ProviderErrorCategory};
 use crate::hash::ContentSha256;
 use std::collections::BTreeMap;
+use std::error::Error;
 use std::fmt;
+use std::time::Duration;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DriveExportErrorCategory {
+    Auth,
+    Conflict,
+    RateLimit,
+    Unavailable,
+    NotFound,
+    InvalidRequest,
+    Internal,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DriveExportError {
+    operation: &'static str,
+    category: DriveExportErrorCategory,
+    safe_detail: &'static str,
+}
+
+impl DriveExportError {
+    pub const fn new(
+        operation: &'static str,
+        category: DriveExportErrorCategory,
+        safe_detail: &'static str,
+    ) -> Self {
+        Self {
+            operation,
+            category,
+            safe_detail,
+        }
+    }
+
+    pub const fn from_raw_payload(
+        operation: &'static str,
+        category: DriveExportErrorCategory,
+        _raw_payload: &str,
+    ) -> Self {
+        Self::new(operation, category, "provider error payload redacted")
+    }
+
+    pub const fn operation(&self) -> &'static str {
+        self.operation
+    }
+
+    pub const fn category(&self) -> DriveExportErrorCategory {
+        self.category
+    }
+}
+
+impl fmt::Display for DriveExportError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "Drive export operation {} failed as {:?}: {}",
+            self.operation, self.category, self.safe_detail
+        )
+    }
+}
+
+impl Error for DriveExportError {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExportRetryDisposition {
+    RetryAfter(Duration),
+    Reauthenticate,
+    DoNotRetry,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExportRetryPolicy {
+    delays: [Duration; 4],
+}
+
+impl ExportRetryPolicy {
+    pub const fn new(delays: [Duration; 4]) -> Self {
+        Self { delays }
+    }
+
+    pub fn classify_provider(
+        &self,
+        category: DriveExportErrorCategory,
+        attempt: usize,
+    ) -> ExportRetryDisposition {
+        match category {
+            DriveExportErrorCategory::RateLimit
+            | DriveExportErrorCategory::Unavailable
+            | DriveExportErrorCategory::Internal => {
+                let index = attempt.min(self.delays.len() - 1);
+                ExportRetryDisposition::RetryAfter(self.delays[index])
+            }
+            DriveExportErrorCategory::Auth => ExportRetryDisposition::Reauthenticate,
+            DriveExportErrorCategory::Conflict
+            | DriveExportErrorCategory::NotFound
+            | DriveExportErrorCategory::InvalidRequest => ExportRetryDisposition::DoNotRetry,
+        }
+    }
+}
+
+impl Default for ExportRetryPolicy {
+    fn default() -> Self {
+        Self::new([
+            Duration::from_secs(5),
+            Duration::from_secs(15),
+            Duration::from_secs(60),
+            Duration::from_secs(300),
+        ])
+    }
+}
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct DriveCreateExportRequest {
@@ -68,17 +177,17 @@ pub trait DriveExportProvider {
     fn create_file(
         &mut self,
         request: DriveCreateExportRequest,
-    ) -> Result<DriveExportReceipt, ProviderError>;
+    ) -> Result<DriveExportReceipt, DriveExportError>;
 
     fn update_file(
         &mut self,
         request: DriveUpdateExportRequest,
-    ) -> Result<DriveExportReceipt, ProviderError>;
+    ) -> Result<DriveExportReceipt, DriveExportError>;
 
     fn trash_file(
         &mut self,
         request: DriveTrashExportRequest,
-    ) -> Result<DriveExportReceipt, ProviderError>;
+    ) -> Result<DriveExportReceipt, DriveExportError>;
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -118,7 +227,7 @@ struct AppliedMutation {
 pub struct FakeDriveExportProvider {
     files_by_id: BTreeMap<String, FakeExportFile>,
     applied_by_operation_id: BTreeMap<String, AppliedMutation>,
-    errors_by_operation: BTreeMap<&'static str, ProviderError>,
+    errors_by_operation: BTreeMap<&'static str, DriveExportError>,
     next_file_number: u64,
     next_revision_number: u64,
     mutation_count: usize,
@@ -155,7 +264,7 @@ impl FakeDriveExportProvider {
         self
     }
 
-    pub fn with_error(mut self, operation: &'static str, error: ProviderError) -> Self {
+    pub fn with_error(mut self, operation: &'static str, error: DriveExportError) -> Self {
         self.errors_by_operation.insert(operation, error);
         self
     }
@@ -184,7 +293,7 @@ impl FakeDriveExportProvider {
         self.mutation_count
     }
 
-    fn configured_error(&self, operation: &'static str) -> Option<ProviderError> {
+    fn configured_error(&self, operation: &'static str) -> Option<DriveExportError> {
         self.errors_by_operation.get(operation).cloned()
     }
 
@@ -192,7 +301,7 @@ impl FakeDriveExportProvider {
         &self,
         operation_id: &str,
         fingerprint: &MutationFingerprint,
-    ) -> Result<Option<DriveExportReceipt>, ProviderError> {
+    ) -> Result<Option<DriveExportReceipt>, DriveExportError> {
         let Some(applied) = self.applied_by_operation_id.get(operation_id) else {
             return Ok(None);
         };
@@ -241,7 +350,7 @@ impl DriveExportProvider for FakeDriveExportProvider {
     fn create_file(
         &mut self,
         request: DriveCreateExportRequest,
-    ) -> Result<DriveExportReceipt, ProviderError> {
+    ) -> Result<DriveExportReceipt, DriveExportError> {
         if let Some(error) = self.configured_error("create_file") {
             return Err(error);
         }
@@ -254,9 +363,9 @@ impl DriveExportProvider for FakeDriveExportProvider {
             return Ok(receipt);
         }
         if !request.content_sha256.verifies(&request.content) {
-            return Err(ProviderError::new(
+            return Err(DriveExportError::new(
                 "create_file",
-                ProviderErrorCategory::InvalidRequest,
+                DriveExportErrorCategory::InvalidRequest,
                 "verified export content hash changed before provider mutation",
             ));
         }
@@ -286,7 +395,7 @@ impl DriveExportProvider for FakeDriveExportProvider {
     fn update_file(
         &mut self,
         request: DriveUpdateExportRequest,
-    ) -> Result<DriveExportReceipt, ProviderError> {
+    ) -> Result<DriveExportReceipt, DriveExportError> {
         if let Some(error) = self.configured_error("update_file") {
             return Err(error);
         }
@@ -298,9 +407,9 @@ impl DriveExportProvider for FakeDriveExportProvider {
             return Ok(receipt);
         }
         if !request.content_sha256.verifies(&request.content) {
-            return Err(ProviderError::new(
+            return Err(DriveExportError::new(
                 "update_file",
-                ProviderErrorCategory::InvalidRequest,
+                DriveExportErrorCategory::InvalidRequest,
                 "verified export content hash changed before provider mutation",
             ));
         }
@@ -308,7 +417,7 @@ impl DriveExportProvider for FakeDriveExportProvider {
         let current = self
             .files_by_id
             .get(&request.file_id)
-            .ok_or_else(|| ProviderError::not_found("update_file"))?;
+            .ok_or_else(|| provider_not_found("update_file"))?;
         if current.trashed
             || request
                 .expected_revision_token
@@ -337,7 +446,7 @@ impl DriveExportProvider for FakeDriveExportProvider {
     fn trash_file(
         &mut self,
         request: DriveTrashExportRequest,
-    ) -> Result<DriveExportReceipt, ProviderError> {
+    ) -> Result<DriveExportReceipt, DriveExportError> {
         if let Some(error) = self.configured_error("trash_file") {
             return Err(error);
         }
@@ -351,7 +460,7 @@ impl DriveExportProvider for FakeDriveExportProvider {
         let current = self
             .files_by_id
             .get(&request.file_id)
-            .ok_or_else(|| ProviderError::not_found("trash_file"))?;
+            .ok_or_else(|| provider_not_found("trash_file"))?;
         if request
             .expected_revision_token
             .as_deref()
@@ -375,10 +484,18 @@ impl DriveExportProvider for FakeDriveExportProvider {
     }
 }
 
-fn provider_conflict(operation: &'static str) -> ProviderError {
-    ProviderError::new(
+fn provider_conflict(operation: &'static str) -> DriveExportError {
+    DriveExportError::new(
         operation,
-        ProviderErrorCategory::Conflict,
+        DriveExportErrorCategory::Conflict,
         "provider precondition or idempotency conflict",
+    )
+}
+
+fn provider_not_found(operation: &'static str) -> DriveExportError {
+    DriveExportError::new(
+        operation,
+        DriveExportErrorCategory::NotFound,
+        "provider item not found",
     )
 }
