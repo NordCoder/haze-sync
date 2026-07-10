@@ -125,23 +125,34 @@ export class ConflictCenterModal extends Modal {
     this.renderField(card, "Conflict copy", item.conflictPath);
     this.renderField(card, "Status", item.status);
     this.renderField(card, "Source adapter", item.sourceAdapter);
+    this.renderField(card, "Policy", item.policyApplied);
     this.renderField(card, "Created", item.createdAt);
-    this.renderField(card, "Resolved", item.resolvedAt);
+    this.renderField(card, "Updated", item.updatedAt);
 
     const confirmation = this.pendingConfirmation;
-    if (confirmation !== undefined && confirmation.item.conflict.id === item.conflict.id) {
+    if (
+      confirmation !== undefined &&
+      confirmation.item.conflict.conflict_id === item.conflict.conflict_id
+    ) {
       this.renderConfirmation(card, confirmation);
       return;
     }
 
     for (const definition of CONFLICT_ACTION_DEFINITIONS) {
+      const description = definition.available
+        ? definition.description
+        : `${definition.description} ${definition.unavailableReason ?? "Unavailable."}`;
       new Setting(card)
         .setName(definition.label)
-        .setDesc(definition.description)
+        .setDesc(description)
         .addButton((button) => {
           button
-            .setButtonText(definition.label)
-            .setDisabled(!this.controller.canResolveConflicts() || this.busyKey !== undefined)
+            .setButtonText(definition.available ? definition.label : "Unavailable")
+            .setDisabled(
+              !definition.available ||
+              !this.controller.canResolveConflicts() ||
+              this.busyKey !== undefined,
+            )
             .onClick(() => {
               void this.requestAction(item, definition);
             });
@@ -178,7 +189,11 @@ export class ConflictCenterModal extends Modal {
   }
 
   private async requestAction(item: ConflictCenterItem, definition: ConflictActionDefinition): Promise<void> {
-    if (!this.controller.canResolveConflicts() || this.busyKey !== undefined) {
+    if (
+      !definition.available ||
+      !this.controller.canResolveConflicts() ||
+      this.busyKey !== undefined
+    ) {
       return;
     }
 
@@ -253,7 +268,7 @@ export class ConflictCenterModal extends Modal {
   }
 
   private actionMapKey(item: ConflictCenterItem, action: ConflictResolutionAction): string {
-    return `${item.conflict.id}:${action}`;
+    return `${item.conflict.conflict_id}:${action}`;
   }
 
   private renderField(container: HTMLElement, label: string, value: string): void {
