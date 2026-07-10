@@ -1,4 +1,4 @@
-# W1-CLI-P6-BLOCKED — Bootstrap/operator endpoint dependency gate
+# W1-CLI-P6-BLOCKED — Operator endpoint and runtime acceptance gate
 
 Component: cli
 Path: crates/haze-sync-cli
@@ -10,22 +10,23 @@ This is a hold notice, not an executable worker prompt.
 
 ## Accepted state
 
-CLI-P5 implementation, CI fixer, and clean-code review are accepted. Final code/docs CI is green.
+CLI-P5 implementation, CI correction, and clean-code review are accepted with green CI.
 
-- code_bearing_sha: 3130df7c6ceeb735baf186d57cee931f973a4cd3
-- workflow: Component CI
-- workflow_run_id: 29084418994
-- run_number: 1047
-- conclusion: success
+Worktree WT-P8 and GDrive GDA-P7C are now implemented, but both final heads are formally red and have been routed through artifact-based fixer slots. Their runtime and export boundaries are not yet clean-code/CI accepted for fan-in use.
 
 ## Blocked next phase
 
-The next plan phase is CLI-P6: bootstrap and sync operation commands.
+CLI-P6 owns bootstrap and sync operation commands. It may call only accepted Server/API operator endpoints or an explicitly accepted local orchestration contract.
 
-CLI-P6 may only call accepted Server/API operator endpoints or an explicitly accepted local orchestration contract. The required bootstrap/import/export/sync-once endpoints and safe orchestration boundaries do not yet exist. Worktree and GDrive are also not at their runtime/fan-in completion phases.
+The following remain unavailable:
+
+- accepted bootstrap/import/export/sync-once operator endpoints;
+- accepted Worktree runtime hosting boundary;
+- accepted GDrive export/runtime and persistence fan-in;
+- stable safe progress/result and failure contracts for command rendering.
+
+CLI must not invent local orchestration, direct database access, provider calls, or hidden runtime ownership.
 
 ## Unblock condition
 
-Unblock after Server/API expose accepted bootstrap and sync-operation contracts, with required Worktree/GDrive runtime boundaries and safety gates available, or after a dedicated cross-component fan-in contract is approved.
-
-Until then, do not run a worker for this component and do not add placeholder mutation commands.
+Green WT-P8 and GDA-P7C lifecycle acceptance plus accepted Server/API operator contracts, or a dedicated cross-component CLI fan-in contract. Until then, do not launch a worker from this hold notice.
