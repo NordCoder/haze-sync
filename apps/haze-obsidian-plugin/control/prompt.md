@@ -1,42 +1,41 @@
-# W1-OBS-P7 — Conflict center and user actions
+# W1-OBS-P7C — Obsidian conflict center clean-code review
 
 Component: obsidian-plugin
 Path: apps/haze-obsidian-plugin
 Branch: component/obsidian-plugin
 PR: #51
-Role: implementation-worker
+Role: clean-code-reviewer
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-OBS-P6 implementation and clean-code review are accepted. Component CI evidence for the accepted source state is green.
+OBS-P7 implementation is complete and its code-bearing Component CI run is green.
 
+- code_bearing_sha: 6fd375f07ae942befd171181fcadfe72c52dc531
 - workflow: Component CI
-- workflow_run_id: 29038540630
-- run_number: 740
+- workflow_run_id: 29067731941
+- run_number: 849
 - conclusion: success
-
-The next implementation phase is OBS-P7 from apps/haze-obsidian-plugin/docs/implementation-plan.md.
 
 ## Read
 
-Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, relevant source, and PR diff.
-
-Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
+Read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, chatgpt-gh-connector.md, component docs/control files, relevant source, and PR diff. Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
 
 ## Task
 
-Implement OBS-P7: Conflict center and user actions.
+Review OBS-P7 conflict center and supported server-backed actions.
 
-Follow the plan:
+Focus areas:
 
-- list open conflicts from Server through accepted abstractions;
-- show original path, conflict path or materialized copy, status, source adapter, and safe timestamps;
-- provide supported actions: accept_current, accept_conflict, keep_both, mark_resolved;
-- explain destructive implications before actions where necessary;
-- refresh local base state after server-confirmed resolution;
-- avoid raw server internals or token details in UI/state.
+- safe conflict DTO validation and rendering;
+- supported action vocabulary and destructive-action confirmation;
+- idempotency-key stability and retry behavior;
+- server-confirmed-only local base-state updates;
+- disabled/dry-run mutation guards;
+- sanitization of server-provided display values and generic UI errors;
+- separation of controller logic from Obsidian modal rendering;
+- preservation of all OBS-P7 non-goals.
 
 ## Allowed files
 
@@ -44,14 +43,14 @@ Follow the plan:
 - apps/haze-obsidian-plugin/docs/**
 - apps/haze-obsidian-plugin/control/report.md
 
-## Non-goals
+## Forbidden changes
 
-No local-only conflict resolution bypassing Server, semantic merge editor, new conflict policy vocabulary, server route changes, workflow changes, or sibling component changes.
+No local-only resolution, semantic merge editor, new conflict policy vocabulary, server route changes, provider behavior, hard delete, background sync loop, workflow changes, dependency changes, or sibling component changes.
 
 ## CI trigger policy
 
-Product/source/docs commits must not skip CI. A final report-only commit may skip CI.
+Source/doc clean-code commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only the report to apps/haze-obsidian-plugin/control/report.md. Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION and phase_id to OBS-P7.
+Write only the report to apps/haze-obsidian-plugin/control/report.md. Use report-template.md. Set REPORT_TYPE to CLEAN_CODE_REVIEW and phase_id to OBS-P7C.
