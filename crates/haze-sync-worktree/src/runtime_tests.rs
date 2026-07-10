@@ -108,7 +108,13 @@ fn service(
     mode: WorktreeMode,
     clock: FakeClock,
 ) -> WorktreeRuntimeService<FakeClock, FakeWatcher, FakeCycle> {
-    WorktreeRuntimeService::new(mode, policy(), clock, FakeWatcher::default(), FakeCycle::default())
+    WorktreeRuntimeService::new(
+        mode,
+        policy(),
+        clock,
+        FakeWatcher::default(),
+        FakeCycle::default(),
+    )
 }
 
 #[test]
@@ -229,7 +235,10 @@ fn cancellation_prevents_startup_cycle_and_shutdown_is_explicit() {
     let shutdown = runtime.shutdown().unwrap();
     assert_eq!(shutdown.watcher, WorktreeRuntimeWatcherState::Stopped);
     assert_eq!(runtime.watcher_mut().shutdowns, 1);
-    assert_eq!(runtime.status().lifecycle, WorktreeRuntimeLifecycle::Shutdown);
+    assert_eq!(
+        runtime.status().lifecycle,
+        WorktreeRuntimeLifecycle::Shutdown
+    );
     assert_eq!(
         runtime.poll().unwrap_err(),
         WorktreeRuntimeLifecycleError::AlreadyShutdown
@@ -269,8 +278,10 @@ fn adapter_modes_produce_distinct_cycle_capabilities() {
 #[test]
 fn watcher_failure_degrades_to_periodic_full_scans() {
     let clock = FakeClock::new();
-    let mut watcher = FakeWatcher::default();
-    watcher.start_failure = Some(WorktreeWatcherFailure::Start);
+    let watcher = FakeWatcher {
+        start_failure: Some(WorktreeWatcherFailure::Start),
+        ..FakeWatcher::default()
+    };
     let mut runtime = WorktreeRuntimeService::new(
         WorktreeMode::ImportOnly,
         policy(),
