@@ -69,8 +69,8 @@ impl DoctorReportSummary {
 /// Deterministically ordered doctor report.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct DoctorReport {
-    summary: DoctorReportSummary,
-    checks: Vec<DoctorCheckResult>,
+    pub summary: DoctorReportSummary,
+    pub checks: Vec<DoctorCheckResult>,
 }
 
 impl DoctorReport {
