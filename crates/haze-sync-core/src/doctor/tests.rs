@@ -236,9 +236,7 @@ fn mapping_and_worktree_summaries_use_counts_without_provider_or_path_data() {
         DoctorCheckStatus::Failed
     );
 
-    let worktree = worktree_drift_check(WorktreeDriftCheckInput::new(
-        true, 10, 0, 1, 1, 0,
-    ));
+    let worktree = worktree_drift_check(WorktreeDriftCheckInput::new(true, 10, 0, 1, 1, 0));
     assert_eq!(worktree.status(), DoctorCheckStatus::Warning);
     assert_eq!(
         worktree_drift_check(WorktreeDriftCheckInput::new(true, 10, 1, 0, 0, 0)).status(),
