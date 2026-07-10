@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "vault_paths": [
+    {
+      "input": "Notes//./Project%2Fplan.md",
+      "canonical": "Notes/Project/plan.md"
+    },
+    {
+      "input": "_haze_conflicts/conf_fixture_0001/note.md",
+      "canonical": "_haze_conflicts/conf_fixture_0001/note.md"
+    }
+  ],
+  "identifiers": {
+    "adapter_id": "worktree-adapter",
+    "revision_id": "rev_fixture_0001",
+    "operation_id": "op_fixture_0001",
+    "conflict_id": "conf_fixture_0001"
+  },
+  "content_hashes": [
+    {
+      "input": "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF",
+      "canonical": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    },
+    {
+      "input": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "canonical": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "adapter_roles": [
+    "obsidian_plugin",
+    "gdrive_adapter",
+    "worktree_adapter",
+    "admin",
+    "readonly_agent"
+  ],
+  "adapter_modes": [
+    {
+      "wire": "disabled",
+      "allows_core_reads": false,
+      "allows_core_writes": false
+    },
+    {
+      "wire": "read_only",
+      "allows_core_reads": true,
+      "allows_core_writes": false
+    },
+    {
+      "wire": "import_only",
+      "allows_core_reads": false,
+      "allows_core_writes": true
+    },
+    {
+      "wire": "export_only",
+      "allows_core_reads": true,
+      "allows_core_writes": false
+    },
+    {
+      "wire": "bidirectional",
+      "allows_core_reads": true,
+      "allows_core_writes": true
+    },
+    {
+      "wire": "dry_run",
+      "allows_core_reads": true,
+      "allows_core_writes": false
+    }
+  ],
+  "validation_errors": [
+    {
+      "wire": "empty_path",
+      "message": "path must not be empty"
+    },
+    {
+      "wire": "absolute_path",
+      "message": "path must be relative to the vault"
+    },
+    {
+      "wire": "path_traversal",
+      "message": "path must not contain traversal segments"
+    },
+    {
+      "wire": "windows_drive_prefix",
+      "message": "path must not contain a Windows drive prefix"
+    },
+    {
+      "wire": "windows_separator",
+      "message": "path must use forward slash separators"
+    },
+    {
+      "wire": "null_byte",
+      "message": "value must not contain null bytes"
+    },
+    {
+      "wire": "runtime_path",
+      "message": "path is reserved for runtime state and must not sync"
+    },
+    {
+      "wire": "invalid_percent_encoding",
+      "message": "path contains invalid percent encoding"
+    },
+    {
+      "wire": "invalid_hash_length",
+      "message": "SHA-256 value must contain exactly 64 hexadecimal characters"
+    },
+    {
+      "wire": "invalid_hash_character",
+      "message": "SHA-256 value contains non-hexadecimal characters"
+    },
+    {
+      "wire": "invalid_identifier",
+      "message": "identifier contains unsupported characters"
+    },
+    {
+      "wire": "invalid_identifier_prefix",
+      "message": "identifier does not use the required prefix"
+    },
+    {
+      "wire": "invalid_adapter_role",
+      "message": "adapter role is not supported"
+    },
+    {
+      "wire": "invalid_adapter_mode",
+      "message": "adapter mode is not supported"
+    }
+  ]
+}
