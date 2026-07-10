@@ -12,7 +12,7 @@ use haze_sync_common::{RevisionId, VaultPath};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    auth::AdapterRole,
+    auth::{AdapterPrincipal, AdapterRole},
     contracts::{
         errors::{ErrorResponse, PublicError, PublicErrorCode, SafeErrorDetails},
         headers::{
@@ -38,6 +38,9 @@ pub const DELETE_FILE_ALLOWED_ROLES: [AdapterRole; 4] = [
 
 /// HTTP status code for malformed DELETE route requests.
 pub const HTTP_STATUS_BAD_REQUEST: u16 = 400;
+
+/// HTTP status code for a missing authenticated adapter principal.
+pub const HTTP_STATUS_UNAUTHORIZED: u16 = 401;
 
 /// HTTP status code for forbidden authenticated roles.
 pub const HTTP_STATUS_FORBIDDEN: u16 = 403;
@@ -130,6 +133,33 @@ impl fmt::Debug for DeleteFileRouteRequest {
     }
 }
 
+/// DELETE request paired with a principal already verified by server middleware.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AuthenticatedDeleteFileRouteRequest {
+    request: DeleteFileRouteRequest,
+    adapter_principal: AdapterPrincipal,
+}
+
+impl AuthenticatedDeleteFileRouteRequest {
+    /// Parsed delete request metadata.
+    #[must_use]
+    pub const fn request(&self) -> &DeleteFileRouteRequest {
+        &self.request
+    }
+
+    /// Verified adapter principal supplied by the runtime layer.
+    #[must_use]
+    pub const fn adapter_principal(&self) -> &AdapterPrincipal {
+        &self.adapter_principal
+    }
+
+    /// Consume the authenticated wrapper and return the passive request metadata.
+    #[must_use]
+    pub fn into_request(self) -> DeleteFileRouteRequest {
+        self.request
+    }
+}
+
 /// Role metadata for the future DELETE handler. No authentication happens here.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct DeleteFileAuthRequirement;
@@ -148,6 +178,14 @@ impl DeleteFileAuthRequirement {
         } else {
             Err(DeleteRouteError::ForbiddenRole)
         }
+    }
+
+    /// Validate the role carried by an already verified adapter principal.
+    pub fn validate_principal(
+        self,
+        principal: &AdapterPrincipal,
+    ) -> Result<(), DeleteRouteError> {
+        self.validate_role(principal.role())
     }
 }
 
@@ -202,11 +240,34 @@ pub fn parse_delete_file_request(
     })
 }
 
+/// Parse DELETE metadata and require an already verified adapter principal.
+///
+/// This helper does not parse bearer tokens or perform runtime authentication.
+pub fn parse_authenticated_delete_file_request(
+    parts: DeleteFileRouteRequestParts<'_>,
+    adapter_principal: Option<&AdapterPrincipal>,
+) -> Result<AuthenticatedDeleteFileRouteRequest, DeleteRouteError> {
+    let adapter_principal = adapter_principal
+        .cloned()
+        .ok_or(DeleteRouteError::MissingAdapterPrincipal)?;
+    let request = parse_delete_file_request(parts)?;
+    request
+        .auth_requirement()
+        .validate_principal(&adapter_principal)?;
+
+    Ok(AuthenticatedDeleteFileRouteRequest {
+        request,
+        adapter_principal,
+    })
+}
+
 /// Sanitized error category for DELETE route contract helpers.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DeleteRouteError {
     /// Route path failed vault path validation.
     InvalidPath,
+    /// A verified adapter principal was not supplied by runtime auth wiring.
+    MissingAdapterPrincipal,
     /// A required contract header was absent.
     MissingRequiredHeader { header: &'static str },
     /// `Idempotency-Key` was empty, unsafe, or too long.
@@ -237,6 +298,7 @@ impl DeleteRouteError {
             | Self::InvalidIdempotencyKey
             | Self::InvalidBaseRevision
             | Self::InvalidDeleteGuardMetadata => HTTP_STATUS_BAD_REQUEST,
+            Self::MissingAdapterPrincipal => HTTP_STATUS_UNAUTHORIZED,
             Self::ForbiddenRole => HTTP_STATUS_FORBIDDEN,
             Self::NotFound => HTTP_STATUS_NOT_FOUND,
             Self::StaleBaseConflict | Self::DeleteGuardBlocked | Self::IdempotencyMismatch => {
@@ -250,6 +312,7 @@ impl DeleteRouteError {
     pub const fn public_code(&self) -> PublicErrorCode {
         match self {
             Self::InvalidPath => PublicErrorCode::InvalidPath,
+            Self::MissingAdapterPrincipal => PublicErrorCode::MissingToken,
             Self::MissingRequiredHeader { .. } => PublicErrorCode::InvalidRequest,
             Self::InvalidIdempotencyKey
             | Self::InvalidBaseRevision
@@ -283,6 +346,7 @@ impl DeleteRouteError {
     fn safe_message(&self) -> &'static str {
         match self {
             Self::InvalidPath => "Invalid vault path",
+            Self::MissingAdapterPrincipal => "Missing authenticated adapter principal",
             Self::MissingRequiredHeader { .. } => "Missing required header",
             Self::InvalidIdempotencyKey => "Invalid Idempotency-Key header",
             Self::InvalidBaseRevision => "Invalid X-Base-Revision-Id header",
@@ -298,6 +362,7 @@ impl DeleteRouteError {
     fn safe_details(&self) -> Option<SafeErrorDetails> {
         match self {
             Self::InvalidPath => Some(detail("path", "failed validation")),
+            Self::MissingAdapterPrincipal => Some(detail("auth", "adapter principal required")),
             Self::MissingRequiredHeader { header } => Some(detail("header", *header)),
             Self::InvalidIdempotencyKey => Some(detail("header", IDEMPOTENCY_KEY_HEADER)),
             Self::InvalidBaseRevision => Some(detail("header", X_BASE_REVISION_ID_HEADER)),
@@ -413,6 +478,14 @@ mod tests {
         }
     }
 
+    fn principal() -> AdapterPrincipal {
+        AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap()
+    }
+
+    fn path(value: &str) -> VaultPath {
+        VaultPath::parse(value).unwrap()
+    }
+
     #[test]
     fn valid_delete_route_request_parses() {
         let request = parse_delete_file_request(valid_parts()).expect("request should parse");
@@ -436,6 +509,32 @@ mod tests {
             }
         );
         assert!(!format!("{request:?}").contains("iphone-anna:delete-001"));
+    }
+
+    #[test]
+    fn authenticated_delete_requires_verified_adapter_principal() {
+        let error = parse_authenticated_delete_file_request(valid_parts(), None).unwrap_err();
+        assert_eq!(error, DeleteRouteError::MissingAdapterPrincipal);
+        assert_eq!(error.http_status_code(), HTTP_STATUS_UNAUTHORIZED);
+        assert_eq!(error.public_code(), PublicErrorCode::MissingToken);
+
+        let json = serde_json::to_string(&error.to_error_response()).unwrap();
+        assert!(json.contains("missing_token"));
+        assert!(!json.contains("delete-001"));
+        assert!(!json.contains("Bearer"));
+
+        let principal = principal();
+        let authenticated =
+            parse_authenticated_delete_file_request(valid_parts(), Some(&principal)).unwrap();
+        assert_eq!(authenticated.adapter_principal(), &principal);
+        assert_eq!(
+            authenticated.request().path().as_str(),
+            "Projects/Haze/old.md"
+        );
+        assert_eq!(
+            authenticated.request().base_revision_id().map(RevisionId::as_str),
+            Some("rev_123")
+        );
     }
 
     #[test]
@@ -500,18 +599,44 @@ mod tests {
     }
 
     #[test]
-    fn tombstoned_response_serializes_deterministically() {
-        let response = tombstoned_delete_response(
-            VaultPath::parse("Projects/Haze/old.md").unwrap(),
+    fn delete_guard_metadata_rejects_zero_and_preserves_positive_counts() {
+        assert_eq!(
+            DeleteGuardRequestMetadata::new(0),
+            Err(DeleteRouteError::InvalidDeleteGuardMetadata)
+        );
+        assert_eq!(
+            DeleteGuardRequestMetadata::new(25).unwrap(),
+            DeleteGuardRequestMetadata {
+                requested_delete_count: 25
+            }
+        );
+    }
+
+    #[test]
+    fn delete_response_vocabulary_is_deterministic_and_passive() {
+        let tombstoned = tombstoned_delete_response(
+            path("Projects/Haze/old.md"),
             "tmb_01JDELETE",
             12_382,
             "2026-08-01T00:00:00Z",
         );
+        let not_found = not_found_delete_response(path("Projects/Haze/missing.md"));
+        let stale = stale_base_delete_response(path("Projects/Haze/old.md"));
+        let guard_blocked = unsafe_delete_response(path("Projects/Haze/old.md"));
 
         assert_eq!(
-            serde_json::to_string(&response).unwrap(),
+            serde_json::to_string(&tombstoned).unwrap(),
             "{\"status\":\"tombstoned\",\"path\":\"Projects/Haze/old.md\",\"tombstone_id\":\"tmb_01JDELETE\",\"seq\":12382,\"retention_until\":\"2026-08-01T00:00:00Z\"}"
         );
+        assert!(serde_json::to_string(&not_found)
+            .unwrap()
+            .contains("\"status\":\"not_found\""));
+        assert!(serde_json::to_string(&stale)
+            .unwrap()
+            .contains("stale_base_revision"));
+        assert!(serde_json::to_string(&guard_blocked)
+            .unwrap()
+            .contains("unsafe_delete"));
     }
 
     #[test]
@@ -534,7 +659,7 @@ mod tests {
         assert_eq!(error.http_status_code(), HTTP_STATUS_NOT_FOUND);
         assert_eq!(error.public_code(), PublicErrorCode::NotFound);
         assert_eq!(
-            not_found_delete_response(VaultPath::parse("Projects/Haze/missing.md").unwrap()),
+            not_found_delete_response(path("Projects/Haze/missing.md")),
             DeleteFileResponse::NotFound {
                 path: VaultPathDto::from("Projects/Haze/missing.md"),
             }
