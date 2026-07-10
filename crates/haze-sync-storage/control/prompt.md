@@ -1,60 +1,42 @@
-# W1-STOR-P9 — Storage test-support and integration harness hardening
+# W1-FIX-STOR-P9-CI — Storage STOR-P9 validation correction
 
 Component: storage
 Path: crates/haze-sync-storage
 Branch: component/storage
 PR: #47
-Role: implementation-worker
+Role: fixer-worker
 
-Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
+Use only the GitHub connector. Do not merge the PR or change its lifecycle state.
 
-## Context
+## Evidence
 
-STOR-P8 implementation, formatter correction, and clean-code review are accepted. Final source/test CI is green.
+The final STOR-P9 source/docs head has a failed Component CI result.
 
-- code_bearing_sha: 1a53e555a933ee2c81ce4843be4506b2ad713f17
-- workflow: Component CI
-- workflow_run_id: 29113692274
-- run_number: 1453
-- conclusion: success
+- code_bearing_sha: 46b13f986f2a338e86a8811639d706a64a378565
+- workflow_run_id: 29116418343
+- run_number: 1502
+- run_attempt: 1
+- artifact_id: 8236830104
+- artifact_name: ci-diag__component-storage__wf-component-ci__run-29116418343__attempt-1
+- artifact_expires_at: 2026-07-11T19:00:35Z
 
-The next implementation phase is STOR-P9 from crates/haze-sync-storage/docs/implementation-plan.md.
+Use the diagnostics artifact as the authoritative failure evidence.
 
-## Read
+## Required work
 
-Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current `test-support` feature gates and helpers, storage repository tests, CI documentation, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt explicitly instructs it.
+Read the project process files, current Storage control files, STOR-P9 source/tests/docs, PR diff, and every required file in artifact 8236830104. If the artifact is unavailable or incomplete, report FIX_BLOCKED_BY_LOGS.
 
-## Task
-
-Implement STOR-P9: Storage test-support and integration harness hardening.
-
-- audit the `test-support` feature and ensure production builds do not depend on test-only helpers;
-- provide focused helpers for safe test database setup, isolation, cleanup, and deterministic fixture state where accepted;
-- require an explicitly supplied test-only database URL and reject production-looking or missing configuration safely;
-- make unavailable-database behavior explicit: skip only when the contract says not-run, never convert setup failure into a pass;
-- avoid provider credentials, external vaults, production secrets, or live services;
-- document exact commands and environment requirements for feature-gated Storage integration tests;
-- add unit tests for configuration validation and helper behavior that do not require a live database.
+Apply only the smallest correction demonstrated by the artifact. Preserve explicit test-only database configuration, redacted configuration errors, production isolation, schema setup locking, partial-schema rejection, bounded fixture identifiers, observable test object cleanup, pure harness tests, documentation, and Storage ownership boundaries.
 
 ## Allowed files
 
 - crates/haze-sync-storage/src/test_support/**
-- crates/haze-sync-storage/docs/**
+- crates/haze-sync-storage/docs/** only when directly required by diagnostics
+- crates/haze-sync-storage/src/lib.rs or Cargo.toml only when directly required by diagnostics
 - crates/haze-sync-storage/control/report.md
 
-Only if directly required to keep the test-support feature correctly isolated:
+Do not change production repository semantics, migrations/schema, Server fan-in, provider behavior, shared workflows/dependencies, sibling components, or unrelated test expectations.
 
-- crates/haze-sync-storage/src/lib.rs
-- crates/haze-sync-storage/Cargo.toml
+Source/test/docs correction commits must run CI normally. A final report-only commit may skip CI.
 
-## Non-goals
-
-No production migration deployment, provider credentials, external vault access, product repository semantics, schema expansion, CI workflow edits, Server fan-in, workflow/dependency changes, or sibling component changes.
-
-## CI trigger policy
-
-Product/source/test/docs commits must not skip CI. A final report-only commit may skip CI.
-
-## Report
-
-Write only crates/haze-sync-storage/control/report.md. Use report-template.md, REPORT_TYPE IMPLEMENTATION, phase_id STOR-P9.
+Write only crates/haze-sync-storage/control/report.md using REPORT_TYPE FIX and phase_id FIX-STOR-P9-CI.
