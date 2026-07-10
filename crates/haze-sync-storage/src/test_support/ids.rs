@@ -3,9 +3,12 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+const MAX_SANITIZED_LABEL_LEN: usize = 32;
+const MAX_SHARED_IDENTIFIER_LEN: usize = 128;
+
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
-/// Generates a process-local unique identifier with a sanitized prefix.
+/// Generates a process-local unique identifier with a sanitized bounded prefix.
 #[must_use]
 pub fn unique_test_id(prefix: &str) -> String {
     let prefix = sanitize_label(prefix);
@@ -21,13 +24,17 @@ pub fn unique_test_id(prefix: &str) -> String {
 }
 
 /// Namespace for grouping rows, adapter ids, and paths owned by one test.
+///
+/// Namespace creation is unique per process, while child identifiers are stable
+/// for the same label inside one namespace. Bounded labels keep generated shared
+/// identifiers within the current common identifier limit.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TestNamespace {
     id: String,
 }
 
 impl TestNamespace {
-    /// Creates a fresh namespace with a sanitized prefix.
+    /// Creates a fresh namespace with a sanitized bounded prefix.
     #[must_use]
     pub fn new(prefix: &str) -> Self {
         Self {
@@ -44,7 +51,9 @@ impl TestNamespace {
     /// Produces a stable child identifier inside this namespace.
     #[must_use]
     pub fn child_id(&self, label: &str) -> String {
-        format!("{}-{}", self.id, sanitize_label(label))
+        let child = format!("{}-{}", self.id, sanitize_label(label));
+        debug_assert!(child.len() <= MAX_SHARED_IDENTIFIER_LEN);
+        child
     }
 
     /// Produces an adapter id suitable for fixture rows.
@@ -88,12 +97,9 @@ fn sanitize_label(value: &str) -> String {
         })
         .collect();
     let trimmed = sanitized.trim_matches('-');
+    let label = if trimmed.is_empty() { "test" } else { trimmed };
 
-    if trimmed.is_empty() {
-        "test".to_owned()
-    } else {
-        trimmed.to_owned()
-    }
+    label.chars().take(MAX_SANITIZED_LABEL_LEN).collect()
 }
 
 fn sanitize_path_segment(value: &str) -> String {
@@ -109,11 +115,12 @@ fn sanitize_path_segment(value: &str) -> String {
         .collect();
     let trimmed = sanitized.trim_matches(|ch| ch == '-' || ch == '.');
     let segment = if trimmed.is_empty() { "note" } else { trimmed };
+    let bounded: String = segment.chars().take(MAX_SANITIZED_LABEL_LEN).collect();
 
-    if segment.contains('.') {
-        segment.to_owned()
+    if bounded.contains('.') {
+        bounded
     } else {
-        format!("{segment}.md")
+        format!("{bounded}.md")
     }
 }
 
@@ -132,15 +139,25 @@ mod tests {
     }
 
     #[test]
-    fn namespace_builds_related_fixture_identifiers() {
+    fn namespace_builds_stable_related_fixture_identifiers() {
         let namespace = TestNamespace::new("Pg Fixture");
 
         assert!(namespace.adapter_id("iphone").contains(namespace.id()));
+        assert_eq!(namespace.operation_id("put file"), namespace.operation_id("put file"));
         assert!(namespace.operation_id("put file").contains("op-put-file"));
         assert!(namespace.request_id("upload").contains("req-upload"));
         assert!(namespace.vault_path("note").ends_with("/note.md"));
         assert!(namespace
             .vault_path("Folder/Note.md")
             .ends_with("/folder-note.md"));
+    }
+
+    #[test]
+    fn generated_shared_identifiers_remain_bounded() {
+        let namespace = TestNamespace::new(&"prefix".repeat(50));
+        let child = namespace.child_id(&"label".repeat(100));
+
+        assert!(child.len() <= MAX_SHARED_IDENTIFIER_LEN);
+        assert!(namespace.id().len() < child.len());
     }
 }
