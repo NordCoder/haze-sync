@@ -6,7 +6,7 @@
 
 use chrono::{DateTime, Utc};
 use haze_sync_common::{AdapterId, ConflictId, ContentHash, OperationId, RevisionId, VaultPath};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::{error::Error, fmt, str::FromStr};
 
@@ -32,6 +32,8 @@ pub enum OperationLogError {
     LimitTooLarge { max: u32 },
     /// Operation rows must be strictly ordered by ascending sequence.
     NonMonotonicSequence,
+    /// Serialized page bounds do not match the ordered operation rows.
+    InconsistentPageBounds,
     /// An operation kind string is not part of the V1 public contract.
     InvalidOperationKind,
     /// Tombstone identifiers must be safe public identifiers with the V1 prefix.
@@ -50,6 +52,9 @@ impl fmt::Display for OperationLogError {
             }
             Self::NonMonotonicSequence => formatter
                 .write_str("operation log entries must be ordered by strictly increasing sequence"),
+            Self::InconsistentPageBounds => {
+                formatter.write_str("changes page bounds do not match its operation rows")
+            }
             Self::InvalidOperationKind => formatter.write_str("operation kind is not supported"),
             Self::InvalidTombstoneId => formatter.write_str("tombstone id is invalid"),
         }
@@ -59,7 +64,7 @@ impl fmt::Display for OperationLogError {
 impl Error for OperationLogError {}
 
 /// Monotonic operation-log sequence value.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(transparent)]
 pub struct OperationSequence(i64);
 
@@ -83,6 +88,16 @@ impl OperationSequence {
     }
 }
 
+impl<'de> Deserialize<'de> for OperationSequence {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = i64::deserialize(deserializer)?;
+        Self::new(value).map_err(serde::de::Error::custom)
+    }
+}
+
 impl fmt::Display for OperationSequence {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(formatter, "{}", self.0)
@@ -90,7 +105,7 @@ impl fmt::Display for OperationSequence {
 }
 
 /// Bounded changes-feed page limit.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(transparent)]
 pub struct ChangesLimit(u32);
 
@@ -122,10 +137,20 @@ impl ChangesLimit {
         self.0
     }
 
-    /// Return a SQL-friendly limit including one sentinel row for has_more.
+    /// Return a SQL-friendly limit including one sentinel row for `has_more`.
     #[must_use]
     pub const fn value_with_sentinel(self) -> i64 {
         self.0 as i64 + 1
+    }
+}
+
+impl<'de> Deserialize<'de> for ChangesLimit {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = u32::deserialize(deserializer)?;
+        Self::new(value).map_err(serde::de::Error::custom)
     }
 }
 
@@ -210,7 +235,7 @@ impl FromStr for OperationKind {
 }
 
 /// Public tombstone identifier used by delete-file operations.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(transparent)]
 pub struct TombstoneId(String);
 
@@ -239,6 +264,16 @@ impl TombstoneId {
     #[must_use]
     pub fn into_string(self) -> String {
         self.0
+    }
+}
+
+impl<'de> Deserialize<'de> for TombstoneId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::parse(&value).map_err(serde::de::Error::custom)
     }
 }
 
@@ -306,15 +341,15 @@ pub struct ChangeFeedEntry {
 }
 
 /// Validated ordered operation page.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct ChangesPage {
     /// Sequence supplied by the adapter request.
     pub from_seq: OperationSequence,
-    /// Highest sequence included in this page, or from_seq when empty.
+    /// Highest sequence included in this page, or `from_seq` when empty.
     pub to_seq: OperationSequence,
     /// True when another request is needed to continue pagination.
     pub has_more: bool,
-    /// Ordered operations after from_seq.
+    /// Ordered operations after `from_seq`.
     pub changes: Vec<ChangeFeedEntry>,
 }
 
@@ -325,17 +360,7 @@ impl ChangesPage {
         changes: Vec<ChangeFeedEntry>,
         has_more: bool,
     ) -> Result<Self, OperationLogError> {
-        let mut previous = query.since;
-        for change in &changes {
-            if change.operation.seq <= previous {
-                return Err(OperationLogError::NonMonotonicSequence);
-            }
-            previous = change.operation.seq;
-        }
-
-        let to_seq = changes
-            .last()
-            .map_or(query.since, |change| change.operation.seq);
+        let to_seq = validate_change_order(query.since, &changes)?;
 
         Ok(Self {
             from_seq: query.since,
@@ -344,6 +369,52 @@ impl ChangesPage {
             changes,
         })
     }
+}
+
+impl<'de> Deserialize<'de> for ChangesPage {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct ChangesPageWire {
+            from_seq: OperationSequence,
+            to_seq: OperationSequence,
+            has_more: bool,
+            changes: Vec<ChangeFeedEntry>,
+        }
+
+        let wire = ChangesPageWire::deserialize(deserializer)?;
+        let expected_to_seq =
+            validate_change_order(wire.from_seq, &wire.changes).map_err(serde::de::Error::custom)?;
+        if wire.to_seq != expected_to_seq {
+            return Err(serde::de::Error::custom(
+                OperationLogError::InconsistentPageBounds,
+            ));
+        }
+
+        Ok(Self {
+            from_seq: wire.from_seq,
+            to_seq: wire.to_seq,
+            has_more: wire.has_more,
+            changes: wire.changes,
+        })
+    }
+}
+
+fn validate_change_order(
+    from_seq: OperationSequence,
+    changes: &[ChangeFeedEntry],
+) -> Result<OperationSequence, OperationLogError> {
+    let mut previous = from_seq;
+    for change in changes {
+        if change.operation.seq <= previous {
+            return Err(OperationLogError::NonMonotonicSequence);
+        }
+        previous = change.operation.seq;
+    }
+
+    Ok(previous)
 }
 
 /// Adapter progress cursor.
@@ -359,8 +430,19 @@ pub struct AdapterCursor {
     pub last_success_at: Option<DateTime<Utc>>,
 }
 
+impl AdapterCursor {
+    /// Classify a requested Core sequence without mutating durable cursor state.
+    #[must_use]
+    pub fn classify_core_sequence_update(
+        &self,
+        requested: OperationSequence,
+    ) -> CursorUpdateOutcome {
+        classify_cursor_update(self.last_core_seq, requested)
+    }
+}
+
 /// Safe outcome for a requested adapter cursor update.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CursorUpdateOutcome {
     /// Cursor moved to a higher sequence.
@@ -372,6 +454,7 @@ pub enum CursorUpdateOutcome {
 }
 
 /// Classify a cursor update without mutating storage.
+#[must_use]
 pub fn classify_cursor_update(
     current: OperationSequence,
     requested: OperationSequence,
@@ -388,6 +471,7 @@ pub fn classify_cursor_update(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     fn sample_change(seq: i64) -> ChangeFeedEntry {
         ChangeFeedEntry {
@@ -407,62 +491,123 @@ mod tests {
         }
     }
 
+    fn adapter_cursor(last_core_seq: i64) -> AdapterCursor {
+        AdapterCursor {
+            adapter_id: AdapterId::parse("worktree-adapter").unwrap(),
+            last_core_seq: OperationSequence::new(last_core_seq).unwrap(),
+            external_cursor_json: json!({"page_token": "public-fixture"}),
+            last_success_at: None,
+        }
+    }
+
     #[test]
-    fn changes_limit_rejects_unsafe_values() {
+    fn changes_limit_covers_all_boundaries_and_validating_serde() {
         assert_eq!(ChangesLimit::new(0), Err(OperationLogError::ZeroLimit));
+        assert_eq!(ChangesLimit::new(1).unwrap().value(), 1);
+        assert_eq!(ChangesLimit::default().value(), DEFAULT_CHANGES_LIMIT);
+        assert_eq!(ChangesLimit::new(MAX_CHANGES_LIMIT).unwrap().value(), 1_000);
+        assert_eq!(
+            ChangesLimit::new(MAX_CHANGES_LIMIT)
+                .unwrap()
+                .value_with_sentinel(),
+            1_001
+        );
         assert_eq!(
             ChangesLimit::new(MAX_CHANGES_LIMIT + 1),
             Err(OperationLogError::LimitTooLarge {
                 max: MAX_CHANGES_LIMIT
             })
         );
-        assert_eq!(ChangesLimit::new(MAX_CHANGES_LIMIT).unwrap().value(), 1_000);
+        assert!(serde_json::from_str::<ChangesLimit>("0").is_err());
+        assert!(serde_json::from_str::<ChangesLimit>("1001").is_err());
+        assert_eq!(serde_json::from_str::<ChangesLimit>("1").unwrap().value(), 1);
     }
 
     #[test]
-    fn sequence_rejects_negative_values() {
+    fn sequence_validation_cannot_be_bypassed_by_serde() {
         assert_eq!(
             OperationSequence::new(-1),
             Err(OperationLogError::NegativeSequence)
         );
         assert_eq!(OperationSequence::new(0).unwrap(), OperationSequence::ZERO);
-    }
-
-    #[test]
-    fn operation_kind_matches_contract_strings() {
-        assert_eq!(OperationKind::UpsertFile.as_str(), "upsert_file");
+        assert_eq!(OperationSequence::new(i64::MAX).unwrap().value(), i64::MAX);
+        assert!(serde_json::from_str::<OperationSequence>("-1").is_err());
         assert_eq!(
-            OperationKind::from_str("conflict_resolved").unwrap(),
-            OperationKind::ConflictResolved
-        );
-        assert_eq!(
-            serde_json::to_string(&OperationKind::BackupCreated).unwrap(),
-            "\"backup_created\""
-        );
-        assert_eq!(
-            OperationKind::from_str("overwrite_file"),
-            Err(OperationLogError::InvalidOperationKind)
+            serde_json::from_str::<OperationSequence>("0").unwrap(),
+            OperationSequence::ZERO
         );
     }
 
     #[test]
-    fn tombstone_id_requires_public_prefix() {
+    fn changes_query_deserialization_enforces_sequence_and_limit_bounds() {
+        assert!(serde_json::from_value::<ChangesQuery>(json!({
+            "since": -1,
+            "limit": 100
+        }))
+        .is_err());
+        assert!(serde_json::from_value::<ChangesQuery>(json!({
+            "since": 0,
+            "limit": 0
+        }))
+        .is_err());
+        assert!(serde_json::from_value::<ChangesQuery>(json!({
+            "since": 0,
+            "limit": 1001
+        }))
+        .is_err());
+        assert_eq!(
+            serde_json::from_value::<ChangesQuery>(json!({
+                "since": 0,
+                "limit": 1
+            }))
+            .unwrap(),
+            ChangesQuery::new(0, 1).unwrap()
+        );
+    }
+
+    #[test]
+    fn operation_kind_parse_display_and_serde_are_stable_for_all_variants() {
+        for kind in [
+            OperationKind::UpsertFile,
+            OperationKind::DeleteFile,
+            OperationKind::RestoreFile,
+            OperationKind::ConflictCreated,
+            OperationKind::ConflictResolved,
+            OperationKind::BackupCreated,
+        ] {
+            assert_eq!(OperationKind::from_str(kind.as_str()).unwrap(), kind);
+            assert_eq!(kind.to_string(), kind.as_str());
+            let serialized = serde_json::to_string(&kind).unwrap();
+            assert_eq!(serialized, format!("\"{}\"", kind.as_str()));
+            assert_eq!(serde_json::from_str::<OperationKind>(&serialized).unwrap(), kind);
+        }
+
+        for invalid in ["overwrite_file", "UPSERT_FILE", "upsert-file", ""] {
+            assert_eq!(
+                OperationKind::from_str(invalid),
+                Err(OperationLogError::InvalidOperationKind)
+            );
+            assert!(serde_json::from_str::<OperationKind>(&format!("\"{invalid}\"")).is_err());
+        }
+    }
+
+    #[test]
+    fn tombstone_id_validation_cannot_be_bypassed_by_serde() {
         assert_eq!(
             TombstoneId::parse("tmb_01JTEST").unwrap().as_str(),
             "tmb_01JTEST"
         );
-        assert_eq!(
-            TombstoneId::parse("../secret"),
-            Err(OperationLogError::InvalidTombstoneId)
-        );
-        assert_eq!(
-            TombstoneId::parse("tmb_"),
-            Err(OperationLogError::InvalidTombstoneId)
-        );
+        for invalid in ["../secret", "tmb_", "tmb_bad/id"] {
+            assert_eq!(
+                TombstoneId::parse(invalid),
+                Err(OperationLogError::InvalidTombstoneId)
+            );
+            assert!(serde_json::from_str::<TombstoneId>(&format!("\"{invalid}\"")).is_err());
+        }
     }
 
     #[test]
-    fn changes_page_preserves_ordering_and_to_seq() {
+    fn changes_page_preserves_ordering_bounds_and_empty_cursor() {
         let query = ChangesQuery::new(10, 100).unwrap();
         let page =
             ChangesPage::new(query, vec![sample_change(11), sample_change(12)], false).unwrap();
@@ -470,31 +615,90 @@ mod tests {
         assert_eq!(page.from_seq.value(), 10);
         assert_eq!(page.to_seq.value(), 12);
         assert!(!page.has_more);
+        assert_eq!(
+            serde_json::from_str::<ChangesPage>(&serde_json::to_string(&page).unwrap()).unwrap(),
+            page
+        );
+
+        let empty = ChangesPage::new(query, Vec::new(), false).unwrap();
+        assert_eq!(empty.from_seq, query.since);
+        assert_eq!(empty.to_seq, query.since);
     }
 
     #[test]
-    fn changes_page_rejects_non_monotonic_rows() {
+    fn changes_page_rejects_duplicate_regression_and_inconsistent_bounds() {
         let query = ChangesQuery::new(10, 100).unwrap();
         assert_eq!(
             ChangesPage::new(query, vec![sample_change(12), sample_change(12)], false),
             Err(OperationLogError::NonMonotonicSequence)
         );
+        assert_eq!(
+            ChangesPage::new(query, vec![sample_change(9)], false),
+            Err(OperationLogError::NonMonotonicSequence)
+        );
+
+        let inconsistent = json!({
+            "from_seq": 10,
+            "to_seq": 99,
+            "has_more": false,
+            "changes": [sample_change(11)]
+        });
+        assert!(serde_json::from_value::<ChangesPage>(inconsistent).is_err());
+
+        let non_monotonic = json!({
+            "from_seq": 10,
+            "to_seq": 12,
+            "has_more": false,
+            "changes": [sample_change(12), sample_change(12)]
+        });
+        assert!(serde_json::from_value::<ChangesPage>(non_monotonic).is_err());
     }
 
     #[test]
-    fn cursor_update_classification_is_monotonic() {
-        let current = OperationSequence::new(5).unwrap();
+    fn cursor_update_classification_is_monotonic_at_boundaries() {
         assert_eq!(
-            classify_cursor_update(current, OperationSequence::new(8).unwrap()),
+            classify_cursor_update(OperationSequence::ZERO, OperationSequence::new(1).unwrap()),
+            CursorUpdateOutcome::Advanced
+        );
+
+        let cursor = adapter_cursor(5);
+        assert_eq!(
+            cursor.classify_core_sequence_update(OperationSequence::new(8).unwrap()),
             CursorUpdateOutcome::Advanced
         );
         assert_eq!(
-            classify_cursor_update(current, OperationSequence::new(5).unwrap()),
+            cursor.classify_core_sequence_update(OperationSequence::new(5).unwrap()),
             CursorUpdateOutcome::Unchanged
         );
         assert_eq!(
-            classify_cursor_update(current, OperationSequence::new(4).unwrap()),
+            cursor.classify_core_sequence_update(OperationSequence::new(4).unwrap()),
             CursorUpdateOutcome::RejectedRegression
         );
+
+        let max = OperationSequence::new(i64::MAX).unwrap();
+        assert_eq!(classify_cursor_update(max, max), CursorUpdateOutcome::Unchanged);
+        assert_eq!(
+            classify_cursor_update(max, OperationSequence::new(i64::MAX - 1).unwrap()),
+            CursorUpdateOutcome::RejectedRegression
+        );
+    }
+
+    #[test]
+    fn cursor_update_outcome_serde_names_are_stable() {
+        for (outcome, expected) in [
+            (CursorUpdateOutcome::Advanced, "advanced"),
+            (CursorUpdateOutcome::Unchanged, "unchanged"),
+            (
+                CursorUpdateOutcome::RejectedRegression,
+                "rejected_regression",
+            ),
+        ] {
+            let serialized = serde_json::to_string(&outcome).unwrap();
+            assert_eq!(serialized, format!("\"{expected}\""));
+            assert_eq!(
+                serde_json::from_str::<CursorUpdateOutcome>(&serialized).unwrap(),
+                outcome
+            );
+        }
     }
 }
