@@ -1,50 +1,63 @@
-# W1-FIX-GDA-P4C-CI — GDrive adapter clean-code CI fix
+# W1-GDA-P5 — Full scan and import planner
 
 Component: gdrive-adapter
 Path: crates/haze-gdrive-adapter
 Branch: component/gdrive-adapter
 PR: #50
-Role: fixer-worker
+Role: implementation-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-GDA-P4C clean-code review made source changes, but the code-bearing Component CI run is red.
+GDA-P4 implementation, clean-code review, and CI fixer are accepted. Post-fix Component CI is green.
 
-- code_bearing_sha: b5ed39520173f4e802e13a6db795364dd9b25e9c
+- code_bearing_sha: 097b78cd1642ede9a393018ab3c35dc7e1752abb
 - workflow: Component CI
-- workflow_run_id: 29067620037
-- run_number: 827
-- run_attempt: 1
-- artifact_id: 8217736856
-- artifact_name: ci-diag__component-gdrive-adapter__wf-component-ci__run-29067620037__attempt-1
-- artifact_expires_at: 2026-07-11T03:49:57Z
+- workflow_run_id: 29079858205
+- run_number: 893
+- conclusion: success
+
+The next implementation phase is GDA-P5 from crates/haze-gdrive-adapter/docs/implementation-plan.md.
 
 ## Read
 
-Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, relevant source, and PR diff.
-
-Download diagnostics artifact 8217736856. Read `summary.md`, `manifest.json`, and every failed-check log. If it is missing, expired, malformed, or unreadable, report `FIX_BLOCKED_BY_LOGS`.
+Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current source, relevant accepted Common/API/Core contracts, and PR diff. Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
 
 ## Task
 
-Fix only the minimum CI cause introduced or exposed by the GDA-P4C source changes in `state.rs`. Preserve mapping identity protection, consistent echo fingerprint matching, unresolved persistence default, and all component non-goals. Use the artifact as source of truth.
+Implement GDA-P5: Full scan and import planner.
+
+Follow the plan:
+
+- list a configured Drive subtree through the existing fake/provider abstraction;
+- normalize supported folder/file paths into Common-compatible vault paths;
+- detect new, modified, missing, and unsupported entries;
+- download supported file bytes only when required by the plan;
+- compute and verify content hashes;
+- prepare Core/API upload requests with known base revision or explicit null base;
+- represent Drive disappearance as a conservative delete candidate, never an immediate delete;
+- apply adapter mode rules before import planning;
+- add fake-provider tree coverage.
+
+## Persistence guard
+
+GDA-P4 intentionally leaves durable mapping/cursor persistence unresolved. GDA-P5 may use explicit in-memory or injected state abstractions, but must not claim or add direct DB ownership. If durable persistence is required to complete the phase, report `BLOCKED_BY_CONTRACT` with the exact missing boundary rather than choosing one implicitly.
 
 ## Allowed files
 
 - crates/haze-gdrive-adapter/src/**
-- crates/haze-gdrive-adapter/docs/** only if diagnostics prove a documentation-format failure
+- crates/haze-gdrive-adapter/docs/**
 - crates/haze-gdrive-adapter/control/report.md
 
-## Forbidden changes
+## Non-goals
 
-No direct DB access, provider sync loop, Google SDK wiring, live provider calls, Core policy, hard delete, workflow changes, dependency changes, or sibling component changes.
+No Drive export, real provider network calls unless already accepted by the provider abstraction, hard delete, Core policy decisions, Docs conversion, direct DB access, workflow changes, dependency changes, or sibling component changes.
 
 ## CI trigger policy
 
-Product/source/docs fixer commits must not skip CI. A final report-only commit may skip CI.
+Product/source/docs commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only the report to crates/haze-gdrive-adapter/control/report.md. Use report-template.md. Set REPORT_TYPE to FIX and phase_id to FIX-GDA-P4C-CI.
+Write only the report to crates/haze-gdrive-adapter/control/report.md. Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION and phase_id to GDA-P5.
