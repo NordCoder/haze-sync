@@ -1,8 +1,6 @@
 //! Explicit Worktree drift classification and persisted-state abstraction.
 
-use crate::echo_guard::{
-    WorktreeEchoDecision, WorktreeEchoGuard, WorktreeEchoGuardError,
-};
+use crate::echo_guard::{WorktreeEchoDecision, WorktreeEchoGuard, WorktreeEchoGuardError};
 use crate::import_planner::{WorktreeAppliedPathState, WorktreeStateSnapshot};
 use crate::scanner::{
     WorktreeFileSnapshot, WorktreeScanResult, WorktreeScanSkipReason, WorktreeScanSkipped,
@@ -68,9 +66,7 @@ impl WorktreeReconciliationState {
     }
 
     /// Iterate over recorded observations in deterministic path order.
-    pub fn observations(
-        &self,
-    ) -> impl Iterator<Item = (&VaultPath, &WorktreeObservedFileState)> {
+    pub fn observations(&self) -> impl Iterator<Item = (&VaultPath, &WorktreeObservedFileState)> {
         self.observations.iter()
     }
 
@@ -359,7 +355,13 @@ impl WorktreeReconciler {
         for (vault_path, snapshot) in &local_files {
             let applied = state.applied_state().path_state(vault_path).cloned();
             let expected_observation = expected_observation(state, vault_path, applied.as_ref());
-            let echo_status = consume_echo(echo_guard, vault_path, applied.as_ref(), Some(snapshot), now)?;
+            let echo_status = consume_echo(
+                echo_guard,
+                vault_path,
+                applied.as_ref(),
+                Some(snapshot),
+                now,
+            )?;
             let kind = classify_present_path(vault_path, applied.as_ref(), snapshot);
 
             if matches!(applied, Some(WorktreeAppliedPathState::Present(ref file)) if file.content_hash == snapshot.content_hash)
@@ -411,7 +413,8 @@ impl WorktreeReconciler {
                 observed_content_hash: None,
                 expected_size: expected_observation.map(|observation| observation.size),
                 observed_size: None,
-                expected_modified: expected_observation.and_then(|observation| observation.modified),
+                expected_modified: expected_observation
+                    .and_then(|observation| observation.modified),
                 observed_modified: None,
                 modification_facts_match: None,
                 echo_status,
@@ -467,15 +470,12 @@ impl WorktreeReconciliationRunner {
     }
 }
 
-fn stable_files_by_path<'a>(
-    files: &'a [WorktreeFileSnapshot],
-) -> Result<BTreeMap<VaultPath, &'a WorktreeFileSnapshot>, WorktreeReconciliationError> {
+fn stable_files_by_path(
+    files: &[WorktreeFileSnapshot],
+) -> Result<BTreeMap<VaultPath, &WorktreeFileSnapshot>, WorktreeReconciliationError> {
     let mut by_path = BTreeMap::new();
     for file in files {
-        if by_path
-            .insert(file.vault_path.clone(), file)
-            .is_some()
-        {
+        if by_path.insert(file.vault_path.clone(), file).is_some() {
             return Err(WorktreeReconciliationError::DuplicateScanPath {
                 vault_path: file.vault_path.clone(),
             });
@@ -517,9 +517,7 @@ fn classify_present_path(
             WorktreeReconciliationKind::Clean
         }
         Some(WorktreeAppliedPathState::Present(_)) => WorktreeReconciliationKind::Dirty,
-        Some(WorktreeAppliedPathState::Tombstoned(_)) | None => {
-            WorktreeReconciliationKind::Extra
-        }
+        Some(WorktreeAppliedPathState::Tombstoned(_)) | None => WorktreeReconciliationKind::Extra,
     }
 }
 
@@ -564,13 +562,8 @@ fn consume_echo(
         None => (None, None),
     };
     let observed_hash = snapshot.map(|snapshot| snapshot.content_hash);
-    let decision = guard.consume_for_observation(
-        vault_path,
-        revision,
-        applied_hash,
-        observed_hash,
-        now,
-    )?;
+    let decision =
+        guard.consume_for_observation(vault_path, revision, applied_hash, observed_hash, now)?;
     Ok(match decision {
         WorktreeEchoDecision::NoMarker => WorktreeEchoStatus::NoMarker,
         WorktreeEchoDecision::Suppressed(_) => WorktreeEchoStatus::Suppressed,
