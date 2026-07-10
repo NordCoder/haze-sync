@@ -13,7 +13,7 @@ use std::time::Duration;
 pub enum WorktreeMode {
     /// Runtime is inert: no watcher, scan, import, or export work.
     Disabled,
-    /// Observe local state for reconciliation/status without importing or exporting.
+    /// Adapter may read Core/apply exports but must not write local facts to Core.
     ReadOnly,
     /// Observe and import local facts, but do not apply Core exports.
     ImportOnly,
@@ -33,7 +33,7 @@ impl WorktreeMode {
     /// Whether this mode observes local state through authoritative scans.
     #[must_use]
     pub const fn observes_local(self) -> bool {
-        matches!(self, Self::ReadOnly | Self::ImportOnly | Self::Bidirectional)
+        matches!(self, Self::ImportOnly | Self::Bidirectional)
     }
 
     /// Whether local facts may be planned/submitted as imports.
@@ -45,7 +45,7 @@ impl WorktreeMode {
     /// Whether authoritative Core changes may be materialized locally.
     #[must_use]
     pub const fn exports_core(self) -> bool {
-        matches!(self, Self::ExportOnly | Self::Bidirectional)
+        matches!(self, Self::ReadOnly | Self::ExportOnly | Self::Bidirectional)
     }
 }
 
@@ -655,6 +655,12 @@ where
         &self.executor
     }
 
+    /// Mutably borrow the host-provided executor for explicit host/test setup.
+    #[must_use]
+    pub fn executor_mut(&mut self) -> &mut X {
+        &mut self.executor
+    }
+
     /// Mutably borrow the host-provided watcher for explicit test/composition control.
     #[must_use]
     pub fn watcher_mut(&mut self) -> &mut W {
@@ -671,8 +677,7 @@ where
                 Ok(WorktreeWatcherPoll::Hint(_)) => {
                     self.pending_watcher_hints = self.pending_watcher_hints.saturating_add(1);
                     self.watcher_hints_observed = self.watcher_hints_observed.saturating_add(1);
-                    self.debounce_deadline =
-                        Some(add_saturating(now, self.policy.debounce));
+                    self.debounce_deadline = Some(add_saturating(now, self.policy.debounce));
                 }
                 Ok(WorktreeWatcherPoll::Idle) => break,
                 Ok(WorktreeWatcherPoll::Closed) => {
@@ -726,13 +731,13 @@ where
         };
         let result = self.executor.run_cycle(request);
         self.cycle_in_progress = false;
+        self.finish_attempt(now);
 
         match result {
             Ok(summary) => match validate_cycle_summary(request, summary) {
                 Ok(()) => {
                     self.cycles_completed = self.cycles_completed.saturating_add(1);
                     self.last_cycle = Some(WorktreeRuntimeLastCycle::Completed(summary));
-                    self.complete_cycle(now);
                     WorktreeRuntimePoll::CycleCompleted { cause, summary }
                 }
                 Err(violation) => {
@@ -749,7 +754,7 @@ where
         }
     }
 
-    fn complete_cycle(&mut self, now: Duration) {
+    fn finish_attempt(&mut self, now: Duration) {
         self.startup_cycle_pending = false;
         self.pending_watcher_hints = 0;
         self.debounce_deadline = None;
