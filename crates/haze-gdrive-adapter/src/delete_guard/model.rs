@@ -41,11 +41,12 @@ pub struct CompleteDeleteScan {
 
 impl CompleteDeleteScan {
     #[must_use]
-    pub fn from_full_scan(
-        plan: FullScanPlan,
-        mappings: &[GDriveMapping],
-    ) -> DeleteScanObservation {
-        if plan.unsupported.iter().any(scan_entry_makes_scan_incomplete) {
+    pub fn from_full_scan(plan: FullScanPlan, mappings: &[GDriveMapping]) -> DeleteScanObservation {
+        if plan
+            .unsupported
+            .iter()
+            .any(scan_entry_makes_scan_incomplete)
+        {
             return DeleteScanObservation::Unreliable(DeleteScanIssue::IncompleteScan);
         }
 
@@ -245,7 +246,9 @@ impl CoreDeleteGuardDecision {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DeleteBlockReason {
     ScanUnreliable(DeleteScanIssue),
-    ModeDoesNotImportDeletes { mode: AdapterMode },
+    ModeDoesNotImportDeletes {
+        mode: AdapterMode,
+    },
     AdapterDeleteCountExceeded {
         proposed_delete_count: u64,
         max_deletes_per_run: u32,
