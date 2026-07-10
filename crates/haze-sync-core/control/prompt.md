@@ -1,51 +1,47 @@
-# W1-FIX-CORE-P5-CI — Core CORE-P5 CI fix
+# W1-CORE-P5C — Core tombstone/delete-guard clean-code review
 
 Component: core
 Path: crates/haze-sync-core
 Branch: component/core
 PR: #43
-Role: fixer-worker
+Role: clean-code-reviewer
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-CORE-P5 implementation is complete, but its code/docs-bearing Component CI run is red.
+CORE-P5 implementation and CI fixer are complete. Final code-bearing Component CI is green.
 
-- code_bearing_sha: 5bbb15d056f305ecb95b353ea8f70162bd0677d9
-- workflow: Component CI
-- workflow_run_id: 29080048723
-- run_number: 911
-- run_attempt: 1
-- artifact_id: 8222399369
-- artifact_name: ci-diag__component-core__wf-component-ci__run-29080048723__attempt-1
-- artifact_expires_at: 2026-07-11T08:33:27Z
+- code_bearing_sha: f827341777a0b1f405b446ebf564f209ea1aaa60
+- workflow_run_id: 29082064452
+- run_number: 976
+- conclusion: success
 
 ## Read
 
-Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current source, and PR diff.
-
-Download diagnostics artifact 8222399369. Read `summary.md`, `manifest.json`, and every failed-check log. If it is missing, expired, malformed, or unreadable, report `FIX_BLOCKED_BY_LOGS`.
+Read process sources, component docs/control files, current source/tests/docs, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt instructs it.
 
 ## Task
 
-Fix the minimum artifact-proven cause of the CORE-P5 CI failure. Preserve tombstone validation, restore/retention classifiers, delete-guard thresholds and scoped unlock semantics, storage/adapter neutrality, and all CORE-P5 non-goals.
+Review CORE-P5 tombstone validation, restore/retention classifiers, delete-guard hardening, and CI corrections.
+
+Focus on deterministic classifiers, metadata invariants, exact retention boundaries, threshold arithmetic, scoped unlock semantics, public-safe outputs, test fixture correctness, storage/adapter neutrality, and non-goal preservation.
 
 ## Allowed files
 
 - crates/haze-sync-core/src/tombstone_service/**
 - crates/haze-sync-core/src/delete_guard/**
-- crates/haze-sync-core/docs/** only if diagnostics prove a docs-format issue
+- crates/haze-sync-core/docs/**
 - crates/haze-sync-core/control/report.md
 
-## Forbidden changes
+## Boundaries
 
-No hard-delete cleanup, filesystem trash behavior, provider calls, tombstone repository, CLI parsing, API/Server route wiring, workflow changes, dependency changes, sibling component changes, test deletion, or assertion weakening.
+No physical cleanup, filesystem/provider actions, repository implementation, CLI parsing, API/Server wiring, workflow/dependency changes, or sibling changes.
 
 ## CI trigger policy
 
-Product/source/docs fixer commits must not skip CI. A final report-only commit may skip CI.
+Source/docs clean-code commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only the report to crates/haze-sync-core/control/report.md. Use report-template.md. Set REPORT_TYPE to FIX and phase_id to FIX-CORE-P5-CI.
+Write only crates/haze-sync-core/control/report.md. Use REPORT_TYPE CLEAN_CODE_REVIEW and phase_id CORE-P5C.
