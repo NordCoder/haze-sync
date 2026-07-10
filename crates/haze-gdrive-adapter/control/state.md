@@ -20,3 +20,4 @@ ci_run_number: 1136
 ci_run_attempt: 1
 known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
+dependency_note: concrete STOR-P7 cursor persistence is not accepted; use an injected cursor-store abstraction and report concrete wiring as fan-in work
