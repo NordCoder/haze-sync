@@ -218,8 +218,7 @@ fn unscoped_scan_error_prevents_false_missing_classification() {
     let policy = WorktreeEchoGuardPolicy::new(Duration::from_secs(60), 4).unwrap();
     let mut guard = WorktreeEchoGuard::new(policy);
 
-    let report =
-        WorktreeReconciler::reconcile(&mut state, &scan, &mut guard, observed).unwrap();
+    let report = WorktreeReconciler::reconcile(&mut state, &scan, &mut guard, observed).unwrap();
 
     assert_eq!(report.summary().missing, 0);
     assert_eq!(report.summary().skipped, 1);
