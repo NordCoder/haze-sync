@@ -80,7 +80,9 @@ fn core_compatible_response_snapshot_is_preserved_verbatim() {
         input.response_json()["headers"]["content-type"],
         "application/json"
     );
-    assert!(input.response_json()["headers"].get("authorization").is_none());
+    assert!(input.response_json()["headers"]
+        .get("authorization")
+        .is_none());
     assert!(input.response_json()["headers"].get("set-cookie").is_none());
 }
 
@@ -103,11 +105,8 @@ fn invalid_stored_hash_is_rejected_without_exposing_row_values() {
     let mut invalid = row(&Sha256::parse(&"a".repeat(64)).unwrap());
     invalid.request_hash = "not-a-hash".to_owned();
 
-    let error = compare_request_fingerprint(
-        &invalid,
-        &Sha256::parse(&"b".repeat(64)).unwrap(),
-    )
-    .unwrap_err();
+    let error = compare_request_fingerprint(&invalid, &Sha256::parse(&"b".repeat(64)).unwrap())
+        .unwrap_err();
     let displayed = error.to_string();
 
     assert_eq!(error, IdempotencyRepositoryError::InvalidStoredRequestHash);
