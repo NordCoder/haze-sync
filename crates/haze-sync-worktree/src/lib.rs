@@ -4,6 +4,7 @@
 //! the sync source of truth; later phases add scanning, importing, writing, and
 //! runtime behavior on top of these safe path-mapping primitives.
 
+mod delete_guard;
 mod echo_guard;
 mod hashing;
 mod import_planner;
@@ -12,6 +13,13 @@ mod path_mapping;
 mod reconciliation;
 mod scanner;
 
+pub use delete_guard::{
+    WorktreeDeleteAuthorization, WorktreeDeleteBlockReason, WorktreeDeleteCandidate,
+    WorktreeDeleteGuardDecision, WorktreeDeleteGuardPolicy, WorktreeDeleteGuardPolicyError,
+    WorktreeDeleteGuardSummary, WorktreeDeletePlanError, WorktreeDeleteRunError,
+    WorktreeDeleteRunner, WorktreeDeleteScan, WorktreeDeleteSubmission,
+    WorktreeDeleteSubmissionReport, WorktreeGuardedDeletePlan,
+};
 pub use echo_guard::{
     WorktreeEchoDecision, WorktreeEchoGuard, WorktreeEchoGuardError, WorktreeEchoGuardPolicy,
     WorktreeEchoLoadSummary, WorktreeEchoRecordSummary,
@@ -20,9 +28,9 @@ pub use import_planner::{
     WorktreeAcceptedImport, WorktreeAppliedFileState, WorktreeAppliedPathState,
     WorktreeBaseRevision, WorktreeDeleteImport, WorktreeImportAction, WorktreeImportClient,
     WorktreeImportFile, WorktreeImportOutcome, WorktreeImportPlan, WorktreeImportPlanError,
-    WorktreeImportPlanner, WorktreeImportRejection, WorktreeImportRunner, WorktreeImportSubmission,
-    WorktreeImportSubmissionReport, WorktreePutImport, WorktreeStateSnapshot,
-    WorktreeTombstoneState, WorktreeUnchangedFile,
+    WorktreeImportPlanner, WorktreeImportRejection, WorktreeImportRunner,
+    WorktreeImportSubmission, WorktreeImportSubmissionReport, WorktreePutImport,
+    WorktreeStateSnapshot, WorktreeTombstoneState, WorktreeUnchangedFile,
 };
 pub use materializer::{
     AtomicWorktreeWriter, WorktreeDeferredMaterialization, WorktreeEchoMarker,
@@ -34,11 +42,11 @@ pub use path_mapping::{
     TRASH_DIR_NAME, WORKTREE_RUNTIME_DIR_NAME,
 };
 pub use reconciliation::{
-    WorktreeEchoStatus, WorktreeObservedFileState, WorktreeReconciler, WorktreeReconciliationEntry,
-    WorktreeReconciliationError, WorktreeReconciliationKind, WorktreeReconciliationReport,
-    WorktreeReconciliationRunError, WorktreeReconciliationRunner, WorktreeReconciliationState,
-    WorktreeReconciliationStateStore, WorktreeReconciliationStateTransition,
-    WorktreeReconciliationSummary,
+    WorktreeEchoStatus, WorktreeObservedFileState, WorktreeReconciler,
+    WorktreeReconciliationEntry, WorktreeReconciliationError, WorktreeReconciliationKind,
+    WorktreeReconciliationReport, WorktreeReconciliationRunError, WorktreeReconciliationRunner,
+    WorktreeReconciliationState, WorktreeReconciliationStateStore,
+    WorktreeReconciliationStateTransition, WorktreeReconciliationSummary,
 };
 pub use scanner::{
     StableFileDetector, StableFileObservation, StableFileState, WorktreeFileSnapshot,
@@ -55,6 +63,8 @@ pub const fn package_name() -> &'static str {
     "haze-sync-worktree"
 }
 
+#[cfg(test)]
+mod delete_guard_tests;
 #[cfg(test)]
 mod echo_guard_tests;
 #[cfg(test)]
