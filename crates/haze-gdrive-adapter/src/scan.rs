@@ -198,13 +198,7 @@ pub fn plan_full_scan(
     collection
         .visited_folder_ids
         .insert(root_folder_id.to_owned());
-    collect_folder(
-        provider,
-        root_folder_id,
-        &[],
-        true,
-        &mut collection,
-    )?;
+    collect_folder(provider, root_folder_id, &[], true, &mut collection)?;
 
     let mut plan = FullScanPlan {
         unsupported: collection.unsupported,
@@ -621,12 +615,7 @@ mod tests {
         SafeTimestamp::new(value).expect("timestamp")
     }
 
-    fn mapping(
-        path: &str,
-        provider_id: &str,
-        parent_id: &str,
-        name: &str,
-    ) -> GDriveMapping {
+    fn mapping(path: &str, provider_id: &str, parent_id: &str, name: &str) -> GDriveMapping {
         GDriveMapping::new(
             VaultPath::new(path).expect("path"),
             provider_id,
@@ -638,9 +627,8 @@ mod tests {
 
     #[test]
     fn full_scan_plans_new_modified_missing_and_unsupported_entries() {
-        let notes_folder =
-            DriveMetadata::new_special("folder-notes", "Notes", MIME_GOOGLE_FOLDER)
-                .with_parent("root");
+        let notes_folder = DriveMetadata::new_special("folder-notes", "Notes", MIME_GOOGLE_FOLDER)
+            .with_parent("root");
         let new_file = DriveMetadata::new_file("new", "new.md", MIME_TEXT_MARKDOWN)
             .with_parent("folder-notes")
             .with_size_bytes(3)
@@ -658,9 +646,8 @@ mod tests {
                 .with_modified_time("2026-07-10T08:02:00Z");
         let google_doc =
             DriveMetadata::new_special("doc", "draft", MIME_GOOGLE_DOC).with_parent("folder-notes");
-        let invalid_path =
-            DriveMetadata::new_file("invalid", "../escape.md", MIME_TEXT_MARKDOWN)
-                .with_parent("root");
+        let invalid_path = DriveMetadata::new_file("invalid", "../escape.md", MIME_TEXT_MARKDOWN)
+            .with_parent("root");
         let provider = FakeDriveProvider::new()
             .with_child("root", notes_folder)
             .with_child("root", invalid_path)
@@ -691,12 +678,8 @@ mod tests {
         unchanged_mapping.drive_modified_time = Some(timestamp("2026-07-10T08:02:00Z"));
         unchanged_mapping.delete_candidate_since = Some(timestamp("2026-07-09T08:00:00Z"));
 
-        let mut missing_mapping = mapping(
-            "Notes/missing.md",
-            "missing",
-            "folder-notes",
-            "missing.md",
-        );
+        let mut missing_mapping =
+            mapping("Notes/missing.md", "missing", "folder-notes", "missing.md");
         missing_mapping.core_revision = Some("rev-missing".to_owned());
         let mappings = [modified_mapping, unchanged_mapping, missing_mapping];
 
@@ -758,8 +741,8 @@ mod tests {
 
     #[test]
     fn mode_rules_prevent_downloads_when_import_is_not_allowed() {
-        let metadata = DriveMetadata::new_file("new", "new.md", MIME_TEXT_MARKDOWN)
-            .with_parent("root");
+        let metadata =
+            DriveMetadata::new_file("new", "new.md", MIME_TEXT_MARKDOWN).with_parent("root");
         let provider = FakeDriveProvider::new().with_child("root", metadata);
 
         let plan = plan_full_scan(
@@ -812,8 +795,8 @@ mod tests {
 
     #[test]
     fn common_compatible_normalization_detects_path_collisions_before_download() {
-        let first = DriveMetadata::new_file("first", "Notes/a.md", MIME_TEXT_MARKDOWN)
-            .with_parent("root");
+        let first =
+            DriveMetadata::new_file("first", "Notes/a.md", MIME_TEXT_MARKDOWN).with_parent("root");
         let second = DriveMetadata::new_file("second", "Notes//a.md", MIME_TEXT_MARKDOWN)
             .with_parent("root");
         let provider = FakeDriveProvider::new()
@@ -868,8 +851,8 @@ mod tests {
 
     #[test]
     fn folder_cycle_is_skipped_safely() {
-        let cycle = DriveMetadata::new_special("root", "cycle", MIME_GOOGLE_FOLDER)
-            .with_parent("root");
+        let cycle =
+            DriveMetadata::new_special("root", "cycle", MIME_GOOGLE_FOLDER).with_parent("root");
         let provider = FakeDriveProvider::new().with_child("root", cycle);
 
         let plan = plan_full_scan(
