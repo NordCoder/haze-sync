@@ -203,6 +203,36 @@ fn duplicate_stable_scan_path_is_rejected_before_reconciliation() {
 }
 
 #[test]
+fn unscoped_scan_error_prevents_false_missing_classification() {
+    let observed = SystemTime::UNIX_EPOCH + Duration::from_secs(15);
+    let mut applied = WorktreeStateSnapshot::new();
+    applied.record_present(path("tracked.md"), revision("rev_tracked"), hash(1));
+    let mut state = WorktreeReconciliationState::new(applied);
+    let scan = WorktreeScanResult {
+        files: Vec::new(),
+        skipped: vec![WorktreeScanSkipped {
+            vault_path: None,
+            reason: WorktreeScanSkipReason::FilesystemError,
+        }],
+    };
+    let policy = WorktreeEchoGuardPolicy::new(Duration::from_secs(60), 4).unwrap();
+    let mut guard = WorktreeEchoGuard::new(policy);
+
+    let report =
+        WorktreeReconciler::reconcile(&mut state, &scan, &mut guard, observed).unwrap();
+
+    assert_eq!(report.summary().missing, 0);
+    assert_eq!(report.summary().skipped, 1);
+    assert_eq!(report.entries().len(), 1);
+    assert_eq!(
+        report.entries()[0].kind,
+        WorktreeReconciliationKind::Skipped
+    );
+    assert_eq!(report.entries()[0].vault_path, None);
+    assert!(!report.state_changed());
+}
+
+#[test]
 fn persisted_runner_saves_only_real_observation_transitions() {
     let observed = SystemTime::UNIX_EPOCH + Duration::from_secs(20);
     let mut applied = WorktreeStateSnapshot::new();
