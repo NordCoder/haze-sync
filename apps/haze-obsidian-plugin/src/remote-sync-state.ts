@@ -164,7 +164,7 @@ export function recordRemoteTombstone(
   };
 }
 
-function clearRemoteConflictForChange(
+export function clearRemoteConflictForChange(
   state: RemoteSyncState,
   change: ChangeDto,
   observedAt: string,
