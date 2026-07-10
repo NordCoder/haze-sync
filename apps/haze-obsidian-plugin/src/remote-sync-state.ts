@@ -171,6 +171,12 @@ export function clearRemoteConflictForChange(
 ): RemoteSyncState {
   const conflicts = { ...state.conflicts };
   let directMatchFound = false;
+  const exactChangeId = conflictIdForChange(change);
+
+  if (conflicts[exactChangeId] !== undefined) {
+    delete conflicts[exactChangeId];
+    directMatchFound = true;
+  }
 
   if (change.conflict_id !== undefined) {
     for (const [key, record] of Object.entries(conflicts)) {
