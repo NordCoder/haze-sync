@@ -93,9 +93,7 @@ impl OperationalCheckStatus {
         match self {
             Self::Passed => DependencyReadinessState::Ready,
             Self::Failed => DependencyReadinessState::NotReady,
-            Self::Skipped | Self::NotRun | Self::Placeholder => {
-                DependencyReadinessState::Unknown
-            }
+            Self::Skipped | Self::NotRun | Self::Placeholder => DependencyReadinessState::Unknown,
         }
     }
 }
@@ -252,7 +250,10 @@ impl PauseStatusSummary {
     /// Whether the public support/state pair is internally consistent.
     #[must_use]
     pub const fn is_consistent(self) -> bool {
-        matches!((self.supported, self.active), (false, None) | (true, Some(_)))
+        matches!(
+            (self.supported, self.active),
+            (false, None) | (true, Some(_))
+        )
     }
 }
 
@@ -594,7 +595,10 @@ mod tests {
         assert_eq!(unknown.external_cursor_presence(), CursorPresence::Unknown);
         assert_eq!(absent.external_cursor_presence(), CursorPresence::Absent);
         assert_eq!(present.external_cursor_presence(), CursorPresence::Present);
-        assert_eq!(serde_json::to_string(&CursorPresence::Present).unwrap(), "\"present\"");
+        assert_eq!(
+            serde_json::to_string(&CursorPresence::Present).unwrap(),
+            "\"present\""
+        );
     }
 
     #[test]
@@ -639,7 +643,12 @@ mod tests {
         assert_no_secret_bearing_fields(&json);
 
         let placeholder_json = serde_json::to_string(&DoctorStatusResponse::placeholder()).unwrap();
-        assert_eq!(placeholder_json.matches("\"status\":\"placeholder\"").count(), 4);
+        assert_eq!(
+            placeholder_json
+                .matches("\"status\":\"placeholder\"")
+                .count(),
+            4
+        );
         assert!(!placeholder_json.contains("checked_at"));
     }
 
@@ -657,10 +666,8 @@ mod tests {
                 PauseStatusSummary::supported(false),
             ),
         );
-        let placeholder = AdapterOperationalSummary::new(
-            adapter,
-            AdapterRuntimeSummary::placeholder(),
-        );
+        let placeholder =
+            AdapterOperationalSummary::new(adapter, AdapterRuntimeSummary::placeholder());
 
         assert!(observed.runtime.pause.is_consistent());
         assert_eq!(
