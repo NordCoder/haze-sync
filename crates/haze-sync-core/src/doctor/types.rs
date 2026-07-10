@@ -1,6 +1,6 @@
 use haze_sync_common::ContentHash;
 use serde::{Deserialize, Deserializer, Serialize};
-use std::fmt;
+use std::{fmt, ops::Deref};
 
 /// Stable identifier for a passive doctor check.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
@@ -464,12 +464,20 @@ impl fmt::Display for DoctorCheckMessage {
     }
 }
 
+impl Deref for DoctorCheckMessage {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
 /// JSON-safe doctor check result.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct DoctorCheckResult {
-    check_id: DoctorCheckId,
+    pub check_id: DoctorCheckId,
     status: DoctorCheckStatus,
-    message: DoctorCheckMessage,
+    pub message: DoctorCheckMessage,
     details: DoctorCheckDetails,
 }
 
