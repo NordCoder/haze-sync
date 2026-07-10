@@ -12,6 +12,7 @@ mod import_planner;
 mod materializer;
 mod path_mapping;
 mod reconciliation;
+mod runtime;
 mod scanner;
 mod trash;
 
@@ -52,6 +53,16 @@ pub use reconciliation::{
     WorktreeReconciliationStateStore, WorktreeReconciliationStateTransition,
     WorktreeReconciliationSummary,
 };
+pub use runtime::{
+    WorktreeMode, WorktreeRuntimeClock, WorktreeRuntimeContractViolation, WorktreeRuntimeCycle,
+    WorktreeRuntimeCycleBudget, WorktreeRuntimeCycleCause, WorktreeRuntimeCycleFailure,
+    WorktreeRuntimeCycleRequest, WorktreeRuntimeCycleSummary, WorktreeRuntimeLastCycle,
+    WorktreeRuntimeLifecycle, WorktreeRuntimeLifecycleError, WorktreeRuntimePolicy,
+    WorktreeRuntimePolicyError, WorktreeRuntimePoll, WorktreeRuntimeService,
+    WorktreeRuntimeShutdownSummary, WorktreeRuntimeStartSummary, WorktreeRuntimeStatus,
+    WorktreeRuntimeWatcherState, WorktreeWatcher, WorktreeWatcherFailure, WorktreeWatcherHint,
+    WorktreeWatcherPoll,
+};
 pub use scanner::{
     StableFileDetector, StableFileObservation, StableFileState, WorktreeFileSnapshot,
     WorktreeScanError, WorktreeScanResult, WorktreeScanSkipReason, WorktreeScanSkipped,
@@ -84,6 +95,8 @@ mod file_import_tests;
 mod materializer_safety_tests;
 #[cfg(test)]
 mod reconciliation_tests;
+#[cfg(test)]
+mod runtime_tests;
 #[cfg(test)]
 mod trash_integrity_tests;
 #[cfg(test)]
