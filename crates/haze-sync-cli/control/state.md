@@ -6,21 +6,17 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-cli/control/prompt.md
 active_report: crates/haze-sync-cli/control/report.md
-active_agent_role: fixer-worker
+active_agent_role: clean-code-reviewer
 
 wave: W1
-phase: FIX-CLI-P5-CI
+phase: CLI-P5C
 
 implementation_status: SELF_ACCEPT_PENDING_CI
-clean_review_status: NOT_STARTED
-ci_status: CI_RED
+clean_review_status: PENDING
+ci_status: CI_GREEN
 ci_workflow: Component CI
-ci_run_id: 29080204443
-ci_run_number: 917
+ci_run_id: 29081982496
+ci_run_number: 966
 ci_run_attempt: 1
-ci_artifact_id: 8222457216
-ci_artifact_name: ci-diag__component-cli__wf-component-ci__run-29080204443__attempt-1
-ci_artifact_expires_at: 2026-07-11T08:36:13Z
-known_failed_checks:
-- diagnostics-artifact-required
+known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
