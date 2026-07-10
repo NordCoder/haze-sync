@@ -1,42 +1,54 @@
-# W1-FIX-STOR-P9-CI — Storage STOR-P9 validation correction
+# W1-STOR-P9C — Storage test-support clean-code review
 
 Component: storage
 Path: crates/haze-sync-storage
 Branch: component/storage
 PR: #47
-Role: fixer-worker
+Role: clean-code-reviewer
 
-Use only the GitHub connector. Do not merge the PR or change its lifecycle state.
+Work only through the GitHub connector. Do not merge the PR or change its lifecycle state.
 
-## Evidence
+## Context
 
-The final STOR-P9 source/docs head has a failed Component CI result.
+STOR-P9 implementation and artifact-based CI corrections are complete. Final source/docs CI is green.
 
-- code_bearing_sha: 46b13f986f2a338e86a8811639d706a64a378565
-- workflow_run_id: 29116418343
-- run_number: 1502
-- run_attempt: 1
-- artifact_id: 8236830104
-- artifact_name: ci-diag__component-storage__wf-component-ci__run-29116418343__attempt-1
-- artifact_expires_at: 2026-07-11T19:00:35Z
+- code_bearing_sha: 9571dc4deef60f4a35923139feb85fc53e94ab03
+- workflow: Component CI
+- workflow_run_id: 29120476441
+- run_number: 1536
+- conclusion: success
 
-Use the diagnostics artifact as the authoritative failure evidence.
+## Read
 
-## Required work
+Read the project process files, current Storage control files, STOR-P9 test-support source/tests/docs, fixer changes, downstream optional database-test usage, and PR diff. Do not read diagnostics artifacts unless a later fixer prompt explicitly requires them.
 
-Read the project process files, current Storage control files, STOR-P9 source/tests/docs, PR diff, and every required file in artifact 8236830104. If the artifact is unavailable or incomplete, report FIX_BLOCKED_BY_LOGS.
+## Task
 
-Apply only the smallest correction demonstrated by the artifact. Preserve explicit test-only database configuration, redacted configuration errors, production isolation, schema setup locking, partial-schema rejection, bounded fixture identifiers, observable test object cleanup, pure harness tests, documentation, and Storage ownership boundaries.
+Review STOR-P9 test-support and integration-harness hardening.
+
+Focus on:
+
+- production isolation and cfg/feature boundaries;
+- exclusive use of HAZE_SYNC_TEST_DATABASE_URL;
+- redacted configuration and connection errors;
+- optional compatibility wrapper versus strict required/prepare helpers;
+- schema setup locking and partial-schema rejection;
+- deterministic bounded identifiers and explicit object-root cleanup;
+- absence of silent passes for mandatory database tests;
+- documentation of not-run versus failure semantics;
+- downstream source compatibility, tests, and ownership boundaries.
 
 ## Allowed files
 
 - crates/haze-sync-storage/src/test_support/**
-- crates/haze-sync-storage/docs/** only when directly required by diagnostics
-- crates/haze-sync-storage/src/lib.rs or Cargo.toml only when directly required by diagnostics
+- crates/haze-sync-storage/docs/**
+- crates/haze-sync-storage/src/lib.rs or Cargo.toml only if required to preserve isolation
 - crates/haze-sync-storage/control/report.md
 
-Do not change production repository semantics, migrations/schema, Server fan-in, provider behavior, shared workflows/dependencies, sibling components, or unrelated test expectations.
+## Boundaries
 
-Source/test/docs correction commits must run CI normally. A final report-only commit may skip CI.
+No production repository semantics, schema/migration expansion, Server fan-in, provider behavior, workflow/dependency changes, sibling changes, test deletion, or assertion weakening.
 
-Write only crates/haze-sync-storage/control/report.md using REPORT_TYPE FIX and phase_id FIX-STOR-P9-CI.
+Source/test/docs review commits must run CI normally. A final report-only commit may skip CI.
+
+Write only crates/haze-sync-storage/control/report.md using REPORT_TYPE CLEAN_CODE_REVIEW and phase_id STOR-P9C.
