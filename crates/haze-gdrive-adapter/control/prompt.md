@@ -20,9 +20,11 @@ GDA-P5 implementation, clean-code review, and artifact-based CI fixer are comple
 
 The next implementation phase is GDA-P6 from crates/haze-gdrive-adapter/docs/implementation-plan.md.
 
+STOR-P7 concrete cursor persistence is not accepted yet. GDA-P6 must remain executable through an injected adapter-local cursor-store abstraction. Do not add direct Storage/DB ownership. Report concrete persistence wiring as a fan-in dependency.
+
 ## Read
 
-Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current scan/mapping/cursor/retry abstractions, accepted Storage cursor boundary, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt explicitly instructs it.
+Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current scan/mapping/cursor/retry abstractions, read-only STOR-P7 contract context if useful, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt explicitly instructs it.
 
 ## Task
 
@@ -32,7 +34,7 @@ Implement GDA-P6: Change feed polling and reconciliation loop.
 - classify change entries into safe scan/import/export work;
 - fall back to full scan when the cursor is invalidated;
 - debounce and coalesce duplicate or reordered entries safely;
-- advance persisted cursor only after successful processing through an accepted abstraction;
+- advance cursor state only after successful processing through an injected abstraction;
 - classify retry/backoff for provider limits and failures;
 - add focused tests for cursor invalidation, duplicate/reordered entries, success-only advancement, and full-scan fallback.
 
@@ -44,7 +46,7 @@ Implement GDA-P6: Change feed polling and reconciliation loop.
 
 ## Non-goals
 
-No webhook/public callback infrastructure, change-feed-only correctness claim, provider deletion side effects, direct DB writes, Core conflict policy, export apply runner from GDA-P7, workflow/dependency changes, or sibling-component changes.
+No webhook/public callback infrastructure, change-feed-only correctness claim, provider deletion side effects, direct DB writes, concrete Storage wiring, Core conflict policy, export apply runner from GDA-P7, workflow/dependency changes, or sibling-component changes.
 
 ## CI trigger policy
 
