@@ -79,7 +79,7 @@ test("PUT and DELETE requests preserve idempotency and base revision headers", a
 
   const put = await client.putFile({
     path: "Notes/fixture.md",
-    body: new Uint8Array([1, 2, 3]),
+    body: new Uint8Array([1, 2, 3]).buffer,
     contentHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     baseRevisionId: "rev_fixture_0001",
     idempotencyKey: "put-key",
@@ -95,7 +95,7 @@ test("PUT and DELETE requests preserve idempotency and base revision headers", a
 });
 
 test("conflict resolution uses canonical resolution body and route path id", async () => {
-  const client = clientWithTransport(async ({ url, init }) => {
+  const client = clientWithTransport(({ url, init }) => {
     assert.equal(init.method, "POST");
     assert.equal(url.pathname, "/v1/conflicts/conf_fixture_0001/resolve");
     assert.deepEqual(JSON.parse(String(init.body)), { resolution: "keep_both" });
