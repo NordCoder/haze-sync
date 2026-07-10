@@ -133,9 +133,6 @@ export async function materializeRemoteChange(input: RemoteMaterializationInput)
       return materializeDelete(input, classification.path);
     case "conflict_created":
       return queueConflict(input, "unsupported_change");
-    case "conflict_resolved":
-    case "backup_created":
-      return metadataOnlyChangeApplied(input, classification.path);
   }
 }
 
