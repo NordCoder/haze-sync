@@ -301,9 +301,8 @@ fn operation_log_row_from_pg(row: PgRow) -> Result<OperationLogRow, sqlx::Error>
 }
 
 fn change_feed_row_from_pg(row: &PgRow) -> RepositoryResult<ChangeFeedRow> {
-    let size_bytes = validated_persisted_size_bytes(
-        row.try_get("size_bytes").map_err(map_sqlx_error)?,
-    )?;
+    let size_bytes =
+        validated_persisted_size_bytes(row.try_get("size_bytes").map_err(map_sqlx_error)?)?;
 
     Ok(ChangeFeedRow {
         seq: row.try_get("seq").map_err(map_sqlx_error)?,
@@ -652,7 +651,7 @@ mod postgres_tests {
         assert_eq!(conflict.status, ConflictStatusName::Open.as_str());
         assert_eq!(
             conflict_repository
-                .list_by_status(&mut *tx, ConflictStatusName::Open, 10)
+                .list_by_status_limited(&mut *tx, ConflictStatusName::Open, 10)
                 .await
                 .unwrap(),
             vec![conflict.clone()]
@@ -733,13 +732,11 @@ mod postgres_tests {
         assert_eq!(resolved.status, ConflictStatusName::Resolved.as_str());
         assert!(resolved.resolved_at.is_some());
         assert_eq!(resolved.resolved_by.as_deref(), Some(adapter_id.as_str()));
-        assert!(
-            conflict_repository
-                .mark_open_ignored(&mut *tx, &conflict_id, &adapter_id)
-                .await
-                .unwrap()
-                .is_none()
-        );
+        assert!(conflict_repository
+            .mark_open_ignored(&mut *tx, &conflict_id, &adapter_id)
+            .await
+            .unwrap()
+            .is_none());
 
         let restored = tombstone_repository
             .mark_restored(&mut *tx, tombstone_id)
@@ -747,20 +744,16 @@ mod postgres_tests {
             .unwrap()
             .unwrap();
         assert!(restored.restored_at.is_some());
-        assert!(
-            tombstone_repository
-                .mark_restored(&mut *tx, tombstone_id)
-                .await
-                .unwrap()
-                .is_none()
-        );
-        assert!(
-            tombstone_repository
-                .list_active(&mut *tx, 10)
-                .await
-                .unwrap()
-                .is_empty()
-        );
+        assert!(tombstone_repository
+            .mark_restored(&mut *tx, tombstone_id)
+            .await
+            .unwrap()
+            .is_none());
+        assert!(tombstone_repository
+            .list_active(&mut *tx, 10)
+            .await
+            .unwrap()
+            .is_empty());
 
         let conflict_resolved = operation_log
             .append(
@@ -833,9 +826,15 @@ mod postgres_tests {
         assert!(!changes.has_more);
         assert_eq!(changes.changes.len(), 4);
         assert_eq!(changes.changes[0].seq, conflict_created.seq);
-        assert_eq!(changes.changes[0].conflict_id.as_deref(), Some(conflict_id.as_str()));
+        assert_eq!(
+            changes.changes[0].conflict_id.as_deref(),
+            Some(conflict_id.as_str())
+        );
         assert_eq!(changes.changes[1].seq, deleted.seq);
-        assert_eq!(changes.changes[1].tombstone_id.as_deref(), Some(tombstone_id));
+        assert_eq!(
+            changes.changes[1].tombstone_id.as_deref(),
+            Some(tombstone_id)
+        );
         assert_eq!(changes.changes[2].seq, conflict_resolved.seq);
         assert_eq!(changes.changes[3].seq, restored_operation.seq);
         assert_eq!(
