@@ -216,7 +216,7 @@ export async function pullRemoteChanges(input: {
     result.pages += 1;
     result.hasMore = response.has_more;
 
-    for (const change of response.changes) {
+    for (const [changeIndex, change] of response.changes.entries()) {
       assertNotAborted(input.signal);
       const download = remoteChangeNeedsDownload(change)
         ? await input.client.getFile(change.path)
@@ -244,8 +244,12 @@ export async function pullRemoteChanges(input: {
         case "tombstone_recorded":
           result.tombstones += 1;
           break;
+        case "conflict_recorded":
+          result.conflicts += 1;
+          break;
         case "conflict_queued":
           result.conflicts += 1;
+          result.hasMore = response.has_more || changeIndex < response.changes.length - 1;
           return result;
       }
     }
@@ -322,7 +326,7 @@ async function readStableUploadBodies(
     .sort((left, right) => left.path.localeCompare(right.path));
 
   for (const entry of entries) {
-    assertNotAborted(signal);
+    assertNotAborted(input.signal);
     const file = vault.getAbstractFileByPath(entry.path);
     if (!(file instanceof TFile) || entry.file === undefined) {
       continue;
