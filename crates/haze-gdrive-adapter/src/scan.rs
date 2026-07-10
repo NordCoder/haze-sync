@@ -28,7 +28,7 @@ pub enum ImportExecution {
     DryRun,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct CoreUploadRequest {
     pub path: VaultPath,
     pub base_revision_id: Option<String>,
@@ -41,6 +41,27 @@ impl CoreUploadRequest {
     #[must_use]
     pub fn verifies_content(&self) -> bool {
         self.size_bytes == self.content.len() as u64 && self.content_sha256.verifies(&self.content)
+    }
+}
+
+impl fmt::Debug for CoreUploadRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("CoreUploadRequest")
+            .field("path", &self.path)
+            .field("base_revision_id", &self.base_revision_id)
+            .field("content_sha256", &self.content_sha256)
+            .field("size_bytes", &self.size_bytes)
+            .field("content", &RedactedContent(self.content.len()))
+            .finish()
+    }
+}
+
+struct RedactedContent(usize);
+
+impl fmt::Debug for RedactedContent {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "<redacted {} bytes>", self.0)
     }
 }
 
@@ -89,6 +110,8 @@ pub enum ScanSkipReason {
     DuplicateProviderEntry,
     FolderCycle,
     PathCollision,
+    MappingIdentityPathChanged,
+    MappingPathOccupiedByDifferentIdentity,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -204,7 +227,7 @@ pub fn plan_full_scan(
         unsupported: collection.unsupported,
         ..FullScanPlan::default()
     };
-    plan_supported_files(
+    let blocked_missing_mappings = plan_supported_files(
         provider,
         input.mode,
         input.dry_run,
@@ -215,6 +238,7 @@ pub fn plan_full_scan(
     plan_missing_mappings(
         input.mappings,
         &collection.seen_provider_ids,
+        &blocked_missing_mappings,
         &input.observed_at,
         &mut plan,
     );
@@ -224,12 +248,13 @@ pub fn plan_full_scan(
 
 struct MappingIndexes<'a> {
     by_drive_file_id: BTreeMap<String, &'a GDriveMapping>,
+    by_path: BTreeMap<VaultPath, &'a GDriveMapping>,
 }
 
 impl<'a> MappingIndexes<'a> {
     fn new(mappings: &'a [GDriveMapping]) -> Result<Self, FullScanError> {
         let mut by_drive_file_id = BTreeMap::new();
-        let mut paths = BTreeSet::new();
+        let mut by_path = BTreeMap::new();
 
         for mapping in mappings {
             if by_drive_file_id
@@ -238,16 +263,23 @@ impl<'a> MappingIndexes<'a> {
             {
                 return Err(FullScanError::DuplicateMappingDriveFileId);
             }
-            if !paths.insert(mapping.vault_path.clone()) {
+            if by_path.insert(mapping.vault_path.clone(), mapping).is_some() {
                 return Err(FullScanError::DuplicateMappingPath);
             }
         }
 
-        Ok(Self { by_drive_file_id })
+        Ok(Self {
+            by_drive_file_id,
+            by_path,
+        })
     }
 
     fn by_provider_id(&self, provider_id: &str) -> Option<&'a GDriveMapping> {
         self.by_drive_file_id.get(provider_id).copied()
+    }
+
+    fn by_path(&self, path: &VaultPath) -> Option<&'a GDriveMapping> {
+        self.by_path.get(path).copied()
     }
 }
 
@@ -351,7 +383,8 @@ fn plan_supported_files(
     indexes: &MappingIndexes<'_>,
     files: Vec<CollectedFile>,
     plan: &mut FullScanPlan,
-) -> Result<(), FullScanError> {
+) -> Result<BTreeSet<String>, FullScanError> {
+    let mut blocked_missing_mappings = BTreeSet::new();
     let mut files_by_path: BTreeMap<VaultPath, Vec<CollectedFile>> = BTreeMap::new();
     for file in files {
         files_by_path
@@ -362,6 +395,7 @@ fn plan_supported_files(
 
     for (path, mut path_files) in files_by_path {
         if path_files.len() > 1 {
+            block_mapping_at_path(indexes, &path, &mut blocked_missing_mappings);
             for file in path_files {
                 plan.unsupported.push(SkippedScanEntry {
                     provider_id: file.metadata.id,
@@ -376,6 +410,28 @@ fn plan_supported_files(
             continue;
         };
         let mapping = indexes.by_provider_id(&file.metadata.id);
+
+        if mapping.is_some_and(|mapping| mapping.vault_path != path) {
+            plan.unsupported.push(SkippedScanEntry {
+                provider_id: file.metadata.id,
+                path: Some(path),
+                reason: ScanSkipReason::MappingIdentityPathChanged,
+            });
+            continue;
+        }
+
+        if mapping.is_none() {
+            if let Some(path_mapping) = indexes.by_path(&path) {
+                blocked_missing_mappings.insert(path_mapping.drive_file_id.clone());
+                plan.unsupported.push(SkippedScanEntry {
+                    provider_id: file.metadata.id,
+                    path: Some(path),
+                    reason: ScanSkipReason::MappingPathOccupiedByDifferentIdentity,
+                });
+                continue;
+            }
+        }
+
         let change = match mapping {
             None => Some(ImportChangeKind::New),
             Some(mapping) if mapping_matches_scan(mapping, &file) => None,
@@ -437,14 +493,21 @@ fn plan_supported_files(
         });
     }
 
-    Ok(())
+    Ok(blocked_missing_mappings)
+}
+
+fn block_mapping_at_path(
+    indexes: &MappingIndexes<'_>,
+    path: &VaultPath,
+    blocked_missing_mappings: &mut BTreeSet<String>,
+) {
+    if let Some(mapping) = indexes.by_path(path) {
+        blocked_missing_mappings.insert(mapping.drive_file_id.clone());
+    }
 }
 
 fn mapping_matches_scan(mapping: &GDriveMapping, file: &CollectedFile) -> bool {
-    if mapping.vault_path != file.path
-        || mapping.parent_id != file.parent_id
-        || mapping.name != file.metadata.name
-    {
+    if mapping.parent_id != file.parent_id || mapping.name != file.metadata.name {
         return false;
     }
 
@@ -473,11 +536,14 @@ fn mapping_matches_scan(mapping: &GDriveMapping, file: &CollectedFile) -> bool {
 fn plan_missing_mappings(
     mappings: &[GDriveMapping],
     seen_provider_ids: &BTreeSet<String>,
+    blocked_missing_mappings: &BTreeSet<String>,
     observed_at: &SafeTimestamp,
     plan: &mut FullScanPlan,
 ) {
     for mapping in mappings {
-        if seen_provider_ids.contains(&mapping.drive_file_id) {
+        if seen_provider_ids.contains(&mapping.drive_file_id)
+            || blocked_missing_mappings.contains(&mapping.drive_file_id)
+        {
             continue;
         }
 
@@ -519,39 +585,42 @@ fn sort_plan(plan: &mut FullScanPlan) {
 }
 
 fn normalize_common_compatible_path(segments: &[String]) -> Result<VaultPath, ()> {
-    let raw = segments.join("/");
-    let decoded = decode_percent_sequences(&raw)?;
-    let decoded = decoded.as_ref();
+    if segments.is_empty() {
+        return Err(());
+    }
 
-    if decoded.is_empty()
-        || decoded.as_bytes().contains(&0)
-        || has_windows_drive_prefix(decoded)
-        || decoded.contains('\\')
-        || decoded.starts_with('/')
-        || decoded == "~"
-        || decoded.starts_with("~/")
+    let mut normalized_segments = Vec::with_capacity(segments.len());
+    for segment in segments {
+        normalized_segments.push(normalize_provider_segment(segment)?);
+    }
+
+    let normalized = normalized_segments.join("/");
+    if has_windows_drive_prefix(&normalized)
+        || normalized == "~"
+        || normalized.starts_with("~/")
+        || is_reserved_runtime_path(&normalized)
     {
         return Err(());
     }
 
-    let mut normalized_segments = Vec::new();
-    for segment in decoded.split('/') {
-        match segment {
-            "" | "." => {}
-            ".." => return Err(()),
-            safe_segment => normalized_segments.push(safe_segment),
-        }
-    }
-    if normalized_segments.is_empty() {
-        return Err(());
-    }
-
-    let normalized = normalized_segments.join("/");
-    if is_reserved_runtime_path(&normalized) {
-        return Err(());
-    }
-
     VaultPath::new(normalized).map_err(|_| ())
+}
+
+fn normalize_provider_segment(raw: &str) -> Result<String, ()> {
+    let decoded = decode_percent_sequences(raw)?;
+    let segment = decoded.as_ref();
+    if segment.is_empty()
+        || segment.trim() != segment
+        || segment == "."
+        || segment == ".."
+        || segment.as_bytes().contains(&0)
+        || segment.contains('/')
+        || segment.contains('\\')
+    {
+        return Err(());
+    }
+
+    Ok(segment.to_owned())
 }
 
 fn decode_percent_sequences(input: &str) -> Result<Cow<'_, str>, ()> {
@@ -605,271 +674,4 @@ fn is_reserved_runtime_path(normalized: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::drive::{
-        DriveMetadata, FakeDriveProvider, MIME_GOOGLE_DOC, MIME_GOOGLE_FOLDER, MIME_TEXT_MARKDOWN,
-    };
-
-    fn timestamp(value: &str) -> SafeTimestamp {
-        SafeTimestamp::new(value).expect("timestamp")
-    }
-
-    fn mapping(path: &str, provider_id: &str, parent_id: &str, name: &str) -> GDriveMapping {
-        GDriveMapping::new(
-            VaultPath::new(path).expect("path"),
-            provider_id,
-            parent_id,
-            name,
-        )
-        .expect("mapping")
-    }
-
-    #[test]
-    fn full_scan_plans_new_modified_missing_and_unsupported_entries() {
-        let notes_folder = DriveMetadata::new_special("folder-notes", "Notes", MIME_GOOGLE_FOLDER)
-            .with_parent("root");
-        let new_file = DriveMetadata::new_file("new", "new.md", MIME_TEXT_MARKDOWN)
-            .with_parent("folder-notes")
-            .with_size_bytes(3)
-            .with_md5_checksum("md5-new")
-            .with_modified_time("2026-07-10T08:00:00Z");
-        let modified_file = DriveMetadata::new_file("modified", "modified.md", MIME_TEXT_MARKDOWN)
-            .with_parent("folder-notes")
-            .with_size_bytes(8)
-            .with_md5_checksum("md5-current")
-            .with_modified_time("2026-07-10T08:01:00Z");
-        let unchanged_file =
-            DriveMetadata::new_file("unchanged", "unchanged.md", MIME_TEXT_MARKDOWN)
-                .with_parent("folder-notes")
-                .with_md5_checksum("md5-same")
-                .with_modified_time("2026-07-10T08:02:00Z");
-        let google_doc =
-            DriveMetadata::new_special("doc", "draft", MIME_GOOGLE_DOC).with_parent("folder-notes");
-        let invalid_path = DriveMetadata::new_file("invalid", "../escape.md", MIME_TEXT_MARKDOWN)
-            .with_parent("root");
-        let provider = FakeDriveProvider::new()
-            .with_child("root", notes_folder)
-            .with_child("root", invalid_path)
-            .with_child("folder-notes", new_file)
-            .with_child("folder-notes", modified_file)
-            .with_child("folder-notes", unchanged_file)
-            .with_child("folder-notes", google_doc)
-            .with_content("new", b"new".to_vec())
-            .with_content("modified", b"modified".to_vec());
-
-        let mut modified_mapping = mapping(
-            "Notes/modified.md",
-            "modified",
-            "folder-notes",
-            "modified.md",
-        );
-        modified_mapping.checksum = Some("md5-old".to_owned());
-        modified_mapping.drive_modified_time = Some(timestamp("2026-07-09T08:01:00Z"));
-        modified_mapping.core_revision = Some("rev-modified".to_owned());
-
-        let mut unchanged_mapping = mapping(
-            "Notes/unchanged.md",
-            "unchanged",
-            "folder-notes",
-            "unchanged.md",
-        );
-        unchanged_mapping.checksum = Some("md5-same".to_owned());
-        unchanged_mapping.drive_modified_time = Some(timestamp("2026-07-10T08:02:00Z"));
-        unchanged_mapping.delete_candidate_since = Some(timestamp("2026-07-09T08:00:00Z"));
-
-        let mut missing_mapping =
-            mapping("Notes/missing.md", "missing", "folder-notes", "missing.md");
-        missing_mapping.core_revision = Some("rev-missing".to_owned());
-        let mappings = [modified_mapping, unchanged_mapping, missing_mapping];
-
-        let plan = plan_full_scan(
-            &provider,
-            FullScanInput {
-                root_folder_id: "root",
-                mode: AdapterMode::ImportOnly,
-                dry_run: false,
-                observed_at: timestamp("2026-07-10T09:00:00Z"),
-                mappings: &mappings,
-            },
-        )
-        .expect("scan plan");
-
-        assert_eq!(plan.imports.len(), 2);
-        let new_import = plan
-            .imports
-            .iter()
-            .find(|import| import.change == ImportChangeKind::New)
-            .expect("new import");
-        assert_eq!(new_import.execution, ImportExecution::Submit);
-        assert_eq!(new_import.file_type, SupportedFileType::Markdown);
-        assert_eq!(new_import.request.path.as_str(), "Notes/new.md");
-        assert_eq!(new_import.request.base_revision_id, None);
-        assert!(new_import.request.verifies_content());
-
-        let modified_import = plan
-            .imports
-            .iter()
-            .find(|import| import.change == ImportChangeKind::Modified)
-            .expect("modified import");
-        assert_eq!(
-            modified_import.request.base_revision_id.as_deref(),
-            Some("rev-modified")
-        );
-        assert_eq!(modified_import.request.content, b"modified".to_vec());
-
-        assert_eq!(plan.unchanged.len(), 1);
-        assert!(plan.unchanged[0].clear_delete_candidate);
-        assert_eq!(plan.delete_candidates.len(), 1);
-        assert_eq!(plan.delete_candidates[0].path.as_str(), "Notes/missing.md");
-        assert_eq!(
-            plan.delete_candidates[0].base_revision_id.as_deref(),
-            Some("rev-missing")
-        );
-        assert!(!plan.has_immediate_delete_actions());
-        assert!(plan.unsupported.iter().any(|entry| {
-            entry.reason
-                == ScanSkipReason::ProviderUnsupported(
-                    UnsupportedEntryReason::GoogleWorkspaceDocument,
-                )
-        }));
-        assert!(plan
-            .unsupported
-            .iter()
-            .any(|entry| entry.reason == ScanSkipReason::InvalidVaultPath));
-    }
-
-    #[test]
-    fn mode_rules_prevent_downloads_when_import_is_not_allowed() {
-        let metadata =
-            DriveMetadata::new_file("new", "new.md", MIME_TEXT_MARKDOWN).with_parent("root");
-        let provider = FakeDriveProvider::new().with_child("root", metadata);
-
-        let plan = plan_full_scan(
-            &provider,
-            FullScanInput {
-                root_folder_id: "root",
-                mode: AdapterMode::ExportOnly,
-                dry_run: false,
-                observed_at: timestamp("2026-07-10T09:00:00Z"),
-                mappings: &[],
-            },
-        )
-        .expect("scan plan");
-
-        assert!(plan.imports.is_empty());
-        assert_eq!(plan.skipped_imports.len(), 1);
-        assert_eq!(plan.skipped_imports[0].change, ImportChangeKind::New);
-        assert_eq!(plan.skipped_imports[0].mode, AdapterMode::ExportOnly);
-    }
-
-    #[test]
-    fn dry_run_prepares_hash_verified_request_without_submit_execution() {
-        let metadata = DriveMetadata::new_file("new", "new.md", MIME_TEXT_MARKDOWN)
-            .with_parent("root")
-            .with_size_bytes(7);
-        let provider = FakeDriveProvider::new()
-            .with_child("root", metadata)
-            .with_content("new", b"preview".to_vec());
-
-        let plan = plan_full_scan(
-            &provider,
-            FullScanInput {
-                root_folder_id: "root",
-                mode: AdapterMode::Bidirectional,
-                dry_run: true,
-                observed_at: timestamp("2026-07-10T09:00:00Z"),
-                mappings: &[],
-            },
-        )
-        .expect("scan plan");
-
-        assert_eq!(plan.imports.len(), 1);
-        assert_eq!(plan.imports[0].execution, ImportExecution::DryRun);
-        assert_eq!(
-            plan.imports[0].request.content_sha256.to_string(),
-            "sha256:5975cf1bba432391c94667f5886225f69377c0aa8b9fa21fddfb21c89bcf9092"
-        );
-        assert!(plan.imports[0].request.verifies_content());
-    }
-
-    #[test]
-    fn common_compatible_normalization_detects_path_collisions_before_download() {
-        let first =
-            DriveMetadata::new_file("first", "Notes/a.md", MIME_TEXT_MARKDOWN).with_parent("root");
-        let second = DriveMetadata::new_file("second", "Notes//a.md", MIME_TEXT_MARKDOWN)
-            .with_parent("root");
-        let provider = FakeDriveProvider::new()
-            .with_child("root", first)
-            .with_child("root", second);
-
-        let plan = plan_full_scan(
-            &provider,
-            FullScanInput {
-                root_folder_id: "root",
-                mode: AdapterMode::ImportOnly,
-                dry_run: false,
-                observed_at: timestamp("2026-07-10T09:00:00Z"),
-                mappings: &[],
-            },
-        )
-        .expect("scan plan");
-
-        assert!(plan.imports.is_empty());
-        assert_eq!(
-            plan.unsupported
-                .iter()
-                .filter(|entry| entry.reason == ScanSkipReason::PathCollision)
-                .count(),
-            2
-        );
-    }
-
-    #[test]
-    fn size_mismatch_aborts_plan_before_any_core_side_effect() {
-        let metadata = DriveMetadata::new_file("file", "file.md", MIME_TEXT_MARKDOWN)
-            .with_parent("root")
-            .with_size_bytes(100);
-        let provider = FakeDriveProvider::new()
-            .with_child("root", metadata)
-            .with_content("file", b"short".to_vec());
-
-        let error = plan_full_scan(
-            &provider,
-            FullScanInput {
-                root_folder_id: "root",
-                mode: AdapterMode::ImportOnly,
-                dry_run: false,
-                observed_at: timestamp("2026-07-10T09:00:00Z"),
-                mappings: &[],
-            },
-        )
-        .expect_err("size mismatch must fail");
-
-        assert_eq!(error, FullScanError::ContentSizeMismatch);
-    }
-
-    #[test]
-    fn folder_cycle_is_skipped_safely() {
-        let cycle =
-            DriveMetadata::new_special("root", "cycle", MIME_GOOGLE_FOLDER).with_parent("root");
-        let provider = FakeDriveProvider::new().with_child("root", cycle);
-
-        let plan = plan_full_scan(
-            &provider,
-            FullScanInput {
-                root_folder_id: "root",
-                mode: AdapterMode::ImportOnly,
-                dry_run: false,
-                observed_at: timestamp("2026-07-10T09:00:00Z"),
-                mappings: &[],
-            },
-        )
-        .expect("cycle is skipped");
-
-        assert!(plan
-            .unsupported
-            .iter()
-            .any(|entry| entry.reason == ScanSkipReason::FolderCycle));
-    }
-}
+mod tests;
