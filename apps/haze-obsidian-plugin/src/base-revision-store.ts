@@ -52,7 +52,8 @@ export function mergeBaseRevisionState(rawState: unknown): BaseRevisionState {
 }
 
 export function getBaseRevisionId(state: BaseRevisionState, path: VaultPath): RevisionId | null {
-  return state.byPath[path]?.revisionId ?? null;
+  const entry = state.byPath[path];
+  return entry === undefined || entry.serverDeleted ? null : entry.revisionId;
 }
 
 export function getBaseContentHash(state: BaseRevisionState, path: VaultPath): ContentHash | null {
@@ -155,7 +156,7 @@ function confirmedDelete(
   return {
     state: upsertBaseRevision(state, {
       path,
-      revisionId: state.byPath[path]?.revisionId ?? null,
+      revisionId: null,
       contentHash: null,
       serverDeleted: true,
       updatedAt: observedAt,
@@ -243,8 +244,8 @@ function readBaseRevisionEntry(value: unknown): BaseRevisionEntry | undefined {
 
   return {
     path: value.path,
-    revisionId: value.revisionId,
-    contentHash,
+    revisionId: value.serverDeleted ? null : value.revisionId,
+    contentHash: value.serverDeleted ? null : contentHash,
     serverDeleted: value.serverDeleted,
     updatedAt: value.updatedAt,
   };
