@@ -248,12 +248,31 @@ function isConflictDto(payload: unknown): payload is ConflictDto {
     isRecord(payload) &&
     typeof payload.id === "string" &&
     typeof payload.original_path === "string" &&
-    typeof payload.status === "string"
+    typeof payload.status === "string" &&
+    isOptionalStringOrNull(payload.conflict_path) &&
+    isOptionalStringOrNull(payload.current_revision_id) &&
+    isOptionalStringOrNull(payload.conflict_revision_id) &&
+    isOptionalStringOrNull(payload.source_adapter_id) &&
+    isOptionalString(payload.created_at) &&
+    isOptionalStringOrNull(payload.resolved_at)
   );
 }
 
 function isResolveConflictResponseDto(payload: unknown): payload is ResolveConflictResponseDto {
-  return isRecord(payload) && typeof payload.status === "string" && typeof payload.conflict_id === "string";
+  return (
+    isRecord(payload) &&
+    typeof payload.status === "string" &&
+    typeof payload.conflict_id === "string" &&
+    isOptionalStringOrNull(payload.revision_id)
+  );
+}
+
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || typeof value === "string";
+}
+
+function isOptionalStringOrNull(value: unknown): boolean {
+  return value === undefined || value === null || typeof value === "string";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
