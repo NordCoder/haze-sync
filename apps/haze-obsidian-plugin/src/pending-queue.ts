@@ -11,7 +11,6 @@ export interface PendingQueueEntry {
   source: PendingChangeSource;
   firstSeenAt: string;
   lastSeenAt: string;
-  version: number;
   operationIdempotencyKey: string;
   file?: LocalFileFact;
   previousFile?: LocalFileFact;
@@ -23,7 +22,6 @@ interface StoredPendingQueueEntry {
   source: PendingChangeSource;
   firstSeenAt: string;
   lastSeenAt: string;
-  version?: number;
   operationIdempotencyKey?: string;
   file?: LocalFileFact;
   previousFile?: LocalFileFact;
@@ -206,7 +204,7 @@ function upsertPendingEntry(
   const operationKind = operationKindForPendingChange(kind);
   const currentOperationKind = currentEntry === undefined ? undefined : operationKindForPendingChange(currentEntry.kind);
   const sameOperationKind = currentEntry !== undefined && currentOperationKind === operationKind;
-  const reuseIdempotencyKey = shouldReuseIdempotencyKey(currentEntry, operationKind, file);
+  const reuseIdempotencyKey = shouldReuseIdempotencyKey(currentEntry, operationKind, source, file);
 
   return {
     path,
@@ -214,7 +212,6 @@ function upsertPendingEntry(
     source,
     firstSeenAt: sameOperationKind ? currentEntry.firstSeenAt : observedAt,
     lastSeenAt: observedAt,
-    version: (currentEntry?.version ?? 0) + 1,
     operationIdempotencyKey: reuseIdempotencyKey
       ? currentEntry.operationIdempotencyKey
       : generateLocalIdempotencyKey(operationKind),
@@ -226,9 +223,14 @@ function upsertPendingEntry(
 function shouldReuseIdempotencyKey(
   currentEntry: PendingQueueEntry | undefined,
   operationKind: LocalMutationKind,
+  source: PendingChangeSource,
   nextFile: LocalFileFact | undefined,
 ): currentEntry is PendingQueueEntry {
-  if (currentEntry === undefined || operationKindForPendingChange(currentEntry.kind) !== operationKind) {
+  if (
+    currentEntry === undefined ||
+    operationKindForPendingChange(currentEntry.kind) !== operationKind ||
+    source === "event_hint"
+  ) {
     return false;
   }
 
@@ -288,7 +290,6 @@ function readPendingQueueEntry(value: unknown): PendingQueueEntry | undefined {
     source: value.source,
     firstSeenAt: value.firstSeenAt,
     lastSeenAt: value.lastSeenAt,
-    version: value.version ?? 1,
     operationIdempotencyKey:
       value.operationIdempotencyKey ?? generateLocalIdempotencyKey(operationKindForPendingChange(value.kind)),
     file: value.file,
@@ -326,7 +327,6 @@ function isStoredPendingQueueEntry(value: unknown): value is StoredPendingQueueE
     isPendingChangeSource(value.source) &&
     typeof value.firstSeenAt === "string" &&
     typeof value.lastSeenAt === "string" &&
-    (value.version === undefined || isPositiveInteger(value.version)) &&
     (value.operationIdempotencyKey === undefined || typeof value.operationIdempotencyKey === "string") &&
     (value.file === undefined || isLocalFileFact(value.file)) &&
     (value.previousFile === undefined || isLocalFileFact(value.previousFile))
@@ -345,10 +345,6 @@ function isLocalFileFact(value: unknown): value is LocalFileFact {
     typeof value.sizeBytes === "number" &&
     typeof value.mtime === "number"
   );
-}
-
-function isPositiveInteger(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value) && value > 0;
 }
 
 function isPendingChangeKind(value: unknown): value is PendingChangeKind {
