@@ -47,8 +47,10 @@ export const CONFLICT_ACTION_DEFINITIONS: readonly ConflictActionDefinition[] = 
   },
 ] as const;
 
+export type ConflictCenterConflict = ConflictDto & { readonly id: string };
+
 export interface ConflictCenterItem {
-  conflict: ConflictDto;
+  conflict: ConflictCenterConflict;
   originalPath: string;
   conflictPath: string;
   status: string;
@@ -85,6 +87,7 @@ export async function resolveConflictThroughServer(
   action: ConflictResolutionAction,
   idempotencyKey: string,
   baseRevisionState: BaseRevisionState,
+  _observedAt?: string,
 ): Promise<ConflictResolutionResult> {
   const definition = CONFLICT_ACTION_DEFINITIONS.find((candidate) => candidate.action === action);
   if (definition === undefined || !definition.available) {
@@ -114,8 +117,13 @@ export async function resolveConflictThroughServer(
 }
 
 function toConflictCenterItem(conflict: ConflictDto, secrets: string[]): ConflictCenterItem {
+  const localConflict: ConflictCenterConflict = {
+    ...conflict,
+    id: conflict.conflict_id,
+  };
+
   return {
-    conflict,
+    conflict: localConflict,
     originalPath: safeDisplayText(conflict.original_path, "Path unavailable", 240, secrets),
     conflictPath: safeDisplayText(conflict.conflict_path, "Conflict path unavailable", 240, secrets),
     status: safeDisplayText(conflict.status, "Unknown", 48, secrets),
@@ -127,10 +135,7 @@ function toConflictCenterItem(conflict: ConflictDto, secrets: string[]): Conflic
 }
 
 function compareConflictItems(left: ConflictCenterItem, right: ConflictCenterItem): number {
-  return (
-    left.originalPath.localeCompare(right.originalPath) ||
-    left.conflict.conflict_id.localeCompare(right.conflict.conflict_id)
-  );
+  return left.originalPath.localeCompare(right.originalPath) || left.conflict.id.localeCompare(right.conflict.id);
 }
 
 function safeTimestamp(value: string | undefined): string {
