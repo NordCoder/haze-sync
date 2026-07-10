@@ -17,7 +17,7 @@ impl FakeClock {
     }
 
     fn advance(&self, duration: Duration) {
-        self.now.set(self.now.get() + duration);
+        self.now.set(self.now.get().checked_add(duration).unwrap());
     }
 }
 
@@ -220,7 +220,7 @@ fn watcher_hint_consumption_is_bounded_per_host_poll() {
 #[test]
 fn cancellation_prevents_startup_cycle_and_shutdown_is_explicit() {
     let clock = FakeClock::new();
-    let mut runtime = service(WorktreeMode::ReadOnly, clock);
+    let mut runtime = service(WorktreeMode::ImportOnly, clock);
     runtime.start().unwrap();
     runtime.request_cancel().unwrap();
 
@@ -240,7 +240,7 @@ fn cancellation_prevents_startup_cycle_and_shutdown_is_explicit() {
 fn adapter_modes_produce_distinct_cycle_capabilities() {
     let cases = [
         (WorktreeMode::Disabled, false, false, false, false),
-        (WorktreeMode::ReadOnly, true, true, false, false),
+        (WorktreeMode::ReadOnly, false, false, false, true),
         (WorktreeMode::ImportOnly, true, true, true, false),
         (WorktreeMode::ExportOnly, false, false, false, true),
         (WorktreeMode::Bidirectional, true, true, true, true),
@@ -299,11 +299,14 @@ fn watcher_failure_degrades_to_periodic_full_scans() {
 #[test]
 fn executor_contract_rejects_missing_scan_mode_work_and_budget_overflow() {
     let clock = FakeClock::new();
-    let mut runtime = service(WorktreeMode::ReadOnly, clock);
-    runtime.executor.responses.push_back(Ok(WorktreeRuntimeCycleSummary {
-        full_scan_completed: false,
-        ..WorktreeRuntimeCycleSummary::default()
-    }));
+    let mut runtime = service(WorktreeMode::ImportOnly, clock.clone());
+    runtime
+        .executor_mut()
+        .responses
+        .push_back(Ok(WorktreeRuntimeCycleSummary {
+            full_scan_completed: false,
+            ..WorktreeRuntimeCycleSummary::default()
+        }));
     runtime.start().unwrap();
     assert!(matches!(
         runtime.poll().unwrap(),
@@ -312,14 +315,25 @@ fn executor_contract_rejects_missing_scan_mode_work_and_budget_overflow() {
             ..
         }
     ));
-    assert!(runtime.status().startup_cycle_pending);
+    assert!(!runtime.status().startup_cycle_pending);
+    assert_eq!(runtime.poll().unwrap(), WorktreeRuntimePoll::Idle);
+    clock.advance(Duration::from_secs(10));
+    assert!(matches!(
+        runtime.poll().unwrap(),
+        WorktreeRuntimePoll::CycleCompleted {
+            cause: WorktreeRuntimeCycleCause::Periodic,
+            ..
+        }
+    ));
 
     let clock = FakeClock::new();
     let mut runtime = service(WorktreeMode::ExportOnly, clock);
-    runtime.executor.push_summary(WorktreeRuntimeCycleSummary {
-        planned_imports: 1,
-        ..WorktreeRuntimeCycleSummary::default()
-    });
+    runtime
+        .executor_mut()
+        .push_summary(WorktreeRuntimeCycleSummary {
+            planned_imports: 1,
+            ..WorktreeRuntimeCycleSummary::default()
+        });
     runtime.start().unwrap();
     assert!(matches!(
         runtime.poll().unwrap(),
@@ -331,11 +345,13 @@ fn executor_contract_rejects_missing_scan_mode_work_and_budget_overflow() {
 
     let clock = FakeClock::new();
     let mut runtime = service(WorktreeMode::Bidirectional, clock);
-    runtime.executor.push_summary(WorktreeRuntimeCycleSummary {
-        full_scan_completed: true,
-        planned_imports: 5,
-        ..WorktreeRuntimeCycleSummary::default()
-    });
+    runtime
+        .executor_mut()
+        .push_summary(WorktreeRuntimeCycleSummary {
+            full_scan_completed: true,
+            planned_imports: 5,
+            ..WorktreeRuntimeCycleSummary::default()
+        });
     runtime.start().unwrap();
     assert!(matches!(
         runtime.poll().unwrap(),
