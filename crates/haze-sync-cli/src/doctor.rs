@@ -1,7 +1,7 @@
 use haze_sync_core::doctor::{
     adapter_token_sanity_check, db_connectivity_check, missing_blob_detection_check,
     object_store_exists_writable_check, AdapterTokenSanityInput, DbConnectivityCheckInput,
-    DoctorReport, MissingBlobDetectionInput, ObjectStoreExistsWritableInput,
+    DoctorCheckStatus, DoctorReport, MissingBlobDetectionInput, ObjectStoreExistsWritableInput,
 };
 use std::{error::Error, fmt};
 
@@ -11,21 +11,32 @@ pub enum DoctorCliCommand {
     Help,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct DoctorCommand {
-    pub offline: bool,
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum DoctorMode {
+    #[default]
+    Offline,
+    Live,
 }
 
-impl Default for DoctorCommand {
-    fn default() -> Self {
-        Self { offline: true }
+impl DoctorMode {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Offline => "offline",
+            Self::Live => "live",
+        }
     }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct DoctorCommand {
+    pub mode: DoctorMode,
 }
 
 impl DoctorCommand {
     #[must_use]
     pub fn build_offline_report(self) -> DoctorReport {
-        debug_assert!(self.offline, "live doctor mode is intentionally deferred");
+        debug_assert_eq!(self.mode, DoctorMode::Offline);
         DoctorReport::from_results(vec![
             db_connectivity_check(DbConnectivityCheckInput::offline(false)),
             object_store_exists_writable_check(ObjectStoreExistsWritableInput::offline(false)),
@@ -39,6 +50,7 @@ impl DoctorCommand {
 pub enum DoctorParseError {
     UnknownDoctorFlag,
     UnexpectedDoctorArgument,
+    ConflictingDoctorModes,
 }
 
 impl fmt::Display for DoctorParseError {
@@ -46,6 +58,7 @@ impl fmt::Display for DoctorParseError {
         let message = match self {
             Self::UnknownDoctorFlag => "unknown doctor flag",
             Self::UnexpectedDoctorArgument => "unexpected doctor argument",
+            Self::ConflictingDoctorModes => "conflicting doctor modes",
         };
         formatter.write_str(message)
     }
@@ -59,7 +72,7 @@ where
     S: AsRef<str>,
 {
     let mut args = args.into_iter();
-    let mut command = DoctorCommand::default();
+    let mut selected_mode = None;
 
     while let Some(argument) = next_argument(&mut args) {
         match argument.as_str() {
@@ -67,13 +80,27 @@ where
                 reject_trailing(args)?;
                 return Ok(DoctorCliCommand::Help);
             }
-            "--offline" => command.offline = true,
+            "--offline" => select_mode(&mut selected_mode, DoctorMode::Offline)?,
+            "--live" => select_mode(&mut selected_mode, DoctorMode::Live)?,
             value if value.starts_with('-') => return Err(DoctorParseError::UnknownDoctorFlag),
             _value => return Err(DoctorParseError::UnexpectedDoctorArgument),
         }
     }
 
-    Ok(DoctorCliCommand::Doctor(command))
+    Ok(DoctorCliCommand::Doctor(DoctorCommand {
+        mode: selected_mode.unwrap_or_default(),
+    }))
+}
+
+fn select_mode(
+    selected_mode: &mut Option<DoctorMode>,
+    requested_mode: DoctorMode,
+) -> Result<(), DoctorParseError> {
+    if selected_mode.is_some_and(|mode| mode != requested_mode) {
+        return Err(DoctorParseError::ConflictingDoctorModes);
+    }
+    *selected_mode = Some(requested_mode);
+    Ok(())
 }
 
 #[must_use]
@@ -91,8 +118,39 @@ pub fn render_text_summary(report: &DoctorReport) -> String {
 }
 
 #[must_use]
+pub fn render_detailed_report(report: &DoctorReport) -> String {
+    let mut lines = vec![render_text_summary(report)];
+    for check in &report.checks {
+        lines.push(format!(
+            "check {}: {} - {}",
+            check.check_id.as_str(),
+            status_label(check.status),
+            check.message
+        ));
+    }
+    lines.join("\n")
+}
+
+#[must_use]
+pub fn render_offline_report(report: &DoctorReport) -> String {
+    format!(
+        "doctor mode: offline\nlive server calls: not attempted\n{}",
+        render_detailed_report(report)
+    )
+}
+
+const fn status_label(status: DoctorCheckStatus) -> &'static str {
+    match status {
+        DoctorCheckStatus::Ok => "ok",
+        DoctorCheckStatus::Warning => "warning",
+        DoctorCheckStatus::Failed => "failed",
+        DoctorCheckStatus::Skipped => "skipped",
+    }
+}
+
+#[must_use]
 pub const fn usage() -> &'static str {
-    "usage: haze-sync doctor [--offline]\n\ncurrent mode: read-only offline summary only\nlive checks, repair, provider calls, and destructive actions are intentionally unavailable"
+    "usage: haze-sync doctor [--offline]\n       haze-sync doctor --live\n\nmodes:\n  --offline  read-only offline summary; no network calls\n  --live     read-only aggregation of accepted Server health/readiness/status surfaces\n\nrepair, direct database/provider checks, and destructive actions are unavailable"
 }
 
 fn next_argument<I, S>(args: &mut I) -> Option<String>
@@ -147,17 +205,43 @@ mod tests {
     }
 
     #[test]
-    fn rendered_doctor_summary_is_sensitive_safe() {
+    fn rendered_offline_doctor_report_is_labeled_and_sensitive_safe() {
         let report = DoctorCommand::default().build_offline_report();
-        let summary = render_text_summary(&report);
+        let summary = render_offline_report(&report);
 
+        assert!(summary.contains("doctor mode: offline"));
+        assert!(summary.contains("live server calls: not attempted"));
         assert!(summary.contains("doctor summary"));
         assert!(summary.contains("total: 4"));
         assert_no_sensitive_leaks(&summary);
     }
 
     #[test]
-    fn unsupported_live_or_repair_args_are_rejected_safely() {
+    fn explicit_live_and_offline_modes_parse() {
+        assert_eq!(
+            parse_doctor_args(["--live"]).unwrap(),
+            DoctorCliCommand::Doctor(DoctorCommand {
+                mode: DoctorMode::Live,
+            })
+        );
+        assert_eq!(
+            parse_doctor_args(["--offline"]).unwrap(),
+            DoctorCliCommand::Doctor(DoctorCommand {
+                mode: DoctorMode::Offline,
+            })
+        );
+        assert_eq!(
+            parse_doctor_args(std::iter::empty::<&str>()).unwrap(),
+            DoctorCliCommand::Doctor(DoctorCommand::default())
+        );
+    }
+
+    #[test]
+    fn conflicting_modes_and_unsupported_repair_are_rejected_safely() {
+        assert_eq!(
+            parse_doctor_args(["--live", "--offline"]).unwrap_err(),
+            DoctorParseError::ConflictingDoctorModes
+        );
         assert_eq!(
             parse_doctor_args(["--repair"]).unwrap_err(),
             DoctorParseError::UnknownDoctorFlag
@@ -174,6 +258,8 @@ mod tests {
             parse_doctor_args(["--help"]).unwrap(),
             DoctorCliCommand::Help
         );
+        assert!(usage().contains("usage: haze-sync doctor [--offline]"));
+        assert!(usage().contains("haze-sync doctor --live"));
         assert!(usage().contains("read-only offline summary"));
         assert_no_sensitive_leaks(usage());
     }
