@@ -1,15 +1,16 @@
 //! Guarded local-delete planning and abstract Core/API submission.
 //!
-//! Scanner absence is only a local fact. This module turns complete, safe scan
-//! observations into explicit delete candidates, applies bounded mass-delete
-//! thresholds, and submits approved candidates through the existing abstract
-//! import client. Core remains the tombstone and conflict-policy authority.
+//! Scanner absence is only a local fact. This module emits explicit delete
+//! candidates only when absence is safely scoped, applies bounded mass-delete
+//! thresholds, and submits approved candidates through the abstract Core/API
+//! client. Core remains the tombstone and conflict-policy authority.
 
 use crate::{
     WorktreeAppliedPathState, WorktreeBaseRevision, WorktreeDeleteImport, WorktreeImportAction,
-    WorktreeImportClient, WorktreeImportOutcome, WorktreeScanResult, WorktreeStateSnapshot,
+    WorktreeImportClient, WorktreeImportOutcome, WorktreeScanResult, WorktreeScanSkipReason,
+    WorktreeStateSnapshot,
 };
-use haze_sync_common::{RevisionId, VaultPath};
+use haze_sync_common::{VaultPath};
 use std::collections::BTreeSet;
 use std::fmt;
 
@@ -51,11 +52,12 @@ pub struct WorktreeDeleteScan {
 }
 
 impl WorktreeDeleteScan {
-    /// Derive known-base delete candidates from a complete scanner result.
+    /// Derive known-base delete candidates from a scanner result.
     ///
-    /// Any unscoped skipped entry makes negative absence conclusions unsafe, so
-    /// the scan is marked incomplete and no delete candidates are emitted. A
-    /// path-scoped skipped entry suppresses candidates at or below that path.
+    /// An unscoped filesystem error makes negative absence conclusions unsafe.
+    /// Expected unscoped reserved-runtime skips do not hide valid user paths and
+    /// therefore do not block delete planning. Any path-scoped skipped entry
+    /// suppresses candidates at or below that path.
     pub fn from_scan(
         state: &WorktreeStateSnapshot,
         scan: &WorktreeScanResult,
@@ -65,8 +67,12 @@ impl WorktreeDeleteScan {
             .iter()
             .filter(|(_, path_state)| matches!(path_state, WorktreeAppliedPathState::Present(_)))
             .count();
+        let complete = !scan.skipped.iter().any(|entry| {
+            entry.vault_path.is_none()
+                && entry.reason == WorktreeScanSkipReason::FilesystemError
+        });
 
-        if scan.skipped.iter().any(|entry| entry.vault_path.is_none()) {
+        if !complete {
             return Ok(Self {
                 candidates: Vec::new(),
                 tracked_present_count,
@@ -80,7 +86,6 @@ impl WorktreeDeleteScan {
             .filter_map(|entry| entry.vault_path.as_ref())
             .collect();
         let mut candidates = Vec::new();
-
         for (vault_path, path_state) in state.iter() {
             let WorktreeAppliedPathState::Present(applied) = path_state else {
                 continue;
@@ -99,20 +104,20 @@ impl WorktreeDeleteScan {
         Ok(Self {
             candidates,
             tracked_present_count,
-            complete: true,
+            complete,
         })
     }
 
     /// Construct a complete candidate set from another accepted observation source.
     ///
-    /// This supports explicit null-base semantics without assigning any delete
-    /// policy to Worktree. Duplicate candidate paths are rejected.
+    /// This supports explicit null-base semantics without assigning delete policy
+    /// to Worktree. Duplicate paths are rejected.
     pub fn from_candidates(
         candidates: impl IntoIterator<Item = WorktreeDeleteCandidate>,
         tracked_present_count: usize,
     ) -> Result<Self, WorktreeDeletePlanError> {
-        let mut seen = BTreeSet::new();
         let mut candidates: Vec<WorktreeDeleteCandidate> = candidates.into_iter().collect();
+        let mut seen = BTreeSet::new();
         for candidate in &candidates {
             if !seen.insert(candidate.vault_path.clone()) {
                 return Err(WorktreeDeletePlanError::DuplicateCandidate {
@@ -138,13 +143,13 @@ impl WorktreeDeleteScan {
         &self.candidates
     }
 
-    /// Number of last-applied present paths used as the delete-ratio denominator.
+    /// Number of last-applied present paths used as the ratio denominator.
     #[must_use]
     pub const fn tracked_present_count(&self) -> usize {
         self.tracked_present_count
     }
 
-    /// Whether the scan was complete enough for negative absence conclusions.
+    /// Whether scanner output was complete enough for absence conclusions.
     #[must_use]
     pub const fn is_complete(&self) -> bool {
         self.complete
@@ -154,9 +159,9 @@ impl WorktreeDeleteScan {
 /// Safe candidate-planning failures.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorktreeDeletePlanError {
-    /// A stable scanner result contained the same file path more than once.
+    /// Scanner result contained the same stable path more than once.
     DuplicateScanPath { vault_path: VaultPath },
-    /// An accepted candidate source contained the same delete path more than once.
+    /// Accepted candidate source contained the same delete path more than once.
     DuplicateCandidate { vault_path: VaultPath },
 }
 
@@ -200,7 +205,7 @@ pub struct WorktreeDeleteGuardPolicy {
 }
 
 impl WorktreeDeleteGuardPolicy {
-    /// Construct a guard policy. `500` basis points represents five percent.
+    /// Construct a policy. `500` basis points represents five percent.
     pub fn new(
         max_deletes_per_run: usize,
         max_delete_ratio_basis_points: u16,
@@ -255,7 +260,7 @@ pub enum WorktreeDeleteAuthorization {
 /// Why delete propagation was blocked.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WorktreeDeleteBlockReason {
-    /// Scanner output contained an unscoped skipped entry.
+    /// Scanner output contained an unscoped filesystem error.
     IncompleteScan,
     /// One or both configured mass-delete thresholds were exceeded.
     ThresholdExceeded,
@@ -327,7 +332,7 @@ pub struct WorktreeGuardedDeletePlan {
 }
 
 impl WorktreeGuardedDeletePlan {
-    /// Evaluate one scan/candidate batch against configured thresholds.
+    /// Evaluate one candidate batch against configured thresholds.
     #[must_use]
     pub fn evaluate(
         scan: WorktreeDeleteScan,
@@ -348,7 +353,6 @@ impl WorktreeGuardedDeletePlan {
             ratio_exceeded,
             manual_unlock_used,
         };
-
         let decision = if !scan.complete {
             WorktreeDeleteGuardDecision::Blocked {
                 reason: WorktreeDeleteBlockReason::IncompleteScan,
@@ -364,7 +368,6 @@ impl WorktreeGuardedDeletePlan {
         } else {
             WorktreeDeleteGuardDecision::Allowed(summary)
         };
-
         Self {
             candidates: scan.candidates,
             decision,
@@ -453,9 +456,8 @@ impl WorktreeDeleteRunner {
 
         let mut submissions = Vec::with_capacity(plan.candidates.len());
         for candidate in plan.candidates {
-            let action = candidate.clone().into_action();
             let outcome = client
-                .submit(action)
+                .submit(candidate.clone().into_action())
                 .map_err(WorktreeDeleteRunError::Client)?;
             let local_state_updated = match &outcome {
                 WorktreeImportOutcome::Tombstoned(tombstone) => {
@@ -509,9 +511,8 @@ fn delete_ratio_basis_points(delete_count: usize, tracked_present_count: usize) 
     if tracked_present_count == 0 {
         return RATIO_SCALE_BASIS_POINTS as u32;
     }
-
     let numerator = (delete_count as u128) * RATIO_SCALE_BASIS_POINTS;
     let denominator = tracked_present_count as u128;
-    let ceiling = numerator.div_ceil(denominator);
+    let ceiling = (numerator + denominator - 1) / denominator;
     ceiling.min(u128::from(u32::MAX)) as u32
 }
