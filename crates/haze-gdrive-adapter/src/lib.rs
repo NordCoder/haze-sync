@@ -16,12 +16,12 @@ pub mod scan;
 pub mod state;
 
 pub use change_feed::{
-    classify_drive_changes, run_change_feed_cycle, ChangeFeedCycleInput,
-    ChangeFeedCycleOutcome, ChangeFeedError, ChangeFeedModelError, ChangePollDebouncer,
-    ChangePollTrigger, ChangeProcessingError, ChangeWorkBatch, ChangeWorkItem,
-    ChangeWorkProcessor, CursorStoreError, DebouncedPoll, DriveChangeEntry, DriveChangeFeedProvider,
-    DriveChangePage, DriveChangePoll, DriveCursorStore, FakeDriveChangeFeedProvider,
-    FullScanFallbackReason, InMemoryDriveCursorStore, ProviderBackoffPolicy, RetryDisposition,
+    classify_drive_changes, run_change_feed_cycle, ChangeFeedCycleInput, ChangeFeedCycleOutcome,
+    ChangeFeedError, ChangeFeedModelError, ChangePollDebouncer, ChangePollTrigger,
+    ChangeProcessingError, ChangeWorkBatch, ChangeWorkItem, ChangeWorkProcessor, CursorStoreError,
+    DebouncedPoll, DriveChangeEntry, DriveChangeFeedProvider, DriveChangePage, DriveChangePoll,
+    DriveCursorStore, FakeDriveChangeFeedProvider, FullScanFallbackReason,
+    InMemoryDriveCursorStore, ProviderBackoffPolicy, RetryDisposition,
 };
 pub use config::{
     AdapterConfig, AdapterMode, DeleteSafetyConfig, RuntimeIntervals, SecretPath, SecretString,
