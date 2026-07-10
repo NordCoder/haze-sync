@@ -19,6 +19,7 @@ import {
   RemoteConflictReason,
   RemoteSyncState,
   advanceRemoteCursor,
+  applyRemoteMetadataChange,
   markRemotePullAttempt,
   recordRemoteConflict,
   recordRemoteTombstone,
@@ -28,6 +29,7 @@ import { classifyVaultPath } from "./vault-paths";
 export type RemoteMaterializationStatus =
   | "applied"
   | "conflict_queued"
+  | "conflict_recorded"
   | "no_op"
   | "tombstone_recorded";
 
@@ -116,8 +118,22 @@ export function remoteChangeNeedsDownload(change: ChangeDto): boolean {
 }
 
 export async function materializeRemoteChange(input: RemoteMaterializationInput): Promise<RemoteMaterializationResult> {
-  if (input.change.kind === "conflict_resolved" || input.change.kind === "backup_created") {
-    return metadataOnlyChangeApplied(input, input.change.path);
+  if (
+    input.change.kind === "conflict_created" ||
+    input.change.kind === "conflict_resolved" ||
+    input.change.kind === "backup_created"
+  ) {
+    const metadata = applyRemoteMetadataChange(
+      input.remoteSyncState,
+      input.change,
+      input.observedAt,
+    );
+    return {
+      status: metadata.conflictRecorded ? "conflict_recorded" : "no_op",
+      baseRevisionState: input.baseRevisionState,
+      remoteSyncState: metadata.state,
+      path: input.change.path,
+    };
   }
 
   const classification = classifyVaultPath(input.change.path);
@@ -131,8 +147,6 @@ export async function materializeRemoteChange(input: RemoteMaterializationInput)
       return materializeUpsert(input, classification.path);
     case "delete_file":
       return materializeDelete(input, classification.path);
-    case "conflict_created":
-      return queueConflict(input, "unsupported_change");
   }
 }
 
@@ -215,15 +229,6 @@ async function materializeDelete(input: RemoteMaterializationInput, path: string
     status: "tombstone_recorded",
     baseRevisionState: markRemoteDelete(input.baseRevisionState, path, null, input.observedAt),
     remoteSyncState,
-    path,
-  };
-}
-
-function metadataOnlyChangeApplied(input: RemoteMaterializationInput, path: string): RemoteMaterializationResult {
-  return {
-    status: "no_op",
-    baseRevisionState: input.baseRevisionState,
-    remoteSyncState: advanceRemoteCursor(input.remoteSyncState, input.change.seq, input.observedAt),
     path,
   };
 }
