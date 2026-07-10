@@ -34,13 +34,15 @@ fn render_command(command: commands::CliCommand) -> output::CliOutput {
         commands::CliCommand::Help(commands::HelpTopic::Doctor) => {
             output::CliOutput::success(doctor::usage())
         }
-        commands::CliCommand::Status(command) => annotate_legacy_smoke_summary(
+        commands::CliCommand::Status(command) => annotate_unconfigured_placeholder(
             server_api::render_status_command(&config, command.mode, &client),
+            "status: not_configured",
             "status command parsed; live server calls remain unavailable",
         ),
         commands::CliCommand::Adapters(commands::AdaptersCommand::List { mode }) => {
-            annotate_legacy_smoke_summary(
+            annotate_unconfigured_placeholder(
                 server_api::render_adapters_command(&config, mode, &client),
+                "adapters: not_configured",
                 "adapters list command parsed; live server calls remain unavailable",
             )
         }
@@ -51,11 +53,13 @@ fn render_command(command: commands::CliCommand) -> output::CliOutput {
     }
 }
 
-fn annotate_legacy_smoke_summary(
+fn annotate_unconfigured_placeholder(
     mut output: output::CliOutput,
+    placeholder_marker: &'static str,
     compatibility_line: &'static str,
 ) -> output::CliOutput {
     if output.exit_code == output::CliExitCode::Success
+        && output.stdout.contains(placeholder_marker)
         && !output.stdout.contains(compatibility_line)
     {
         output.stdout = format!("{}\n{}", compatibility_line, output.stdout);
@@ -99,7 +103,20 @@ mod tests {
         assert_eq!(output.exit_code, CliExitCode::Success);
         assert!(output.stdout.contains("status: offline"));
         assert!(output.stdout.contains("live server calls: not attempted"));
+        assert!(!output.stdout.contains("remain unavailable"));
         assert!(output.stderr.is_empty());
+    }
+
+    #[test]
+    fn live_success_is_not_annotated_as_unavailable() {
+        let output = output::CliOutput::success("server status: ready");
+        let output = annotate_unconfigured_placeholder(
+            output,
+            "status: not_configured",
+            "status command parsed; live server calls remain unavailable",
+        );
+
+        assert_eq!(output.stdout, "server status: ready");
     }
 
     #[test]
