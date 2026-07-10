@@ -181,9 +181,7 @@ impl DoctorCheckDetails {
     fn fixed_check_id(&self) -> Option<DoctorCheckId> {
         match self {
             Self::DbConnectivity(_) => Some(DoctorCheckId::DbConnectivity),
-            Self::ObjectStoreExistsWritable(_) => {
-                Some(DoctorCheckId::ObjectStoreExistsWritable)
-            }
+            Self::ObjectStoreExistsWritable(_) => Some(DoctorCheckId::ObjectStoreExistsWritable),
             Self::MissingBlobs(_) => Some(DoctorCheckId::MissingBlobs),
             Self::AdapterCursors(_) => Some(DoctorCheckId::AdapterCursors),
             Self::GdriveMapping(_) => Some(DoctorCheckId::GdriveMapping),
@@ -315,9 +313,7 @@ impl DoctorCheckMessage {
             Self::WorktreeDriftSkipped => {
                 "worktree drift check skipped because the worktree is not configured"
             }
-            Self::WorktreeUnknownRevision => {
-                "worktree state references an unknown Core revision"
-            }
+            Self::WorktreeUnknownRevision => "worktree state references an unknown Core revision",
             Self::WorktreeDriftDetected => "worktree drift detected",
             Self::WorktreeStateConsistent => "worktree state is consistent",
             Self::CheckNotRun => "doctor check was not run",
