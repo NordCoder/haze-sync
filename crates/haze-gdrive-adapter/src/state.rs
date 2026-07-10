@@ -527,10 +527,7 @@ fn required_string(field: &'static str, raw: impl Into<String>) -> Result<String
     Ok(trimmed.to_owned())
 }
 
-fn echo_fingerprint_matches(
-    entry: &EchoGuardEntry,
-    observation: &DriveEchoObservation,
-) -> bool {
+fn echo_fingerprint_matches(entry: &EchoGuardEntry, observation: &DriveEchoObservation) -> bool {
     let mut compared_field = false;
     for (expected, observed) in [
         (&entry.checksum, &observation.checksum),
@@ -599,13 +596,9 @@ mod tests {
     #[test]
     fn mapping_rejects_observation_for_different_drive_file() {
         let mut mapping = mapping();
-        let observation = DriveStateObservation::new(
-            "drive-2",
-            "root",
-            "other.md",
-            ts("2026-07-09T12:00:00Z"),
-        )
-        .expect("drive observation");
+        let observation =
+            DriveStateObservation::new("drive-2", "root", "other.md", ts("2026-07-09T12:00:00Z"))
+                .expect("drive observation");
 
         assert_eq!(
             mapping.record_drive_observation(observation),
@@ -677,8 +670,7 @@ mod tests {
 
         let mut guard = EchoGuard::new();
         guard.record_exported_write(
-            EchoGuardEntry::from_mapping(&mapping, ts("2026-07-09T12:00:00Z"))
-                .expect("echo entry"),
+            EchoGuardEntry::from_mapping(&mapping, ts("2026-07-09T12:00:00Z")).expect("echo entry"),
         );
 
         let adapter_echo = DriveEchoObservation::new("drive-1")
@@ -723,8 +715,7 @@ mod tests {
 
         let mut guard = EchoGuard::new();
         guard.record_exported_write(
-            EchoGuardEntry::from_mapping(&mapping, ts("2026-07-09T12:00:00Z"))
-                .expect("echo entry"),
+            EchoGuardEntry::from_mapping(&mapping, ts("2026-07-09T12:00:00Z")).expect("echo entry"),
         );
         let adapter_echo = DriveEchoObservation::new("drive-1")
             .expect("observation")
@@ -742,10 +733,7 @@ mod tests {
         let unresolved = StatePersistencePolicy::default();
         let server_api = StatePersistencePolicy::server_api_mediated();
 
-        assert_eq!(
-            unresolved.boundary,
-            MappingPersistenceBoundary::Unresolved
-        );
+        assert_eq!(unresolved.boundary, MappingPersistenceBoundary::Unresolved);
         assert!(!unresolved.is_resolved());
         assert!(server_api.is_resolved());
         assert!(!unresolved.direct_database_access_allowed());
