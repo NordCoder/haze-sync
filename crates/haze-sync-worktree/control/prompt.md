@@ -1,58 +1,50 @@
-# W1-WT-P7C — Worktree delete and retention clean-code review
+# W1-FIX-WT-P7C-CI — Worktree WT-P7C CI correction
 
 Component: worktree
 Path: crates/haze-sync-worktree
 Branch: component/worktree
 PR: #49
-Role: clean-code-reviewer
+Role: fixer-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-WT-P7 implementation and artifact-based CI correction are complete. Final source CI is green.
+WT-P7C clean-code review completed with source/test corrections, but its final code-bearing Component CI run failed at diagnostics finalization.
 
-- code_bearing_sha: e9e7120916ff26ad7e6f4443bad3db2752f4acb1
+- code_bearing_sha: bec979eb6bebb94fa94920aa8b2af73d03c71669
 - workflow: Component CI
-- workflow_run_id: 29107152621
-- run_number: 1362
-- conclusion: success
+- workflow_run_id: 29110274762
+- run_number: unknown
+- run_attempt: 1
+- artifact_id: 8234518397
+- artifact_name: ci-diag__component-worktree__wf-component-ci__run-29110274762__attempt-1
+- artifact_expires_at: 2026-07-11T17:16:36Z
+
+Use the diagnostics artifact as source of truth.
 
 ## Read
 
-Read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, chatgpt-gh-connector.md, component docs/control files, current WT-P7 source/tests, fixer changes, accepted Core/API delete semantics, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt explicitly instructs it.
+Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current WT-P7C source/tests, and PR diff. Download artifact 8234518397 and read summary.md, manifest.json, and every failed-check log. If unavailable or unreadable, report FIX_BLOCKED_BY_LOGS.
 
 ## Task
 
-Review WT-P7 guarded delete submission, retained trash, restore metadata, and the CI corrections.
-
-Focus on:
-
-- safe candidate derivation from complete scans;
-- known and explicit null base semantics;
-- count/ratio guards and manual-unlock boundaries;
-- public put-only import behavior;
-- retained move and rollback ordering;
-- path/root/symlink safety;
-- restore metadata integrity, including retained byte length;
-- state advancement only after accepted outcomes and durable local completion;
-- private compatibility planner cleanup without widening the public delete surface;
-- tests, redaction, and non-goal preservation.
+Apply only the minimum artifact-proven correction for the WT-P7C CI failure. Preserve removal of the obsolete delete-inferencing planner, the public put-only import boundary, guarded delete submission, safe retained-trash metadata and byte verification, retention integrity, path/symlink safety, rollback durability, focused regressions, and component ownership.
 
 ## Allowed files
 
 - crates/haze-sync-worktree/src/**
-- crates/haze-sync-worktree/docs/**
+- crates/haze-sync-worktree/docs/** only if diagnostics prove a documentation issue
 - crates/haze-sync-worktree/control/report.md
 
 ## Boundaries
 
-No Core tombstone policy, hard-delete cleanup, provider calls, CLI repair work, direct DB mutation, watcher/runtime service work, Server hosting, workflow/dependency changes, sibling changes, test deletion, or assertion weakening.
+No Core policy changes, hard-delete cleanup, provider behavior, CLI repair work, direct DB mutation, watcher/runtime service work, Server hosting, workflow/dependency changes, sibling changes, test deletion, or assertion weakening.
 
 ## CI trigger policy
 
-Source/test/docs clean-code commits must not skip CI. A final report-only commit may skip CI.
+Source/test/docs fixer commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only crates/haze-sync-worktree/control/report.md. Use report-template.md, REPORT_TYPE CLEAN_CODE_REVIEW, phase_id WT-P7C.
+Write only crates/haze-sync-worktree/control/report.md. Use report-template.md, REPORT_TYPE FIX, phase_id FIX-WT-P7C-CI.
