@@ -379,15 +379,16 @@ impl AtomicWorktreeWriter {
         }
 
         let staged_marker = self.stage_bytes(ECHO_TEMP_PREFIX, &marker_bytes)?;
-        staged_marker
-            .commit_new(&marker_path)
-            .map_err(|_| WorktreeMaterializeError::EchoMarkerWriteFailed {
+        staged_marker.commit_new(&marker_path).map_err(|_| {
+            WorktreeMaterializeError::EchoMarkerWriteFailed {
                 vault_path: marker.vault_path.clone(),
-            })?;
-        sync_runtime_directory(marker_path.parent())
-            .map_err(|_| WorktreeMaterializeError::EchoMarkerWriteFailed {
+            }
+        })?;
+        sync_runtime_directory(marker_path.parent()).map_err(|_| {
+            WorktreeMaterializeError::EchoMarkerWriteFailed {
                 vault_path: marker.vault_path.clone(),
-            })?;
+            }
+        })?;
         Ok(())
     }
 
@@ -424,13 +425,15 @@ impl AtomicWorktreeWriter {
 
         for segment in segments.iter().take(segments.len().saturating_sub(1)) {
             current.push(segment);
-            ensure_directory_component(&current, || {
-                WorktreeMaterializeError::UnsafeParent {
+            ensure_directory_component(
+                &current,
+                || WorktreeMaterializeError::UnsafeParent {
                     vault_path: vault_path.clone(),
-                }
-            }, || WorktreeMaterializeError::ParentDirectoryCreateFailed {
-                vault_path: vault_path.clone(),
-            })?;
+                },
+                || WorktreeMaterializeError::ParentDirectoryCreateFailed {
+                    vault_path: vault_path.clone(),
+                },
+            )?;
         }
         Ok(())
     }
@@ -476,10 +479,9 @@ impl AtomicWorktreeWriter {
 
     fn next_temp_path(&self, prefix: &str) -> PathBuf {
         let id = NEXT_TEMP_FILE_ID.fetch_add(1, Ordering::Relaxed);
-        self.config.temp_dir().join(format!(
-            "{prefix}{}-{id}{TEMP_SUFFIX}",
-            std::process::id()
-        ))
+        self.config
+            .temp_dir()
+            .join(format!("{prefix}{}-{id}{TEMP_SUFFIX}", std::process::id()))
     }
 
     fn echo_marker_path(&self, marker: &WorktreeEchoMarker) -> PathBuf {
@@ -548,11 +550,9 @@ impl WorktreeMaterializer {
             ));
         }
 
-        let expected_target = local_file
-            .as_ref()
-            .map_or(ExpectedTarget::Absent, |local| {
-                ExpectedTarget::Present(local.content_hash)
-            });
+        let expected_target = local_file.as_ref().map_or(ExpectedTarget::Absent, |local| {
+            ExpectedTarget::Present(local.content_hash)
+        });
         let marker = WorktreeEchoMarker {
             vault_path: request.vault_path.clone(),
             revision_id: request.revision_id.clone(),
@@ -672,9 +672,10 @@ fn observe_local_file(
     };
     ensure_regular_target(&before, vault_path)?;
 
-    let mut file = File::open(&local_path).map_err(|_| WorktreeMaterializeError::LocalReadFailed {
-        vault_path: vault_path.clone(),
-    })?;
+    let mut file =
+        File::open(&local_path).map_err(|_| WorktreeMaterializeError::LocalReadFailed {
+            vault_path: vault_path.clone(),
+        })?;
     let mut bytes = Vec::new();
     file.read_to_end(&mut bytes)
         .map_err(|_| WorktreeMaterializeError::LocalReadFailed {
@@ -924,7 +925,11 @@ mod tests {
         content_hash_for_bytes(bytes)
     }
 
-    fn request(vault_path: &str, revision_id: &str, bytes: &[u8]) -> WorktreeMaterializationRequest {
+    fn request(
+        vault_path: &str,
+        revision_id: &str,
+        bytes: &[u8],
+    ) -> WorktreeMaterializationRequest {
         WorktreeMaterializationRequest {
             vault_path: path(vault_path),
             revision_id: revision(revision_id),
@@ -944,7 +949,10 @@ mod tests {
             .materialize(&mut state, request("Notes/a.md", "rev_new", b"hello"))
             .unwrap();
 
-        assert!(matches!(outcome, WorktreeMaterializationOutcome::Applied { .. }));
+        assert!(matches!(
+            outcome,
+            WorktreeMaterializationOutcome::Applied { .. }
+        ));
         assert_eq!(
             fs::read(config.vault_path_to_local(&path("Notes/a.md")).unwrap()).unwrap(),
             b"hello"
@@ -988,7 +996,10 @@ mod tests {
             .materialize(&mut state, request("a.md", "rev_remote", b"remote"))
             .unwrap();
 
-        assert!(matches!(outcome, WorktreeMaterializationOutcome::Applied { .. }));
+        assert!(matches!(
+            outcome,
+            WorktreeMaterializationOutcome::Applied { .. }
+        ));
         assert_eq!(fs::read(target).unwrap(), b"remote");
     }
 
@@ -1086,11 +1097,7 @@ mod tests {
         };
 
         let error = writer
-            .write_materialized_file(
-                &request,
-                ExpectedTarget::Present(hash(b"old")),
-                &marker,
-            )
+            .write_materialized_file(&request, ExpectedTarget::Present(hash(b"old")), &marker)
             .unwrap_err();
 
         assert_eq!(error.code(), "target_changed_before_commit");
@@ -1102,7 +1109,9 @@ mod tests {
         let root = TempRoot::new("temp-cleanup");
         let config = root.config();
         let writer = AtomicWorktreeWriter::new(config.clone());
-        writer.ensure_runtime_directory(&[crate::TEMP_DIR_NAME]).unwrap();
+        writer
+            .ensure_runtime_directory(&[crate::TEMP_DIR_NAME])
+            .unwrap();
         fs::write(config.temp_dir().join(".haze-write-stale.tmp"), b"partial").unwrap();
         fs::write(config.temp_dir().join("keep.txt"), b"keep").unwrap();
 
