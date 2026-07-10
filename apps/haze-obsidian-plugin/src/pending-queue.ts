@@ -1,6 +1,6 @@
 import type { LocalMutationKind } from "./idempotency-keys";
 import { generateLocalIdempotencyKey } from "./idempotency-keys";
-import { LocalFileFact } from "./local-file-facts";
+import type { LocalFileFact } from "./local-file-facts";
 
 export type PendingChangeKind = "created" | "modified" | "deleted";
 export type PendingChangeSource = "event_hint" | "scan";
@@ -11,6 +11,7 @@ export interface PendingQueueEntry {
   source: PendingChangeSource;
   firstSeenAt: string;
   lastSeenAt: string;
+  version: number;
   operationIdempotencyKey: string;
   file?: LocalFileFact;
   previousFile?: LocalFileFact;
@@ -22,6 +23,7 @@ interface StoredPendingQueueEntry {
   source: PendingChangeSource;
   firstSeenAt: string;
   lastSeenAt: string;
+  version?: number;
   operationIdempotencyKey?: string;
   file?: LocalFileFact;
   previousFile?: LocalFileFact;
@@ -78,17 +80,38 @@ export function reconcileFullScan(
 
   for (const fact of facts) {
     const previousFact = currentState.knownFiles[fact.path];
+    const currentEntry = pendingQueue[fact.path];
     if (previousFact === undefined) {
-      pendingQueue[fact.path] = upsertPendingEntry(fact.path, pendingQueue[fact.path], "created", "scan", scannedAt, fact);
+      pendingQueue[fact.path] = upsertPendingEntry(fact.path, currentEntry, "created", "scan", scannedAt, fact);
     } else if (fileFactChanged(previousFact, fact)) {
       pendingQueue[fact.path] = upsertPendingEntry(
         fact.path,
-        pendingQueue[fact.path],
+        currentEntry,
         "modified",
         "scan",
         scannedAt,
         fact,
         previousFact,
+      );
+    } else if (currentEntry?.kind === "deleted") {
+      pendingQueue[fact.path] = upsertPendingEntry(
+        fact.path,
+        currentEntry,
+        "modified",
+        "scan",
+        scannedAt,
+        fact,
+        currentEntry.previousFile ?? previousFact,
+      );
+    } else if (currentEntry !== undefined && currentEntry.file === undefined) {
+      pendingQueue[fact.path] = upsertPendingEntry(
+        fact.path,
+        currentEntry,
+        currentEntry.kind,
+        "scan",
+        scannedAt,
+        fact,
+        currentEntry.previousFile,
       );
     }
   }
@@ -182,20 +205,38 @@ function upsertPendingEntry(
 ): PendingQueueEntry {
   const operationKind = operationKindForPendingChange(kind);
   const currentOperationKind = currentEntry === undefined ? undefined : operationKindForPendingChange(currentEntry.kind);
+  const sameOperationKind = currentEntry !== undefined && currentOperationKind === operationKind;
+  const reuseIdempotencyKey = shouldReuseIdempotencyKey(currentEntry, operationKind, file);
 
   return {
     path,
     kind,
     source,
-    firstSeenAt: currentEntry?.firstSeenAt ?? observedAt,
+    firstSeenAt: sameOperationKind ? currentEntry.firstSeenAt : observedAt,
     lastSeenAt: observedAt,
-    operationIdempotencyKey:
-      currentOperationKind === operationKind && currentEntry !== undefined
-        ? currentEntry.operationIdempotencyKey
-        : generateLocalIdempotencyKey(operationKind),
-    file,
-    previousFile: previousFile ?? currentEntry?.previousFile,
+    version: (currentEntry?.version ?? 0) + 1,
+    operationIdempotencyKey: reuseIdempotencyKey
+      ? currentEntry.operationIdempotencyKey
+      : generateLocalIdempotencyKey(operationKind),
+    file: operationKind === "upload" ? file ?? currentEntry?.file : undefined,
+    previousFile: previousFile ?? currentEntry?.previousFile ?? currentEntry?.file,
   };
+}
+
+function shouldReuseIdempotencyKey(
+  currentEntry: PendingQueueEntry | undefined,
+  operationKind: LocalMutationKind,
+  nextFile: LocalFileFact | undefined,
+): currentEntry is PendingQueueEntry {
+  if (currentEntry === undefined || operationKindForPendingChange(currentEntry.kind) !== operationKind) {
+    return false;
+  }
+
+  if (operationKind === "delete" || nextFile === undefined) {
+    return true;
+  }
+
+  return currentEntry.file?.contentHash === nextFile.contentHash;
 }
 
 function operationKindForPendingChange(kind: PendingChangeKind): LocalMutationKind {
@@ -247,6 +288,7 @@ function readPendingQueueEntry(value: unknown): PendingQueueEntry | undefined {
     source: value.source,
     firstSeenAt: value.firstSeenAt,
     lastSeenAt: value.lastSeenAt,
+    version: value.version ?? 1,
     operationIdempotencyKey:
       value.operationIdempotencyKey ?? generateLocalIdempotencyKey(operationKindForPendingChange(value.kind)),
     file: value.file,
@@ -284,6 +326,7 @@ function isStoredPendingQueueEntry(value: unknown): value is StoredPendingQueueE
     isPendingChangeSource(value.source) &&
     typeof value.firstSeenAt === "string" &&
     typeof value.lastSeenAt === "string" &&
+    (value.version === undefined || isPositiveInteger(value.version)) &&
     (value.operationIdempotencyKey === undefined || typeof value.operationIdempotencyKey === "string") &&
     (value.file === undefined || isLocalFileFact(value.file)) &&
     (value.previousFile === undefined || isLocalFileFact(value.previousFile))
@@ -302,6 +345,10 @@ function isLocalFileFact(value: unknown): value is LocalFileFact {
     typeof value.sizeBytes === "number" &&
     typeof value.mtime === "number"
   );
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
 }
 
 function isPendingChangeKind(value: unknown): value is PendingChangeKind {
