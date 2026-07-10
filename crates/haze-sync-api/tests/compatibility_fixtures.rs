@@ -132,6 +132,21 @@ where
     assert_eq!(actual_set, expected_set);
 }
 
+fn assert_complete_unique_strings(actual: &[String], expected: &[&str]) {
+    let actual_set = actual.iter().cloned().collect::<BTreeSet<_>>();
+    let expected_set = expected
+        .iter()
+        .map(|value| (*value).to_owned())
+        .collect::<BTreeSet<_>>();
+
+    assert_eq!(
+        actual.len(),
+        actual_set.len(),
+        "fixture string values must be unique"
+    );
+    assert_eq!(actual_set, expected_set);
+}
+
 fn status_values(values: &[Value]) -> Vec<String> {
     values
         .iter()
@@ -204,6 +219,20 @@ fn fixture_schema_rejects_unknown_root_and_group_fields() {
         .unwrap()
         .insert("unexpected_field".to_owned(), Value::Null);
     assert!(serde_json::from_value::<ApiCompatibilityFixture>(admin).is_err());
+
+    let mut vocabulary = serde_json::from_str::<Value>(FIXTURE_JSON).unwrap();
+    vocabulary["vocabulary"]
+        .as_object_mut()
+        .unwrap()
+        .insert("unexpected_field".to_owned(), Value::Null);
+    assert!(serde_json::from_value::<ApiCompatibilityFixture>(vocabulary).is_err());
+
+    let mut resolution = serde_json::from_str::<Value>(FIXTURE_JSON).unwrap();
+    resolution["conflict_resolutions"][0]
+        .as_object_mut()
+        .unwrap()
+        .insert("unexpected_field".to_owned(), Value::Null);
+    assert!(serde_json::from_value::<ApiCompatibilityFixture>(resolution).is_err());
 }
 
 #[test]
@@ -221,23 +250,25 @@ fn server_info_and_file_metadata_match_current_public_shapes() {
 
 #[test]
 fn put_and_delete_outcomes_cover_every_public_status_shape() {
+    const PUT_STATUSES: &[&str] = &["accepted", "conflict_saved", "ignored", "rejected"];
+    const DELETE_STATUSES: &[&str] = &["tombstoned", "not_found", "rejected"];
+
     let fixture = load_fixture();
 
     for outcome in &fixture.put_file_outcomes {
         let _: PutFileResponse = assert_fixture_roundtrip(outcome);
     }
-    assert_eq!(
-        status_values(&fixture.put_file_outcomes),
-        fixture.vocabulary.put_statuses
-    );
+    assert_complete_unique_strings(&status_values(&fixture.put_file_outcomes), PUT_STATUSES);
+    assert_complete_unique_strings(&fixture.vocabulary.put_statuses, PUT_STATUSES);
 
     for outcome in &fixture.delete_file_outcomes {
         let _: DeleteFileResponse = assert_fixture_roundtrip(outcome);
     }
-    assert_eq!(
-        status_values(&fixture.delete_file_outcomes),
-        fixture.vocabulary.delete_statuses
+    assert_complete_unique_strings(
+        &status_values(&fixture.delete_file_outcomes),
+        DELETE_STATUSES,
     );
+    assert_complete_unique_strings(&fixture.vocabulary.delete_statuses, DELETE_STATUSES);
 }
 
 #[test]
@@ -256,7 +287,7 @@ fn changes_page_roundtrips_and_satisfies_route_pagination_invariants() {
 }
 
 #[test]
-fn conflict_list_and_resolve_fixtures_match_route_contracts() {
+fn conflict_list_and_resolve_fixtures_match_passive_api_contracts() {
     let fixture = load_fixture();
     let query: ConflictListQuery = assert_fixture_roundtrip(&fixture.conflict_list_query);
     let _list: ConflictListRouteResponse = assert_fixture_roundtrip(&fixture.conflict_list);
@@ -275,16 +306,18 @@ fn conflict_list_and_resolve_fixtures_match_route_contracts() {
         fixture.conflict_list_query
     );
 
+    let mut resolution_actions = Vec::with_capacity(fixture.conflict_resolutions.len());
     for example in &fixture.conflict_resolutions {
         let request: ResolveConflictRequest = assert_fixture_roundtrip(&example.request);
         let response: ResolveConflictResponse = assert_fixture_roundtrip(&example.response);
         let resolution = wire_value(&request.resolution);
+        resolution_actions.push(resolution.clone());
         let parsed = parse_resolve_conflict_request(ResolveConflictRequestParts {
             conflict_id: example.path_conflict_id.as_str(),
             resolution: Some(resolution.as_str()),
             extra_fields: &[],
         })
-        .expect("fixture resolution must be accepted by route helpers");
+        .expect("fixture resolution must be accepted by passive API helpers");
 
         assert_eq!(
             serde_json::to_value(parsed.to_dto()).unwrap(),
@@ -304,6 +337,18 @@ fn conflict_list_and_resolve_fixtures_match_route_contracts() {
             example.response
         );
     }
+
+    const RESOLUTION_ACTIONS: &[&str] = &[
+        "accept_current",
+        "accept_conflict",
+        "keep_both",
+        "mark_resolved",
+    ];
+    assert_complete_unique_strings(&resolution_actions, RESOLUTION_ACTIONS);
+    assert_complete_unique_strings(
+        &fixture.vocabulary.conflict_resolution_actions,
+        RESOLUTION_ACTIONS,
+    );
 }
 
 #[test]
@@ -323,8 +368,23 @@ fn admin_status_doctor_and_adapter_summaries_are_consistent() {
     assert!(status.pause.is_consistent());
     assert_eq!(adapters.total_count, adapters.adapters.len() as u64);
 
+    assert_eq!(status.adapter_count, Some(adapters.total_count));
+
+    const DOCTOR_CHECKS: &[&str] = &[
+        "database",
+        "object_store",
+        "operation_log",
+        "adapter_registry",
+    ];
     for value in &fixture.admin.doctor_statuses {
         let doctor: DoctorStatusResponse = assert_fixture_roundtrip(value);
+        let check_kinds = doctor
+            .checks
+            .iter()
+            .map(|check| wire_value(&check.check))
+            .collect::<Vec<_>>();
+        assert_complete_unique_strings(&check_kinds, DOCTOR_CHECKS);
+
         for check in doctor.checks {
             assert_eq!(check.readiness_state, check.status.readiness_state());
             match check.status {
@@ -340,8 +400,32 @@ fn admin_status_doctor_and_adapter_summaries_are_consistent() {
         }
     }
 
-    for value in &fixture.admin.adapter_operational_summaries {
-        let summary: AdapterOperationalSummary = assert_fixture_roundtrip(value);
+    let operational_summaries = fixture
+        .admin
+        .adapter_operational_summaries
+        .iter()
+        .map(assert_fixture_roundtrip::<AdapterOperationalSummary>)
+        .collect::<Vec<_>>();
+    let listed_adapter_ids = adapters
+        .adapters
+        .iter()
+        .map(|adapter| adapter.adapter_id.as_str().to_owned())
+        .collect::<BTreeSet<_>>();
+    let operational_adapter_ids = operational_summaries
+        .iter()
+        .map(|summary| summary.adapter.adapter_id.as_str().to_owned())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(listed_adapter_ids.len(), adapters.adapters.len());
+    assert_eq!(operational_adapter_ids.len(), operational_summaries.len());
+    assert_eq!(listed_adapter_ids, operational_adapter_ids);
+
+    for summary in operational_summaries {
+        let listed_adapter = adapters
+            .adapters
+            .iter()
+            .find(|adapter| adapter.adapter_id.as_str() == summary.adapter.adapter_id.as_str())
+            .expect("every operational summary must reference a listed adapter");
+        assert_eq!(listed_adapter, &summary.adapter);
         assert!(summary.runtime.pause.is_consistent());
         match summary.runtime.observation_status {
             OperationalCheckStatus::Passed | OperationalCheckStatus::Failed => {
