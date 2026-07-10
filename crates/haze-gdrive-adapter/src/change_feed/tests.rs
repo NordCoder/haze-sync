@@ -26,11 +26,7 @@ fn markdown_change(provider_id: &str, checksum: &str) -> DriveChangeEntry {
 }
 
 fn cycle_input() -> ChangeFeedCycleInput {
-    ChangeFeedCycleInput::new(
-        AdapterMode::ImportOnly,
-        false,
-        timestamp(POLLED_AT),
-    )
+    ChangeFeedCycleInput::new(AdapterMode::ImportOnly, false, timestamp(POLLED_AT))
 }
 
 #[derive(Default)]
@@ -77,7 +73,12 @@ fn missing_cursor_runs_full_scan_before_saving_start_token() {
     assert!(outcome.full_scan_used);
     assert_eq!(outcome.pages_polled, 0);
     assert_eq!(store.save_count(), 1);
-    assert_eq!(store.cursor().and_then(|cursor| cursor.sync_token.as_deref()), Some("start-2"));
+    assert_eq!(
+        store
+            .cursor()
+            .and_then(|cursor| cursor.sync_token.as_deref()),
+        Some("start-2")
+    );
     assert_eq!(
         processor.batches,
         vec![ChangeWorkBatch::full_scan(
@@ -108,7 +109,12 @@ fn provider_cursor_invalidation_falls_back_to_full_scan() {
     .expect("cycle");
 
     assert!(outcome.full_scan_used);
-    assert_eq!(store.cursor().and_then(|cursor| cursor.sync_token.as_deref()), Some("sync-2"));
+    assert_eq!(
+        store
+            .cursor()
+            .and_then(|cursor| cursor.sync_token.as_deref()),
+        Some("sync-2")
+    );
     assert_eq!(
         processor.batches[0],
         ChangeWorkBatch::full_scan(FullScanFallbackReason::ProviderCursorInvalidated)
@@ -120,21 +126,18 @@ fn duplicate_entries_coalesce_and_conflicting_reordered_entries_require_scan() {
     let duplicate = markdown_change("file-a", "checksum-a");
     let old = markdown_change("file-b", "checksum-old");
     let new = markdown_change("file-b", "checksum-new");
-    let forward = vec![duplicate.clone(), old.clone(), duplicate.clone(), new.clone()];
+    let forward = vec![
+        duplicate.clone(),
+        old.clone(),
+        duplicate.clone(),
+        new.clone(),
+    ];
     let reverse = vec![new, duplicate.clone(), old, duplicate];
 
-    let forward_batch = classify_drive_changes(
-        forward,
-        AdapterMode::ImportOnly,
-        false,
-        &EchoGuard::new(),
-    );
-    let reverse_batch = classify_drive_changes(
-        reverse,
-        AdapterMode::ImportOnly,
-        false,
-        &EchoGuard::new(),
-    );
+    let forward_batch =
+        classify_drive_changes(forward, AdapterMode::ImportOnly, false, &EchoGuard::new());
+    let reverse_batch =
+        classify_drive_changes(reverse, AdapterMode::ImportOnly, false, &EchoGuard::new());
 
     assert_eq!(forward_batch, reverse_batch);
     assert_eq!(forward_batch.items.len(), 2);
@@ -192,7 +195,12 @@ fn successful_multi_page_poll_saves_only_final_cursor() {
     assert_eq!(outcome.entries_received, 2);
     assert_eq!(outcome.work_items_processed, 2);
     assert_eq!(store.save_count(), 1);
-    assert_eq!(store.cursor().and_then(|cursor| cursor.sync_token.as_deref()), Some("sync-2"));
+    assert_eq!(
+        store
+            .cursor()
+            .and_then(|cursor| cursor.sync_token.as_deref()),
+        Some("sync-2")
+    );
     assert!(processor.batches[0].items.iter().all(|item| matches!(
         item,
         ChangeWorkItem::Import {
@@ -231,7 +239,12 @@ fn failed_processing_does_not_advance_cursor() {
 
     assert!(matches!(error, ChangeFeedError::Processing(_)));
     assert_eq!(store.save_count(), 0);
-    assert_eq!(store.cursor().and_then(|cursor| cursor.sync_token.as_deref()), Some("sync-1"));
+    assert_eq!(
+        store
+            .cursor()
+            .and_then(|cursor| cursor.sync_token.as_deref()),
+        Some("sync-1")
+    );
 }
 
 #[test]
@@ -249,12 +262,8 @@ fn matching_echo_is_classified_as_export_confirmation() {
         .with_drive_version("version-2")
         .expect("version");
 
-    let batch = classify_drive_changes(
-        vec![change],
-        AdapterMode::Bidirectional,
-        false,
-        &echo_guard,
-    );
+    let batch =
+        classify_drive_changes(vec![change], AdapterMode::Bidirectional, false, &echo_guard);
 
     assert!(matches!(
         &batch.items[0],
