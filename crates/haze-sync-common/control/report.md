@@ -1,13 +1,13 @@
 REPORT_TYPE:
-CLEAN_CODE_REVIEW
+IMPLEMENTATION
 
 STATUS:
-CLEAN_ACCEPT_PENDING_CI
+SELF_ACCEPT_PENDING_CI
 
 AGENT:
-role: clean-code-reviewer
-agent_execution_id: W1-CMM-P5C-common-adapter-security-clean-review
-chat_name: common — W1 CMM-P5C Clean-Code Review
+role: implementation-worker
+agent_execution_id: W1-CMM-P6-common-compatibility-fixtures
+chat_name: common — W1 CMM-P6 Implementation
 
 COMPONENT:
 name: common
@@ -21,28 +21,30 @@ control_report_path: crates/haze-sync-common/control/report.md
 
 WAVE:
 id: W1
-phase_id: CMM-P5C
-dependency_status: CMM-P5 implementation accepted; active state reported CI_GREEN for code-bearing commit b09833e2129cdb1c756a66c6da150a051d1dc6e2 via Component CI run 29038641448; clean-review source fix has a new pending CI run
+phase_id: CMM-P6
+dependency_status: CMM-P5 implementation and clean-code review accepted; clean-review code-bearing commit 987d76b451b209a4996c5bdaabf2c16cc0e0f5ca has successful Component CI evidence from run 29067608602
 
 SUMMARY:
-Reviewed CMM-P5 adapter role, adapter mode, and security primitive hardening. AdapterRole/AdapterMode wire values, serde behavior, exact-input rejection, declarative mode helpers, the ReadonlyAgent V1 decision, SecretString formatting redaction, and the decision against token lifecycle or broad speculative wrappers are clear and contract-aligned. Found and fixed one security-contract defect: `SecretString` derived `std::hash::Hash` even though its wrapped value is intended to be accessible only through explicitly named sensitive accessors and common owns no hashing behavior. A caller-controlled Hasher can observe the raw bytes supplied by a Hash implementation, so the derive was removed and rustdoc now states the restriction explicitly. No adapter vocabulary, mode semantics, redaction output, runtime behavior, or sibling component behavior changed. Post-fix Component CI is pending.
+Implemented CMM-P6 shared primitive compatibility fixtures inside common scope. Added a versioned, language-neutral JSON fixture covering normalized VaultPath examples, every currently shared identifier type, canonical SHA-256 inputs/outputs, the complete AdapterRole and AdapterMode vocabularies, declarative mode capability flags, and every safe ValidationError wire code/message. Added Rust integration tests that load the fixture through `include_str!` and verify it against the actual Common constructors, serde implementations, canonical output, capability helpers, and complete stable vocabularies. Added downstream mirroring documentation for Rust components and TypeScript clients while explicitly excluding API DTO envelopes, Core policy, runtime authorization, provider data, and secret/environment examples. No dependencies, workflows, sibling components, runtime behavior, or existing primitive semantics were changed. Component CI for the latest fixture/docs head is in progress.
 
 CHANGED_FILES:
-- crates/haze-sync-common/src/security/mod.rs
+- crates/haze-sync-common/fixtures/common-primitives-v1.json
+- crates/haze-sync-common/tests/compatibility_fixtures.rs
+- crates/haze-sync-common/docs/compatibility-fixtures.md
 - crates/haze-sync-common/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/common
 base_branch: main
-base_sha: PR metadata reports base_sha 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2; compare_commits reports current main c1e69a664388b0cba028170e8398b9088218957d with merge base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
-head_sha: 987d76b451b209a4996c5bdaabf2c16cc0e0f5ca before this report-only commit; final branch head is the report update commit returned by GitHub contents API
+base_sha: PR metadata reports base_sha 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2; compare_commits currently reports main at c1e69a664388b0cba028170e8398b9088218957d with merge base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
+head_sha: ad64fbfacc160d491c8e4e961b18ca4b7efcf0f4 before this report-only commit; final branch head is the report update commit returned by GitHub contents API
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
 ci_skip_used: yes
-ci_skip_reason: final commit updates only crates/haze-sync-common/control/report.md after the security source fix was committed without CI skip; skipped report-only workflow is not CI evidence
+ci_skip_reason: final commit updates only crates/haze-sync-common/control/report.md after fixture/test/docs changes were committed without CI skip; skipped report-only workflow is not CI evidence
 
 SCOPE:
 allowed_files_only: yes
@@ -55,63 +57,65 @@ CONTRACT:
 contract_read: yes
 contract_satisfied: yes
 contract_changes_requested: none
-contract_change_rationale: removing the undocumented Hash implementation aligns SecretString with the existing contract that secret access is explicit and hashing behavior is outside common; no stable wire value or documented public behavior changed
-affected_components: potential downstream callers must not rely on SecretString as a hash-map/set key; no sibling component was edited and integration compilation remains an Orchestrator/fan-in concern
+contract_change_rationale: none
+affected_components: downstream Rust components and TypeScript clients may consume the versioned examples read-only; no sibling component source or contract was changed
 
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- read Project Sources for implementation manifest, report template, clean-code-reviewer prompt, and GitHub connector protocol
-- reloaded active common state and CMM-P5C prompt from component/common
-- read the current implementation report, component contract, implementation plan, implementation log, dependency map, decisions, adapter source, security source, and relevant PR patches
-- reviewed all AdapterRole variants and exact lowercase snake_case wire values, including `readonly_agent`
-- reviewed AdapterRole parsing, Display/as_str/TryFrom behavior, serde roundtrips, and rejection of unknown, hyphenated, case-mismatched, and non-exact inputs
-- reviewed all AdapterMode variants and exact lowercase snake_case wire values
-- reviewed AdapterMode parsing, Display/as_str/TryFrom behavior, serde roundtrips, non-exact rejection, and declarative Core read/write capability boundaries
-- confirmed AdapterMode helpers remain declarative and do not implement permission or runtime enforcement
-- reviewed the ReadonlyAgent V1 decision and confirmed it preserves vocabulary while leaving authorization to downstream runtime components
-- reviewed SecretString Display, Debug, alternate Debug, contextual formatting, clone, empty-value, and explicit-sensitive-accessor coverage
-- reviewed decisions against serialization, token verification, cryptographic hashing, loading, persistence, generation, and broad speculative redaction wrappers
-- found that SecretString derived std::hash::Hash, which could expose raw secret bytes to an arbitrary Hasher without an explicitly named sensitive accessor
-- removed the Hash derive and clarified rustdoc that SecretString intentionally does not implement std::hash::Hash or secret lifecycle behavior
-- inspected the resulting security source and PR patch
-- observed PR #46 open/draft and mergeable true at source head 987d76b451b209a4996c5bdaabf2c16cc0e0f5ca before report write
-- observed Component CI run 29067608602 in_progress for clean-review source commit 987d76b451b209a4996c5bdaabf2c16cc0e0f5ca
-behavior_changes: removed an undocumented Hash trait implementation from SecretString to prevent implicit secret-byte exposure; formatting, accessors, role/mode vocabulary, and rollout capability semantics are unchanged
-bugs_found: SecretString exposed raw wrapped bytes through its derived std::hash::Hash implementation despite the explicit-sensitive-access contract and no-hashing component boundary
-bugs_fixed: removed SecretString Hash derive and documented the restriction in rustdoc
-cleanups_made: security API was reduced to the explicitly documented surface; no unrelated refactor was introduced
-non_goals_preserved: no storage behavior, no Core behavior, no runtime/provider behavior, no sibling component edits, no workflow changes, no permission enforcement in common, no token lifecycle behavior, and no CI diagnostics artifact reads
-deferred_work: observe post-fix CI and handle only through a future fixer prompt if red; downstream fan-in should compile against the accepted SecretString contract
+- read Project Sources for implementation manifest, report template, implementation-worker prompt, GitHub connector protocol, and wave-plan background
+- reloaded active common state and CMM-P6 prompt from component/common
+- read previous CMM-P5C report, component contract, implementation plan, implementation log, dependency map, current primitive implementations, Cargo.toml, and relevant PR diff
+- read the Obsidian plugin component contract from its component branch as read-only downstream mirror-type context; no sibling changes were made
+- added `fixtures/common-primitives-v1.json` with schema_version 1
+- added VaultPath examples covering deterministic normalization and representability of `_haze_conflicts/**`
+- added safe examples for AdapterId, RevisionId, OperationId, and ConflictId
+- added SHA-256 examples covering uppercase digest normalization and canonical lowercase `sha256:<hex>` output
+- added the complete AdapterRole wire vocabulary including `readonly_agent`
+- added the complete AdapterMode wire vocabulary with declarative `allows_core_reads` and `allows_core_writes` expectations
+- added all ValidationError stable wire codes and safe public messages
+- added `tests/compatibility_fixtures.rs` to deserialize the fixture and verify actual Common parsing, serde output, normalization, stable vocabulary completeness, mode capabilities, and safe error messages
+- added a fixture safety test rejecting credential, endpoint, database URL, local-home-path, and environment-specific fragments
+- added `docs/compatibility-fixtures.md` describing Rust and TypeScript mirroring, fixture scope, versioning, security rules, and the boundary between Common primitives and API/Core/runtime ownership
+- inspected the created fixture, integration test, documentation, and relevant PR patches
+- observed PR #46 open and draft with mergeable true at fixture/docs head ad64fbfacc160d491c8e4e961b18ca4b7efcf0f4 before report write
+- observed Component CI run 29079946397 in_progress for latest fixture/docs head ad64fbfacc160d491c8e4e961b18ca4b7efcf0f4
+behavior_changes: added test/documentation compatibility artifacts only; existing public primitive behavior and wire values are unchanged
+bugs_found: none during CMM-P6 implementation
+bugs_fixed: none
+cleanups_made: compatibility expectations are centralized in one versioned fixture instead of requiring downstream components to infer examples from scattered unit tests/docs
+non_goals_preserved: no TypeScript edits, no generated-code pipeline, no API DTO ownership, no Core policy, no adapter runtime behavior, no workflow changes, no dependency changes, no sibling component changes, and no credential/environment fixtures
+deferred_work: CMM-P6 clean-code review after CI observation; downstream components may add their own fixture-backed tests in their own scoped phases
 
 TESTS_AND_CHECKS:
 checks_run:
 - GitHub connector read of crates/haze-sync-common/control/state.md
 - GitHub connector read of crates/haze-sync-common/control/prompt.md
 - GitHub connector read of previous crates/haze-sync-common/control/report.md
-- GitHub connector read of component contract, implementation plan, implementation log, dependency map, decisions, adapter.rs, and security/mod.rs
-- GitHub connector repository search for SecretString and as_sensitive_str; no indexed repository results were returned, so this was not treated as conclusive downstream-usage evidence
+- GitHub connector read of common component contract, implementation plan, implementation log, dependency map, Cargo.toml, lib.rs, path.rs, ids.rs, hash.rs, adapter.rs, error.rs, and security/mod.rs as relevant
+- read-only GitHub connector read of apps/haze-obsidian-plugin/docs/component-contract.md on component/obsidian-plugin
+- GitHub connector post-write read of crates/haze-sync-common/tests/compatibility_fixtures.rs
 - GitHub connector list_pr_changed_filenames for PR #46
-- GitHub connector fetch_pr_file_patch for crates/haze-sync-common/src/security/mod.rs
-- GitHub connector get_pr_info for PR #46; observed open draft PR with mergeable true at source head 987d76b451b209a4996c5bdaabf2c16cc0e0f5ca before report write
+- GitHub connector fetch_pr_file_patch for compatibility_fixtures.rs, common-primitives-v1.json, and compatibility-fixtures.md
+- GitHub connector get_pr_info for PR #46; observed open draft PR and mergeable true at head ad64fbfacc160d491c8e4e961b18ca4b7efcf0f4 before report write
 - GitHub connector compare_commits for main...component/common
-- GitHub connector fetch_commit_workflow_runs for clean-review source commit 987d76b451b209a4996c5bdaabf2c16cc0e0f5ca; observed Component CI run 29067608602 in_progress before report write
+- GitHub connector fetch_commit_workflow_runs for latest fixture/docs commit ad64fbfacc160d491c8e4e961b18ca4b7efcf0f4; observed Component CI run 29079946397 in_progress before report write
 checks_not_run:
-- cargo fmt --check: not run locally because work is restricted to GitHub connector and no shell-capable repository checkout is available
-- cargo check -p haze-sync-common: not run locally because work is restricted to GitHub connector and no shell-capable repository checkout is available
-- cargo test -p haze-sync-common: not run locally because work is restricted to GitHub connector and no shell-capable repository checkout is available
-- cargo clippy -p haze-sync-common --all-targets -- -D warnings: not run locally because work is restricted to GitHub connector and no shell-capable repository checkout is available
+- cargo fmt --check: not run locally because repository work is restricted to the GitHub connector and no shell-capable repository checkout was used
+- cargo check -p haze-sync-common: not run locally because repository work is restricted to the GitHub connector and no shell-capable repository checkout was used
+- cargo test -p haze-sync-common: not run locally because repository work is restricted to the GitHub connector and no shell-capable repository checkout was used
+- cargo clippy -p haze-sync-common --all-targets -- -D warnings: not run locally because repository work is restricted to the GitHub connector and no shell-capable repository checkout was used
 ci_status: CI_PENDING
-workflow_urls: Component CI run 29067608602 in_progress for clean-review source commit 987d76b451b209a4996c5bdaabf2c16cc0e0f5ca before this report-only commit
-known_failures: none observed for the clean-review source commit before report write
+workflow_urls: Component CI run 29079946397 in_progress for latest fixture/docs commit ad64fbfacc160d491c8e4e961b18ca4b7efcf0f4 before this report-only commit
+known_failures: none observed for CMM-P6 before report write
 
 CI_DIAGNOSTICS:
 artifact_based_logs: no
 artifact_name: not applicable
 artifact_id: not applicable
-workflow_run_id: not applicable for this clean-code review pass
+workflow_run_id: not applicable for this implementation pass
 workflow_run_attempt: not applicable
-artifact_status: not read; active clean-code prompt explicitly prohibited CI diagnostics artifact reads unless a future prompt instructs them
+artifact_status: not read; active implementation prompt prohibited CI diagnostics artifact reads unless a future prompt explicitly instructs them
 summary_read: no
 manifest_read: no
 logs_read: none
@@ -127,20 +131,19 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- Post-fix Component CI was still in progress when the report was written.
-- Removing SecretString's undocumented Hash trait may surface downstream code that incorrectly used secrets as hash-map/set keys; such code should use an explicit non-secret key or an owning-component wrapper rather than restoring implicit secret hashing.
-- Local shell checks could not be run through the GitHub connector.
-- The final report-only commit uses `[skip ci]`; it is not CI evidence. The relevant CI evidence will be run 29067608602 for source commit 987d76b451b209a4996c5bdaabf2c16cc0e0f5ca.
+- Component CI for the latest CMM-P6 fixture/docs head was still in progress when the report was written.
+- Local shell checks were not run because repository work is restricted to the GitHub connector.
+- The final report-only commit uses `[skip ci]`; it is not CI evidence. The relevant CI evidence will be Component CI run 29079946397 for commit ad64fbfacc160d491c8e4e961b18ca4b7efcf0f4.
 - component/common remains diverged from current main by normal commit graph, but PR metadata reports mergeable true; no merge/rebase/reset was performed.
 
 BLOCKERS:
-none for clean-code review; final CI conclusion is pending
+none for implementation; CI completion and mandatory clean-code review remain pending
 
 NEXT_RECOMMENDED_AGENT:
-orchestrator
+clean-code-reviewer
 
 FINAL_VERDICT:
-CLEAN_ACCEPT_PENDING_CI — CMM-P5 adapter/security hardening is accepted after removing the contract-violating SecretString Hash implementation. Adapter role/mode behavior and SecretString redaction remain clear and scoped. Post-fix Component CI is pending; the final report-only commit intentionally uses CI skip and is not CI evidence.
+SELF_ACCEPT_PENDING_CI — CMM-P6 shared primitive compatibility fixtures are implemented and internally verified inside common scope. The versioned JSON fixture, Rust compatibility tests, and downstream mirroring documentation preserve Common ownership boundaries and contain only safe deterministic examples. Latest Component CI is pending, and the final report-only commit intentionally uses CI skip.
 
 PUSHED:
 yes
