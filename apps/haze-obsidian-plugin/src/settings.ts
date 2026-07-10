@@ -6,12 +6,23 @@ export const SYNC_MODES = [
   "dry_run",
 ] as const;
 
+export const SYNC_INTERVAL_MINUTES = [0, 1, 5, 15, 30, 60] as const;
+export const EVENT_DEBOUNCE_SECONDS = [5, 15, 30, 60] as const;
+
 export type SyncMode = (typeof SYNC_MODES)[number];
+export type SyncIntervalMinutes = (typeof SYNC_INTERVAL_MINUTES)[number];
+export type EventDebounceSeconds = (typeof EVENT_DEBOUNCE_SECONDS)[number];
 
 export interface SafetyToggles {
   protectLocalChanges: boolean;
   confirmBeforeDelete: boolean;
   showMobileBackgroundWarning: boolean;
+}
+
+export interface SyncAutomationSettings {
+  intervalMinutes: SyncIntervalMinutes;
+  syncOnFileEvents: boolean;
+  eventDebounceSeconds: EventDebounceSeconds;
 }
 
 export interface PluginSettings {
@@ -20,6 +31,7 @@ export interface PluginSettings {
   authToken: string;
   syncMode: SyncMode;
   safety: SafetyToggles;
+  automation: SyncAutomationSettings;
 }
 
 export interface SettingsValidationResult {
@@ -42,6 +54,11 @@ export function createDefaultPluginSettings(): PluginSettings {
       confirmBeforeDelete: true,
       showMobileBackgroundWarning: true,
     },
+    automation: {
+      intervalMinutes: 0,
+      syncOnFileEvents: false,
+      eventDebounceSeconds: 15,
+    },
   };
 }
 
@@ -59,6 +76,7 @@ export function mergePluginSettings(rawSettings: unknown): PluginSettings {
   }
 
   const rawSafety = isRecord(rawSettings.safety) ? rawSettings.safety : {};
+  const rawAutomation = isRecord(rawSettings.automation) ? rawSettings.automation : {};
 
   const merged: PluginSettings = {
     serverUrl: readString(rawSettings.serverUrl, defaults.serverUrl),
@@ -78,6 +96,18 @@ export function mergePluginSettings(rawSettings: unknown): PluginSettings {
         rawSafety.showMobileBackgroundWarning,
         defaults.safety.showMobileBackgroundWarning,
       ),
+    },
+    automation: {
+      intervalMinutes: isSyncIntervalMinutes(rawAutomation.intervalMinutes)
+        ? rawAutomation.intervalMinutes
+        : defaults.automation.intervalMinutes,
+      syncOnFileEvents: readBoolean(
+        rawAutomation.syncOnFileEvents,
+        defaults.automation.syncOnFileEvents,
+      ),
+      eventDebounceSeconds: isEventDebounceSeconds(rawAutomation.eventDebounceSeconds)
+        ? rawAutomation.eventDebounceSeconds
+        : defaults.automation.eventDebounceSeconds,
     },
   };
 
@@ -109,6 +139,21 @@ export function validatePluginSettings(settings: PluginSettings): SettingsValida
     errors.push("Sync mode is invalid.");
   }
 
+  const intervalMinutes = isSyncIntervalMinutes(settings.automation.intervalMinutes)
+    ? settings.automation.intervalMinutes
+    : 0;
+  const eventDebounceSeconds = isEventDebounceSeconds(settings.automation.eventDebounceSeconds)
+    ? settings.automation.eventDebounceSeconds
+    : 15;
+  const syncOnFileEvents = Boolean(settings.automation.syncOnFileEvents);
+
+  if ((intervalMinutes > 0 || syncOnFileEvents) && settings.syncMode === "disabled") {
+    warnings.push("Automatic sync is configured but sync mode is disabled.");
+  }
+  if ((intervalMinutes > 0 || syncOnFileEvents) && settings.syncMode === "dry_run") {
+    warnings.push("Automatic triggers in dry-run mode scan and report only; they do not mutate server or vault state.");
+  }
+
   const normalized: PluginSettings = {
     serverUrl: serverUrlResult.url,
     adapterId,
@@ -118,6 +163,11 @@ export function validatePluginSettings(settings: PluginSettings): SettingsValida
       protectLocalChanges: Boolean(settings.safety.protectLocalChanges),
       confirmBeforeDelete: Boolean(settings.safety.confirmBeforeDelete),
       showMobileBackgroundWarning: Boolean(settings.safety.showMobileBackgroundWarning),
+    },
+    automation: {
+      intervalMinutes,
+      syncOnFileEvents,
+      eventDebounceSeconds,
     },
   };
 
@@ -220,6 +270,18 @@ export function settingsAreReady(settings: PluginSettings): boolean {
     validation.normalized.authToken.length > 0 &&
     validation.normalized.adapterId.length > 0
   );
+}
+
+export function syncAutomationEnabled(settings: PluginSettings): boolean {
+  return settings.automation.intervalMinutes > 0 || settings.automation.syncOnFileEvents;
+}
+
+function isSyncIntervalMinutes(value: unknown): value is SyncIntervalMinutes {
+  return typeof value === "number" && SYNC_INTERVAL_MINUTES.includes(value as SyncIntervalMinutes);
+}
+
+function isEventDebounceSeconds(value: unknown): value is EventDebounceSeconds {
+  return typeof value === "number" && EVENT_DEBOUNCE_SECONDS.includes(value as EventDebounceSeconds);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
