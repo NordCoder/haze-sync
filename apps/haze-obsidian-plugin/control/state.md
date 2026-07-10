@@ -2,17 +2,17 @@
 
 component: obsidian-plugin
 branch: component/obsidian-plugin
-status: BLOCKED_BY_DEPENDENCY
+status: PROMPT_READY
 
 active_prompt: apps/haze-obsidian-plugin/control/prompt.md
 active_report: apps/haze-obsidian-plugin/control/report.md
-active_agent_role: none
+active_agent_role: implementation-worker
 
 wave: W1
-phase: OBS-P9-BLOCKED
+phase: OBS-P9
 
-implementation_status: NOT_STARTED
-clean_review_status: CLEAN_ACCEPT
+implementation_status: PENDING
+clean_review_status: NOT_STARTED
 ci_status: CI_GREEN
 ci_workflow: Component CI
 ci_run_id: 29084771114
@@ -20,5 +20,4 @@ ci_run_number: 1058
 ci_run_attempt: 1
 known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
-blocker: API-P7 compatibility fixtures are not accepted yet
-unblock_condition: API-P7 accepted with green CI or equivalent explicit cross-component fixture contract
+dependency_evidence: API-P7C accepted with green Component CI run 29093081652
