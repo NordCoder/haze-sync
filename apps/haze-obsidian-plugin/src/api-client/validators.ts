@@ -1,9 +1,9 @@
+import { isCanonicalContentHash } from "../content-hash";
 import {
   ADAPTER_RUNTIME_STATES,
   CONFLICT_POLICIES,
   CONFLICT_RESOLUTION_ACTIONS,
   CONFLICT_STATUSES,
-  CURSOR_PRESENCE_STATES,
   DELETE_REJECTED_REASONS,
   DEPENDENCY_READINESS_STATES,
   DOCTOR_CHECK_KINDS,
@@ -47,7 +47,7 @@ export function isFileMetadataDto(value: unknown): value is FileMetadataDto {
     isExactRecord(value, ["path", "revision_id", "content_sha256", "size_bytes", "updated_by", "updated_at"]) &&
     isNonEmptyString(value.path) &&
     isNonEmptyString(value.revision_id) &&
-    isContentHash(value.content_sha256) &&
+    isCanonicalContentHash(value.content_sha256) &&
     isSafeNonNegativeInteger(value.size_bytes) &&
     isNonEmptyString(value.updated_by) &&
     isTimestamp(value.updated_at)
@@ -55,15 +55,19 @@ export function isFileMetadataDto(value: unknown): value is FileMetadataDto {
 }
 
 export function isChangesResponseDto(value: unknown): value is ChangesResponseDto {
-  return (
-    isExactRecord(value, ["from_seq", "to_seq", "has_more", "changes"]) &&
-    isSafeNonNegativeInteger(value.from_seq) &&
-    isSafeNonNegativeInteger(value.to_seq) &&
-    value.to_seq >= value.from_seq &&
-    typeof value.has_more === "boolean" &&
-    Array.isArray(value.changes) &&
-    value.changes.every(isChangeDto)
-  );
+  if (
+    !isExactRecord(value, ["from_seq", "to_seq", "has_more", "changes"]) ||
+    !isSafeNonNegativeInteger(value.from_seq) ||
+    !isSafeNonNegativeInteger(value.to_seq) ||
+    value.to_seq < value.from_seq ||
+    typeof value.has_more !== "boolean" ||
+    !Array.isArray(value.changes) ||
+    !value.changes.every(isChangeDto)
+  ) {
+    return false;
+  }
+
+  return isOrderedChangePage(value.from_seq, value.to_seq, value.changes);
 }
 
 export function isChangeDto(value: unknown): value is ChangeDto {
@@ -99,7 +103,7 @@ export function isChangeDto(value: unknown): value is ChangeDto {
     case "restore_file":
       return (
         isNonEmptyString(value.revision_id) &&
-        isContentHash(value.content_sha256) &&
+        isCanonicalContentHash(value.content_sha256) &&
         isSafeNonNegativeInteger(value.size_bytes)
       );
     case "delete_file":
@@ -249,6 +253,22 @@ export function isAdminFixtureDto(value: unknown): value is AdminFixtureDto {
   );
 }
 
+function isOrderedChangePage(fromSequence: number, toSequence: number, changes: readonly ChangeDto[]): boolean {
+  if (changes.length === 0) {
+    return toSequence === fromSequence;
+  }
+
+  let previous = fromSequence;
+  for (const change of changes) {
+    if (change.seq <= previous || change.seq > toSequence) {
+      return false;
+    }
+    previous = change.seq;
+  }
+
+  return previous === toSequence;
+}
+
 function isStatusSummaryDto(value: unknown): value is StatusSummaryDto {
   return (
     isExactRecord(value, [
@@ -339,12 +359,8 @@ function isOptionalSafeDetails(value: unknown): boolean {
   );
 }
 
-function isContentHash(value: unknown): value is string {
-  return typeof value === "string" && /^sha256:[0-9a-f]{64}$/u.test(value);
-}
-
 function isOptionalContentHash(value: unknown): boolean {
-  return value === undefined || isContentHash(value);
+  return value === undefined || isCanonicalContentHash(value);
 }
 
 function isTimestamp(value: unknown): value is string {
