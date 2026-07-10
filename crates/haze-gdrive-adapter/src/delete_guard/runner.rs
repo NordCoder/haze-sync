@@ -191,11 +191,9 @@ fn classify_candidate(
                 candidate.base_revision_id.as_deref(),
                 first_detected_at.as_str(),
             );
-            outcome
-                .notices
-                .push(DeleteSafetyNotice::ConfirmedAbsence {
-                    path: candidate.path.clone(),
-                });
+            outcome.notices.push(DeleteSafetyNotice::ConfirmedAbsence {
+                path: candidate.path.clone(),
+            });
             confirmed.push(ConfirmedDeleteCandidate {
                 provider_id: candidate.provider_id,
                 path: candidate.path,
