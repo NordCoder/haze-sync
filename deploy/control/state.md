@@ -20,5 +20,5 @@ ci_run_number: 979
 ci_run_attempt: 1
 known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
-blocker: GDrive durable mapping/cursor persistence and service topology are not accepted
-unblock_condition: accepted GDrive persistence/config/service boundary with green CI or dedicated fan-in contract
+blocker: STOR-P8 is accepted, but GDrive runtime/config/service topology and concrete persistence/secret/lifecycle fan-in are not accepted
+unblock_condition: accepted GDA-P7C plus accepted runtime/config fan-in, or a dedicated cross-component deployment topology contract
