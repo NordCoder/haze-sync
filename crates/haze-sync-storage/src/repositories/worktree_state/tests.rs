@@ -47,7 +47,10 @@ fn input_uses_validated_common_values_and_typed_timestamps() {
 
 #[test]
 fn persisted_state_validation_rejects_noncanonical_or_invalid_values() {
-    assert_eq!(validate_worktree_state_row(state_row()).unwrap(), state_row());
+    assert_eq!(
+        validate_worktree_state_row(state_row()).unwrap(),
+        state_row()
+    );
 
     let mut invalid_path = state_row();
     invalid_path.path = "Notes//worktree.md".to_owned();
