@@ -44,7 +44,7 @@ export class VaultScanner {
           excluded.push(result.excluded);
         }
       } catch (error) {
-        if (isAbortError(error)) {
+        if (signal?.aborted) {
           throw error;
         }
 
@@ -73,8 +73,4 @@ function assertNotAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted) {
     throw new DOMException("Vault scan aborted.", "AbortError");
   }
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === "AbortError";
 }
