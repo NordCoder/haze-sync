@@ -126,7 +126,7 @@ impl fmt::Debug for DriveCreateExportRequest {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("DriveCreateExportRequest")
-            .field("operation_id", &self.operation_id)
+            .field("operation_id", &"<redacted-idempotency-key>")
             .field("parent_id", &self.parent_id)
             .field("name", &self.name)
             .field("mime_type", &self.mime_type)
@@ -150,7 +150,7 @@ impl fmt::Debug for DriveUpdateExportRequest {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("DriveUpdateExportRequest")
-            .field("operation_id", &self.operation_id)
+            .field("operation_id", &"<redacted-idempotency-key>")
             .field("file_id", &self.file_id)
             .field(
                 "has_expected_revision_token",
@@ -163,17 +163,41 @@ impl fmt::Debug for DriveUpdateExportRequest {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct DriveTrashExportRequest {
     pub operation_id: String,
     pub file_id: String,
     pub expected_revision_token: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+impl fmt::Debug for DriveTrashExportRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("DriveTrashExportRequest")
+            .field("operation_id", &"<redacted-idempotency-key>")
+            .field("file_id", &self.file_id)
+            .field(
+                "has_expected_revision_token",
+                &self.expected_revision_token.is_some(),
+            )
+            .finish()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
 pub struct DriveExportReceipt {
     pub provider_id: String,
     pub revision_token: String,
+}
+
+impl fmt::Debug for DriveExportReceipt {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("DriveExportReceipt")
+            .field("provider_id", &self.provider_id)
+            .field("has_revision_token", &!self.revision_token.is_empty())
+            .finish()
+    }
 }
 
 pub trait DriveExportProvider {
@@ -209,14 +233,18 @@ enum MutationFingerprint {
     Create {
         parent_id: String,
         name: String,
+        mime_type: String,
         content_sha256: ContentSha256,
     },
     Update {
         file_id: String,
+        expected_revision_token: Option<String>,
+        mime_type: String,
         content_sha256: ContentSha256,
     },
     Trash {
         file_id: String,
+        expected_revision_token: Option<String>,
     },
 }
 
@@ -360,20 +388,21 @@ impl DriveExportProvider for FakeDriveExportProvider {
         if let Some(error) = self.configured_error("create_file") {
             return Err(error);
         }
-        let fingerprint = MutationFingerprint::Create {
-            parent_id: request.parent_id.clone(),
-            name: request.name.clone(),
-            content_sha256: request.content_sha256,
-        };
-        if let Some(receipt) = self.replay_or_conflict(&request.operation_id, &fingerprint)? {
-            return Ok(receipt);
-        }
         if !request.content_sha256.verifies(&request.content) {
             return Err(DriveExportError::new(
                 "create_file",
                 DriveExportErrorCategory::InvalidRequest,
                 "verified export content hash changed before provider mutation",
             ));
+        }
+        let fingerprint = MutationFingerprint::Create {
+            parent_id: request.parent_id.clone(),
+            name: request.name.clone(),
+            mime_type: request.mime_type.clone(),
+            content_sha256: request.content_sha256,
+        };
+        if let Some(receipt) = self.replay_or_conflict(&request.operation_id, &fingerprint)? {
+            return Ok(receipt);
         }
 
         self.next_file_number = self.next_file_number.saturating_add(1);
@@ -405,19 +434,21 @@ impl DriveExportProvider for FakeDriveExportProvider {
         if let Some(error) = self.configured_error("update_file") {
             return Err(error);
         }
-        let fingerprint = MutationFingerprint::Update {
-            file_id: request.file_id.clone(),
-            content_sha256: request.content_sha256,
-        };
-        if let Some(receipt) = self.replay_or_conflict(&request.operation_id, &fingerprint)? {
-            return Ok(receipt);
-        }
         if !request.content_sha256.verifies(&request.content) {
             return Err(DriveExportError::new(
                 "update_file",
                 DriveExportErrorCategory::InvalidRequest,
                 "verified export content hash changed before provider mutation",
             ));
+        }
+        let fingerprint = MutationFingerprint::Update {
+            file_id: request.file_id.clone(),
+            expected_revision_token: request.expected_revision_token.clone(),
+            mime_type: request.mime_type.clone(),
+            content_sha256: request.content_sha256,
+        };
+        if let Some(receipt) = self.replay_or_conflict(&request.operation_id, &fingerprint)? {
+            return Ok(receipt);
         }
 
         let current = self
@@ -428,7 +459,7 @@ impl DriveExportProvider for FakeDriveExportProvider {
             || request
                 .expected_revision_token
                 .as_deref()
-                .is_some_and(|expected| expected != current.revision_token)
+                .is_none_or(|expected| expected != current.revision_token)
         {
             return Err(provider_conflict("update_file"));
         }
@@ -458,6 +489,7 @@ impl DriveExportProvider for FakeDriveExportProvider {
         }
         let fingerprint = MutationFingerprint::Trash {
             file_id: request.file_id.clone(),
+            expected_revision_token: request.expected_revision_token.clone(),
         };
         if let Some(receipt) = self.replay_or_conflict(&request.operation_id, &fingerprint)? {
             return Ok(receipt);
@@ -470,7 +502,7 @@ impl DriveExportProvider for FakeDriveExportProvider {
         if request
             .expected_revision_token
             .as_deref()
-            .is_some_and(|expected| expected != current.revision_token)
+            .is_none_or(|expected| expected != current.revision_token)
         {
             return Err(provider_conflict("trash_file"));
         }
