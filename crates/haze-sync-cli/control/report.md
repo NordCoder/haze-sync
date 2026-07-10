@@ -1,13 +1,13 @@
 REPORT_TYPE:
-IMPLEMENTATION
+FIX
 
 STATUS:
-SELF_ACCEPT_PENDING_CI
+FIX_COMPLETE
 
 AGENT:
-role: implementation-worker
-agent_execution_id: cli-W1-CLI-P5
-chat_name: cli — W1 CLI-P5 Implementation
+role: fixer-worker
+agent_execution_id: cli-W1-FIX-CLI-P5-CI
+chat_name: cli — W1 FIX-CLI-P5-CI CI Fix
 
 COMPONENT:
 name: cli
@@ -21,16 +21,14 @@ control_report_path: crates/haze-sync-cli/control/report.md
 
 WAVE:
 id: W1
-phase_id: CLI-P5
-dependency_status: CLI-P4 implementation, fixer loop, and clean-code review accepted; Component CI run 29067608009 was green before this phase
+phase_id: FIX-CLI-P5-CI
+dependency_status: CLI-P5 implementation completed with SELF_ACCEPT_PENDING_CI; Component CI run 29080204443 failed and diagnostics artifact 8222457216 was present, unexpired, and readable
 
 SUMMARY:
-Implemented the contract-backed portion of CLI-P5. Added explicit `doctor --live` while keeping `doctor` and `doctor --offline` offline and no-network by default. Live doctor uses only accepted public Server surfaces: GET /health, GET /ready, and GET /v1/admin/status. Sanitized readiness data maps into Core DoctorReport checks. Missing-blob and adapter-token-sanity checks are explicitly skipped because no accepted public diagnostic surface exposes them. Missing config and partial surface failures produce safe runtime exit code 1 with honest not-run or partial summaries. No concrete HTTP transport, config/token loading, direct DB/object-store/provider access, repair behavior, route changes, dependency changes, workflow changes, or sibling changes were added.
+Fixed the minimum artifact-proven CLI-P5 CI failures inside cli scope. Diagnostics showed two cargo-clippy `clone_on_copy` errors in the test-only FakeDoctorClient and two rustfmt diffs, one in the DoctorReadClient readiness signature and one in the main doctor-help assertion. Removed only the unnecessary Copy-value clones and applied the exact formatting requested by rustfmt. Offline-by-default behavior, explicit `doctor --live`, accepted health/readiness/status aggregation, honest skipped/not-run checks, safe output, tests, and all CLI-P5 non-goals remain unchanged.
 
 CHANGED_FILES:
 - crates/haze-sync-cli/src/doctor_live.rs
-- crates/haze-sync-cli/src/doctor.rs
-- crates/haze-sync-cli/src/commands.rs
 - crates/haze-sync-cli/src/main.rs
 - crates/haze-sync-cli/control/report.md
 
@@ -38,14 +36,14 @@ BRANCH_AND_CONTROL:
 current_branch: component/cli
 base_branch: main
 base_sha: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2 from PR #48 metadata
-head_sha: 8497ce6d80baa412893be46d5f8b96140367dcb1 before report-only commits
+head_sha: 97ef1ae1c6995aff71d364d303d0cdbea040de49 before report-only commit; report write creates final head commit
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
-ci_skip_used: yes, for final control/report.md-only commits only
-ci_skip_reason: report-only updates cannot change executable behavior or validation outcome; all source commits did not use CI skip
+ci_skip_used: yes, for this final control/report.md-only commit only
+ci_skip_reason: final report update cannot change executable behavior or validation outcome; both source fixer commits did not use CI skip
 
 SCOPE:
 allowed_files_only: yes
@@ -58,76 +56,73 @@ CONTRACT:
 contract_read: yes
 contract_satisfied: yes
 contract_changes_requested: none
-contract_change_rationale: no dedicated doctor endpoint or DTO was invented; accepted Server health/readiness/admin-status surfaces were sufficient for bounded aggregation, and unavailable diagnostics are reported as skipped
+contract_change_rationale: none; fixes are test implementation and formatting only
 affected_components: cli only
 
 IMPLEMENTATION_OR_REVIEW:
 completed:
-- Read project process sources, component docs/control files, current source, PR metadata, and accepted Core/Server/API diagnostic contracts.
-- Confirmed accepted routes GET /health, GET /ready, and GET /v1/admin/status and confirmed no dedicated doctor endpoint exists.
-- Added DoctorReadClient, safe endpoint/response models, partial-result handling, and Core DoctorReport mapping in src/doctor_live.rs.
-- Added explicit offline/live doctor modes, `--live` parsing, conflict rejection, detailed safe rendering, and main routing.
-- Added tests for endpoint paths, default/offline mode, not-configured live mode, ready/not-ready results, partial auth failure, skipped unsupported checks, safe output, and predictable exit codes.
+- Read process sources, current control state, active fixer prompt, prior implementation report, component contract, CLI-P5 plan section, dependency map, relevant current source, and PR #48 changed-file patches.
+- Verified diagnostics artifact 8222457216 metadata matches Component CI run 29080204443, attempt 1, branch component/cli, and source head 8497ce6d80baa412893be46d5f8b96140367dcb1.
+- Downloaded and read summary.md, manifest.json, failures/cargo-clippy.txt, logs/cargo-clippy.log, failures/rust-fmt.txt, and logs/rust-fmt.log.
+- Changed FakeDoctorClient::fetch_health from `self.health.clone()` to `self.health` because the Result value is Copy.
+- Changed FakeDoctorClient::fetch_readiness from `self.readiness.clone()` to `self.readiness` because the Result value is Copy.
+- Applied rustfmt's single-line DoctorReadClient::fetch_readiness signature.
+- Applied rustfmt's multiline doctor-help stdout assertion.
 main_changes:
-- `doctor` remains offline by default; `doctor --offline` makes no network attempt.
-- `doctor --live` aggregates accepted public health/readiness/status surfaces through an injected read-only client boundary.
-- Database and object-store readiness map to Core doctor checks.
-- Missing-blob and adapter-token-sanity checks are marked skipped/not run.
-- Missing server config reports `live checks: not_run` and exit code 1.
-- Partial surface errors preserve safe partial stdout and stable stderr error categories.
+- test-only removal of two unnecessary clones
+- formatting-only changes in doctor_live.rs and main.rs
 behavior_changes:
-- Offline output explicitly identifies offline mode and no live calls.
-- Live mode is accepted explicitly.
-- Conflicting `--live` and `--offline` flags fail with usage exit code 2.
-- Completed diagnostics return success; transport/config/auth/response failures return runtime exit code 1.
+- none
 bugs_found:
-- none
+- test fake client cloned two Copy Result values, which violates workspace clippy with -D warnings
+- two source fragments were not rustfmt-compliant
 bugs_fixed:
-- none
+- removed both clone_on_copy violations
+- applied both artifact-proven rustfmt diffs
 cleanups_made:
-- Separated live aggregation from parser/process wiring.
-- Reused Core DoctorReport and stable check identifiers/statuses.
-- Removed unused production imports during internal verification.
+- none beyond the exact CI fixes
 non_goals_preserved:
 - no repair or destructive behavior
 - no direct DB/object-store/provider access
 - no provider OAuth validation
-- no Server/API route or DTO changes
-- no sibling/workflow/dependency changes
-- no token creation/rotation
-- no raw diagnostics, provider payloads, cursor values, secrets, local paths, or stack traces
+- no new Server/API routes or DTOs
+- no concrete transport/config expansion
+- no dependency or workflow changes
+- no sibling component changes
+- no test deletion or assertion weakening
+- no change to offline/live/skipped/not-run semantics
 deferred_work:
-- Concrete config, token, HTTP transport, and response decoding remain future scope.
-- Current binary default config has no server URL, so `doctor --live` honestly reports not-run until transport/config wiring exists.
-- Full HTTP E2E validation remains future fan-in work.
+- Orchestrator should observe Component CI run 29081982496 for final source head 97ef1ae1c6995aff71d364d303d0cdbea040de49.
 
 TESTS_AND_CHECKS:
 checks_run:
-- GitHub reads for component/process sources, current code, PR metadata, Core doctor models, Server routes/readiness models, and API contract.
-- GitHub verification of final doctor_live.rs source.
-- Internal static verification of scope, accepted paths, secrecy, mode behavior, skipped checks, and exit-code mapping.
-- Observed Component CI run 29080204443 for source head 8497ce6d80baa412893be46d5f8b96140367dcb1 as in_progress.
+- GitHub verification of updated DoctorReadClient signature and FakeDoctorClient Copy returns.
+- GitHub verification of the formatted doctor-help assertion in main.rs.
+- Observed new Component CI run 29081982496 for final source head 97ef1ae1c6995aff71d364d303d0cdbea040de49 as queued.
 checks_not_run:
 - cargo fmt --all --check: not run locally; repository work is restricted to the GitHub connector.
-- cargo check -p haze-sync-cli: not run locally; repository work is restricted to the GitHub connector.
+- cargo clippy --workspace --all-targets -- -D warnings: not run locally; repository work is restricted to the GitHub connector.
 - cargo test -p haze-sync-cli: not run locally; repository work is restricted to the GitHub connector.
-- cargo clippy -p haze-sync-cli --all-targets -- -D warnings: not run locally; repository work is restricted to the GitHub connector.
 ci_status: CI_PENDING
 workflow_urls:
-- Component CI run 29080204443, run number 917, source head 8497ce6d80baa412893be46d5f8b96140367dcb1; observed in_progress
+- Component CI run 29081982496, run number 966, for final source head 97ef1ae1c6995aff71d364d303d0cdbea040de49; observed queued
 known_failures:
-- none observed at report time
+- Superseded run 29080204443 failed cargo-clippy and rust-fmt for the exact issues fixed here.
 
 CI_DIAGNOSTICS:
-artifact_based_logs: no
-artifact_name: none
-artifact_id: none
-workflow_run_id: none
-workflow_run_attempt: none
-artifact_status: not applicable; active role is implementation-worker and prompt forbids diagnostics reading
-summary_read: no
-manifest_read: no
-logs_read: none
+artifact_based_logs: yes
+artifact_name: ci-diag__component-cli__wf-component-ci__run-29080204443__attempt-1
+artifact_id: 8222457216
+workflow_run_id: 29080204443
+workflow_run_attempt: 1
+artifact_status: present, unexpired, downloaded, schema-valid, and readable
+summary_read: yes
+manifest_read: yes
+logs_read:
+- failures/cargo-clippy.txt
+- logs/cargo-clippy.log
+- failures/rust-fmt.txt
+- logs/rust-fmt.log
 raw_job_logs_used: no
 diagnostics_failure: none
 
@@ -140,20 +135,18 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- No dedicated public Server doctor endpoint exists; only accepted health/readiness/admin-status surfaces are aggregated.
-- Concrete transport/config/token wiring remains deferred.
-- Local shell checks were not run.
-- Report-only commits use CI skip and are not CI evidence.
-- Final source CI was still in progress at report time.
+- Local shell checks could not be run through the GitHub connector.
+- The report-only commit uses CI skip and is not CI evidence.
+- Final source-fix CI was queued at report time.
 
 BLOCKERS:
-none for the contract-backed CLI-P5 foundation
+none
 
 NEXT_RECOMMENDED_AGENT:
 orchestrator
 
 FINAL_VERDICT:
-SELF_ACCEPT_PENDING_CI. CLI-P5 now provides explicit offline/live modes, contract-backed Server health/readiness/status aggregation, Core doctor summaries, honest skipped/not-run checks, and safe partial-failure behavior. Final source CI must be observed by Orchestrator.
+FIX_COMPLETE. All artifact-proven CLI-P5 cargo-clippy and rustfmt failures were fixed minimally inside cli scope. Final source CI run 29081982496 is pending Orchestrator observation.
 
 PUSHED:
 yes
