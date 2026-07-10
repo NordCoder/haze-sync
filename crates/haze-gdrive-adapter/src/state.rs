@@ -265,13 +265,26 @@ impl GDriveMapping {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct DriveChangeCursor {
     pub start_page_token: Option<String>,
     pub next_page_token: Option<String>,
     pub sync_token: Option<String>,
     pub last_polled_at: Option<SafeTimestamp>,
     pub invalidated_at: Option<SafeTimestamp>,
+}
+
+impl fmt::Debug for DriveChangeCursor {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("DriveChangeCursor")
+            .field("has_start_page_token", &self.start_page_token.is_some())
+            .field("has_next_page_token", &self.next_page_token.is_some())
+            .field("has_sync_token", &self.sync_token.is_some())
+            .field("last_polled_at", &self.last_polled_at)
+            .field("invalidated_at", &self.invalidated_at)
+            .finish()
+    }
 }
 
 impl DriveChangeCursor {
@@ -637,6 +650,29 @@ mod tests {
         cursor.invalidate(ts("2026-07-09T12:02:00Z"));
 
         assert!(cursor.requires_full_scan());
+    }
+
+    #[test]
+    fn drive_cursor_debug_redacts_provider_tokens() {
+        let mut cursor = DriveChangeCursor::new("secret-start-token").expect("cursor");
+        cursor
+            .advance_page("secret-next-token", ts("2026-07-09T12:00:00Z"))
+            .expect("advance page");
+
+        let page_debug = format!("{cursor:?}");
+
+        assert!(page_debug.contains("has_start_page_token: true"));
+        assert!(page_debug.contains("has_next_page_token: true"));
+        assert!(!page_debug.contains("secret-start-token"));
+        assert!(!page_debug.contains("secret-next-token"));
+
+        cursor
+            .finish_batch("secret-sync-token", ts("2026-07-09T12:01:00Z"))
+            .expect("finish batch");
+        let sync_debug = format!("{cursor:?}");
+
+        assert!(sync_debug.contains("has_sync_token: true"));
+        assert!(!sync_debug.contains("secret-sync-token"));
     }
 
     #[test]
