@@ -9,9 +9,11 @@ import {
   applyDeleteOutcome,
   applyUploadOutcome,
 } from "./base-revision-store";
+import type { LocalFileFact } from "./local-file-facts";
 import { sha256Hex } from "./local-file-facts";
 import { planPendingMutations } from "./mutation-planner";
 import type { LocalSyncState, PendingQueueEntry } from "./pending-queue";
+import { reconcileFullScan } from "./pending-queue";
 import {
   RemoteEchoSuppressor,
   fetchRemoteChangePage,
@@ -20,8 +22,7 @@ import {
   remoteChangeNeedsDownload,
 } from "./remote-materializer";
 import type { RemoteSyncState } from "./remote-sync-state";
-import { reconcileFullScan } from "./pending-queue";
-import type { VaultScanner } from "./vault-scanner";
+import type { VaultScanResult, VaultScanner } from "./vault-scanner";
 
 export interface LocalScanOperationResult {
   localState: LocalSyncState;
@@ -65,7 +66,8 @@ export async function scanLocalVault(
   assertNotAborted(signal);
   const scanResult = await scanner.scan();
   assertNotAborted(signal);
-  const reconciled = reconcileFullScan(currentState, scanResult.facts, scanResult.scannedAt);
+  const safeFacts = preserveUnreadableKnownFiles(scanResult, currentState.knownFiles);
+  const reconciled = reconcileFullScan(currentState, safeFacts, scanResult.scannedAt);
 
   return {
     localState: reconciled.state,
@@ -230,7 +232,6 @@ export async function pullRemoteChanges(input: {
     }
 
     if (!response.has_more || response.changes.length === 0) {
-      result.hasMore = false;
       return result;
     }
   }
@@ -254,6 +255,21 @@ export function clearPendingChangeIfCurrent(
     ...state,
     pendingQueue,
   };
+}
+
+function preserveUnreadableKnownFiles(
+  scanResult: VaultScanResult,
+  knownFiles: Record<string, LocalFileFact>,
+): LocalFileFact[] {
+  const factsByPath = new Map(scanResult.facts.map((fact) => [fact.path, fact]));
+  for (const error of scanResult.errors) {
+    const known = knownFiles[error.path];
+    if (known !== undefined) {
+      factsByPath.set(error.path, known);
+    }
+  }
+
+  return Array.from(factsByPath.values()).sort((left, right) => left.path.localeCompare(right.path));
 }
 
 function assertMatchingPath(actual: string, expected: string): void {
