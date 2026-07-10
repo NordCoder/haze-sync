@@ -1,60 +1,50 @@
-# W1-CLI-P5 — Live doctor command integration
+# W1-FIX-CLI-P5-CI — CLI live-doctor CI fix
 
 Component: cli
 Path: crates/haze-sync-cli
 Branch: component/cli
 PR: #48
-Role: implementation-worker
+Role: fixer-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-CLI-P4 implementation, fixer, and clean-code review are accepted. The clean-code code-bearing Component CI run is green.
+CLI-P5 implementation is complete, but its code-bearing Component CI run is red.
 
-- code_bearing_sha: 91b9a0cfddacace23701e964ddd11d0dea7ef3c5
+- code_bearing_sha: 8497ce6d80baa412893be46d5f8b96140367dcb1
 - workflow: Component CI
-- workflow_run_id: 29067608009
-- run_number: 824
-- conclusion: success
-
-The next implementation phase is CLI-P5 from crates/haze-sync-cli/docs/implementation-plan.md.
+- workflow_run_id: 29080204443
+- run_number: 917
+- run_attempt: 1
+- artifact_id: 8222457216
+- artifact_name: ci-diag__component-cli__wf-component-ci__run-29080204443__attempt-1
+- artifact_expires_at: 2026-07-11T08:36:13Z
 
 ## Read
 
-Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current source, relevant accepted Server/API/Core diagnostic contracts, and PR diff. Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
+Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current source, and PR diff.
+
+Download diagnostics artifact 8222457216. Read `summary.md`, `manifest.json`, and every failed-check log. If it is missing, expired, malformed, or unreadable, report `FIX_BLOCKED_BY_LOGS`.
 
 ## Task
 
-Implement CLI-P5: Live doctor command integration.
-
-Follow the plan:
-
-- add explicit live-doctor behavior only through accepted public Server diagnostic/readiness/status surfaces;
-- preserve `doctor --offline` as no-network mode;
-- render Core doctor status/summary consistently where accepted;
-- distinguish live, offline, skipped, and not-run checks honestly;
-- avoid raw diagnostics, provider payloads, cursor values, secrets, and local paths in output;
-- maintain predictable exit-code and safe public-error behavior.
-
-## Dependency guard
-
-Do not invent a Server doctor endpoint or DTO. If accepted Server/API surfaces are insufficient for live doctor behavior, implement only the contract-backed portion and report `BLOCKED_BY_DEPENDENCY` or `BLOCKED_BY_CONTRACT` with the exact missing surface.
+Fix the minimum artifact-proven cause of the CLI-P5 CI failure. Preserve offline-by-default behavior, explicit `doctor --live`, accepted health/readiness/status aggregation, honest skipped/not-run checks, safe output, and all CLI-P5 non-goals.
 
 ## Allowed files
 
 - crates/haze-sync-cli/src/**
-- crates/haze-sync-cli/docs/**
+- crates/haze-sync-cli/docs/** only if diagnostics prove a documentation-format failure
 - crates/haze-sync-cli/control/report.md
 
-## Non-goals
+## Forbidden changes
 
-No repair behavior, direct DB/provider access, destructive checks, provider OAuth validation, Server/API route changes, workflow changes, dependency changes, or sibling component changes.
+No repair behavior, direct DB/object-store/provider access, new Server/API routes or DTOs, concrete transport/config expansion beyond the artifact-proven fix, workflow changes, dependency changes, sibling component changes, test deletion, or assertion weakening.
 
 ## CI trigger policy
 
-Product/source/docs commits must not skip CI. A final report-only commit may skip CI.
+Product/source/docs fixer commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only the report to crates/haze-sync-cli/control/report.md. Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION and phase_id to CLI-P5.
+Write only the report to crates/haze-sync-cli/control/report.md. Use report-template.md. Set REPORT_TYPE to FIX and phase_id to FIX-CLI-P5-CI.
