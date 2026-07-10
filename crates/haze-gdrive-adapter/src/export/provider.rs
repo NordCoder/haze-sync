@@ -456,8 +456,7 @@ impl DriveExportProvider for FakeDriveExportProvider {
             .get(&request.file_id)
             .ok_or_else(|| provider_not_found("update_file"))?;
         if current.trashed
-            || request.expected_revision_token.as_deref()
-                != Some(current.revision_token.as_str())
+            || request.expected_revision_token.as_deref() != Some(current.revision_token.as_str())
         {
             return Err(provider_conflict("update_file"));
         }
