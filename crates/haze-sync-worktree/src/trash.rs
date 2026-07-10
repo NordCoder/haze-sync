@@ -95,7 +95,7 @@ pub struct WorktreeTrashRecord {
     pub content_hash: ContentHash,
     /// Retained file byte length.
     pub size: u64,
-    /// Local retention start time.
+    /// Local retention start time, normalized to whole Unix seconds.
     pub retained_at: SystemTime,
     /// Earliest time at which a separate maintenance policy may consider cleanup.
     pub retention_until: SystemTime,
@@ -174,7 +174,7 @@ pub enum WorktreeTrashError {
     MetadataWriteFailed { vault_path: VaultPath },
     /// Durable metadata could not be read.
     MetadataReadFailed,
-    /// Durable metadata was malformed or inconsistent.
+    /// Durable metadata was malformed, inconsistent, or tampered with.
     InvalidMetadata,
     /// User content could not be moved into retained trash.
     MoveFailed { vault_path: VaultPath },
@@ -281,12 +281,14 @@ impl WorktreeTrashManager {
         state: &mut WorktreeStateSnapshot,
         request: WorktreeTombstoneMaterializationRequest,
     ) -> Result<WorktreeTombstoneMaterializationOutcome, WorktreeTrashError> {
-        let retained_at = request.tombstoned_at;
+        ensure_existing_root_chain(self.config.root_path())?;
+        let retained_at_seconds = unix_seconds(request.tombstoned_at)?;
+        let retained_at = UNIX_EPOCH + Duration::from_secs(retained_at_seconds);
         let retention_until = retained_at
             .checked_add(self.policy.retention)
             .ok_or(WorktreeTrashError::InvalidTimestamp)?;
-        let retained_at_seconds = unix_seconds(retained_at)?;
         let local_path = self.config.vault_path_to_local(&request.vault_path)?;
+
         let Some(observed) = observe_regular_file(&local_path, &request.vault_path)? else {
             state.record_tombstoned(
                 request.vault_path.clone(),
@@ -299,14 +301,13 @@ impl WorktreeTrashManager {
             });
         };
 
-        let record_id = record_id_for(
-            &request.vault_path,
-            &request.tombstone_revision_id,
-            observed.content_hash,
-            retained_at_seconds,
-        );
         let record = WorktreeTrashRecord {
-            record_id,
+            record_id: record_id_for(
+                &request.vault_path,
+                &request.tombstone_revision_id,
+                observed.content_hash,
+                retained_at_seconds,
+            ),
             vault_path: request.vault_path.clone(),
             tombstone_revision_id: request.tombstone_revision_id.clone(),
             content_hash: observed.content_hash,
@@ -320,9 +321,10 @@ impl WorktreeTrashManager {
         let metadata_path = self.metadata_path(&record.record_id);
         ensure_absent(&destination, &request.vault_path)?;
         ensure_absent(&metadata_path, &request.vault_path)?;
-
         let staged_metadata = self.stage_metadata(&record)?;
+
         let current = observe_regular_file(&local_path, &request.vault_path)?.ok_or_else(|| {
+            cleanup_owned_file(&staged_metadata);
             WorktreeTrashError::TargetChangedBeforeMove {
                 vault_path: request.vault_path.clone(),
             }
@@ -334,13 +336,12 @@ impl WorktreeTrashManager {
             });
         }
 
-        fs::rename(&local_path, &destination).map_err(|_| {
+        if fs::rename(&local_path, &destination).is_err() {
             cleanup_owned_file(&staged_metadata);
-            WorktreeTrashError::MoveFailed {
-                vault_path: request.vault_path.clone(),
-            }
-        })?;
-
+            return Err(WorktreeTrashError::MoveFailed {
+                vault_path: request.vault_path,
+            });
+        }
         if sync_directory(local_path.parent()).is_err() || sync_directory(destination.parent()).is_err()
         {
             cleanup_owned_file(&staged_metadata);
@@ -378,10 +379,10 @@ impl WorktreeTrashManager {
             return Err(WorktreeTrashError::InvalidMetadata);
         }
 
-        let mut file = File::open(&metadata_path)
-            .map_err(|_| WorktreeTrashError::MetadataReadFailed)?;
         let mut bytes = Vec::new();
-        file.take(MAX_TRASH_METADATA_BYTES + 1)
+        File::open(&metadata_path)
+            .map_err(|_| WorktreeTrashError::MetadataReadFailed)?
+            .take(MAX_TRASH_METADATA_BYTES + 1)
             .read_to_end(&mut bytes)
             .map_err(|_| WorktreeTrashError::MetadataReadFailed)?;
         if bytes.len() as u64 > MAX_TRASH_METADATA_BYTES {
@@ -394,7 +395,7 @@ impl WorktreeTrashManager {
         }
 
         let record = parse_metadata(&bytes)?;
-        if &record.record_id != record_id {
+        if &record.record_id != record_id || recompute_record_id(&record)? != record.record_id {
             return Err(WorktreeTrashError::InvalidMetadata);
         }
         Ok(record)
@@ -404,7 +405,6 @@ impl WorktreeTrashManager {
         &self,
         record: &WorktreeTrashRecord,
     ) -> Result<(), WorktreeTrashError> {
-        ensure_existing_root_chain(self.config.root_path())?;
         ensure_directory(&self.config.runtime_dir())?;
         ensure_directory(&self.config.temp_dir())?;
         ensure_directory(&self.config.trash_dir())?;
@@ -419,8 +419,7 @@ impl WorktreeTrashManager {
             ensure_directory(&current)?;
         }
         ensure_directory(&self.config.metadata_dir())?;
-        ensure_directory(&self.config.metadata_dir().join(TRASH_METADATA_DIR_NAME))?;
-        Ok(())
+        ensure_directory(&self.config.metadata_dir().join(TRASH_METADATA_DIR_NAME))
     }
 
     fn retained_file_path(&self, record: &WorktreeTrashRecord) -> PathBuf {
@@ -460,14 +459,12 @@ impl WorktreeTrashManager {
             .map_err(|_| WorktreeTrashError::MetadataWriteFailed {
                 vault_path: record.vault_path.clone(),
             })?;
-        file.write_all(&bytes)
-            .and_then(|()| file.sync_all())
-            .map_err(|_| {
-                cleanup_owned_file(&temp_path);
-                WorktreeTrashError::MetadataWriteFailed {
-                    vault_path: record.vault_path.clone(),
-                }
-            })?;
+        if file.write_all(&bytes).is_err() || file.sync_all().is_err() {
+            cleanup_owned_file(&temp_path);
+            return Err(WorktreeTrashError::MetadataWriteFailed {
+                vault_path: record.vault_path.clone(),
+            });
+        }
         Ok(temp_path)
     }
 }
@@ -494,15 +491,15 @@ fn observe_regular_file(
     };
     ensure_regular_file(&before, vault_path)?;
 
-    let mut file = File::open(path).map_err(|_| WorktreeTrashError::TargetReadFailed {
-        vault_path: vault_path.clone(),
-    })?;
     let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes)
+    File::open(path)
+        .map_err(|_| WorktreeTrashError::TargetReadFailed {
+            vault_path: vault_path.clone(),
+        })?
+        .read_to_end(&mut bytes)
         .map_err(|_| WorktreeTrashError::TargetReadFailed {
             vault_path: vault_path.clone(),
         })?;
-    drop(file);
 
     let after = fs::symlink_metadata(path).map_err(|_| {
         WorktreeTrashError::TargetChangedBeforeMove {
@@ -633,14 +630,23 @@ fn record_id_for(
     WorktreeTrashRecordId(content_hash_for_bytes(&bytes).as_hex().to_owned())
 }
 
+fn recompute_record_id(
+    record: &WorktreeTrashRecord,
+) -> Result<WorktreeTrashRecordId, WorktreeTrashError> {
+    Ok(record_id_for(
+        &record.vault_path,
+        &record.tombstone_revision_id,
+        record.content_hash,
+        unix_seconds(record.retained_at)?,
+    ))
+}
+
 fn append_length_prefixed(output: &mut Vec<u8>, value: &[u8]) {
     output.extend_from_slice(&(value.len() as u64).to_be_bytes());
     output.extend_from_slice(value);
 }
 
 fn metadata_bytes(record: &WorktreeTrashRecord) -> Result<Vec<u8>, WorktreeTrashError> {
-    let retained_at = unix_seconds(record.retained_at)?;
-    let retention_until = unix_seconds(record.retention_until)?;
     Ok(format!(
         "version={TRASH_METADATA_VERSION}\nrecord_id={}\npath_hex={}\ntombstone_revision_hex={}\ncontent_hash={}\nsize={}\nretained_at_unix_seconds={}\nretention_until_unix_seconds={}\n",
         record.record_id.as_str(),
@@ -648,8 +654,8 @@ fn metadata_bytes(record: &WorktreeTrashRecord) -> Result<Vec<u8>, WorktreeTrash
         hex_encode(record.tombstone_revision_id.as_str().as_bytes()),
         record.content_hash,
         record.size,
-        retained_at,
-        retention_until,
+        unix_seconds(record.retained_at)?,
+        unix_seconds(record.retention_until)?,
     )
     .into_bytes())
 }
@@ -681,10 +687,10 @@ fn parse_metadata(bytes: &[u8]) -> Result<WorktreeTrashRecord, WorktreeTrashErro
             _ => return Err(WorktreeTrashError::InvalidMetadata),
         }
     }
-
     if version != Some(TRASH_METADATA_VERSION) {
         return Err(WorktreeTrashError::InvalidMetadata);
     }
+
     let path = String::from_utf8(hex_decode(path_hex.ok_or(WorktreeTrashError::InvalidMetadata)?)?)
         .map_err(|_| WorktreeTrashError::InvalidMetadata)?;
     let revision = String::from_utf8(hex_decode(
@@ -738,7 +744,7 @@ fn hex_encode(bytes: &[u8]) -> String {
 }
 
 fn hex_decode(input: &str) -> Result<Vec<u8>, WorktreeTrashError> {
-    if !input.len().is_multiple_of(2) {
+    if input.len() % 2 != 0 {
         return Err(WorktreeTrashError::InvalidMetadata);
     }
     let bytes = input.as_bytes();
