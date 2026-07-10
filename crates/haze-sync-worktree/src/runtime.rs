@@ -45,7 +45,10 @@ impl WorktreeMode {
     /// Whether authoritative Core changes may be materialized locally.
     #[must_use]
     pub const fn exports_core(self) -> bool {
-        matches!(self, Self::ReadOnly | Self::ExportOnly | Self::Bidirectional)
+        matches!(
+            self,
+            Self::ReadOnly | Self::ExportOnly | Self::Bidirectional
+        )
     }
 }
 
@@ -758,10 +761,7 @@ where
         self.startup_cycle_pending = false;
         self.pending_watcher_hints = 0;
         self.debounce_deadline = None;
-        self.next_periodic_cycle = Some(add_saturating(
-            now,
-            self.policy.periodic_cycle_interval,
-        ));
+        self.next_periodic_cycle = Some(add_saturating(now, self.policy.periodic_cycle_interval));
     }
 }
 
