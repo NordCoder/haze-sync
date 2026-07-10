@@ -1,56 +1,43 @@
-# W1-CORE-P8 — Core compatibility fixtures and integration contract examples
+# W1-FIX-CORE-P8-CI — Core CORE-P8 validation correction
 
 Component: core
 Path: crates/haze-sync-core
 Branch: component/core
 PR: #43
-Role: implementation-worker
+Role: fixer-worker
 
-Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
+Use only the GitHub connector. Do not merge the PR or change its lifecycle state.
 
-## Context
+## Evidence
 
-CORE-P7 implementation, clean-code review, and artifact-based CI correction are accepted. Final source CI is green.
+The final CORE-P8 fixture/test/docs head has a failed Component CI result.
 
-- code_bearing_sha: 6bb7da230d18e68c023117498cefcd9ea81137e7
-- workflow: Component CI
-- workflow_run_id: 29113629870
-- run_number: 1448
-- conclusion: success
+- code_bearing_sha: 14b92f467b5806d31ec14723b5857e64660fdf06
+- workflow_run_id: 29116378264
+- run_number: 1501
+- run_attempt: 1
+- artifact_id: 8236809649
+- artifact_name: ci-diag__component-core__wf-component-ci__run-29116378264__attempt-1
+- artifact_expires_at: 2026-07-11T18:59:37Z
 
-The next implementation phase is CORE-P8 from crates/haze-sync-core/docs/implementation-plan.md.
+Use the diagnostics artifact as the authoritative failure evidence.
 
-## Read
+## Required work
 
-Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current public Core models and serde contracts, accepted API compatibility guidance, downstream mapping examples, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt explicitly instructs it.
+Read the project process files, current Core control files, CORE-P8 fixtures/tests/docs, PR diff, and every required file in artifact 8236809649. If the artifact is unavailable or incomplete, report FIX_BLOCKED_BY_LOGS.
 
-## Task
-
-Implement CORE-P8: Core compatibility fixtures and integration contract examples.
-
-- add minimal synthetic serialized examples for accepted write, same-content, conflict-saved, hash mismatch, tombstone, delete-guard block, idempotency replay/conflict, operation-log cursor outcomes, and doctor summaries where current public Core models support them;
-- keep fixtures language-neutral, deterministic, secret-free, path-safe, and free of raw bytes;
-- add strict fixture-stability tests that detect field, vocabulary, invariant, and semantic drift;
-- document which fields are stable semantic contracts and which remain internal implementation details;
-- ensure downstream components can map examples without depending on private Core internals;
-- avoid duplicating API-owned HTTP DTOs or claiming runtime integration support.
+Apply only the smallest correction demonstrated by the artifact. Preserve the versioned synthetic fixture catalog, strict public-type roundtrips, semantic decision recomputation, secrecy/path-safety checks, stable contract documentation, conflict-saved compatibility explanation, lack of production Core changes, and component ownership.
 
 ## Allowed files
 
-- crates/haze-sync-core/src/** only when fixture helpers or public re-exports are directly required
 - crates/haze-sync-core/tests/**
 - crates/haze-sync-core/fixtures/**
-- crates/haze-sync-core/docs/**
+- crates/haze-sync-core/docs/** only when directly required by diagnostics
+- crates/haze-sync-core/src/** only if the diagnostics directly require a fixture helper or public re-export correction
 - crates/haze-sync-core/control/report.md
 
-## Non-goals
+Do not add API DTOs, TypeScript generation, runtime integrations, persistence/provider behavior, shared workflow/dependency changes, sibling components, or unrelated test changes.
 
-No API DTO duplication, TypeScript generation, Server route tests, Storage repository tests, adapter runtime tests, persistence, provider behavior, live checks, workflow/dependency changes, or sibling component changes.
+Source/test/fixture/docs correction commits must run CI normally. A final report-only commit may skip CI.
 
-## CI trigger policy
-
-Product/source/test/fixture/docs commits must not skip CI. A final report-only commit may skip CI.
-
-## Report
-
-Write only crates/haze-sync-core/control/report.md. Use report-template.md, REPORT_TYPE IMPLEMENTATION, phase_id CORE-P8.
+Write only crates/haze-sync-core/control/report.md using REPORT_TYPE FIX and phase_id FIX-CORE-P8-CI.
