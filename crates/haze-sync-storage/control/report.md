@@ -1,13 +1,13 @@
 REPORT_TYPE:
-CLEAN_CODE_REVIEW
+FIX
 
 STATUS:
-CLEAN_BLOCKED_BY_TOOLING
+FIX_COMPLETE
 
 AGENT:
-role: clean-code-reviewer
-agent_execution_id: W1-STOR-P7C-storage-idempotency-cursor-clean-code-review
-chat_name: storage — W1 STOR-P7C Clean-Code Review
+role: fixer-worker
+agent_execution_id: W1-FIX-STOR-P7C-CI-storage-clippy-fix
+chat_name: storage — W1 FIX-STOR-P7C-CI CI Fix
 
 COMPONENT:
 name: storage
@@ -21,29 +21,28 @@ control_report_path: crates/haze-sync-storage/control/report.md
 
 WAVE:
 id: W1
-phase_id: STOR-P7C
-dependency_status: active control state was PROMPT_READY; active_prompt matched crates/haze-sync-storage/control/prompt.md; active role was clean-code-reviewer; STOR-P7 implementation and fixer cycle were complete; Component CI run 29090307985 was independently observed completed/success for code-bearing fixer head 00f4cfaaac43d6c8eec09a49d6d0968e68a84226 before this review
+phase_id: FIX-STOR-P7C-CI
+dependency_status: active control state was PROMPT_READY; active_prompt matched crates/haze-sync-storage/control/prompt.md; active role was fixer-worker; STOR-P7C clean-code report status was CLEAN_BLOCKED_BY_TOOLING; active state recorded Component CI run 29092943655 as CI_RED with diagnostics artifact 8227556619
 
 SUMMARY:
-Reviewed STOR-P7 idempotency and adapter cursor persistence together with the prior CI correction. First-writer preservation, same-request replay, different-request conflict classification, atomic cursor initialization, monotonic updates, lower-sequence metadata preservation, raw-cursor-free summaries, caller-owned transactions, and component non-goals remain intact. Found one local invariant bypass: `IdempotencyRecordInput` derived `Deserialize`, allowing serialized input to construct the public repository input without passing through the validating constructor. Replaced the derived implementation with a manual serde implementation that delegates to `IdempotencyRecordInput::new`, preserving valid serialization compatibility while rejecting invalid idempotency keys with the existing safe error text and without echoing raw key values. Added unit coverage for valid roundtrip and invalid-key rejection. Component CI run 29092943655 completed with cargo fmt, cargo check, cargo test, and cargo clippy all successful, but the workflow concluded failure solely because `Finalize CI diagnostics` failed. That workflow/tooling step is outside the allowed storage component scope, so the clean-code result is blocked by tooling rather than by product code.
+Read the complete STOR-P7C diagnostics artifact and fixed its only reported failure. The artifact identified one `cargo-clippy` error in `crates/haze-sync-storage/src/repositories/idempotency.rs`: a redundant closure around `serde::de::Error::custom`. Replaced only that closure with the associated function, exactly as clippy required. The commit changes one line and preserves validated idempotency input construction, serde behavior, first-write/replay/conflict outcomes, stored response safety, cursor behavior, transaction boundaries, tests, public APIs, and component ownership. Follow-up Component CI run 29102448996 completed successfully, including cargo fmt, cargo check, cargo test, cargo clippy, and diagnostics finalization.
 
 CHANGED_FILES:
 - crates/haze-sync-storage/src/repositories/idempotency.rs
-- crates/haze-sync-storage/src/repositories/idempotency/tests.rs
 - crates/haze-sync-storage/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/storage
 base_branch: main
-base_sha: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
-head_sha: 7334c568c95823350fdb1f8bbc0ad8743877d4d4 before report write; report write creates the next branch head
+base_sha: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2 as reported by PR metadata
+head_sha: 134923151514f5d65bad7939a5703e90ff268609 before report write; report write creates the next branch head
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: crates/haze-sync-storage/control/prompt.md
 control_report_written: crates/haze-sync-storage/control/report.md
 control_files_archived_by_worker: no
 ci_skip_used: yes for the final report-only commit only
-ci_skip_reason: final commit updates only crates/haze-sync-storage/control/report.md; both source/test clean-code commits used normal CI and triggered Component CI run 29092943655
+ci_skip_reason: final commit updates only crates/haze-sync-storage/control/report.md; the source fix commit did not skip CI and produced green Component CI evidence
 
 SCOPE:
 allowed_files_only: yes
@@ -62,54 +61,50 @@ affected_components: storage only
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
 main_changes:
-- Reviewed accepted Core idempotency key, request fingerprint, stored response, replay outcome, operation sequence, and cursor update primitives without adding a Storage-to-Core dependency.
-- Verified first-write preservation: existing rows and response snapshots are not overwritten for same-key replay or different-request conflict outcomes.
-- Verified persisted adapter ids, idempotency keys, request hashes, cursor adapter ids, and cursor sequences are validated before repository values leave Storage.
-- Verified cursor initialization and update use single PostgreSQL upserts, lower sequences preserve sequence, external cursor JSON, last-success timestamp, and updated timestamp, and equal/higher requests retain the existing monotonic repository behavior.
-- Verified `AdapterCursorSummary` serializes only cursor presence and excludes raw external cursor JSON.
-- Found that derived deserialization bypassed the `IdempotencyRecordInput::new` validation boundary.
-- Replaced derived input deserialization with a manual implementation that reconstructs the input only through the validating constructor.
-- Added valid serde roundtrip coverage and invalid-key deserialization coverage that checks the error does not echo the raw key.
-behavior_changes: invalid serialized `IdempotencyRecordInput` keys are now rejected through the same safe validation path as direct construction; valid serialized inputs, repository signatures, first-writer outcomes, response snapshots, and cursor behavior are unchanged
-bugs_found: one constructor-invariant bypass through derived `Deserialize` on the public idempotency repository input
-bugs_fixed: serialized idempotency inputs now pass through constructor validation and return safe key errors without raw-value disclosure
-cleanups_made: centralized all `IdempotencyRecordInput` construction paths on one validation boundary while preserving serde compatibility
-non_goals_preserved: no HTTP replay middleware, no adapter polling, no provider calls, no public admin renderer, no Core policy implementation, no schema/migration change, no workflow/dependency change, no sibling change, no test deletion, and no assertion weakening
-deferred_work: CI diagnostics finalizer failure requires orchestrator/tooling triage outside storage scope; feature-gated PostgreSQL tests still require an explicit safe test database and are not executed by default Component CI; broader shared-database harness isolation remains planned for STOR-P9
+- Replaced `.map_err(|error| <D::Error as serde::de::Error>::custom(error))` with `.map_err(<D::Error as serde::de::Error>::custom)`.
+- Preserved the manual `Deserialize` implementation and its delegation to `IdempotencyRecordInput::new`.
+- Preserved all tests and assertions without weakening or deletion.
+behavior_changes: none
+bugs_found: one artifact-reported `clippy::redundant_closure` violation
+bugs_fixed: the redundant closure was replaced with the equivalent associated function
+cleanups_made: compiler/linter-directed one-line cleanup only
+non_goals_preserved: no HTTP middleware, adapter polling, provider calls, public admin rendering, Core policy implementation, schema/migration expansion, workflow/dependency changes, sibling changes, test deletion, or assertion weakening
+deferred_work: none for this fixer phase; feature-gated PostgreSQL tests still require an explicit safe test database as previously documented
 
 TESTS_AND_CHECKS:
 checks_run:
-- Re-read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, implementation-worker-prompt.md, fixer-worker-prompt.md, and chatgpt-gh-connector.md from Project Sources.
-- Read current storage control state, exact active prompt, prior fixer report, component contract, STOR-P7 implementation-plan section, implementation log, dependency map, current idempotency/cursor source and tests, storage test-support helpers, accepted Core idempotency/cursor primitives, PR metadata, phase compare metadata, and main..component/storage compare metadata through the GitHub connector.
-- Did not read any CI diagnostics artifact because the active role is clean-code-reviewer and the prompt prohibits it.
-- Verified commits 6965a286f6ad5d28a7ca76fd4607c14c69a50809 and 7334c568c95823350fdb1f8bbc0ad8743877d4d4 each changed only one allowed storage source/test file.
-- Observed prior Component CI run 29090307985 completed successfully for fixer source head 00f4cfaaac43d6c8eec09a49d6d0968e68a84226.
-- Observed new Component CI run 29092943655 on clean-code source/test head 7334c568c95823350fdb1f8bbc0ad8743877d4d4: cargo fmt success, cargo check success, cargo test success, cargo clippy success, Finalize CI diagnostics failure, overall workflow failure.
+- Re-read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, current control state/prompt/prior report, component contract, STOR-P7 implementation-plan section, implementation log, dependency map, current idempotency source, PR metadata, and phase compare metadata.
+- Downloaded diagnostics artifact 8227556619 and read summary.md, manifest.json, failures/cargo-clippy.txt, and logs/cargo-clippy.log completely.
+- Verified the source commit 134923151514f5d65bad7939a5703e90ff268609 contains exactly the artifact-directed one-line diff.
+- Observed Component CI run 29102448996, run number 1243, completed with conclusion success.
+- Observed cargo fmt, cargo check, cargo test, cargo clippy, and Finalize CI diagnostics all completed successfully in run 29102448996.
 checks_not_run:
 - cargo fmt --all --check locally
 - cargo check --workspace locally
 - cargo test --workspace locally
 - cargo clippy --workspace --all-targets -- -D warnings locally
-- cargo test -p haze-sync-storage --features test-support locally or in Component CI
-ci_status: CI_RED for Component CI run 29092943655 because the out-of-scope `Finalize CI diagnostics` tooling step failed; all Rust validation steps completed successfully
+- cargo test -p haze-sync-storage --features test-support locally
+ci_status: CI_GREEN for Component CI run 29102448996 on source-fix head 134923151514f5d65bad7939a5703e90ff268609
 workflow_urls:
-- prior successful run: Component CI 29090307985, run_number 1173, conclusion success
-- clean-code run: Component CI 29092943655, run_number 1212, conclusion failure only at Finalize CI diagnostics
+- failed run: Component CI 29092943655, run_number 1212, attempt 1, artifact 8227556619
+- successful fix run: Component CI 29102448996, run_number 1243, conclusion success
 known_failures:
-- `Finalize CI diagnostics` failed after fmt/check/test/clippy had all succeeded; no product-code check failure was observed
+- failed run artifact reported one redundant-closure clippy error; corrected and verified green
 
 CI_DIAGNOSTICS:
-artifact_based_logs: no; clean-code role did not read diagnostics artifacts
-artifact_name: not read
-artifact_id: not read
+artifact_based_logs: yes
+artifact_name: ci-diag__component-storage__wf-component-ci__run-29092943655__attempt-1
+artifact_id: 8227556619
 workflow_run_id: 29092943655
-workflow_run_attempt: not inspected
-artifact_status: not inspected by this role
-summary_read: no
-manifest_read: no
-logs_read: none
+workflow_run_attempt: 1
+artifact_status: downloaded, extracted, and read successfully
+summary_read: yes
+manifest_read: yes
+logs_read:
+- failures/cargo-clippy.txt
+- logs/cargo-clippy.log
 raw_job_logs_used: no
-diagnostics_failure: workflow metadata shows failure only in Finalize CI diagnostics; detailed artifact/log diagnosis is reserved for orchestrator-assigned tooling/fixer work
+diagnostics_failure: none
 
 SAFETY_AND_SECRECY:
 secrets_committed: no
@@ -120,20 +115,18 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- Component CI run 29092943655 failed only in the diagnostics finalizer after every Rust validation step succeeded; storage clean-code scope does not permit workflow/script changes.
-- Feature-gated PostgreSQL tests are not executed by default Component CI and require an explicit safe test database; shared harness migration/cleanup isolation remains a STOR-P9 concern.
-- Branch remains diverged from main: current main head c1e69a664388b0cba028170e8398b9088218957d, merge base 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2.
-- Shell commands against the repository were not run because this worker is restricted to the GitHub connector.
-- This final report-only commit uses [skip ci] and is not CI evidence; source/test clean-code commits did not skip CI.
+- Branch remains a draft component PR and is not merged; merge readiness remains orchestrator-owned.
+- Shell commands against the repository were not run because this worker is restricted to the GitHub connector; GitHub Component CI is the verification source.
+- The final report-only commit uses [skip ci] and is not CI evidence; source-fix commit 134923151514f5d65bad7939a5703e90ff268609 did not skip CI.
 
 BLOCKERS:
-- CI diagnostics finalizer/tooling failure outside the allowed storage component scope prevents a clean lifecycle acceptance despite all Rust checks passing
+none
 
 NEXT_RECOMMENDED_AGENT:
 orchestrator
 
 FINAL_VERDICT:
-CLEAN_BLOCKED_BY_TOOLING. STOR-P7 repository behavior and component boundaries pass clean-code review after fixing the serialized-input constructor bypass. The clean-code source/test head passed cargo fmt, cargo check, cargo test, and cargo clippy. Component CI nevertheless concluded failure solely in `Finalize CI diagnostics`, an out-of-scope tooling step that requires orchestrator triage or a separately scoped CI/tooling fixer. The final report-only commit uses CI skip and is not CI evidence.
+FIX_COMPLETE. The complete diagnostics artifact contained one clippy redundant-closure failure in the allowed idempotency repository file. The exact one-line correction was applied without semantic or API changes. Follow-up Component CI run 29102448996 completed successfully across fmt, check, test, clippy, and diagnostics finalization. The report-only commit uses CI skip and is not CI evidence.
 
 PUSHED:
 yes
