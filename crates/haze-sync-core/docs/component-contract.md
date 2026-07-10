@@ -11,7 +11,7 @@ The component is responsible for pure policy and decision logic that keeps Core 
 - conflict policy selection and conflict-copy path generation;
 - metadata-only `conflict_saved` preservation planning;
 - storage/API-neutral conflict resolution action planning;
-- tombstone metadata creation and retention validation;
+- tombstone metadata creation, validation, and pure restore/retention-cleanup eligibility classification;
 - mass-delete guard threshold evaluation;
 - idempotency key, fingerprint, and replay decision primitives;
 - operation-log, changes-feed, and adapter-cursor value models;
@@ -29,8 +29,8 @@ Current public modules:
 - `conflict_service` — conflict policy names, conflict record metadata, conflict-copy path requests, conflict path generation, conflict validation errors, and storage/API-neutral conflict resolution action plans.
 - `policy_engine` — pure conflict policy application that keeps the current revision authoritative and plans incoming-content backup/conflict metadata.
 - `conflict_saved_planner` — fan-in planner that converts `revision_service` `conflict_saved` outcomes into storage/API-neutral conflict preservation plans.
-- `tombstone_service` — tombstone identifiers, retention metadata, tombstone creation inputs, and restore-ready tombstone metadata without restore behavior.
-- `delete_guard` — deterministic mass-delete threshold policy, per-run scope model, manual unlock flag model, and guard decisions.
+- `tombstone_service` — tombstone identifiers, validated retention and restore metadata, restore eligibility, and retention-cleanup eligibility without restore or cleanup side effects.
+- `delete_guard` — deterministic mass-delete threshold policy, per-run scope model, category-scoped manual unlock model, and guard decisions.
 - `idempotency` — idempotency key validation, safe request fingerprints, stored response snapshots, stored record models, and replay/conflict classification.
 - `operation_log` — operation sequences, bounded changes queries, operation kinds, changes pages, tombstone identifiers for operation rows, and cursor update classification.
 - `doctor` — passive doctor check identifiers, JSON-safe check results, redacted check details, and aggregate report summaries.
@@ -48,6 +48,8 @@ Required input rules:
 - Every write decision that can overwrite existing file content must include an explicit `base_revision_id`, where `None` means explicit `base_revision_id = null`.
 - Upsert content must be accompanied by the expected SHA-256 content hash.
 - Caller-owned repository/content-store/operation-log implementations must enforce their own transaction boundaries, locks, durability, and persistence behavior.
+- Tombstone cleanup classification must receive an explicit UTC evaluation timestamp; Core must not read the system clock.
+- Restored tombstone metadata is valid only when restore timestamp, adapter ID, and restore revision ID are all present together.
 - Delete-guard evaluations must include an adapter/run scope and the caller's proposed delete count plus pre-run total file count.
 - Manual delete unlocks must be scoped to the exact adapter/run and threshold category they cover.
 - Conflict resolution planning must receive a validated open conflict record and a Core-owned action name.
@@ -66,6 +68,8 @@ Required output rules:
 - Conflict preservation outputs are metadata-only plans. They do not write conflict-copy bytes, persist conflict rows, or append operation-log entries.
 - Conflict resolution outputs are storage/API-neutral plans. `accept_current`, `keep_both`, and `mark_resolved` are metadata-only from Core's perspective; `accept_conflict` requires downstream storage to create a new current revision from preserved incoming conflict content.
 - Tombstone outputs record delete intent and retention metadata only. They do not physically remove revisions, blobs, worktree files, or provider files.
+- Restore eligibility classifies a tombstone as restore-ready or already restored; it does not create a restore revision or mutate metadata.
+- Retention-cleanup eligibility classifies a tombstone as retained, eligible at/after the exact retention boundary, or ineligible because it was restored; it does not delete data.
 - Delete-guard outputs classify whether a proposed delete run is allowed, blocked by count, blocked by ratio, or blocked pending manual unlock.
 - Operation-log and changes-feed outputs validate sequence ordering and limit bounds but do not query storage.
 - Doctor outputs contain JSON-safe statuses, messages, counts, booleans, and sampled content hashes only.
@@ -92,7 +96,7 @@ Core does not own:
 - Obsidian plugin runtime behavior;
 - worktree filesystem scanning, trash, materialization, or watcher loops;
 - background jobs, async runtimes, queues, or schedulers;
-- hard-delete cleanup or retention execution.
+- restore execution, hard-delete cleanup, or retention execution.
 
 Persistence and runtime components may use Core outputs to decide what to write, but they must implement storage, transactional integrity, idempotent persistence, and external side effects outside this crate.
 
@@ -119,7 +123,7 @@ Core does not implement:
 - provider SDK integration;
 - Google Drive, Obsidian, or worktree adapter loops;
 - conflict-resolution API wiring;
-- physical trash moves, hard delete, or retention cleanup jobs;
+- restore revision creation, physical trash moves, hard delete, or retention cleanup jobs;
 - deployment, CLI command parsing, or server lifecycle management;
 - broad runtime side effects.
 
@@ -157,8 +161,8 @@ Required test categories:
 - conflict path generation, recursive conflict-area rejection, and path mismatch validation;
 - conflict policy outcomes and conflict-saved planning;
 - conflict resolution action planning, including metadata-only actions and new-current-revision effects;
-- tombstone id validation, retention validation, and restore-ready metadata shape;
-- delete guard count/ratio/manual-unlock decisions, including scoped unlock mismatch cases;
+- tombstone ID and metadata validation, restore-ready/already-restored classification, and retention cleanup before/at/after the exact boundary;
+- delete guard zero-total behavior, exact count/ratio boundaries, over-threshold decisions, overflow-safe ratio comparisons, and adapter/run/category-scoped unlock mismatch;
 - idempotency key validation, request fingerprint determinism, replay of same request, and conflict for different request;
 - changes query bounds, monotonic changes pages, operation kind parsing, and cursor regression rejection;
 - passive doctor check status derivation and redaction-oriented detail payloads;
@@ -169,6 +173,7 @@ Checks expected for Core changes when the environment supports shell execution:
 - `cargo fmt --check`
 - `cargo check -p haze-sync-core`
 - `cargo test -p haze-sync-core`
+- `cargo clippy -p haze-sync-core --all-targets -- -D warnings`
 
 ## Contract change protocol
 
