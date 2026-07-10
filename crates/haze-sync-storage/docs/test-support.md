@@ -34,9 +34,11 @@ cargo check -p haze-sync-storage --features test-support
 ```
 
 The default Component CI workflow runs workspace format/check/test/clippy without
-the `test-support` feature. Therefore database-backed tests are explicitly
-**not run** by that workflow unless a future CI-owned job opts into the feature
-and supplies the required test-only environment.
+a CI-owned PostgreSQL service. Tests that explicitly use the optional
+`connect_test_database_from_env` compatibility helper report the database path as
+not run when `HAZE_SYNC_TEST_DATABASE_URL` is absent. A future CI-owned database
+job should supply the variable and use the required or prepare helpers for
+mandatory execution.
 
 ## Configuration contract
 
@@ -44,8 +46,8 @@ and supplies the required test-only environment.
   implicitly by storage test support.
 - General application `DATABASE_URL` configuration is ignored. This prevents a
   developer or CI job from accidentally reusing a runtime database.
-- Missing, blank, non-Unicode, malformed, non-PostgreSQL, or unsafe
-  configuration is an error.
+- Malformed, non-Unicode, non-PostgreSQL, or unsafe configuration is always an
+  error.
 - The database name must contain a standalone `test` marker such as
   `haze_sync_test`, `test_haze_sync`, or `haze_sync_test42`.
 - Names containing production markers such as `prod`, `production`, `live`,
@@ -55,14 +57,20 @@ and supplies the required test-only environment.
   support errors. Raw URLs are available only through the explicitly sensitive
   accessor used to construct the SQLx pool.
 
-Once `test-support` is enabled, missing configuration or an unavailable database
-must fail the test run. A test must not convert connection, setup, migration, or
-cleanup failure into a passing result. The only supported no-database path is to
-run without the feature, which records those tests as not compiled/not run.
+`connect_required_test_database_from_env` and
+`prepare_test_database_from_env` require nonblank configuration. Missing
+configuration or an unavailable database fails through a redacted error.
+
+`connect_test_database_from_env` is a compatibility helper for tests whose name
+and contract explicitly say "when real PostgreSQL is available". It returns
+`Ok(None)` only when `HAZE_SYNC_TEST_DATABASE_URL` is absent or blank. Invalid
+configuration and connection, setup, migration, or cleanup failures remain
+errors and must not be converted into passing results.
 
 ## Database setup and isolation
 
-`prepare_test_database_from_env` is the preferred setup helper. It:
+`prepare_test_database_from_env` is the preferred setup helper for mandatory
+PostgreSQL integration tests. It:
 
 1. requires and validates `HAZE_SYNC_TEST_DATABASE_URL`;
 2. connects without exposing connection details in errors;
