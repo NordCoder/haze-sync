@@ -2,6 +2,39 @@
 
 ## Entries
 
+### 2026-07-10 — W1/DEP-P6 reverse proxy, TLS, and public access boundary
+
+Agent:
+Implementation Worker
+
+Branch:
+component/deployment
+
+Prompt:
+deploy/control/prompt.md
+
+Report:
+deploy/control/report.md
+
+Commit(s):
+
+- 63209c593096cefcec06e03721743d8bf84aa825 — Add secure Caddy reverse proxy example
+- 4ac5c746acb8b6f579bb113d2ce1f6eccda6a54f — Document TLS and public access boundary
+- cfbbca690c17fe2db2d6cfd111f4733dc9767cf3 — Add reverse proxy boundary to deployment contract
+- 23052f6d15a23b551c5648540495e6fa9127824c — Link server compose to public access runbook
+- 29b54a77c9f08fc8e9ff4b0ade63248ce804e512 — Record Caddy public access boundary decision
+
+Summary:
+Implemented DEP-P6 with one placeholder-only Caddy example and a public-access runbook. The topology terminates public TLS at Caddy and proxies to the Server over `127.0.0.1:8080`; blocks `/health` and `/ready` publicly while using loopback `/health` for active checks; preserves Server-owned bearer authentication and role checks; aligns the proxy request-body limit with the accepted `52,428,800`-byte Server/API contract; and documents DNS, certificate storage, firewall/port, validation, smoke-check, and secrecy boundaries. Updated the Deployment contract, decisions, and Server Compose runbook to describe the example honestly without claiming a running proxy, certificate provisioning, DNS automation, firewall mutation, or production readiness.
+
+Status:
+SELF_ACCEPT_PENDING_CI
+
+Follow-ups:
+Run clean-code review and external CI. Validate the Caddyfile with Caddy 2.10 or newer. A later authorized rollout must replace the placeholder hostname, configure DNS/firewall/certificate storage, and start/reload Caddy outside this connector-only phase. Sanitized proxy logging/retention and service-manager wiring remain deferred.
+
+---
+
 ### 2026-07-10 — W1/DEP-P5 object-store, worktree, and host directory provisioning
 
 Agent:
