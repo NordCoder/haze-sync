@@ -276,10 +276,10 @@ fn adapter_modes_produce_distinct_cycle_capabilities() {
 }
 
 #[test]
-fn watcher_failure_degrades_to_periodic_full_scans() {
+fn watcher_start_failure_degrades_to_periodic_full_scans_without_shutdown() {
     let clock = FakeClock::new();
     let watcher = FakeWatcher {
-        start_failure: Some(WorktreeWatcherFailure::Start),
+        start_failure: Some(WorktreeWatcherFailure::Poll),
         ..FakeWatcher::default()
     };
     let mut runtime = WorktreeRuntimeService::new(
@@ -305,6 +305,66 @@ fn watcher_failure_degrades_to_periodic_full_scans() {
         .requests
         .iter()
         .all(|request| request.full_scan_required));
+    assert_eq!(runtime.shutdown().unwrap().watcher, WorktreeRuntimeWatcherState::Stopped);
+    assert_eq!(runtime.watcher_mut().shutdowns, 0);
+}
+
+#[test]
+fn watcher_poll_failure_is_normalized_and_released_on_shutdown() {
+    let clock = FakeClock::new();
+    let mut watcher = FakeWatcher::default();
+    watcher
+        .polls
+        .push_back(Err(WorktreeWatcherFailure::Shutdown));
+    let mut runtime = WorktreeRuntimeService::new(
+        WorktreeMode::ImportOnly,
+        policy(),
+        clock,
+        watcher,
+        FakeCycle::default(),
+    );
+
+    runtime.start().unwrap();
+    runtime.poll().unwrap();
+    assert_eq!(
+        runtime.status().watcher,
+        WorktreeRuntimeWatcherState::Failed(WorktreeWatcherFailure::Poll)
+    );
+
+    let shutdown = runtime.shutdown().unwrap();
+    assert_eq!(shutdown.watcher, WorktreeRuntimeWatcherState::Stopped);
+    assert_eq!(runtime.watcher_mut().shutdowns, 1);
+}
+
+#[test]
+fn closed_watcher_is_released_and_shutdown_failure_is_normalized() {
+    let clock = FakeClock::new();
+    let mut watcher = FakeWatcher {
+        shutdown_failure: Some(WorktreeWatcherFailure::Start),
+        ..FakeWatcher::default()
+    };
+    watcher.polls.push_back(Ok(WorktreeWatcherPoll::Closed));
+    let mut runtime = WorktreeRuntimeService::new(
+        WorktreeMode::ImportOnly,
+        policy(),
+        clock,
+        watcher,
+        FakeCycle::default(),
+    );
+
+    runtime.start().unwrap();
+    runtime.poll().unwrap();
+    assert_eq!(
+        runtime.status().watcher,
+        WorktreeRuntimeWatcherState::Closed
+    );
+
+    let shutdown = runtime.shutdown().unwrap();
+    assert_eq!(
+        shutdown.watcher,
+        WorktreeRuntimeWatcherState::Failed(WorktreeWatcherFailure::Shutdown)
+    );
+    assert_eq!(runtime.watcher_mut().shutdowns, 1);
 }
 
 #[test]
