@@ -1,10 +1,14 @@
 import { Plugin, TAbstractFile, TFile } from "obsidian";
 
+import type { ConflictResolutionAction } from "./api-client";
 import { HazeSyncApiClient } from "./api-client";
 import {
   BaseRevisionState,
   createDefaultBaseRevisionState,
 } from "./base-revision-store";
+import type { ConflictCenterItem, ConflictResolutionResult } from "./conflict-center";
+import { loadOpenConflictItems, resolveConflictThroughServer } from "./conflict-center";
+import { ConflictCenterModal } from "./conflict-center-modal";
 import { factFromEventPath } from "./local-file-facts";
 import {
   LocalSyncState,
@@ -43,6 +47,7 @@ export default class HazeSyncPlugin extends Plugin {
   private remoteSyncState: RemoteSyncState = createDefaultRemoteSyncState();
   private readonly remoteEchoSuppressor = new RemoteEchoSuppressor();
   private pendingDataSave: Promise<void> = Promise.resolve();
+  private serverOpenConflictCount?: number;
   private scanner?: VaultScanner;
   private statusReporter?: SafeStatusReporter;
   private settingsTab?: HazeSyncSettingsTab;
@@ -60,6 +65,7 @@ export default class HazeSyncPlugin extends Plugin {
     this.addSettingTab(this.settingsTab);
     this.addScanCommand();
     this.addRemotePullCommand();
+    this.addConflictCenterCommand();
     this.registerVaultEventHints();
 
     this.refreshSettingsStatus();
@@ -106,18 +112,22 @@ export default class HazeSyncPlugin extends Plugin {
 
     const queueText = pendingQueueSummaryText(summarizePendingQueue(this.localState.pendingQueue));
     const baseCount = Object.keys(this.baseRevisionState.byPath).length;
-    const remoteConflictCount = Object.keys(this.remoteSyncState.conflicts).length;
+    const localRemoteConflictCount = Object.keys(this.remoteSyncState.conflicts).length;
     const remoteCursor = this.remoteSyncState.changeCursor ?? "none";
+    const serverConflictText =
+      this.serverOpenConflictCount === undefined
+        ? "server conflicts not loaded"
+        : `${this.serverOpenConflictCount} open server conflict(s)`;
 
     if (validation.normalized.syncMode === "disabled") {
       this.statusReporter.setStatus(
-        `Configured; sync mode is disabled; ${queueText}; ${baseCount} tracked base revision(s); remote cursor ${remoteCursor}; ${remoteConflictCount} remote conflict(s).`,
+        `Configured; sync mode is disabled; ${queueText}; ${baseCount} tracked base revision(s); remote cursor ${remoteCursor}; ${localRemoteConflictCount} local pull conflict(s); ${serverConflictText}.`,
       );
       return;
     }
 
     this.statusReporter.setStatus(
-      `Configured in ${syncModeLabel(validation.normalized.syncMode)} mode; ${queueText}; ${baseCount} tracked base revision(s); remote cursor ${remoteCursor}; ${remoteConflictCount} remote conflict(s).`,
+      `Configured in ${syncModeLabel(validation.normalized.syncMode)} mode; ${queueText}; ${baseCount} tracked base revision(s); remote cursor ${remoteCursor}; ${localRemoteConflictCount} local pull conflict(s); ${serverConflictText}.`,
     );
   }
 
@@ -137,6 +147,16 @@ export default class HazeSyncPlugin extends Plugin {
       name: "Pull remote changes safely",
       callback: () => {
         void this.pullRemoteChangesSafely();
+      },
+    });
+  }
+
+  private addConflictCenterCommand(): void {
+    this.addCommand({
+      id: "haze-sync-open-conflict-center",
+      name: "Open conflict center",
+      callback: () => {
+        this.openConflictCenter();
       },
     });
   }
@@ -262,6 +282,66 @@ export default class HazeSyncPlugin extends Plugin {
       this.refreshSettingsStatus();
       this.statusReporter?.notice("Remote pull failed safely. Local files were preserved and cursor was not advanced for the failed change.", "warning");
     }
+  }
+
+  private openConflictCenter(): void {
+    const validation = validatePluginSettings(this.settings);
+    this.settings = validation.normalized;
+    if (!settingsAreReady(this.settings)) {
+      this.refreshSettingsStatus(validation);
+      this.statusReporter?.notice("Configure Haze Sync settings before opening the conflict center.", "warning");
+      return;
+    }
+
+    new ConflictCenterModal(this.app, {
+      loadOpenConflicts: () => this.loadOpenConflicts(),
+      resolveConflict: (item, action, idempotencyKey) =>
+        this.resolveOpenConflict(item, action, idempotencyKey),
+      canResolveConflicts: () => this.canResolveConflicts(),
+    }).open();
+  }
+
+  private async loadOpenConflicts(): Promise<ConflictCenterItem[]> {
+    const client = HazeSyncApiClient.fromSettings(this.settings);
+    const items = await loadOpenConflictItems(client);
+    this.serverOpenConflictCount = items.length;
+    this.refreshSettingsStatus();
+    return items;
+  }
+
+  private async resolveOpenConflict(
+    item: ConflictCenterItem,
+    action: ConflictResolutionAction,
+    idempotencyKey: string,
+  ): Promise<ConflictResolutionResult> {
+    if (!this.canResolveConflicts()) {
+      throw new Error("Conflict resolution is disabled by the current sync mode.");
+    }
+
+    const result = await resolveConflictThroughServer(
+      HazeSyncApiClient.fromSettings(this.settings),
+      item,
+      action,
+      idempotencyKey,
+      this.baseRevisionState,
+      new Date().toISOString(),
+    );
+
+    if (result.serverConfirmed) {
+      this.baseRevisionState = result.baseRevisionState;
+      await this.persistPluginData();
+      this.refreshSettingsStatus();
+    }
+
+    return result;
+  }
+
+  private canResolveConflicts(): boolean {
+    return (
+      settingsAreReady(this.settings) &&
+      this.settings.syncMode !== "disabled" &&
+      this.settings.syncMode !== "dry_run"
+    );
   }
 
   private recordVaultEventHint(file: TAbstractFile, kind: PendingChangeKind, pathOverride?: string): void {
