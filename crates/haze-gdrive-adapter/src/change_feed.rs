@@ -68,9 +68,7 @@ impl DriveChangeEntry {
         })
     }
 
-    pub fn metadata_missing(
-        provider_id: impl Into<String>,
-    ) -> Result<Self, ChangeFeedModelError> {
+    pub fn metadata_missing(provider_id: impl Into<String>) -> Result<Self, ChangeFeedModelError> {
         Ok(Self {
             provider_id: required_provider_id(provider_id)?,
             removed: false,
@@ -326,7 +324,11 @@ impl ChangeProcessingError {
 
 impl fmt::Display for ChangeProcessingError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "change work processing failed: {}", self.safe_detail)
+        write!(
+            formatter,
+            "change work processing failed: {}",
+            self.safe_detail
+        )
     }
 }
 
@@ -445,11 +447,7 @@ impl ProviderBackoffPolicy {
         Self { delays }
     }
 
-    pub fn classify(
-        &self,
-        category: ProviderErrorCategory,
-        attempt: usize,
-    ) -> RetryDisposition {
+    pub fn classify(&self, category: ProviderErrorCategory, attempt: usize) -> RetryDisposition {
         match category {
             ProviderErrorCategory::RateLimit
             | ProviderErrorCategory::ProviderUnavailable
@@ -517,9 +515,7 @@ impl Error for ChangeFeedError {
             Self::CursorStore(error) => Some(error),
             Self::Processing(error) => Some(error),
             Self::State(error) => Some(error),
-            Self::InvalidPageShape
-            | Self::RepeatedPageToken
-            | Self::PageLimitExceeded => None,
+            Self::InvalidPageShape | Self::RepeatedPageToken | Self::PageLimitExceeded => None,
         }
     }
 }
@@ -736,13 +732,11 @@ fn poll_from_cursor(
             DriveChangePoll::CursorInvalidated {
                 new_start_page_token,
             } => {
-                let batch = ChangeWorkBatch::full_scan(
-                    FullScanFallbackReason::ProviderCursorInvalidated,
-                );
+                let batch =
+                    ChangeWorkBatch::full_scan(FullScanFallbackReason::ProviderCursorInvalidated);
                 processor.process(&batch)?;
 
-                let mut recovered_cursor =
-                    DriveChangeCursor::new(new_start_page_token.clone())?;
+                let mut recovered_cursor = DriveChangeCursor::new(new_start_page_token.clone())?;
                 recovered_cursor.finish_batch(new_start_page_token, input.polled_at)?;
                 cursor_store.save_cursor(&recovered_cursor)?;
 
@@ -846,13 +840,13 @@ fn classify_single_change(
     }
 
     match import_execution(mode, dry_run) {
-        Some(execution) => batch
-            .items
-            .push(ChangeWorkItem::Import { metadata, execution }),
-        None => batch.items.push(ChangeWorkItem::SkipImportByMode {
-            provider_id,
-            mode,
+        Some(execution) => batch.items.push(ChangeWorkItem::Import {
+            metadata,
+            execution,
         }),
+        None => batch
+            .items
+            .push(ChangeWorkItem::SkipImportByMode { provider_id, mode }),
     }
 }
 
@@ -899,9 +893,7 @@ fn provider_error(
     ChangeFeedError::Provider { error, retry }
 }
 
-fn required_provider_id(
-    provider_id: impl Into<String>,
-) -> Result<String, ChangeFeedModelError> {
+fn required_provider_id(provider_id: impl Into<String>) -> Result<String, ChangeFeedModelError> {
     let provider_id = provider_id.into();
     let trimmed = provider_id.trim();
     if trimmed.is_empty() {
@@ -910,9 +902,7 @@ fn required_provider_id(
     Ok(trimmed.to_owned())
 }
 
-fn required_page_token(
-    page_token: impl Into<String>,
-) -> Result<String, ChangeFeedModelError> {
+fn required_page_token(page_token: impl Into<String>) -> Result<String, ChangeFeedModelError> {
     let page_token = page_token.into();
     let trimmed = page_token.trim();
     if trimmed.is_empty() {
