@@ -1,41 +1,43 @@
-# W1-FIX-CLI-P4-CI-2-RERUN — CLI CLI-P4 follow-up CI fix
+# W1-CLI-P4C — CLI status/adapters clean-code review
 
 Component: cli
 Path: crates/haze-sync-cli
 Branch: component/cli
 PR: #48
-Role: fixer-worker
+Role: clean-code-reviewer
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
-## Rerun guard
-
-This is an explicit refreshed active prompt. The current report before this prompt was for FIX-CLI-P4-CI, not FIX-CLI-P4-CI-2. Therefore FIX-CLI-P4-CI-2-RERUN is not already complete.
-
 ## Context
 
-The first CLI-P4 fixer completed, but post-fix Component CI failed.
+CLI-P4 implementation and follow-up CI fixer are complete. Follow-up Component CI is green.
 
 - workflow: Component CI
-- workflow_run_id: 29034837249
-- run_number: 693
-- run_attempt: 1
-- artifact_id: 8205459786
-- artifact_name: ci-diag__component-cli__wf-component-ci__run-29034837249__attempt-1
-- artifact_expires_at: 2026-07-10T16:51:38Z
+- workflow_run_id: 29038501230
+- run_number: 738
+- conclusion: success
 
 ## Read
 
-Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, relevant code and PR diff. Download and read diagnostics artifact 8205459786. Read summary.md, manifest.json, and every failed-check log. If missing/expired/malformed/unreadable, report FIX_BLOCKED_BY_LOGS.
+Read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, chatgpt-gh-connector.md, component docs/control files, relevant current source, and PR diff. Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
 
 ## Task
 
-Fix the minimum cause of the latest CLI-P4 CI failure inside cli scope. Expected recent changed area: CLI status/adapters output compatibility and safe rendering. Use the artifact as source of truth.
+Review CLI-P4 server status and adapters read-only commands plus the CI fixer.
+
+Focus areas:
+
+- read-only server/API client boundary;
+- status/adapters command output compatibility;
+- safe rendering and redaction;
+- error mapping for not configured, offline, unauthorized, forbidden, server unavailable, and not ready;
+- placeholder mode honesty when no server config exists;
+- preservation of non-goals.
 
 ## Allowed files
 
 - crates/haze-sync-cli/src/**
-- crates/haze-sync-cli/docs/** only if the artifact proves a docs formatting failure
+- crates/haze-sync-cli/docs/**
 - crates/haze-sync-cli/control/report.md
 
 ## Forbidden changes
@@ -44,8 +46,8 @@ No admin mutations, direct DB reads, provider calls, sibling route changes, toke
 
 ## CI trigger policy
 
-Product/source/docs fixer commits must not skip CI. A final report-only commit may skip CI.
+Source/doc clean-code commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only the report to crates/haze-sync-cli/control/report.md. Use report-template.md. Set REPORT_TYPE to FIX and phase_id to FIX-CLI-P4-CI-2-RERUN.
+Write only the report to crates/haze-sync-cli/control/report.md. Use report-template.md. Set REPORT_TYPE to CLEAN_CODE_REVIEW and phase_id to CLI-P4C.
