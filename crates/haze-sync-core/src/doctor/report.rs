@@ -96,11 +96,9 @@ impl DoctorReport {
         for check in &self.checks {
             check.validate()?;
         }
-        if !self
-            .checks
-            .windows(2)
-            .all(|window| window[0].check_id() <= window[1].check_id())
-        {
+        if !self.checks.windows(2).all(|window| {
+            window[0].check_id().as_str() <= window[1].check_id().as_str()
+        }) {
             return Err("doctor report checks are not deterministically ordered");
         }
         if self.summary != DoctorReportSummary::from_results(&self.checks) {
