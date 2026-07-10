@@ -43,7 +43,7 @@ pub(super) async fn status_route(
 ) -> Result<Response, ApiError> {
     authenticate_admin(&state, &headers).await?;
 
-    let response = status_from_state(&state).await?;
+    let response = status_from_state(&state).await;
 
     Ok((StatusCode::OK, Json(response)).into_response())
 }
@@ -64,25 +64,44 @@ pub(super) async fn adapters_route(
     Ok((StatusCode::OK, Json(response)).into_response())
 }
 
-async fn status_from_state(state: &ServerAppState) -> Result<StatusSummaryResponse, ApiError> {
+async fn status_from_state(state: &ServerAppState) -> StatusSummaryResponse {
     let readiness = state.readiness_state().check().await;
-    let (last_operation_sequence, adapter_count) = if let Some(pool) = state.db_pool() {
-        (
-            query_optional_i64(pool, "select max(seq) from operation_log").await?,
-            Some(query_count(pool, "select count(*) from sync_adapters").await?),
-        )
-    } else {
-        (None, None)
-    };
+    let database_state = dependency_state_from_readiness(&readiness, "database");
+    let object_store_state = dependency_state_from_readiness(&readiness, "object_store");
+    let (last_operation_sequence, adapter_count) =
+        best_effort_runtime_metadata(state, database_state).await;
 
-    Ok(StatusSummaryResponse::from_safe_parts(
+    StatusSummaryResponse::from_safe_parts(
         server_status_from_readiness(&readiness),
-        dependency_state_from_readiness(&readiness, "database"),
-        dependency_state_from_readiness(&readiness, "object_store"),
+        database_state,
+        object_store_state,
         last_operation_sequence,
         adapter_count,
         PauseStatusSummary::unsupported(),
-    ))
+    )
+}
+
+async fn best_effort_runtime_metadata(
+    state: &ServerAppState,
+    database_state: DependencyReadinessState,
+) -> (Option<i64>, Option<u64>) {
+    if database_state != DependencyReadinessState::Ready {
+        return (None, None);
+    }
+
+    let Some(pool) = state.db_pool() else {
+        return (None, None);
+    };
+
+    let last_operation_sequence = query_optional_i64(pool, "select max(seq) from operation_log")
+        .await
+        .ok()
+        .flatten();
+    let adapter_count = query_count(pool, "select count(*) from sync_adapters")
+        .await
+        .ok();
+
+    (last_operation_sequence, adapter_count)
 }
 
 async fn adapters_from_runtime_state(pool: &PgPool) -> Result<AdapterListResponse, ApiError> {
