@@ -1,51 +1,48 @@
-# W1-FIX-CORE-P6-CI — Core CORE-P6 CI correction
+# W1-CORE-P6C — Core idempotency/cursor clean-code review
 
 Component: core
 Path: crates/haze-sync-core
 Branch: component/core
 PR: #43
-Role: fixer-worker
+Role: clean-code-reviewer
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-CORE-P6 implementation is complete, but its final code/docs-bearing Component CI run failed.
+CORE-P6 implementation and artifact-based CI fixer are complete. Post-fix Component CI is green.
 
-- code_bearing_sha: a25d01c9633692906d94f783c053cb332521fe06
+- code_bearing_sha: 97704236cdd13714a0d0c6e4ebac7a27d9a5b231
 - workflow: Component CI
-- workflow_run_id: 29086772001
-- run_number: 1104
-- run_attempt: 1
-- artifact_id: 8225090296
-- artifact_name: ci-diag__component-core__wf-component-ci__run-29086772001__attempt-1
-- artifact_expires_at: 2026-07-11T10:36:24Z
-
-Use the diagnostics artifact as source of truth.
+- workflow_run_id: 29088874164
+- run_number: 1149
+- conclusion: success
 
 ## Read
 
-Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current CORE-P6 source/tests/docs, and PR diff. Download artifact 8225090296 and read summary.md, manifest.json, and every failed-check log. If unavailable or unreadable, report FIX_BLOCKED_BY_LOGS.
+Read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, chatgpt-gh-connector.md, component docs/control files, current CORE-P6 source/tests/docs, fixer changes, accepted Storage/API boundaries, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt explicitly instructs it.
 
 ## Task
 
-Apply only the minimum artifact-proven correction for the CORE-P6 CI failure. Preserve idempotency key redaction, deterministic fingerprinting, validating replay deserialization, operation-log and cursor invariants, durable fan-in documentation, tests, and component boundaries.
+Review CORE-P6 idempotency, operation-log, changes-page, and cursor primitive hardening plus the CI fixer.
+
+Focus on redacted idempotency-key formatting, deterministic fingerprints, validated replay snapshots, safe persisted headers, operation sequence/limit/page invariants, cursor monotonicity, durable fan-in documentation, source compatibility, tests, and non-goal preservation.
 
 ## Allowed files
 
 - crates/haze-sync-core/src/idempotency/**
 - crates/haze-sync-core/src/operation_log/**
-- crates/haze-sync-core/docs/** only if diagnostics prove a documentation issue
+- crates/haze-sync-core/docs/**
 - crates/haze-sync-core/control/report.md
 
 ## Boundaries
 
-No durable repository work, database append implementation, HTTP replay middleware, adapter polling loop, Storage/API/Server edits, workflow/dependency changes, sibling changes, test deletion, or assertion weakening.
+No durable repository implementation, database append logic, HTTP replay middleware, adapter polling loop, Storage/API/Server edits, workflow/dependency changes, sibling changes, test deletion, or assertion weakening.
 
 ## CI trigger policy
 
-Source/test/docs fixer commits must not skip CI. A final report-only commit may skip CI.
+Source/test/docs clean-code commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only crates/haze-sync-core/control/report.md. Use report-template.md, REPORT_TYPE FIX, phase_id FIX-CORE-P6-CI.
+Write only crates/haze-sync-core/control/report.md. Use report-template.md, REPORT_TYPE CLEAN_CODE_REVIEW, phase_id CORE-P6C.
