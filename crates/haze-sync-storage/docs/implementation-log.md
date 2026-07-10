@@ -2,6 +2,34 @@
 
 ## Entries
 
+### 2026-07-10 — W1/STOR-P7 idempotency and cursor repository support
+
+Agent:
+Implementation Worker
+
+Branch:
+component/storage
+
+Prompt:
+crates/haze-sync-storage/control/prompt.md
+
+Report:
+crates/haze-sync-storage/control/report.md
+
+Commit(s):
+See component/storage branch history for the implementation commits.
+
+Summary:
+Hardened durable idempotency and adapter cursor persistence without absorbing Core or adapter behavior. Idempotency helpers now document the accepted Core stored-response snapshot boundary, validate persisted adapter/key/hash metadata safely, preserve the first writer's response for same-request replay and different-request conflict outcomes, and include unit plus feature-gated PostgreSQL roundtrips. Cursor initialization and monotonic updates now use single atomic upserts that handle missing rows and concurrent initializers without same-statement snapshot gaps; regression requests preserve persisted sequence, external cursor, success timestamp, and updated timestamp. Added a serializable cursor summary that exposes only cursor presence, never raw external cursor JSON, plus unit and feature-gated PostgreSQL coverage.
+
+Status:
+SELF_ACCEPT_PENDING_CI
+
+Follow-ups:
+Use Component CI for workspace fmt/check/test/clippy verification. Run the feature-gated PostgreSQL tests in an environment with an explicit safe test database URL, then perform the mandatory clean-code review.
+
+---
+
 ### 2026-07-10 — W1/STOR-P6C conflict and tombstone clean-code review
 
 Agent:
