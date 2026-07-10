@@ -144,10 +144,7 @@ impl WorktreeConfig {
             .map_err(|_| WorktreePathError::LocalPathOutsideRoot)
     }
 
-    fn validate_existing_parent_chain(
-        &self,
-        segments: &[&str],
-    ) -> Result<(), WorktreePathError> {
+    fn validate_existing_parent_chain(&self, segments: &[&str]) -> Result<(), WorktreePathError> {
         if !existing_root_chain_is_safe(&self.root)? {
             return Ok(());
         }
