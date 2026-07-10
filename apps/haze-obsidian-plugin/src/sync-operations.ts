@@ -261,7 +261,10 @@ function preserveUnreadableKnownFiles(
   scanResult: VaultScanResult,
   knownFiles: Record<string, LocalFileFact>,
 ): LocalFileFact[] {
-  const factsByPath = new Map(scanResult.facts.map((fact) => [fact.path, fact]));
+  const factsByPath = new Map<string, LocalFileFact>();
+  for (const fact of scanResult.facts) {
+    factsByPath.set(fact.path, fact);
+  }
   for (const error of scanResult.errors) {
     const known = knownFiles[error.path];
     if (known !== undefined) {
