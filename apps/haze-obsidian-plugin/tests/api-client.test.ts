@@ -129,3 +129,26 @@ test("invalid or permissive legacy payloads fail as invalid responses", async ()
     (error: unknown) => error instanceof ApiClientError && error.category === "invalid_response",
   );
 });
+
+test("canonical public error messages redact the configured token", async () => {
+  const client = clientWithTransport(() =>
+    jsonResponse(
+      {
+        error: {
+          code: "validation_error",
+          message: "Request included synthetic-test-token",
+        },
+      },
+      422,
+    ),
+  );
+
+  await assert.rejects(
+    () => client.getServerInfo(),
+    (error: unknown) =>
+      error instanceof ApiClientError &&
+      error.category === "rejected" &&
+      error.message.includes("[redacted]") &&
+      !error.message.includes("synthetic-test-token"),
+  );
+});
