@@ -7,6 +7,8 @@
 mod hashing;
 mod import_planner;
 mod materializer;
+#[cfg(test)]
+mod materializer_safety_tests;
 mod path_mapping;
 mod scanner;
 
