@@ -1,42 +1,31 @@
-# W1-DEP-P6 — Reverse proxy, TLS, and public access boundary
+# W1-DEP-P6C — Deployment public-access clean-code review
 
 Component: deployment
 Path: deploy
 Branch: component/deployment
 PR: #52
-Role: implementation-worker
+Role: clean-code-reviewer
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-DEP-P5 implementation and clean-code review are accepted. Clean-code Component CI is green.
+DEP-P6 implementation is complete and its final docs/config-bearing Component CI is green.
 
-- code_bearing_sha: 0957601182378790ef72abea0e133572a6c044b1
-- workflow: Component CI
-- workflow_run_id: 29079825684
-- run_number: 891
+- code_bearing_sha: 66267862e6de63b405ded83ace54b458ffeb1306
+- workflow_run_id: 29082102227
+- run_number: 979
 - conclusion: success
-
-The next implementation phase is DEP-P6 from deploy/docs/implementation-plan.md.
 
 ## Read
 
-Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, deployment docs/control files, accepted Server/API auth and upload-limit contracts, current deployment files, and PR diff. Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
+Read process sources, deployment docs/control files, accepted Server/API contracts, current proxy configuration, and PR diff. Do not read diagnostics artifacts unless a future fixer prompt instructs it.
 
 ## Task
 
-Implement DEP-P6: Reverse proxy, TLS, and public access boundary.
+Review DEP-P6 reverse-proxy, TLS, and public-access documentation/configuration.
 
-Follow the plan:
-
-- choose and document one secure-by-default reverse proxy example such as nginx or Caddy;
-- document TLS termination and loopback/local upstream topology;
-- document upload/body-size coordination without changing Server/API limits;
-- document authenticated public-access expectations and which health surfaces may be exposed;
-- document firewall and port boundaries;
-- add placeholder-only proxy configuration under `deploy/reverse-proxy/**` only if it remains syntax-checkable and secret-free;
-- document how operators validate configuration without committing certificate material.
+Focus on secure defaults, placeholder-only configuration, loopback upstream topology, route exposure, upload limit alignment, authentication ownership, Caddy version requirements, validation commands, firewall/DNS boundaries, and secrecy rules.
 
 ## Allowed files
 
@@ -44,14 +33,14 @@ Follow the plan:
 - deploy/reverse-proxy/**
 - deploy/control/report.md
 
-## Non-goals
+## Boundaries
 
-No TLS private keys or certificates, public DNS automation, cloud-provider scripts, server auth-model changes, remote host automation, production credentials, workflow changes, or sibling component changes.
+No certificate/private-key material, credentials, DNS/cloud automation, remote host automation, Server/API behavior changes, workflow changes, or sibling changes.
 
 ## CI trigger policy
 
-Deployment/docs/config commits must not skip CI. A final report-only commit may skip CI.
+Docs/config clean-code commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only the report to deploy/control/report.md. Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION and phase_id to DEP-P6.
+Write only deploy/control/report.md. Use REPORT_TYPE CLEAN_CODE_REVIEW and phase_id DEP-P6C.
