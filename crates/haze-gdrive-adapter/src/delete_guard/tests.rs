@@ -4,9 +4,7 @@ use crate::drive::{
     DriveMetadata, FakeDriveProvider, ProviderError, ProviderErrorCategory, MIME_GOOGLE_FOLDER,
     MIME_TEXT_MARKDOWN,
 };
-use crate::scan::{
-    plan_full_scan, FullScanInput, FullScanPlan, ScanSkipReason, SkippedScanEntry,
-};
+use crate::scan::{plan_full_scan, FullScanInput, FullScanPlan, ScanSkipReason, SkippedScanEntry};
 use crate::state::{GDriveMapping, SafeTimestamp, VaultPath};
 
 fn timestamp(value: &str) -> SafeTimestamp {
@@ -24,8 +22,8 @@ fn mapping(
     name: &str,
     candidate_since: Option<&str>,
 ) -> GDriveMapping {
-    let mut mapping = GDriveMapping::new(path(path_value), provider_id, parent_id, name)
-        .expect("mapping");
+    let mut mapping =
+        GDriveMapping::new(path(path_value), provider_id, parent_id, name).expect("mapping");
     mapping.checksum = Some(format!("checksum-{provider_id}"));
     mapping.core_revision = Some(format!("core-revision-{provider_id}"));
     mapping.core_sequence = Some(10);
@@ -120,11 +118,7 @@ fn repeated_absence_submits_core_delete_and_retires_mapping() {
     let mut core = FakeCoreDeleteGateway::new();
 
     let first_mappings = state.mappings();
-    let first_observation = scan_observation(
-        &provider,
-        &first_mappings,
-        "2026-07-11T08:00:00Z",
-    );
+    let first_observation = scan_observation(&provider, &first_mappings, "2026-07-11T08:00:00Z");
     run_delete_reconciliation(
         &mut core,
         &mut state,
@@ -134,11 +128,7 @@ fn repeated_absence_submits_core_delete_and_retires_mapping() {
     .expect("first reconciliation");
 
     let second_mappings = state.mappings();
-    let second_observation = scan_observation(
-        &provider,
-        &second_mappings,
-        "2026-07-11T09:00:00Z",
-    );
+    let second_observation = scan_observation(&provider, &second_mappings, "2026-07-11T09:00:00Z");
     let outcome = run_delete_reconciliation(
         &mut core,
         &mut state,
@@ -201,8 +191,8 @@ fn folder_movement_is_not_treated_as_disappearance() {
         "note.md",
         Some("2026-07-11T08:00:00Z"),
     );
-    let moved_folder = DriveMetadata::new_special("new-folder", "New", MIME_GOOGLE_FOLDER)
-        .with_parent("root");
+    let moved_folder =
+        DriveMetadata::new_special("new-folder", "New", MIME_GOOGLE_FOLDER).with_parent("root");
     let moved_file = DriveMetadata::new_file("file-1", "note.md", MIME_TEXT_MARKDOWN)
         .with_parent("new-folder")
         .with_md5_checksum("checksum-file-1");
@@ -280,13 +270,7 @@ fn auth_scope_loss_blocks_without_candidate_mutation() {
 
 #[test]
 fn provider_failure_and_incomplete_scan_are_distinct_safe_blocks() {
-    let mappings = vec![mapping(
-        "file-1",
-        "Notes/note.md",
-        "root",
-        "note.md",
-        None,
-    )];
+    let mappings = vec![mapping("file-1", "Notes/note.md", "root", "note.md", None)];
     let provider = FakeDriveProvider::new().with_error(
         "list_children",
         ProviderError::new(
@@ -335,11 +319,7 @@ fn repeated_folder_disappearance_is_blocked_as_mass_delete() {
     let delete_safety = DeleteSafetyConfig::new(5, 100).expect("delete safety");
 
     let first_mappings = state.mappings();
-    let first_observation = scan_observation(
-        &provider,
-        &first_mappings,
-        "2026-07-11T08:00:00Z",
-    );
+    let first_observation = scan_observation(&provider, &first_mappings, "2026-07-11T08:00:00Z");
     let first = run_delete_reconciliation(
         &mut core,
         &mut state,
@@ -351,20 +331,12 @@ fn repeated_folder_disappearance_is_blocked_as_mass_delete() {
     assert_eq!(first.delete_submissions, 0);
 
     let second_mappings = state.mappings();
-    let second_observation = scan_observation(
-        &provider,
-        &second_mappings,
-        "2026-07-11T09:00:00Z",
-    );
+    let second_observation = scan_observation(&provider, &second_mappings, "2026-07-11T09:00:00Z");
     let second = run_delete_reconciliation(
         &mut core,
         &mut state,
         delete_safety,
-        input(
-            "folder-scan-2",
-            "2026-07-11T09:00:00Z",
-            second_observation,
-        ),
+        input("folder-scan-2", "2026-07-11T09:00:00Z", second_observation),
     )
     .expect("second reconciliation");
 
@@ -495,13 +467,9 @@ fn dry_run_previews_confirmed_delete_without_mutating_state_or_core() {
     )
     .expect("input");
 
-    let outcome = run_delete_reconciliation(
-        &mut core,
-        &mut state,
-        permissive_delete_safety(),
-        input,
-    )
-    .expect("reconciliation");
+    let outcome =
+        run_delete_reconciliation(&mut core, &mut state, permissive_delete_safety(), input)
+            .expect("reconciliation");
 
     assert_eq!(outcome.execution, Some(DeleteExecution::DryRun));
     assert_eq!(outcome.delete_previews, 1);
