@@ -22,8 +22,9 @@ pub struct NewContentBlob<'a> {
 
 /// Inserts blob metadata when missing, otherwise returns the existing row.
 ///
-/// The helper is immutable-by-hash and therefore uses the existing row on hash
-/// collisions instead of overwriting metadata.
+/// The no-op conflict update guarantees that concurrent same-hash inserts return
+/// the canonical committed row from this statement. Existing size and path
+/// metadata are never overwritten.
 pub async fn create_or_get_content_blob<'executor, E>(
     executor: E,
     input: &NewContentBlob<'_>,
@@ -33,19 +34,11 @@ where
 {
     let size_bytes = size_bytes_to_i64(input.size_bytes)?;
     let row = sqlx::query(
-        "with inserted as ( \
-             insert into content_blobs (sha256, size_bytes, object_store_path) \
-             values ($1, $2, $3) \
-             on conflict (sha256) do nothing \
-             returning sha256, size_bytes, object_store_path, created_at \
-         ) \
-         select sha256, size_bytes, object_store_path, created_at \
-         from inserted \
-         union all \
-         select sha256, size_bytes, object_store_path, created_at \
-         from content_blobs \
-         where sha256 = $1 \
-         limit 1",
+        "insert into content_blobs (sha256, size_bytes, object_store_path) \
+         values ($1, $2, $3) \
+         on conflict (sha256) do update \
+         set sha256 = content_blobs.sha256 \
+         returning sha256, size_bytes, object_store_path, created_at",
     )
     .bind(input.sha256.to_prefixed_string())
     .bind(size_bytes)
