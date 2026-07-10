@@ -1,4 +1,4 @@
-# W1-DEP-P7-BLOCKED — GDrive service/config fan-in dependency gate
+# W1-DEP-P7-BLOCKED — GDrive runtime and deployment-topology gate
 
 Component: deployment
 Path: deploy
@@ -10,35 +10,24 @@ This is a hold notice, not an executable worker prompt.
 
 ## Accepted state
 
-DEP-P6 implementation and clean-code review are accepted. Final docs/config-bearing CI is green.
+DEP-P6 implementation and clean-code review are accepted with green CI. Storage STOR-P8 mapping and Worktree-state repositories are accepted.
 
-- code_bearing_sha: 66267862e6de63b405ded83ace54b458ffeb1306
-- workflow: Component CI
-- workflow_run_id: 29082102227
-- run_number: 979
-- conclusion: success
+GDA-P7 implementation and GDA-P7C clean-code work are present, but the final GDA-P7C source/test head is formally red and has been routed to `FIX-GDA-P7C-CI` using artifact `8236735946`.
 
-Storage STOR-P8 mapping and Worktree-state repositories are now clean-code/CI accepted. GDrive GDA-P7 implementation and CI correction are complete, and GDA-P7C is queued for clean-code review.
+STOR-P9 test-support implementation is also present but is in its own CI-fixer lifecycle; it does not define the missing runtime topology.
 
 ## Blocked next phase
 
-The next plan phase is DEP-P7: GDrive adapter service and OAuth secret layout.
+DEP-P7 requires an accepted concrete boundary for:
 
-Deployment still lacks an accepted concrete service topology and runtime/config contract for:
-
+- GDrive service process ownership and lifecycle;
 - durable mapping and cursor repository wiring;
-- GDrive process ownership and lifecycle;
-- OAuth/token secret loading and rotation boundaries;
-- Server/API transport and health/readiness exposure;
+- OAuth/token secret loading, rotation, and redaction;
+- Server/API transport, health, and readiness exposure;
 - retry/backoff and safe shutdown behavior.
 
-Deployment must not choose direct DB ownership, invent an adapter daemon contract, or define secret handling before the owning component boundaries are accepted.
+Deployment must not invent direct database ownership, an adapter daemon contract, or secret handling policy.
 
 ## Unblock condition
 
-Unblock after GDA-P7C is accepted and either:
-
-1. a later GDrive runtime/config phase plus required Server/Storage fan-in contracts are accepted with green CI; or
-2. a dedicated cross-component prompt explicitly defines the deployment topology, owners, secrets, persistence, lifecycle, and health boundaries.
-
-Until then, do not run a worker for this component and do not modify deployment product files.
+Unblock only after GDA-P7C completes its fixer lifecycle with green CI and an explicit runtime/config/service fan-in contract defines the deployment topology. Until then, do not launch a worker from this hold notice.
