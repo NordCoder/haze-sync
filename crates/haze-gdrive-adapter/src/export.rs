@@ -10,9 +10,7 @@ mod provider;
 mod runner;
 mod state_store;
 
-pub use core::{
-    CoreClientError, CoreClientErrorCategory, CoreExportClient, FakeCoreExportClient,
-};
+pub use core::{CoreClientError, CoreClientErrorCategory, CoreExportClient, FakeCoreExportClient};
 pub use model::{
     CoreExportChange, CoreExportPage, CoreFileContent, DriveCreateTarget, ExportCycleInput,
     ExportCycleOutcome, ExportExecution, ExportModelError, ExportPlanItem, ExportSkipReason,
@@ -24,11 +22,10 @@ pub use provider::{
     ExportRetryPolicy, FakeDriveExportProvider,
 };
 pub use runner::{
-    cursor_after_page, echo_observation_for_mapping, plan_core_export, run_export_cycle, ExportError,
+    cursor_after_page, echo_observation_for_mapping, plan_core_export, run_export_cycle,
+    ExportError,
 };
-pub use state_store::{
-    ExportStateError, ExportStateStore, InMemoryExportStateStore,
-};
+pub use state_store::{ExportStateError, ExportStateStore, InMemoryExportStateStore};
 
 #[cfg(test)]
 mod tests;
