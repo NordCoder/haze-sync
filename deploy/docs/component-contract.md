@@ -4,44 +4,49 @@
 
 `deploy` owns deployment and operations scaffolding for running Haze Sync outside tests.
 
-The deployment component is responsible for future deployable topology, local development service scaffolds, production runbooks, secret placement documentation, directory layout, reverse proxy/TLS guidance, backup/restore procedure, and operational safety checks.
+The deployment component is responsible for deployable topology, local development service scaffolds, production-style runbooks, secret placement documentation, directory layout, reverse proxy/TLS guidance, backup/restore procedure, and operational safety checks.
 
-Current implemented deployment surface is intentionally minimal:
+Current implemented deployment surface is intentionally limited but no longer PostgreSQL-only:
 
-- `deploy/docker-compose.yml` provides local PostgreSQL only;
-- `.env.example` provides local placeholder configuration keys;
-- root `README.md` documents compose syntax validation with `docker compose -f deploy/docker-compose.yml config`;
-- no server container/service, no GDrive adapter service, no reverse proxy, no production secret files, and no deployment automation are implemented yet.
+- `deploy/docker-compose.yml` provides local PostgreSQL and `haze-sync-server` services;
+- `deploy/server.Dockerfile` provides non-root Server container packaging;
+- `.env.example` provides local placeholder configuration and Compose host-port keys;
+- `deploy/docs/local-compose.md` and `deploy/docs/server-compose.md` document local startup, health/readiness, and local-only boundaries;
+- `deploy/docs/migrations-backup-restore.md` documents explicit manual migration, backup, and restore sequencing;
+- `deploy/docs/host-directory-layout.md` documents production-style path, ownership, permission, and backup boundaries;
+- no GDrive adapter service, Worktree runtime bind mount, reverse proxy/TLS, production secret files, cleanup automation, or remote deployment automation is implemented yet.
 
 Deployment owns runtime packaging and operations documents. It does not own product behavior.
 
 ## Public interfaces
 
-Current public files:
+Current public deployment files include:
 
 ```text
 deploy/docker-compose.yml
+deploy/server.Dockerfile
+deploy/server.Dockerfile.dockerignore
 .env.example
+deploy/docs/local-compose.md
+deploy/docs/server-compose.md
+deploy/docs/migrations-backup-restore.md
+deploy/docs/host-directory-layout.md
 README.md deployment/configuration snippets
 ```
 
 Future public deployment surfaces may include:
 
 ```text
-deploy/docker-compose.yml
-Dockerfile or component-specific Dockerfiles
 systemd unit files
 reverse-proxy examples
-.env.example updates
-ops runbooks
-backup/restore scripts
-migration run procedure
-secret placement guide
+backup/restore scripts only when explicitly accepted
+secret placement integrations
 local smoke-test scripts
 production checklist
+release/deployment artifacts when coordinated with github-ci
 ```
 
-Generated secrets, production `.env` files, OAuth token files, local vault data, object-store data, database volumes, logs, dumps, and backups must not be committed.
+Generated secrets, production `.env` files, OAuth token files, local vault data, object-store data, database volumes, logs, dumps, backups, and runtime temp data must not be committed.
 
 ## Input contracts
 
@@ -63,9 +68,10 @@ Required input rules:
 - production secrets must come from host secret files, environment, or a future accepted secret manager;
 - placeholder values in tracked examples must not be usable production credentials;
 - host paths must be explicit and documented;
+- persistent data, config, secrets, logs, backups, and runtime temp paths must remain distinguishable;
 - migration execution policy must be explicit before production startup uses it;
 - service dependencies and health checks must be documented;
-- deployment commands must distinguish local development from production.
+- deployment commands must distinguish local development from production-style guidance.
 
 ## Output contracts
 
@@ -73,9 +79,10 @@ Deployment outputs include:
 
 - checked-in examples and runbooks;
 - safe local compose scaffolds;
-- future service definitions;
-- future smoke-test commands;
-- future backup/restore artifacts created locally but not committed.
+- service definitions and packaging artifacts accepted inside Deployment scope;
+- smoke-test commands;
+- host path and permission guidance;
+- backup/restore artifacts created locally by operators but never committed.
 
 Required output rules:
 
@@ -83,6 +90,7 @@ Required output rules:
 - runbooks must not instruct operators to paste tokens into public logs/reports;
 - status/smoke output examples must be sanitized;
 - backup/restore examples must preserve object-store/database consistency expectations;
+- path examples must keep persistent data, secrets, logs, backups, and temp state separated;
 - local-only scaffolds must be labeled local-only.
 
 ## Error contracts
@@ -102,7 +110,7 @@ They must not expose:
 - raw vault contents;
 - stack traces in public reports.
 
-Local operator-only commands may show host paths when necessary, but public docs/reports should prefer placeholders such as `/srv/haze-sync/...` and must not include real user secrets.
+Local operator-only commands may show generic host paths when necessary, but public docs/reports should prefer placeholders such as `/srv/haze-sync/...` and must not include real user secrets or machine-specific home paths.
 
 ## Persistence/runtime ownership
 
@@ -133,11 +141,13 @@ Deployment does not own:
 
 ## Security and secrecy rules
 
-- Do not commit `.env`, production secret files, OAuth token files, database dumps, object-store data, worktree data, logs, backup archives, or provider payload snapshots.
+- Do not commit `.env`, production secret files, OAuth token files, database dumps, object-store data, worktree data, logs, backup archives, runtime temp data, or provider payload snapshots.
 - `.env.example` values must be empty or clearly local placeholders.
 - Deployment docs must use placeholder secrets only.
 - OAuth token files must be documented as host-local, permission-restricted files.
-- Database and object-store backup paths must be local/operator-owned and ignored.
+- Database, object-store, and worktree backup paths must be local/operator-owned and untracked.
+- Persistent data paths must not be nested inside the repository checkout.
+- Backup paths must not be nested inside object-store, worktree, log, or temp paths.
 - Production reverse proxy/TLS examples must not include private keys.
 - Deployment automation must not run destructive cleanup by default.
 - Smoke checks must not require production secrets or real provider credentials unless explicitly marked production-only.
@@ -171,6 +181,7 @@ See `dependency-map.md`.
 - Local development scaffolds are not production readiness proof.
 - Production startup/migration/backup/restore behavior must be explicit.
 - Database and object-store consistency must be preserved in backup/restore guidance.
+- Persistent data, config, secrets, logs, backups, and runtime temp paths remain separated.
 - Server, GDrive adapter, Worktree, and Obsidian behavior remain owned by their components.
 - Deployment must distinguish local compose validation from service startup and production sync.
 
@@ -185,15 +196,16 @@ Deployment tests/checks should eventually cover:
 - backup/restore dry-run procedure where practical;
 - reverse proxy config syntax if examples are added;
 - local smoke-test runbook commands;
-- permissions checklist for secret/object/worktree paths.
+- permissions checklist for secret/object/worktree paths;
+- validation that approved persistent paths are not world-writable or nested inside tracked/runtime-temp paths.
 
-Current expected check:
+Current expected executable check:
 
 ```bash
 docker compose -f deploy/docker-compose.yml config
 ```
 
-This validates compose syntax only and does not prove production readiness.
+Read-only host permission checks are documented in `deploy/docs/host-directory-layout.md` but are not proof of production readiness by themselves.
 
 ## Contract change protocol
 
@@ -202,6 +214,7 @@ Request a contract change instead of silently broadening scope when implementati
 - committing real secrets or production `.env` files;
 - changing server/config variable names without Server coordination;
 - changing storage paths or migration policy without Storage/Server coordination;
+- enabling Worktree runtime or choosing its authority/write model without Worktree coordination;
 - adding production deployment automation that mutates remote hosts;
 - adding hard-delete/cleanup operations;
 - adding provider credentials or OAuth token contents;
