@@ -73,6 +73,8 @@ pub const fn package_name() -> &'static str {
 }
 
 #[cfg(test)]
+mod delete_guard_reserved_tests;
+#[cfg(test)]
 mod delete_guard_tests;
 #[cfg(test)]
 mod echo_guard_tests;
