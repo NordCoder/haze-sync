@@ -59,11 +59,7 @@ fn tombstone(seq: u64, operation_id: &str, path_value: &str) -> CoreExportChange
     .expect("tombstone")
 }
 
-fn page(
-    from_sequence: u64,
-    next_sequence: u64,
-    changes: Vec<CoreExportChange>,
-) -> CoreExportPage {
+fn page(from_sequence: u64, next_sequence: u64, changes: Vec<CoreExportChange>) -> CoreExportPage {
     CoreExportPage::new(from_sequence, next_sequence, false, changes).expect("page")
 }
 
@@ -87,7 +83,13 @@ fn existing_mapping(path_value: &str, provider_id: &str, revision_token: &str) -
 
 #[test]
 fn create_export_verifies_source_then_saves_mapping_echo_and_cursor() {
-    let (change, source) = upsert(10, "operation-create", "Notes/new.md", "revision-10", b"new");
+    let (change, source) = upsert(
+        10,
+        "operation-create",
+        "Notes/new.md",
+        "revision-10",
+        b"new",
+    );
     let core = FakeCoreExportClient::new()
         .with_page(page(10, 11, vec![change]))
         .with_content(source);
@@ -170,7 +172,10 @@ fn update_then_tombstone_uses_confirmed_mapping_order_and_trash() {
 
     assert_eq!(outcome.provider_mutations, 2);
     assert_eq!(state.mapping_save_count(), 2);
-    assert_eq!(provider.content("drive-existing"), Some(b"updated".as_slice()));
+    assert_eq!(
+        provider.content("drive-existing"),
+        Some(b"updated".as_slice())
+    );
     assert_eq!(provider.is_trashed("drive-existing"), Some(true));
     let mapping = state.mapping("Notes/existing.md").expect("mapping");
     assert_eq!(mapping.core_revision, None);
@@ -181,7 +186,13 @@ fn update_then_tombstone_uses_confirmed_mapping_order_and_trash() {
 
 #[test]
 fn dry_run_verifies_content_without_mutating_or_consuming_cursor() {
-    let (change, source) = upsert(10, "operation-dry-run", "Notes/dry.md", "revision-10", b"dry");
+    let (change, source) = upsert(
+        10,
+        "operation-dry-run",
+        "Notes/dry.md",
+        "revision-10",
+        b"dry",
+    );
     let core = FakeCoreExportClient::new()
         .with_page(page(10, 11, vec![change]))
         .with_content(source);
@@ -211,7 +222,13 @@ fn dry_run_verifies_content_without_mutating_or_consuming_cursor() {
 
 #[test]
 fn non_exporting_mode_skips_without_downloading_or_consuming_cursor() {
-    let (change, _source) = upsert(10, "operation-skip", "Notes/skip.md", "revision-10", b"skip");
+    let (change, _source) = upsert(
+        10,
+        "operation-skip",
+        "Notes/skip.md",
+        "revision-10",
+        b"skip",
+    );
     let core = FakeCoreExportClient::new().with_page(page(10, 11, vec![change]));
     let mut provider = FakeDriveExportProvider::new();
     let mut state = InMemoryExportStateStore::new(CoreChangeCursor::new(10), "root")
@@ -249,14 +266,8 @@ fn source_hash_mismatch_stops_before_provider_and_state_mutation() {
         "core-adapter",
     )
     .expect("change");
-    let source = CoreFileContent::new(
-        vault_path,
-        "revision-10",
-        expected_hash,
-        3,
-        b"abd".to_vec(),
-    )
-    .expect("source");
+    let source = CoreFileContent::new(vault_path, "revision-10", expected_hash, 3, b"abd".to_vec())
+        .expect("source");
     let core = FakeCoreExportClient::new()
         .with_page(page(10, 11, vec![change]))
         .with_content(source);
@@ -303,8 +314,8 @@ fn provider_conflict_is_non_retryable_and_preserves_mapping_order() {
         "provider-current",
     );
     let mapping = existing_mapping("Notes/conflict.md", "drive-conflict", "provider-stale");
-    let mut state = InMemoryExportStateStore::new(CoreChangeCursor::new(10), "root")
-        .with_mapping(mapping);
+    let mut state =
+        InMemoryExportStateStore::new(CoreChangeCursor::new(10), "root").with_mapping(mapping);
     let mut echo_guard = EchoGuard::new();
 
     let error = run_export_cycle(
@@ -360,8 +371,8 @@ fn provider_rate_limit_uses_bounded_retry_and_does_not_advance_state() {
             ),
         );
     let mapping = existing_mapping("Notes/rate.md", "drive-rate", "provider-v1");
-    let mut state = InMemoryExportStateStore::new(CoreChangeCursor::new(10), "root")
-        .with_mapping(mapping);
+    let mut state =
+        InMemoryExportStateStore::new(CoreChangeCursor::new(10), "root").with_mapping(mapping);
     let mut echo_guard = EchoGuard::new();
 
     let error = run_export_cycle(
