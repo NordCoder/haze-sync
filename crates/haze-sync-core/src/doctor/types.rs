@@ -617,38 +617,23 @@ fn db_connectivity_details_match(
     }
 
     match (status, message) {
-        (
-            DoctorCheckStatus::Warning,
-            DoctorCheckMessage::DatabaseMetadataNotConfigured,
-        ) => {
+        (DoctorCheckStatus::Warning, DoctorCheckMessage::DatabaseMetadataNotConfigured) => {
             !details.metadata_configured
                 && !details.live_check_performed
                 && details.connectivity_verified.is_none()
         }
-        (
-            DoctorCheckStatus::Skipped,
-            DoctorCheckMessage::DatabaseConnectivitySkippedOffline,
-        )
-        | (
-            DoctorCheckStatus::NotRun,
-            DoctorCheckMessage::DatabaseConnectivityNotRun,
-        ) => {
+        (DoctorCheckStatus::Skipped, DoctorCheckMessage::DatabaseConnectivitySkippedOffline)
+        | (DoctorCheckStatus::NotRun, DoctorCheckMessage::DatabaseConnectivityNotRun) => {
             details.metadata_configured
                 && !details.live_check_performed
                 && details.connectivity_verified.is_none()
         }
-        (
-            DoctorCheckStatus::Ok,
-            DoctorCheckMessage::DatabaseConnectivityVerified,
-        ) => {
+        (DoctorCheckStatus::Ok, DoctorCheckMessage::DatabaseConnectivityVerified) => {
             details.metadata_configured
                 && details.live_check_performed
                 && details.connectivity_verified == Some(true)
         }
-        (
-            DoctorCheckStatus::Failed,
-            DoctorCheckMessage::DatabaseConnectivityFailed,
-        ) => {
+        (DoctorCheckStatus::Failed, DoctorCheckMessage::DatabaseConnectivityFailed) => {
             details.metadata_configured
                 && details.live_check_performed
                 && details.connectivity_verified == Some(false)
@@ -657,7 +642,9 @@ fn db_connectivity_details_match(
     }
 }
 
-fn object_store_classification(details: &ObjectStoreExistsWritableDetails) -> Option<Classification> {
+fn object_store_classification(
+    details: &ObjectStoreExistsWritableDetails,
+) -> Option<Classification> {
     if !details.configured {
         return (details.exists.is_none() && details.writable.is_none()).then_some((
             DoctorCheckStatus::Warning,
