@@ -2,6 +2,34 @@
 
 ## Entries
 
+### 2026-07-10 — W1/STOR-P6 conflict, tombstone, and delete repository support
+
+Agent:
+Implementation Worker
+
+Branch:
+component/storage
+
+Prompt:
+crates/haze-sync-storage/control/prompt.md
+
+Report:
+crates/haze-sync-storage/control/report.md
+
+Commit(s):
+See component/storage branch history for the implementation commits.
+
+Summary:
+Added passive conflict insertion, bounded status listing, lookup, safe persisted-status validation, and guarded resolve/ignore metadata updates. Added one-shot tombstone restore metadata updates while preserving retention and deleted-revision facts. Extended operation-log changes-feed mapping to reject invalid negative persisted sizes safely, added conflict/delete/restore event metadata tests, and expanded the feature-gated PostgreSQL flow test to cover conflict, tombstone, lifecycle-update, and changes-feed roundtrips inside one caller-owned transaction. Documented that full `accept_conflict` content replacement and restore orchestration remain Core/API/Server fan-in responsibilities.
+
+Status:
+SELF_ACCEPT_PENDING_CI
+
+Follow-ups:
+Run cargo fmt/check/test/clippy through CI or an environment with shell execution. Next storage phase should proceed through clean-code review before final lifecycle acceptance.
+
+---
+
 ### 2026-07-09 — W1/STOR-P5 normal file flow repository support
 
 Agent:
