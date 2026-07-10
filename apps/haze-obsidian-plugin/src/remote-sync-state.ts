@@ -170,15 +170,26 @@ function clearRemoteConflictForChange(
   observedAt: string,
 ): RemoteSyncState {
   const conflicts = { ...state.conflicts };
-  for (const [key, record] of Object.entries(conflicts)) {
-    const sameServerConflict =
-      change.conflict_id !== undefined &&
-      (key === change.conflict_id || record.remoteConflictId === change.conflict_id);
-    const migratedServerConflict =
-      record.kind === "conflict_created" && record.path === change.path;
+  let directMatchFound = false;
 
-    if (sameServerConflict || migratedServerConflict) {
-      delete conflicts[key];
+  if (change.conflict_id !== undefined) {
+    for (const [key, record] of Object.entries(conflicts)) {
+      if (key === change.conflict_id || record.remoteConflictId === change.conflict_id) {
+        delete conflicts[key];
+        directMatchFound = true;
+      }
+    }
+  }
+
+  if (!directMatchFound) {
+    const legacyMatches = Object.entries(conflicts).filter(
+      ([, record]) =>
+        record.remoteConflictId === undefined &&
+        record.kind === "conflict_created" &&
+        record.path === change.path,
+    );
+    if (legacyMatches.length === 1) {
+      delete conflicts[legacyMatches[0][0]];
     }
   }
 
