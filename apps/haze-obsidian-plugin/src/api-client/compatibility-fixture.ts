@@ -16,6 +16,7 @@ import {
 } from "./types";
 import type {
   AdminFixtureDto,
+  ChangesResponseDto,
   ConflictResolutionAction,
   ConflictsResponseDto,
   DeleteFileResponseDto,
@@ -24,7 +25,6 @@ import type {
   PutFileResponseDto,
   ResolveConflictResponseDto,
   ServerInfoDto,
-  ChangesResponseDto,
 } from "./types";
 import {
   isAdminFixtureDto,
@@ -130,8 +130,8 @@ export function isApiContractFixture(value: unknown): value is ApiContractFixtur
     hasUniqueStatusCoverage(value.put_file_outcomes, ["accepted", "conflict_saved", "ignored", "rejected"]) &&
     hasUniqueStatusCoverage(value.delete_file_outcomes, ["tombstoned", "not_found", "rejected"]) &&
     hasUniqueResolutionCoverage(value.conflict_resolutions) &&
-    value.admin.status_summary.adapter_count === value.admin.adapter_list.total_count &&
-    value.admin.adapter_list.total_count === value.admin.adapter_list.adapters.length
+    sameStringSet(value.server_info.capabilities, value.vocabulary.server_capabilities) &&
+    adminSnapshotIsCoherent(value.admin)
   );
 }
 
@@ -195,6 +195,19 @@ function isVocabularyFixture(value: unknown): value is ApiVocabularyFixture {
   );
 }
 
+function adminSnapshotIsCoherent(admin: AdminFixtureDto): boolean {
+  const adapterIds = admin.adapter_list.adapters.map((adapter) => adapter.adapter_id);
+  const operationalAdapterIds = admin.adapter_operational_summaries.map(
+    (summary) => summary.adapter.adapter_id,
+  );
+
+  return (
+    admin.status_summary.adapter_count === admin.adapter_list.total_count &&
+    admin.adapter_list.total_count === admin.adapter_list.adapters.length &&
+    sameStringSet(adapterIds, operationalAdapterIds)
+  );
+}
+
 function hasUniqueStatusCoverage(
   values: readonly { status: string }[],
   expected: readonly string[],
@@ -213,10 +226,13 @@ function sameStringSet(value: unknown, expected: readonly string[]): boolean {
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
     return false;
   }
-  const actualSet = new Set(value);
+  const actualSet = new Set<string>(value as string[]);
   const expectedSet = new Set(expected);
-  return actualSet.size === value.length && actualSet.size === expectedSet.size &&
-    Array.from(expectedSet).every((item) => actualSet.has(item));
+  return (
+    actualSet.size === value.length &&
+    actualSet.size === expectedSet.size &&
+    Array.from(expectedSet).every((item) => actualSet.has(item))
+  );
 }
 
 function includes<const T extends readonly string[]>(values: T, value: unknown): value is T[number] {
