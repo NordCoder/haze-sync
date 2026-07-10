@@ -1,13 +1,13 @@
 REPORT_TYPE:
-FIX
+IMPLEMENTATION
 
 STATUS:
-FIX_COMPLETE
+SELF_ACCEPT
 
 AGENT:
-role: fixer-worker
-agent_execution_id: W1-FIX-SRV-P6C-CI-server-fixer
-chat_name: server — W1 FIX-SRV-P6C-CI CI Fix
+role: implementation-worker
+agent_execution_id: W1-SRV-STOR-TEST-SUPPORT-FAN-IN-server-implementation
+chat_name: server — W1 SRV-STOR-TEST-SUPPORT-FAN-IN Implementation
 
 COMPONENT:
 name: server
@@ -21,34 +21,34 @@ control_report_path: crates/haze-sync-server/control/report.md
 
 WAVE:
 id: W1
-phase_id: FIX-SRV-P6C-CI
-dependency_status: active prompt state was PROMPT_READY; active_prompt matched crates/haze-sync-server/control/prompt.md; active_agent_role was fixer-worker; exact CI artifact metadata was present and the diagnostics artifact was available and readable
+phase_id: SRV-STOR-TEST-SUPPORT-FAN-IN
+dependency_status: active state was PROMPT_READY for implementation-worker; Storage STOR-P9C reported a Server-owned production dependency violation; SRV-P7 remains explicitly blocked and was not started
 
 SUMMARY:
-Fixed the minimum CI failure reported for SRV-P6C. Diagnostics identified exactly one failed check, `rust-fmt`, from `cargo fmt --all --check`, affecting only formatting in `crates/haze-sync-server/src/routes/admin/tests.rs`. Applied the exact rustfmt layout shown by the artifact. No assertions, behavior, admin/status semantics, readiness behavior, dependencies, workflows, contracts, docs, provider behavior, or sibling components changed.
+Restored Storage test-support production isolation in the Server manifest. The normal `haze-sync-storage` dependency no longer enables `test-support`; the same feature is enabled only through Server's dev-dependency so unit/integration test targets retain access. Workspace Cargo resolver v2 keeps the dev-only feature out of normal Server compilation while enabling it for test targets. No Server source, tests, Storage source, workflows, schemas, endpoints, runtime composition, or provider behavior changed. Code-bearing commit `dc53f8dbe08da56d129fc3898cec262149c69f38` passed Component CI run `29127012776`, run number `1616`.
 
 CHANGED_FILES:
-- crates/haze-sync-server/src/routes/admin/tests.rs
+- crates/haze-sync-server/Cargo.toml
 - crates/haze-sync-server/control/report.md
 
 BRANCH_AND_CONTROL:
 current_branch: component/server
 base_branch: main
 base_sha: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
-head_sha: ef615905b996f9eaac249a663ec8c945b508a653 before writing this report; report write creates an additional report-only commit on component/server
+head_sha: dc53f8dbe08da56d129fc3898cec262149c69f38 before writing this report; report write creates an additional report-only commit on component/server
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
 ci_skip_used: yes
-ci_skip_reason: final report-only control commit; actual formatter correction commit `ef615905b996f9eaac249a663ec8c945b508a653` was pushed without CI skip and must be used as CI evidence
+ci_skip_reason: final report-only control commit; Cargo correction commit dc53f8dbe08da56d129fc3898cec262149c69f38 ran normal CI and is the verification head
 
 SCOPE:
 allowed_files_only: yes
 scope_expansion_used: no
 scope_expansion_rationale: none
-cross_component_changes: no
+cross_component_changes: no; the change is Server-owned and resolves a Storage contract boundary without editing Storage
 forbidden_files_touched: no
 
 CONTRACT:
@@ -56,56 +56,54 @@ contract_read: yes
 contract_satisfied: yes
 contract_changes_requested: no
 contract_change_rationale: none
-affected_components: server only
+affected_components: server dependency graph and storage production-isolation boundary
 
 IMPLEMENTATION_OR_REVIEW:
 completed:
-- Read the implementation manifest, fixer-worker guidance, report template, GitHub connector guidance, active state/prompt, prior clean-code report, server component contract, SRV-P6 implementation plan, dependency map, relevant current test file, and PR metadata.
-- Downloaded diagnostics artifact `ci-diag__component-server__wf-component-ci__run-29067613093__attempt-1` using artifact id `8217733996`.
-- Read `summary.md`, `manifest.json`, `failures/rust-fmt.txt`, and `logs/rust-fmt.log`.
-- Confirmed diagnostics schema `haze-ci-diagnostics-v1`, component `server`, head SHA `3ab500d1b4764c0b2775eb14d0c7be3ff6e7f57b`, run id `29067613093`, run number `826`, attempt `1`.
-- Confirmed the only failed check was `rust-fmt`, exit code `1`, command `cargo fmt --all --check`.
-- Applied the exact formatter-requested multiline assertion and constructor layout in `src/routes/admin/tests.rs`.
-- Re-fetched the edited test file and confirmed the formatter layout matches the diagnostics diff.
+- Read project process guidance, active Server control files, Server contract/dependency map, current Server Cargo manifest, workspace resolver configuration, Storage STOR-P9C report, Storage test-support documentation, Storage feature declaration/module gate, PR diff, PR metadata, and CI metadata.
+- Confirmed workspace `resolver = "2"` and Storage exports `test_support` only under `cfg(test)` or feature `test-support`.
+- Removed `features = ["test-support"]` from Server's normal `haze-sync-storage` dependency.
+- Added `haze-sync-storage` with `test-support` under Server dev-dependencies.
+- Verified the final PR patch contains only the intended dependency-placement correction for this phase.
+- Observed Component CI success on the code-bearing SHA.
 main_changes:
-- Formatting-only correction in three rustfmt-reported locations.
-behavior_changes: none
+- Production Server dependency graph uses default Storage features only.
+- Server dev/test targets retain Storage test-support access.
+behavior_changes: no runtime or public behavior change; dependency feature availability is now target-appropriate
 bugs_found:
-- The clean-code test commit was not rustfmt-compliant.
+- Server enabled Storage test-support under normal dependencies, compiling test-only APIs into the production dependency graph.
 bugs_fixed:
-- Applied exact rustfmt output to the admin status tests.
+- Isolated Storage test-support to Server dev/test targets.
 cleanups_made:
-- Rust formatting only.
+- Removed the production feature leak without introducing a harness or source cfg workaround.
 non_goals_preserved:
-- Readiness-first admin status behavior preserved.
-- Best-effort optional metadata behavior preserved.
-- Safe public summaries and read-only operational semantics preserved.
-- No admin mutations, repair execution, token lifecycle changes, provider calls, doctor/metrics surfaces, workflow changes, dependency changes, or sibling changes.
+- No SRV-P7 runtime composition or Worktree hosting.
+- No new endpoints, provider behavior, schema/migration changes, workflow changes, dependency upgrades, test deletion, or assertion weakening.
+- No Storage or other sibling source changes.
 deferred_work:
-- Post-fix CI verification remains for Orchestrator.
+- SRV-P7 remains blocked until the Worktree acceptance/fan-in conditions recorded in active state are satisfied.
 
 TESTS_AND_CHECKS:
 checks_run:
-- Read complete diagnostics artifact contents required by the active prompt.
-- Manual connector-side comparison of the edited file against the exact rustfmt diff.
-- Confirmed PR head became `ef615905b996f9eaac249a663ec8c945b508a653` after the non-skipped formatter commit.
+- GitHub connector verification of Cargo manifests, Storage feature gate/docs/report, PR patch, final code-bearing PR head, workflow run, job, and step conclusions.
+- Component CI `29127012776`, run number `1616`, on SHA `dc53f8dbe08da56d129fc3898cec262149c69f38` completed successfully.
+- CI steps passed: `cargo fmt`, `cargo check`, `cargo test`, `cargo clippy`, and diagnostics finalization.
 checks_not_run:
-- cargo fmt --all --check — not run directly because repository work is restricted to the GitHub connector and no shell execution is available through it.
-- cargo check/test/clippy — not run directly for the same tooling reason and were not identified as failed checks by this artifact.
-ci_status: CI_PENDING for the non-skipped formatter correction commit; no post-fix CI conclusion was observed by this worker
-workflow_urls: PR #45 metadata observed; post-fix workflow URL was not available through the active control slot
-known_failures: pre-fix artifact reported only `rust-fmt`; no post-fix failure observed
+- No local shell Cargo commands were run because repository work is GitHub-connector-only.
+ci_status: CI_GREEN for Component CI run 29127012776 on the final code-bearing SHA
+workflow_urls: Component CI run 29127012776 was observed through GitHub Actions metadata
+known_failures: none
 
 CI_DIAGNOSTICS:
-artifact_based_logs: read
-artifact_name: ci-diag__component-server__wf-component-ci__run-29067613093__attempt-1
-artifact_id: 8217733996
-workflow_run_id: 29067613093
+artifact_based_logs: not read; active prompt did not instruct diagnostics access and the final run was green
+artifact_name: none
+artifact_id: none
+workflow_run_id: 29127012776
 workflow_run_attempt: 1
-artifact_status: downloaded and readable
-summary_read: yes
-manifest_read: yes
-logs_read: yes; read every failed-check marker and log listed in the artifact (`failures/rust-fmt.txt`, `logs/rust-fmt.log`)
+artifact_status: not applicable; diagnostics upload was skipped because CI succeeded
+summary_read: no
+manifest_read: no
+logs_read: no
 raw_job_logs_used: no
 diagnostics_failure: none
 
@@ -118,20 +116,18 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- The final report commit uses `[skip ci]` and must not be treated as CI evidence.
-- Post-fix CI for `ef615905b996f9eaac249a663ec8c945b508a653` was not observed during this fixer run.
-- The PR title/body still describes an earlier scope; this worker did not edit PR metadata because PR management is not authorized.
+- The final report-only commit uses `[skip ci]` and must not be treated as CI evidence; run 29127012776 on dc53f8dbe08da56d129fc3898cec262149c69f38 is the evidence.
+- The PR title/body still describes an older scope; PR metadata was not edited because this worker is not authorized to manage PR lifecycle/content.
 
 BLOCKERS:
-- No log blocker; diagnostics artifact was complete and readable.
-- No contract or scope blocker.
-- Verification remains pending until post-fix CI is observed.
+- No blocker for this fan-in correction.
+- SRV-P7 remains on the explicit post-phase hold recorded in control state.
 
 NEXT_RECOMMENDED_AGENT:
-orchestrator
+clean-code-reviewer
 
 FINAL_VERDICT:
-FIX_COMPLETE. The artifact-proven SRV-P6C failure was formatting-only. The exact rustfmt correction was pushed without CI skip, with no behavior or contract changes. Orchestrator should use post-fix CI on commit `ef615905b996f9eaac249a663ec8c945b508a653` as verification evidence.
+SELF_ACCEPT. Server now consumes Storage test-support only in dev/test targets, normal production compilation is feature-isolated, existing tests remain enabled, and the final code-bearing SHA passed Component CI run 29127012776 (#1616). Proceed to clean-code review for this dependency-only fan-in; do not start SRV-P7 while its recorded Worktree gate remains unsatisfied.
 
 PUSHED:
 yes
