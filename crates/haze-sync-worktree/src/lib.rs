@@ -8,6 +8,7 @@ mod delete_guard;
 mod echo_guard;
 mod file_import;
 mod hashing;
+#[allow(dead_code)]
 mod import_planner;
 mod materializer;
 mod path_mapping;
@@ -46,11 +47,11 @@ pub use path_mapping::{
     TRASH_DIR_NAME, WORKTREE_RUNTIME_DIR_NAME,
 };
 pub use reconciliation::{
-    WorktreeEchoStatus, WorktreeObservedFileState, WorktreeReconciler,
-    WorktreeReconciliationEntry, WorktreeReconciliationError, WorktreeReconciliationKind,
-    WorktreeReconciliationReport, WorktreeReconciliationRunError, WorktreeReconciliationRunner,
-    WorktreeReconciliationState, WorktreeReconciliationStateStore,
-    WorktreeReconciliationStateTransition, WorktreeReconciliationSummary,
+    WorktreeEchoStatus, WorktreeObservedFileState, WorktreeReconciler, WorktreeReconciliationEntry,
+    WorktreeReconciliationError, WorktreeReconciliationKind, WorktreeReconciliationReport,
+    WorktreeReconciliationRunError, WorktreeReconciliationRunner, WorktreeReconciliationState,
+    WorktreeReconciliationStateStore, WorktreeReconciliationStateTransition,
+    WorktreeReconciliationSummary,
 };
 pub use scanner::{
     StableFileDetector, StableFileObservation, StableFileState, WorktreeFileSnapshot,
