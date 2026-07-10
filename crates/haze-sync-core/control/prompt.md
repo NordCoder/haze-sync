@@ -1,43 +1,54 @@
-# W1-FIX-CORE-P8-CI — Core CORE-P8 validation correction
+# W1-CORE-P8C — Core compatibility-fixture clean-code review
 
 Component: core
 Path: crates/haze-sync-core
 Branch: component/core
 PR: #43
-Role: fixer-worker
+Role: clean-code-reviewer
 
-Use only the GitHub connector. Do not merge the PR or change its lifecycle state.
+Work only through the GitHub connector. Do not merge the PR or change its lifecycle state.
 
-## Evidence
+## Context
 
-The final CORE-P8 fixture/test/docs head has a failed Component CI result.
+CORE-P8 implementation and artifact-based CI correction are complete. Final fixture/test/docs CI is green.
 
-- code_bearing_sha: 14b92f467b5806d31ec14723b5857e64660fdf06
-- workflow_run_id: 29116378264
-- run_number: 1501
-- run_attempt: 1
-- artifact_id: 8236809649
-- artifact_name: ci-diag__component-core__wf-component-ci__run-29116378264__attempt-1
-- artifact_expires_at: 2026-07-11T18:59:37Z
+- code_bearing_sha: c2229f75f4fed31215f3a6f4b7f21ac41155d8e8
+- workflow: Component CI
+- workflow_run_id: 29120367603
+- run_number: 1529
+- conclusion: success
 
-Use the diagnostics artifact as the authoritative failure evidence.
+## Read
 
-## Required work
+Read the project process files, current Core control files, CORE-P8 fixture catalog, integration tests, compatibility documentation, fixer correction, accepted API fixture guidance, and PR diff. Do not read diagnostics artifacts unless a later fixer prompt explicitly requires them.
 
-Read the project process files, current Core control files, CORE-P8 fixtures/tests/docs, PR diff, and every required file in artifact 8236809649. If the artifact is unavailable or incomplete, report FIX_BLOCKED_BY_LOGS.
+## Task
 
-Apply only the smallest correction demonstrated by the artifact. Preserve the versioned synthetic fixture catalog, strict public-type roundtrips, semantic decision recomputation, secrecy/path-safety checks, stable contract documentation, conflict-saved compatibility explanation, lack of production Core changes, and component ownership.
+Review CORE-P8 compatibility fixtures and integration-contract examples.
+
+Focus on:
+
+- language-neutral deterministic fixture shape;
+- strict canonical serialization and public-type roundtrips;
+- semantic recomputation through public Core APIs;
+- accepted-write, same-content, conflict-saved, hash mismatch, tombstone, delete guard, idempotency, cursor, and doctor examples;
+- safe synthetic paths, IDs, headers, and absence of raw bytes or secrets;
+- conflict-saved serialized-tag versus public-status documentation;
+- stable semantic contracts versus internal details;
+- downstream usability without API DTO duplication or private-Core coupling.
 
 ## Allowed files
 
 - crates/haze-sync-core/tests/**
 - crates/haze-sync-core/fixtures/**
-- crates/haze-sync-core/docs/** only when directly required by diagnostics
-- crates/haze-sync-core/src/** only if the diagnostics directly require a fixture helper or public re-export correction
+- crates/haze-sync-core/docs/**
+- crates/haze-sync-core/src/** only if directly required to correct a fixture helper or public re-export
 - crates/haze-sync-core/control/report.md
 
-Do not add API DTOs, TypeScript generation, runtime integrations, persistence/provider behavior, shared workflow/dependency changes, sibling components, or unrelated test changes.
+## Boundaries
 
-Source/test/fixture/docs correction commits must run CI normally. A final report-only commit may skip CI.
+No API DTO duplication, TypeScript generation, Server/Storage/adapter runtime integration, persistence/provider behavior, workflow/dependency changes, sibling changes, test deletion, or assertion weakening.
 
-Write only crates/haze-sync-core/control/report.md using REPORT_TYPE FIX and phase_id FIX-CORE-P8-CI.
+Source/test/fixture/docs review commits must run CI normally. A final report-only commit may skip CI.
+
+Write only crates/haze-sync-core/control/report.md using REPORT_TYPE CLEAN_CODE_REVIEW and phase_id CORE-P8C.
