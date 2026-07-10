@@ -1,51 +1,60 @@
-# W1-API-P4C-RERUN — API file/changes route-helper clean-code review
+# W1-API-P5 — Conflict and delete route-helper contract hardening
 
 Component: api
 Path: crates/haze-sync-api
 Branch: component/api
 PR: #44
-Role: clean-code-reviewer
+Role: implementation-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
-## Rerun guard
-
-This is an explicit refreshed active prompt. The current report before this prompt was for FIX-API-P4-CI, not API-P4C. Therefore API-P4C-RERUN is not already complete.
-
 ## Context
 
-API-P4 implementation and CI fixer are complete. Post-fix Component CI is green.
+API-P4 implementation, fixer, and clean-code review are accepted. Component CI evidence for the accepted source state is green.
 
 - workflow: Component CI
 - workflow_run_id: 29034803865
 - run_number: 689
 - conclusion: success
 
+The next implementation phase is API-P5 from crates/haze-sync-api/docs/implementation-plan.md.
+
 ## Read
 
-Read implementation-manifest.md, report-template.md, clean-code-reviewer-prompt.md, chatgpt-gh-connector.md, component docs/control files, relevant code and PR diff. Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
+Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, relevant current source, and PR diff.
+
+Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
 
 ## Task
 
-Review API-P4 file and changes route-helper hardening plus the CI fixer. Focus on VaultPath parsing, upload metadata extraction, verified-principal helper behavior, public response mapping, changes query/page metadata, source compatibility, and passive API boundary preservation.
+Implement API-P5: Conflict and delete route-helper contract hardening.
+
+Follow the plan:
+
+- test conflict list query parsing, especially status filters and bounds;
+- test conflict resolve action parsing for accept_current, accept_conflict, keep_both, and mark_resolved;
+- test conflict list/resolve DTO serde roundtrips and safe path/hash/revision fields;
+- test DELETE metadata extraction for path, base revision/null-base, idempotency key, and adapter principal requirement;
+- test delete response vocabulary for tombstoned, not_found, rejected, and guard-blocked outcomes;
+- ensure API does not implement conflict resolution or tombstone creation itself.
 
 ## Allowed files
 
-- crates/haze-sync-api/src/routes/files/**
-- crates/haze-sync-api/src/routes/changes/**
-- crates/haze-sync-api/src/dto/files/**
-- crates/haze-sync-api/src/dto/changes/**
+- crates/haze-sync-api/src/routes/conflicts/**
+- crates/haze-sync-api/src/routes/delete/**
+- crates/haze-sync-api/src/dto/conflicts/**
+- crates/haze-sync-api/src/dto/files/** when delete DTOs live there
 - crates/haze-sync-api/docs/**
 - crates/haze-sync-api/control/report.md
 
-## Forbidden changes
+## Non-goals
 
-No handler runtime implementation, object-store access, operation-log queries, content streaming, background cursor updates, workflow changes, or sibling component changes.
+No conflict row repository, content replacement implementation, tombstone persistence, provider/worktree trash behavior, mass-delete guard execution, workflow changes, or sibling component changes.
 
 ## CI trigger policy
 
-Source/doc clean-code commits must not skip CI. A final report-only commit may skip CI.
+Product/source/docs commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only the report to crates/haze-sync-api/control/report.md. Use report-template.md. Set REPORT_TYPE to CLEAN_CODE_REVIEW and phase_id to API-P4C-RERUN.
+Write only the report to crates/haze-sync-api/control/report.md. Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION and phase_id to API-P5.
