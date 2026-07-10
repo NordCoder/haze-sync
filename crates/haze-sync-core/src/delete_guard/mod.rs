@@ -278,42 +278,43 @@ impl DeleteGuard {
     /// Evaluate delete candidates without mutating storage or calling providers.
     #[must_use]
     pub fn evaluate(&self, input: &DeleteGuardInput) -> DeleteGuardDecision {
-        if input.proposed_delete_count > self.policy.max_deletes_per_run
-            && !input.manual_unlock.covers_too_many_deletes(&input.scope)
-        {
-            if self.policy.require_manual_unlock_for_mass_delete {
+        if input.proposed_delete_count > self.policy.max_deletes_per_run {
+            if !self.policy.require_manual_unlock_for_mass_delete {
+                return DeleteGuardDecision::BlockedTooManyDeletes {
+                    proposed_delete_count: input.proposed_delete_count,
+                    max_deletes_per_run: self.policy.max_deletes_per_run,
+                };
+            }
+
+            if !input.manual_unlock.covers_too_many_deletes(&input.scope) {
                 return DeleteGuardDecision::BlockedRequiresManualUnlock {
                     proposed_delete_count: input.proposed_delete_count,
                     total_files_before_run: input.total_files_before_run,
                     reason: DeleteGuardBlockReason::TooManyDeletes,
                 };
             }
-
-            return DeleteGuardDecision::BlockedTooManyDeletes {
-                proposed_delete_count: input.proposed_delete_count,
-                max_deletes_per_run: self.policy.max_deletes_per_run,
-            };
         }
 
         if self
             .policy
             .max_delete_ratio_per_run
             .is_exceeded_by(input.proposed_delete_count, input.total_files_before_run)
-            && !input.manual_unlock.covers_delete_ratio(&input.scope)
         {
-            if self.policy.require_manual_unlock_for_mass_delete {
+            if !self.policy.require_manual_unlock_for_mass_delete {
+                return DeleteGuardDecision::BlockedDeleteRatio {
+                    proposed_delete_count: input.proposed_delete_count,
+                    total_files_before_run: input.total_files_before_run,
+                    max_delete_ratio_per_run: self.policy.max_delete_ratio_per_run,
+                };
+            }
+
+            if !input.manual_unlock.covers_delete_ratio(&input.scope) {
                 return DeleteGuardDecision::BlockedRequiresManualUnlock {
                     proposed_delete_count: input.proposed_delete_count,
                     total_files_before_run: input.total_files_before_run,
                     reason: DeleteGuardBlockReason::DeleteRatio,
                 };
             }
-
-            return DeleteGuardDecision::BlockedDeleteRatio {
-                proposed_delete_count: input.proposed_delete_count,
-                total_files_before_run: input.total_files_before_run,
-                max_delete_ratio_per_run: self.policy.max_delete_ratio_per_run,
-            };
         }
 
         DeleteGuardDecision::Allowed
@@ -553,6 +554,43 @@ mod tests {
                 proposed_delete_count: 6,
                 total_files_before_run: 100,
                 reason: DeleteGuardBlockReason::TooManyDeletes,
+            }
+        );
+    }
+
+    #[test]
+    fn manual_unlock_cannot_bypass_hard_block_policy() {
+        let actual_scope = scope("run-hard-block");
+        let unlock = ManualDeleteUnlock::scoped_for_all(actual_scope.clone());
+
+        let count_guard = DeleteGuard::new(DeleteGuardPolicy::new(
+            2,
+            DeleteRatioLimit::percent(100).unwrap(),
+            false,
+        ));
+        let count_input = DeleteGuardInput::without_manual_unlock(actual_scope.clone(), 3, 100)
+            .with_manual_unlock(unlock.clone());
+        assert_eq!(
+            count_guard.evaluate(&count_input),
+            DeleteGuardDecision::BlockedTooManyDeletes {
+                proposed_delete_count: 3,
+                max_deletes_per_run: 2,
+            }
+        );
+
+        let ratio_guard = DeleteGuard::new(DeleteGuardPolicy::new(
+            u64::MAX,
+            DeleteRatioLimit::percent(5).unwrap(),
+            false,
+        ));
+        let ratio_input = DeleteGuardInput::without_manual_unlock(actual_scope, 6, 100)
+            .with_manual_unlock(unlock);
+        assert_eq!(
+            ratio_guard.evaluate(&ratio_input),
+            DeleteGuardDecision::BlockedDeleteRatio {
+                proposed_delete_count: 6,
+                total_files_before_run: 100,
+                max_delete_ratio_per_run: DeleteRatioLimit::percent(5).unwrap(),
             }
         );
     }
