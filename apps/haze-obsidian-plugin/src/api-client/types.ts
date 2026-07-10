@@ -108,7 +108,7 @@ export type ConflictResolutionAction =
 export interface ResolveConflictRequest {
   conflictId: ConflictId;
   action: ConflictResolutionAction;
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }
 
 export interface ResolveConflictResponseDto {
