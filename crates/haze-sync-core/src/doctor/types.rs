@@ -1,5 +1,5 @@
 use haze_sync_common::ContentHash;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{fmt, ops::Deref};
 
 /// Stable identifier for a passive doctor check.
@@ -190,272 +190,264 @@ impl DoctorCheckDetails {
             Self::NotRun(_) | Self::Placeholder(_) => None,
         }
     }
-}
 
-/// Fixed, redacted doctor message vocabulary.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
-pub enum DoctorCheckMessage {
-    #[serde(rename = "database metadata is not configured")]
-    DatabaseMetadataNotConfigured,
-    #[serde(rename = "database connectivity check skipped in offline mode")]
-    DatabaseConnectivitySkippedOffline,
-    #[serde(rename = "database connectivity verified")]
-    DatabaseConnectivityVerified,
-    #[serde(rename = "database connectivity check failed")]
-    DatabaseConnectivityFailed,
-    #[serde(rename = "database connectivity result was not provided")]
-    DatabaseConnectivityNotRun,
-    #[serde(rename = "object store root is not configured")]
-    ObjectStoreNotConfigured,
-    #[serde(rename = "object store filesystem check skipped in offline mode")]
-    ObjectStoreSkippedOffline,
-    #[serde(rename = "object store root does not exist")]
-    ObjectStoreMissing,
-    #[serde(rename = "object store root is not writable")]
-    ObjectStoreNotWritable,
-    #[serde(rename = "object store root is accessible")]
-    ObjectStoreAccessible,
-    #[serde(rename = "object store filesystem result was incomplete")]
-    ObjectStoreNotRun,
-    #[serde(rename = "no missing blobs detected")]
-    NoMissingBlobs,
-    #[serde(rename = "missing required blobs detected")]
-    MissingBlobsDetected,
-    #[serde(rename = "no adapters require cursor validation")]
-    NoAdaptersForCursorValidation,
-    #[serde(rename = "invalid adapter cursor detected")]
-    InvalidAdapterCursorDetected,
-    #[serde(rename = "required adapter cursor is missing")]
-    MissingAdapterCursorDetected,
-    #[serde(rename = "orphaned adapter cursor detected")]
-    OrphanedAdapterCursorDetected,
-    #[serde(rename = "adapter cursor appears stale")]
-    StaleAdapterCursorDetected,
-    #[serde(rename = "adapter cursors are valid")]
-    AdapterCursorsValid,
-    #[serde(rename = "Google Drive mapping check skipped because the adapter is not configured")]
-    GdriveMappingSkipped,
-    #[serde(rename = "Google Drive mapping references an unknown Core revision")]
-    GdriveMappingUnknownRevision,
-    #[serde(rename = "Google Drive mapping contains duplicate file identifiers")]
-    GdriveMappingDuplicateFileId,
-    #[serde(rename = "Google Drive mapping drift detected")]
-    GdriveMappingDriftDetected,
-    #[serde(rename = "Google Drive mapping is valid")]
-    GdriveMappingValid,
-    #[serde(rename = "enabled adapter has invalid role")]
-    AdapterInvalidRole,
-    #[serde(rename = "enabled adapter is missing a token hash")]
-    AdapterMissingTokenHash,
-    #[serde(rename = "no enabled adapters provided for token sanity check")]
-    NoEnabledAdaptersForTokenSanity,
-    #[serde(rename = "adapter token metadata is sane")]
-    AdapterTokenMetadataSane,
-    #[serde(rename = "worktree drift check skipped because the worktree is not configured")]
-    WorktreeDriftSkipped,
-    #[serde(rename = "worktree state references an unknown Core revision")]
-    WorktreeUnknownRevision,
-    #[serde(rename = "worktree drift detected")]
-    WorktreeDriftDetected,
-    #[serde(rename = "worktree state is consistent")]
-    WorktreeStateConsistent,
-    #[serde(rename = "doctor check was not run")]
-    CheckNotRun,
-    #[serde(rename = "doctor check integration is pending")]
-    CheckPlaceholder,
-}
+    fn validate_for(
+        &self,
+        check_id: DoctorCheckId,
+        status: DoctorCheckStatus,
+        message: DoctorCheckMessage,
+    ) -> Result<(), &'static str> {
+        if let Some(details_id) = self.fixed_check_id() {
+            if details_id != check_id {
+                return Err("doctor details do not match check identifier");
+            }
+        }
 
-impl DoctorCheckMessage {
-    /// Stable redacted message text.
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::DatabaseMetadataNotConfigured => "database metadata is not configured",
-            Self::DatabaseConnectivitySkippedOffline => {
-                "database connectivity check skipped in offline mode"
+        let valid = match self {
+            Self::DbConnectivity(details) => {
+                db_connectivity_details_match(details, status, message)
             }
-            Self::DatabaseConnectivityVerified => "database connectivity verified",
-            Self::DatabaseConnectivityFailed => "database connectivity check failed",
-            Self::DatabaseConnectivityNotRun => "database connectivity result was not provided",
-            Self::ObjectStoreNotConfigured => "object store root is not configured",
-            Self::ObjectStoreSkippedOffline => {
-                "object store filesystem check skipped in offline mode"
+            Self::ObjectStoreExistsWritable(details) => {
+                classification_matches(object_store_classification(details), status, message)
             }
-            Self::ObjectStoreMissing => "object store root does not exist",
-            Self::ObjectStoreNotWritable => "object store root is not writable",
-            Self::ObjectStoreAccessible => "object store root is accessible",
-            Self::ObjectStoreNotRun => "object store filesystem result was incomplete",
-            Self::NoMissingBlobs => "no missing blobs detected",
-            Self::MissingBlobsDetected => "missing required blobs detected",
-            Self::NoAdaptersForCursorValidation => "no adapters require cursor validation",
-            Self::InvalidAdapterCursorDetected => "invalid adapter cursor detected",
-            Self::MissingAdapterCursorDetected => "required adapter cursor is missing",
-            Self::OrphanedAdapterCursorDetected => "orphaned adapter cursor detected",
-            Self::StaleAdapterCursorDetected => "adapter cursor appears stale",
-            Self::AdapterCursorsValid => "adapter cursors are valid",
-            Self::GdriveMappingSkipped => {
-                "Google Drive mapping check skipped because the adapter is not configured"
+            Self::MissingBlobs(details) => {
+                classification_matches(missing_blob_classification(details), status, message)
             }
-            Self::GdriveMappingUnknownRevision => {
-                "Google Drive mapping references an unknown Core revision"
+            Self::AdapterCursors(details) => {
+                classification_matches(adapter_cursor_classification(details), status, message)
             }
-            Self::GdriveMappingDuplicateFileId => {
-                "Google Drive mapping contains duplicate file identifiers"
+            Self::GdriveMapping(details) => {
+                classification_matches(gdrive_mapping_classification(details), status, message)
             }
-            Self::GdriveMappingDriftDetected => "Google Drive mapping drift detected",
-            Self::GdriveMappingValid => "Google Drive mapping is valid",
-            Self::AdapterInvalidRole => "enabled adapter has invalid role",
-            Self::AdapterMissingTokenHash => "enabled adapter is missing a token hash",
-            Self::NoEnabledAdaptersForTokenSanity => {
-                "no enabled adapters provided for token sanity check"
+            Self::AdapterTokenSanity(details) => {
+                classification_matches(adapter_token_classification(details), status, message)
             }
-            Self::AdapterTokenMetadataSane => "adapter token metadata is sane",
-            Self::WorktreeDriftSkipped => {
-                "worktree drift check skipped because the worktree is not configured"
+            Self::WorktreeDrift(details) => {
+                classification_matches(worktree_drift_classification(details), status, message)
             }
-            Self::WorktreeUnknownRevision => "worktree state references an unknown Core revision",
-            Self::WorktreeDriftDetected => "worktree drift detected",
-            Self::WorktreeStateConsistent => "worktree state is consistent",
-            Self::CheckNotRun => "doctor check was not run",
-            Self::CheckPlaceholder => "doctor check integration is pending",
+            Self::NotRun(_) => {
+                status == DoctorCheckStatus::NotRun && message == DoctorCheckMessage::CheckNotRun
+            }
+            Self::Placeholder(_) => {
+                status == DoctorCheckStatus::Placeholder
+                    && message == DoctorCheckMessage::CheckPlaceholder
+            }
+        };
+
+        if valid {
+            Ok(())
+        } else {
+            Err("doctor details do not match status and message")
         }
     }
+}
 
-    fn is_valid_for(self, check_id: DoctorCheckId, status: DoctorCheckStatus) -> bool {
-        matches!(
-            (self, check_id, status),
-            (
-                Self::DatabaseMetadataNotConfigured,
-                DoctorCheckId::DbConnectivity,
-                DoctorCheckStatus::Warning
-            ) | (
-                Self::DatabaseConnectivitySkippedOffline,
-                DoctorCheckId::DbConnectivity,
-                DoctorCheckStatus::Skipped
-            ) | (
-                Self::DatabaseConnectivityVerified,
-                DoctorCheckId::DbConnectivity,
-                DoctorCheckStatus::Ok
-            ) | (
-                Self::DatabaseConnectivityFailed,
-                DoctorCheckId::DbConnectivity,
-                DoctorCheckStatus::Failed
-            ) | (
-                Self::DatabaseConnectivityNotRun,
-                DoctorCheckId::DbConnectivity,
-                DoctorCheckStatus::NotRun
-            ) | (
-                Self::ObjectStoreNotConfigured,
-                DoctorCheckId::ObjectStoreExistsWritable,
-                DoctorCheckStatus::Warning
-            ) | (
-                Self::ObjectStoreSkippedOffline,
-                DoctorCheckId::ObjectStoreExistsWritable,
-                DoctorCheckStatus::Skipped
-            ) | (
-                Self::ObjectStoreMissing,
-                DoctorCheckId::ObjectStoreExistsWritable,
-                DoctorCheckStatus::Failed
-            ) | (
-                Self::ObjectStoreNotWritable,
-                DoctorCheckId::ObjectStoreExistsWritable,
-                DoctorCheckStatus::Failed
-            ) | (
-                Self::ObjectStoreAccessible,
-                DoctorCheckId::ObjectStoreExistsWritable,
-                DoctorCheckStatus::Ok
-            ) | (
-                Self::ObjectStoreNotRun,
-                DoctorCheckId::ObjectStoreExistsWritable,
-                DoctorCheckStatus::NotRun
-            ) | (
-                Self::NoMissingBlobs,
-                DoctorCheckId::MissingBlobs,
-                DoctorCheckStatus::Ok
-            ) | (
-                Self::MissingBlobsDetected,
-                DoctorCheckId::MissingBlobs,
-                DoctorCheckStatus::Failed
-            ) | (
-                Self::NoAdaptersForCursorValidation,
-                DoctorCheckId::AdapterCursors,
-                DoctorCheckStatus::Skipped
-            ) | (
-                Self::InvalidAdapterCursorDetected,
-                DoctorCheckId::AdapterCursors,
-                DoctorCheckStatus::Failed
-            ) | (
-                Self::MissingAdapterCursorDetected,
-                DoctorCheckId::AdapterCursors,
-                DoctorCheckStatus::Warning
-            ) | (
-                Self::OrphanedAdapterCursorDetected,
-                DoctorCheckId::AdapterCursors,
-                DoctorCheckStatus::Warning
-            ) | (
-                Self::StaleAdapterCursorDetected,
-                DoctorCheckId::AdapterCursors,
-                DoctorCheckStatus::Warning
-            ) | (
-                Self::AdapterCursorsValid,
-                DoctorCheckId::AdapterCursors,
-                DoctorCheckStatus::Ok
-            ) | (
-                Self::GdriveMappingSkipped,
-                DoctorCheckId::GdriveMapping,
-                DoctorCheckStatus::Skipped
-            ) | (
-                Self::GdriveMappingUnknownRevision,
-                DoctorCheckId::GdriveMapping,
-                DoctorCheckStatus::Failed
-            ) | (
-                Self::GdriveMappingDuplicateFileId,
-                DoctorCheckId::GdriveMapping,
-                DoctorCheckStatus::Failed
-            ) | (
-                Self::GdriveMappingDriftDetected,
-                DoctorCheckId::GdriveMapping,
-                DoctorCheckStatus::Warning
-            ) | (
-                Self::GdriveMappingValid,
-                DoctorCheckId::GdriveMapping,
-                DoctorCheckStatus::Ok
-            ) | (
-                Self::AdapterInvalidRole,
-                DoctorCheckId::AdapterTokenSanity,
-                DoctorCheckStatus::Failed
-            ) | (
-                Self::AdapterMissingTokenHash,
-                DoctorCheckId::AdapterTokenSanity,
-                DoctorCheckStatus::Warning
-            ) | (
-                Self::NoEnabledAdaptersForTokenSanity,
-                DoctorCheckId::AdapterTokenSanity,
-                DoctorCheckStatus::Skipped
-            ) | (
-                Self::AdapterTokenMetadataSane,
-                DoctorCheckId::AdapterTokenSanity,
-                DoctorCheckStatus::Ok
-            ) | (
-                Self::WorktreeDriftSkipped,
-                DoctorCheckId::WorktreeDrift,
-                DoctorCheckStatus::Skipped
-            ) | (
-                Self::WorktreeUnknownRevision,
-                DoctorCheckId::WorktreeDrift,
-                DoctorCheckStatus::Failed
-            ) | (
-                Self::WorktreeDriftDetected,
-                DoctorCheckId::WorktreeDrift,
-                DoctorCheckStatus::Warning
-            ) | (
-                Self::WorktreeStateConsistent,
-                DoctorCheckId::WorktreeDrift,
-                DoctorCheckStatus::Ok
-            ) | (Self::CheckNotRun, _, DoctorCheckStatus::NotRun)
-                | (Self::CheckPlaceholder, _, DoctorCheckStatus::Placeholder)
-        )
-    }
+macro_rules! define_doctor_messages {
+    ($( $variant:ident => ($wire:literal, $status:ident, $check_id:expr), )+) => {
+        /// Fixed, redacted doctor message vocabulary.
+        #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+        pub enum DoctorCheckMessage {
+            $(
+                #[serde(rename = $wire)]
+                $variant,
+            )+
+        }
+
+        impl DoctorCheckMessage {
+            /// Stable redacted message text.
+            #[must_use]
+            pub const fn as_str(self) -> &'static str {
+                match self {
+                    $(Self::$variant => $wire,)+
+                }
+            }
+
+            const fn status(self) -> DoctorCheckStatus {
+                match self {
+                    $(Self::$variant => DoctorCheckStatus::$status,)+
+                }
+            }
+
+            const fn fixed_check_id(self) -> Option<DoctorCheckId> {
+                match self {
+                    $(Self::$variant => $check_id,)+
+                }
+            }
+
+            fn is_valid_for(self, check_id: DoctorCheckId, status: DoctorCheckStatus) -> bool {
+                self.status() == status
+                    && match self.fixed_check_id() {
+                        Some(expected_check_id) => expected_check_id == check_id,
+                        None => true,
+                    }
+            }
+        }
+    };
+}
+
+define_doctor_messages! {
+    DatabaseMetadataNotConfigured => (
+        "database metadata is not configured",
+        Warning,
+        Some(DoctorCheckId::DbConnectivity)
+    ),
+    DatabaseConnectivitySkippedOffline => (
+        "database connectivity check skipped in offline mode",
+        Skipped,
+        Some(DoctorCheckId::DbConnectivity)
+    ),
+    DatabaseConnectivityVerified => (
+        "database connectivity verified",
+        Ok,
+        Some(DoctorCheckId::DbConnectivity)
+    ),
+    DatabaseConnectivityFailed => (
+        "database connectivity check failed",
+        Failed,
+        Some(DoctorCheckId::DbConnectivity)
+    ),
+    DatabaseConnectivityNotRun => (
+        "database connectivity result was not provided",
+        NotRun,
+        Some(DoctorCheckId::DbConnectivity)
+    ),
+    ObjectStoreNotConfigured => (
+        "object store root is not configured",
+        Warning,
+        Some(DoctorCheckId::ObjectStoreExistsWritable)
+    ),
+    ObjectStoreSkippedOffline => (
+        "object store filesystem check skipped in offline mode",
+        Skipped,
+        Some(DoctorCheckId::ObjectStoreExistsWritable)
+    ),
+    ObjectStoreMissing => (
+        "object store root does not exist",
+        Failed,
+        Some(DoctorCheckId::ObjectStoreExistsWritable)
+    ),
+    ObjectStoreNotWritable => (
+        "object store root is not writable",
+        Failed,
+        Some(DoctorCheckId::ObjectStoreExistsWritable)
+    ),
+    ObjectStoreAccessible => (
+        "object store root is accessible",
+        Ok,
+        Some(DoctorCheckId::ObjectStoreExistsWritable)
+    ),
+    ObjectStoreNotRun => (
+        "object store filesystem result was incomplete",
+        NotRun,
+        Some(DoctorCheckId::ObjectStoreExistsWritable)
+    ),
+    NoMissingBlobs => (
+        "no missing blobs detected",
+        Ok,
+        Some(DoctorCheckId::MissingBlobs)
+    ),
+    MissingBlobsDetected => (
+        "missing required blobs detected",
+        Failed,
+        Some(DoctorCheckId::MissingBlobs)
+    ),
+    NoAdaptersForCursorValidation => (
+        "no adapters require cursor validation",
+        Skipped,
+        Some(DoctorCheckId::AdapterCursors)
+    ),
+    InvalidAdapterCursorDetected => (
+        "invalid adapter cursor detected",
+        Failed,
+        Some(DoctorCheckId::AdapterCursors)
+    ),
+    MissingAdapterCursorDetected => (
+        "required adapter cursor is missing",
+        Warning,
+        Some(DoctorCheckId::AdapterCursors)
+    ),
+    OrphanedAdapterCursorDetected => (
+        "orphaned adapter cursor detected",
+        Warning,
+        Some(DoctorCheckId::AdapterCursors)
+    ),
+    StaleAdapterCursorDetected => (
+        "adapter cursor appears stale",
+        Warning,
+        Some(DoctorCheckId::AdapterCursors)
+    ),
+    AdapterCursorsValid => (
+        "adapter cursors are valid",
+        Ok,
+        Some(DoctorCheckId::AdapterCursors)
+    ),
+    GdriveMappingSkipped => (
+        "Google Drive mapping check skipped because the adapter is not configured",
+        Skipped,
+        Some(DoctorCheckId::GdriveMapping)
+    ),
+    GdriveMappingUnknownRevision => (
+        "Google Drive mapping references an unknown Core revision",
+        Failed,
+        Some(DoctorCheckId::GdriveMapping)
+    ),
+    GdriveMappingDuplicateFileId => (
+        "Google Drive mapping contains duplicate file identifiers",
+        Failed,
+        Some(DoctorCheckId::GdriveMapping)
+    ),
+    GdriveMappingDriftDetected => (
+        "Google Drive mapping drift detected",
+        Warning,
+        Some(DoctorCheckId::GdriveMapping)
+    ),
+    GdriveMappingValid => (
+        "Google Drive mapping is valid",
+        Ok,
+        Some(DoctorCheckId::GdriveMapping)
+    ),
+    AdapterInvalidRole => (
+        "enabled adapter has invalid role",
+        Failed,
+        Some(DoctorCheckId::AdapterTokenSanity)
+    ),
+    AdapterMissingTokenHash => (
+        "enabled adapter is missing a token hash",
+        Warning,
+        Some(DoctorCheckId::AdapterTokenSanity)
+    ),
+    NoEnabledAdaptersForTokenSanity => (
+        "no enabled adapters provided for token sanity check",
+        Skipped,
+        Some(DoctorCheckId::AdapterTokenSanity)
+    ),
+    AdapterTokenMetadataSane => (
+        "adapter token metadata is sane",
+        Ok,
+        Some(DoctorCheckId::AdapterTokenSanity)
+    ),
+    WorktreeDriftSkipped => (
+        "worktree drift check skipped because the worktree is not configured",
+        Skipped,
+        Some(DoctorCheckId::WorktreeDrift)
+    ),
+    WorktreeUnknownRevision => (
+        "worktree state references an unknown Core revision",
+        Failed,
+        Some(DoctorCheckId::WorktreeDrift)
+    ),
+    WorktreeDriftDetected => (
+        "worktree drift detected",
+        Warning,
+        Some(DoctorCheckId::WorktreeDrift)
+    ),
+    WorktreeStateConsistent => (
+        "worktree state is consistent",
+        Ok,
+        Some(DoctorCheckId::WorktreeDrift)
+    ),
+    CheckNotRun => ("doctor check was not run", NotRun, None),
+    CheckPlaceholder => ("doctor check integration is pending", Placeholder, None),
 }
 
 impl fmt::Display for DoctorCheckMessage {
@@ -473,7 +465,7 @@ impl Deref for DoctorCheckMessage {
 }
 
 /// JSON-safe doctor check result.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DoctorCheckResult {
     pub check_id: DoctorCheckId,
     status: DoctorCheckStatus,
@@ -482,23 +474,20 @@ pub struct DoctorCheckResult {
 }
 
 impl DoctorCheckResult {
-    pub(crate) fn classified(
+    pub(super) fn classified(
         check_id: DoctorCheckId,
         status: DoctorCheckStatus,
         message: DoctorCheckMessage,
         details: DoctorCheckDetails,
     ) -> Self {
-        debug_assert!(message.is_valid_for(check_id, status));
-        if let Some(details_id) = details.fixed_check_id() {
-            debug_assert_eq!(details_id, check_id);
-        }
-
-        Self {
+        let result = Self {
             check_id,
             status,
             message,
             details,
-        }
+        };
+        debug_assert!(result.validate().is_ok());
+        result
     }
 
     /// Creates a safe result for a supported check that was not attempted.
@@ -549,6 +538,38 @@ impl DoctorCheckResult {
     pub const fn details(&self) -> &DoctorCheckDetails {
         &self.details
     }
+
+    pub(super) fn validate(&self) -> Result<(), &'static str> {
+        if !self.message.is_valid_for(self.check_id, self.status) {
+            return Err("doctor message does not match check and status");
+        }
+        self.details
+            .validate_for(self.check_id, self.status, self.message)
+    }
+}
+
+#[derive(Serialize)]
+struct DoctorCheckResultWireRef<'a> {
+    check_id: DoctorCheckId,
+    status: DoctorCheckStatus,
+    message: DoctorCheckMessage,
+    details: &'a DoctorCheckDetails,
+}
+
+impl Serialize for DoctorCheckResult {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.validate().map_err(serde::ser::Error::custom)?;
+        DoctorCheckResultWireRef {
+            check_id: self.check_id,
+            status: self.status,
+            message: self.message,
+            details: &self.details,
+        }
+        .serialize(serializer)
+    }
 }
 
 impl<'de> Deserialize<'de> for DoctorCheckResult {
@@ -565,34 +586,275 @@ impl<'de> Deserialize<'de> for DoctorCheckResult {
         }
 
         let wire = DoctorCheckResultWire::deserialize(deserializer)?;
-        if !wire.message.is_valid_for(wire.check_id, wire.status) {
-            return Err(serde::de::Error::custom(
-                "doctor message does not match check and status",
-            ));
-        }
-        if let Some(details_id) = wire.details.fixed_check_id() {
-            if details_id != wire.check_id {
-                return Err(serde::de::Error::custom(
-                    "doctor details do not match check identifier",
-                ));
-            }
-        }
-        match (&wire.details, wire.status) {
-            (DoctorCheckDetails::NotRun(_), DoctorCheckStatus::NotRun)
-            | (DoctorCheckDetails::Placeholder(_), DoctorCheckStatus::Placeholder) => {}
-            (DoctorCheckDetails::NotRun(_), _) | (DoctorCheckDetails::Placeholder(_), _) => {
-                return Err(serde::de::Error::custom(
-                    "doctor execution details do not match status",
-                ));
-            }
-            _ => {}
-        }
-
-        Ok(Self {
+        let result = Self {
             check_id: wire.check_id,
             status: wire.status,
             message: wire.message,
             details: wire.details,
-        })
+        };
+        result.validate().map_err(serde::de::Error::custom)?;
+        Ok(result)
+    }
+}
+
+type Classification = (DoctorCheckStatus, DoctorCheckMessage);
+
+fn classification_matches(
+    expected: Option<Classification>,
+    status: DoctorCheckStatus,
+    message: DoctorCheckMessage,
+) -> bool {
+    expected == Some((status, message))
+}
+
+fn db_connectivity_details_match(
+    details: &DbConnectivityDetails,
+    status: DoctorCheckStatus,
+    message: DoctorCheckMessage,
+) -> bool {
+    if details.live_check_performed != details.connectivity_verified.is_some() {
+        return false;
+    }
+
+    match (status, message) {
+        (
+            DoctorCheckStatus::Warning,
+            DoctorCheckMessage::DatabaseMetadataNotConfigured,
+        ) => {
+            !details.metadata_configured
+                && !details.live_check_performed
+                && details.connectivity_verified.is_none()
+        }
+        (
+            DoctorCheckStatus::Skipped,
+            DoctorCheckMessage::DatabaseConnectivitySkippedOffline,
+        )
+        | (
+            DoctorCheckStatus::NotRun,
+            DoctorCheckMessage::DatabaseConnectivityNotRun,
+        ) => {
+            details.metadata_configured
+                && !details.live_check_performed
+                && details.connectivity_verified.is_none()
+        }
+        (
+            DoctorCheckStatus::Ok,
+            DoctorCheckMessage::DatabaseConnectivityVerified,
+        ) => {
+            details.metadata_configured
+                && details.live_check_performed
+                && details.connectivity_verified == Some(true)
+        }
+        (
+            DoctorCheckStatus::Failed,
+            DoctorCheckMessage::DatabaseConnectivityFailed,
+        ) => {
+            details.metadata_configured
+                && details.live_check_performed
+                && details.connectivity_verified == Some(false)
+        }
+        _ => false,
+    }
+}
+
+fn object_store_classification(details: &ObjectStoreExistsWritableDetails) -> Option<Classification> {
+    if !details.configured {
+        return (details.exists.is_none() && details.writable.is_none()).then_some((
+            DoctorCheckStatus::Warning,
+            DoctorCheckMessage::ObjectStoreNotConfigured,
+        ));
+    }
+    if details.exists == Some(false) {
+        return details.writable.is_none().then_some((
+            DoctorCheckStatus::Failed,
+            DoctorCheckMessage::ObjectStoreMissing,
+        ));
+    }
+    if details.writable == Some(false) {
+        return Some((
+            DoctorCheckStatus::Failed,
+            DoctorCheckMessage::ObjectStoreNotWritable,
+        ));
+    }
+    if details.exists == Some(true) && details.writable == Some(true) {
+        return Some((
+            DoctorCheckStatus::Ok,
+            DoctorCheckMessage::ObjectStoreAccessible,
+        ));
+    }
+    if details.exists.is_none() && details.writable.is_none() {
+        return Some((
+            DoctorCheckStatus::Skipped,
+            DoctorCheckMessage::ObjectStoreSkippedOffline,
+        ));
+    }
+    Some((
+        DoctorCheckStatus::NotRun,
+        DoctorCheckMessage::ObjectStoreNotRun,
+    ))
+}
+
+fn missing_blob_classification(details: &MissingBlobDetectionDetails) -> Option<Classification> {
+    let sample_count = u64::try_from(details.sample_hashes.len()).unwrap_or(u64::MAX);
+    let sorted_unique = details
+        .sample_hashes
+        .windows(2)
+        .all(|window| window[0] < window[1]);
+    if !sorted_unique
+        || sample_count > details.missing_count
+        || (details.missing_count == 0 && !details.sample_hashes.is_empty())
+    {
+        return None;
+    }
+
+    if details.missing_count == 0 {
+        Some((DoctorCheckStatus::Ok, DoctorCheckMessage::NoMissingBlobs))
+    } else {
+        Some((
+            DoctorCheckStatus::Failed,
+            DoctorCheckMessage::MissingBlobsDetected,
+        ))
+    }
+}
+
+fn adapter_cursor_classification(details: &AdapterCursorDetails) -> Option<Classification> {
+    let expected_missing = details
+        .expected_adapter_count
+        .saturating_sub(details.cursor_count);
+    let expected_orphaned = details
+        .cursor_count
+        .saturating_sub(details.expected_adapter_count);
+    if details.missing_cursor_count != expected_missing
+        || details.orphaned_cursor_count != expected_orphaned
+    {
+        return None;
+    }
+
+    if details.invalid_cursor_count > 0 {
+        Some((
+            DoctorCheckStatus::Failed,
+            DoctorCheckMessage::InvalidAdapterCursorDetected,
+        ))
+    } else if details.missing_cursor_count > 0 {
+        Some((
+            DoctorCheckStatus::Warning,
+            DoctorCheckMessage::MissingAdapterCursorDetected,
+        ))
+    } else if details.orphaned_cursor_count > 0 {
+        Some((
+            DoctorCheckStatus::Warning,
+            DoctorCheckMessage::OrphanedAdapterCursorDetected,
+        ))
+    } else if details.stale_cursor_count > 0 {
+        Some((
+            DoctorCheckStatus::Warning,
+            DoctorCheckMessage::StaleAdapterCursorDetected,
+        ))
+    } else if details.expected_adapter_count == 0 && details.cursor_count == 0 {
+        Some((
+            DoctorCheckStatus::Skipped,
+            DoctorCheckMessage::NoAdaptersForCursorValidation,
+        ))
+    } else {
+        Some((
+            DoctorCheckStatus::Ok,
+            DoctorCheckMessage::AdapterCursorsValid,
+        ))
+    }
+}
+
+fn gdrive_mapping_classification(details: &GdriveMappingDetails) -> Option<Classification> {
+    if !details.configured {
+        let no_facts = details.mapping_count == 0
+            && details.unknown_revision_count == 0
+            && details.duplicate_drive_file_id_count == 0
+            && details.unmapped_item_count == 0;
+        return no_facts.then_some((
+            DoctorCheckStatus::Skipped,
+            DoctorCheckMessage::GdriveMappingSkipped,
+        ));
+    }
+    if details.unknown_revision_count > 0 {
+        Some((
+            DoctorCheckStatus::Failed,
+            DoctorCheckMessage::GdriveMappingUnknownRevision,
+        ))
+    } else if details.duplicate_drive_file_id_count > 0 {
+        Some((
+            DoctorCheckStatus::Failed,
+            DoctorCheckMessage::GdriveMappingDuplicateFileId,
+        ))
+    } else if details.unmapped_item_count > 0 {
+        Some((
+            DoctorCheckStatus::Warning,
+            DoctorCheckMessage::GdriveMappingDriftDetected,
+        ))
+    } else {
+        Some((
+            DoctorCheckStatus::Ok,
+            DoctorCheckMessage::GdriveMappingValid,
+        ))
+    }
+}
+
+fn adapter_token_classification(details: &AdapterTokenSanityDetails) -> Option<Classification> {
+    if details.missing_token_hash_count > details.enabled_adapter_count
+        || details.invalid_role_count > details.enabled_adapter_count
+    {
+        return None;
+    }
+    if details.invalid_role_count > 0 {
+        Some((
+            DoctorCheckStatus::Failed,
+            DoctorCheckMessage::AdapterInvalidRole,
+        ))
+    } else if details.missing_token_hash_count > 0 {
+        Some((
+            DoctorCheckStatus::Warning,
+            DoctorCheckMessage::AdapterMissingTokenHash,
+        ))
+    } else if details.enabled_adapter_count == 0 {
+        Some((
+            DoctorCheckStatus::Skipped,
+            DoctorCheckMessage::NoEnabledAdaptersForTokenSanity,
+        ))
+    } else {
+        Some((
+            DoctorCheckStatus::Ok,
+            DoctorCheckMessage::AdapterTokenMetadataSane,
+        ))
+    }
+}
+
+fn worktree_drift_classification(details: &WorktreeDriftDetails) -> Option<Classification> {
+    if !details.configured {
+        let no_facts = details.tracked_path_count == 0
+            && details.unknown_revision_count == 0
+            && details.missing_path_count == 0
+            && details.content_mismatch_count == 0
+            && details.unexpected_path_count == 0;
+        return no_facts.then_some((
+            DoctorCheckStatus::Skipped,
+            DoctorCheckMessage::WorktreeDriftSkipped,
+        ));
+    }
+    if details.unknown_revision_count > 0 {
+        Some((
+            DoctorCheckStatus::Failed,
+            DoctorCheckMessage::WorktreeUnknownRevision,
+        ))
+    } else if details.missing_path_count > 0
+        || details.content_mismatch_count > 0
+        || details.unexpected_path_count > 0
+    {
+        Some((
+            DoctorCheckStatus::Warning,
+            DoctorCheckMessage::WorktreeDriftDetected,
+        ))
+    } else {
+        Some((
+            DoctorCheckStatus::Ok,
+            DoctorCheckMessage::WorktreeStateConsistent,
+        ))
     }
 }
