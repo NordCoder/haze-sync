@@ -175,12 +175,8 @@ mod tests {
 
     #[test]
     fn current_server_info_roundtrips_stable_capability_and_protocol_metadata() {
-        let response = ServerInfoResponse::current(
-            "haze-sync-vps-1",
-            52_428_800,
-            capabilities(),
-        )
-        .unwrap();
+        let response =
+            ServerInfoResponse::current("haze-sync-vps-1", 52_428_800, capabilities()).unwrap();
 
         assert_eq!(response.protocol_version, CURRENT_PROTOCOL_VERSION);
         assert!(response.is_protocol_compatible(CURRENT_PROTOCOL_VERSION));
