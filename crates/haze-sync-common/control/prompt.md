@@ -1,54 +1,52 @@
-# W1-CMM-P6 — Shared primitive compatibility fixtures
+# W1-FIX-CMM-P6-CI — Common compatibility fixture CI fix
 
 Component: common
 Path: crates/haze-sync-common
 Branch: component/common
 PR: #46
-Role: implementation-worker
+Role: fixer-worker
 
 Work only through the GitHub connector. Do not use SSH. Do not use local git. Do not open PR. Do not merge. Do not mark PRs ready for review. Do not decide merge readiness.
 
 ## Context
 
-CMM-P5 implementation and clean-code review are accepted. The clean-code code-bearing Component CI run is green.
+CMM-P6 implementation is complete, but its fixture/test/docs-bearing Component CI run is red.
 
-- code_bearing_sha: 987d76b451b209a4996c5bdaabf2c16cc0e0f5ca
+- code_bearing_sha: ad64fbfacc160d491c8e4e961b18ca4b7efcf0f4
 - workflow: Component CI
-- workflow_run_id: 29067608602
-- run_number: 825
-- conclusion: success
-
-The next implementation phase is CMM-P6 from crates/haze-sync-common/docs/implementation-plan.md.
+- workflow_run_id: 29079946397
+- run_number: 903
+- run_attempt: 1
+- artifact_id: 8222362767
+- artifact_name: ci-diag__component-common__wf-component-ci__run-29079946397__attempt-1
+- artifact_expires_at: 2026-07-11T08:31:49Z
 
 ## Read
 
-Read implementation-manifest.md, report-template.md, implementation-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current source, downstream mirror-type documentation where read-only access is useful, and PR diff. Do not read CI diagnostics artifacts unless a future active prompt explicitly instructs it.
+Read implementation-manifest.md, report-template.md, fixer-worker-prompt.md, chatgpt-gh-connector.md, component docs/control files, current fixture/tests/docs, and PR diff.
+
+Download diagnostics artifact 8222362767. Read `summary.md`, `manifest.json`, and every failed-check log. If it is missing, expired, malformed, or unreadable, report `FIX_BLOCKED_BY_LOGS`.
 
 ## Task
 
-Implement CMM-P6: Shared primitive compatibility fixtures.
-
-Follow the plan:
-
-- provide lightweight JSON examples or fixtures for VaultPath, shared IDs, content hashes, adapter roles/modes, and safe validation errors;
-- add Rust tests that assert fixture compatibility and stable wire values;
-- document how downstream Rust components and TypeScript clients should mirror the examples;
-- keep fixtures limited to Common-owned primitives rather than API DTOs or Core policy;
-- ensure examples contain no real credentials, local paths, or environment-specific values.
+Fix the minimum artifact-proven cause of the CMM-P6 CI failure. Preserve stable Common-owned primitive fixtures, complete vocabulary checks, safe deterministic examples, downstream mirroring documentation, and all CMM-P6 non-goals.
 
 ## Allowed files
 
-- crates/haze-sync-common/**
+- crates/haze-sync-common/fixtures/**
+- crates/haze-sync-common/tests/**
+- crates/haze-sync-common/docs/** only if diagnostics prove a docs issue
+- crates/haze-sync-common/src/** only if diagnostics directly prove an implementation defect
 - crates/haze-sync-common/control/report.md
 
-## Non-goals
+## Forbidden changes
 
-No TypeScript edits, generated-code pipeline, API DTO ownership, Core policy, adapter runtime behavior, workflow changes, dependency changes, or sibling component changes.
+No TypeScript edits, generated-code pipeline, API DTO ownership, Core policy, runtime/provider behavior, workflow changes, dependency changes, sibling component changes, removal of fixture coverage, or weakening of safety assertions.
 
 ## CI trigger policy
 
-Product/source/docs/fixture commits must not skip CI. A final report-only commit may skip CI.
+Product/source/docs/fixture fixer commits must not skip CI. A final report-only commit may skip CI.
 
 ## Report
 
-Write only the report to crates/haze-sync-common/control/report.md. Use report-template.md. Set REPORT_TYPE to IMPLEMENTATION and phase_id to CMM-P6.
+Write only the report to crates/haze-sync-common/control/report.md. Use report-template.md. Set REPORT_TYPE to FIX and phase_id to FIX-CMM-P6-CI.
