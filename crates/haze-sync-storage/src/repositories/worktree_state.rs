@@ -118,10 +118,19 @@ fn validate_worktree_state_row(row: WorktreeStateRow) -> RepositoryResult<Worktr
         RevisionId::parse(revision_id).map_err(|_| RepositoryError::InvalidIdentifier)?;
     }
     if let Some(last_seen_sha256) = row.last_seen_sha256.as_deref() {
-        Sha256::parse(last_seen_sha256).map_err(|_| RepositoryError::InvalidHash)?;
+        validate_canonical_sha256(last_seen_sha256)?;
     }
 
     Ok(row)
+}
+
+fn validate_canonical_sha256(value: &str) -> RepositoryResult<()> {
+    let parsed = Sha256::parse(value).map_err(|_| RepositoryError::InvalidHash)?;
+    if parsed.to_string() != value {
+        return Err(RepositoryError::InvalidHash);
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
