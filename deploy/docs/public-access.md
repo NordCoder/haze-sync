@@ -66,7 +66,8 @@ Current accepted route expectations:
 | `/v1/server-info` | proxied | public capability metadata |
 | `/v1/files/**` | proxied | bearer authentication and role checks required |
 | `/v1/changes` | proxied | bearer authentication and role checks required |
-| `/v1/conflicts**` | proxied | bearer authentication and role checks required |
+| `/v1/conflicts` | proxied | bearer authentication and role checks required |
+| `/v1/conflicts/{id}/resolve` | proxied | bearer authentication and resolver-role checks required |
 | `/v1/admin/**` | proxied | admin bearer authentication required |
 
 Do not configure Caddy to inject a bearer token, replace the `Authorization` header, or bypass Server role checks. Standard reverse proxy behavior preserves the incoming authorization header for Server evaluation.
