@@ -3,10 +3,20 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import { applyDeleteOutcome, applyUploadOutcome, createDefaultBaseRevisionState } from "../src/base-revision-store";
+import {
+  applyDeleteOutcome,
+  applyUploadOutcome,
+  createDefaultBaseRevisionState,
+  mergeBaseRevisionState,
+} from "../src/base-revision-store";
 import { CONFLICT_ACTION_DEFINITIONS } from "../src/conflict-center";
 import { normalizeStoredContentHash } from "../src/content-hash";
-import { createDefaultLocalSyncState, reconcileFullScan, recordEventHint } from "../src/pending-queue";
+import {
+  createDefaultLocalSyncState,
+  mergeLocalSyncState,
+  reconcileFullScan,
+  recordEventHint,
+} from "../src/pending-queue";
 import { sanitizeStatusMessage } from "../src/safe-text";
 import { markSyncFailed, syncBackoffRemainingMs } from "../src/sync-runtime-state";
 import { parseApiContractFixture } from "../src/api-client";
@@ -74,10 +84,30 @@ test("canonical base outcomes do not invent missing revision metadata", () => {
   assert.equal(missing.state.byPath["Notes/a.md"].serverDeleted, true);
 });
 
-test("legacy persisted hex hashes normalize without an unnecessary upload", () => {
+test("legacy persisted hex hashes migrate in base and pending state readers", () => {
   const legacy = "a".repeat(64);
   assert.equal(normalizeStoredContentHash(legacy), `sha256:${legacy}`);
-  assert.equal(normalizeStoredContentHash(`sha256:${legacy}`), `sha256:${legacy}`);
+
+  const base = mergeBaseRevisionState({
+    byPath: {
+      "Notes/a.md": {
+        path: "Notes/a.md",
+        revisionId: "rev_1",
+        contentHash: legacy,
+        serverDeleted: false,
+        updatedAt: "2026-01-01T00:00:00Z",
+      },
+    },
+  });
+  assert.equal(base.byPath["Notes/a.md"].contentHash, `sha256:${legacy}`);
+
+  const local = mergeLocalSyncState({
+    knownFiles: {
+      "Notes/a.md": fact("Notes/a.md", legacy),
+    },
+    pendingQueue: {},
+  });
+  assert.equal(local.knownFiles["Notes/a.md"].contentHash, `sha256:${legacy}`);
   assert.equal(normalizeStoredContentHash("not-a-hash"), undefined);
 });
 
