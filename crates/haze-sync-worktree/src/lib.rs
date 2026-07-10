@@ -4,7 +4,9 @@
 //! the sync source of truth; later phases add scanning, importing, writing, and
 //! runtime behavior on top of these safe path-mapping primitives.
 
+mod hashing;
 mod import_planner;
+mod materializer;
 mod path_mapping;
 mod scanner;
 
@@ -15,6 +17,11 @@ pub use import_planner::{
     WorktreeImportPlanner, WorktreeImportRejection, WorktreeImportRunner, WorktreeImportSubmission,
     WorktreeImportSubmissionReport, WorktreePutImport, WorktreeStateSnapshot,
     WorktreeTombstoneState, WorktreeUnchangedFile,
+};
+pub use materializer::{
+    AtomicWorktreeWriter, WorktreeDeferredMaterialization, WorktreeEchoMarker,
+    WorktreeLocalImportCandidate, WorktreeMaterializationOutcome, WorktreeMaterializationRequest,
+    WorktreeMaterializeError, WorktreeMaterializedFile, WorktreeMaterializer,
 };
 pub use path_mapping::{
     WorktreeConfig, WorktreePathError, ECHO_DIR_NAME, METADATA_DIR_NAME, TEMP_DIR_NAME,
