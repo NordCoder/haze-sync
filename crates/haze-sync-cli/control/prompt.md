@@ -12,7 +12,7 @@ This is a hold notice, not an executable worker prompt.
 
 CLI-P5 implementation, CI correction, and clean-code review are accepted with green CI.
 
-Worktree WT-P8 and GDrive GDA-P7C are now implemented, but both final heads are formally red and have been routed through artifact-based fixer slots. Their runtime and export boundaries are not yet clean-code/CI accepted for fan-in use.
+GDrive GDA-P7C is now fully accepted with green CI. Worktree WT-P8 implementation and fixer are green, but WT-P8C clean-code review is only queued. GDA-P8 delete-guard implementation is also queued and does not supply operator endpoints.
 
 ## Blocked next phase
 
@@ -21,12 +21,12 @@ CLI-P6 owns bootstrap and sync operation commands. It may call only accepted Ser
 The following remain unavailable:
 
 - accepted bootstrap/import/export/sync-once operator endpoints;
-- accepted Worktree runtime hosting boundary;
-- accepted GDrive export/runtime and persistence fan-in;
+- final accepted Worktree runtime hosting boundary;
+- accepted Server composition of Worktree/GDrive runtime operations;
 - stable safe progress/result and failure contracts for command rendering.
 
 CLI must not invent local orchestration, direct database access, provider calls, or hidden runtime ownership.
 
 ## Unblock condition
 
-Green WT-P8 and GDA-P7C lifecycle acceptance plus accepted Server/API operator contracts, or a dedicated cross-component CLI fan-in contract. Until then, do not launch a worker from this hold notice.
+Green WT-P8C acceptance plus accepted Server/API bootstrap and sync contracts and required runtime fan-in, or a dedicated CLI fan-in contract. Until then, do not launch a worker from this hold notice.
