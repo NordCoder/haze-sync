@@ -21,7 +21,9 @@ import {
 } from "../src/pending-queue";
 import {
   applyRemoteMetadataChange,
+  clearRemoteConflictForChange,
   createDefaultRemoteSyncState,
+  recordRemoteConflict,
 } from "../src/remote-sync-state";
 import { sanitizeStatusMessage } from "../src/safe-text";
 import { markSyncFailed, syncBackoffRemainingMs } from "../src/sync-runtime-state";
@@ -141,6 +143,33 @@ test("server conflict metadata advances cursor and clears after resolution", () 
   assert.equal(resolved.conflictRecorded, false);
   assert.equal(resolved.state.changeCursor, 44);
   assert.deepEqual(resolved.state.conflicts, {});
+});
+
+test("replayed file change clears its exact blocking conflict record", () => {
+  const change = {
+    seq: 45,
+    kind: "upsert_file" as const,
+    path: "Notes/a.md",
+    revision_id: "rev_45",
+    content_sha256: HASH_B,
+    size_bytes: 10,
+    updated_by: "worktree-adapter",
+    updated_at: "2026-01-01T00:05:00Z",
+  };
+  const blocked = recordRemoteConflict(
+    createDefaultRemoteSyncState(),
+    change,
+    "dirty_local_file",
+    "2026-01-01T00:05:01Z",
+  );
+  assert.equal(blocked.conflicts["45:Notes/a.md"].reason, "dirty_local_file");
+
+  const cleared = clearRemoteConflictForChange(
+    blocked,
+    change,
+    "2026-01-01T00:05:02Z",
+  );
+  assert.deepEqual(cleared.conflicts, {});
 });
 
 test("legacy persisted hex hashes migrate in base and pending state readers", () => {
