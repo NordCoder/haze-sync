@@ -1,6 +1,6 @@
-import { sanitizeStatusMessage } from "../status";
+import { sanitizeStatusMessage } from "../safe-text";
 
-import { ErrorResponseDto } from "./types";
+import { isErrorResponseDto } from "./validators";
 
 export type ApiErrorCategory =
   | "configuration"
@@ -105,9 +105,8 @@ export function createOfflineError(endpoint: string): ApiClientError {
 }
 
 function safeErrorMessage(status: number, payload: unknown): string {
-  const responseMessage = readErrorResponseMessage(payload);
-  if (responseMessage !== undefined) {
-    return sanitizeStatusMessage(responseMessage);
+  if (isErrorResponseDto(payload)) {
+    return sanitizeStatusMessage(payload.error.message);
   }
 
   switch (mapHttpStatusToCategory(status)) {
@@ -132,26 +131,4 @@ function safeErrorMessage(status: number, payload: unknown): string {
     case "internal":
       return "Haze Sync request failed.";
   }
-}
-
-function readErrorResponseMessage(payload: unknown): string | undefined {
-  if (!isErrorResponse(payload)) {
-    return undefined;
-  }
-
-  return payload.error.message;
-}
-
-function isErrorResponse(payload: unknown): payload is ErrorResponseDto {
-  if (typeof payload !== "object" || payload === null || !("error" in payload)) {
-    return false;
-  }
-
-  const error = (payload as { error: unknown }).error;
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    typeof (error as { message: unknown }).message === "string"
-  );
 }
