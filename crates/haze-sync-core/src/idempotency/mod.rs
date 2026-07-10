@@ -592,7 +592,7 @@ mod tests {
             IdempotencyService::evaluate(Some(&stored), incoming_fingerprint),
             IdempotencyReplayOutcome::ConflictDifferentRequest {
                 stored_request_fingerprint: stored_fingerprint,
-                incoming_request_fingerprint,
+                incoming_request_fingerprint: incoming_fingerprint,
             }
         );
     }
@@ -677,7 +677,10 @@ mod tests {
         }
 
         let mut newline = BTreeMap::new();
-        newline.insert("X-Revision-Id".to_owned(), "rev_1\r\nInjected: yes".to_owned());
+        newline.insert(
+            "X-Revision-Id".to_owned(),
+            "rev_1\r\nInjected: yes".to_owned(),
+        );
         assert_eq!(
             StoredIdempotencyResponse::new(200, json!({}), newline),
             Err(IdempotencyError::UnsafeResponseHeader)

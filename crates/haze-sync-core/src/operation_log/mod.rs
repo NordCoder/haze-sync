@@ -385,8 +385,8 @@ impl<'de> Deserialize<'de> for ChangesPage {
         }
 
         let wire = ChangesPageWire::deserialize(deserializer)?;
-        let expected_to_seq =
-            validate_change_order(wire.from_seq, &wire.changes).map_err(serde::de::Error::custom)?;
+        let expected_to_seq = validate_change_order(wire.from_seq, &wire.changes)
+            .map_err(serde::de::Error::custom)?;
         if wire.to_seq != expected_to_seq {
             return Err(serde::de::Error::custom(
                 OperationLogError::InconsistentPageBounds,
@@ -520,7 +520,10 @@ mod tests {
         );
         assert!(serde_json::from_str::<ChangesLimit>("0").is_err());
         assert!(serde_json::from_str::<ChangesLimit>("1001").is_err());
-        assert_eq!(serde_json::from_str::<ChangesLimit>("1").unwrap().value(), 1);
+        assert_eq!(
+            serde_json::from_str::<ChangesLimit>("1").unwrap().value(),
+            1
+        );
     }
 
     #[test]
@@ -579,7 +582,10 @@ mod tests {
             assert_eq!(kind.to_string(), kind.as_str());
             let serialized = serde_json::to_string(&kind).unwrap();
             assert_eq!(serialized, format!("\"{}\"", kind.as_str()));
-            assert_eq!(serde_json::from_str::<OperationKind>(&serialized).unwrap(), kind);
+            assert_eq!(
+                serde_json::from_str::<OperationKind>(&serialized).unwrap(),
+                kind
+            );
         }
 
         for invalid in ["overwrite_file", "UPSERT_FILE", "upsert-file", ""] {
@@ -676,7 +682,10 @@ mod tests {
         );
 
         let max = OperationSequence::new(i64::MAX).unwrap();
-        assert_eq!(classify_cursor_update(max, max), CursorUpdateOutcome::Unchanged);
+        assert_eq!(
+            classify_cursor_update(max, max),
+            CursorUpdateOutcome::Unchanged
+        );
         assert_eq!(
             classify_cursor_update(max, OperationSequence::new(i64::MAX - 1).unwrap()),
             CursorUpdateOutcome::RejectedRegression
