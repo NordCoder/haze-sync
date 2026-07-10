@@ -71,8 +71,8 @@ where
     let expected_json = serde_json::to_string(expected).expect("fixture wire value must serialize");
     assert_eq!(actual_json, expected_json);
 
-    let decoded =
-        serde_json::from_str::<T>(&actual_json).expect("serialized common primitive must deserialize");
+    let decoded = serde_json::from_str::<T>(&actual_json)
+        .expect("serialized common primitive must deserialize");
     assert_eq!(&decoded, value);
 }
 
@@ -84,7 +84,8 @@ fn assert_complete_unique_wires<'a>(
     let actual_set = actual_values.iter().cloned().collect::<BTreeSet<_>>();
     let expected_set = expected
         .iter()
-        .map(|wire| (*wire).to_owned())
+        .copied()
+        .map(str::to_owned)
         .collect::<BTreeSet<_>>();
 
     assert_eq!(
@@ -125,8 +126,8 @@ fn fixture_schema_is_v1_and_contains_no_environment_or_secret_examples() {
 
 #[test]
 fn fixture_schema_rejects_unknown_fields() {
-    let mut document =
-        serde_json::from_str::<serde_json::Value>(FIXTURE_JSON).expect("fixture must be valid JSON");
+    let mut document = serde_json::from_str::<serde_json::Value>(FIXTURE_JSON)
+        .expect("fixture must be valid JSON");
     document
         .as_object_mut()
         .expect("fixture root must be a JSON object")
@@ -196,7 +197,7 @@ fn adapter_role_examples_are_complete_and_stable() {
 
     for wire in roles {
         let role = AdapterRole::from_str(&wire).unwrap();
-        assert_eq!(role.as_str(), wire);
+        assert_eq!(role.as_str(), wire.as_str());
         assert_wire_roundtrip(&role, &wire);
     }
 }
@@ -220,7 +221,7 @@ fn adapter_mode_examples_are_complete_and_stable() {
 
     for example in modes {
         let mode = AdapterMode::from_str(&example.wire).unwrap();
-        assert_eq!(mode.as_str(), example.wire);
+        assert_eq!(mode.as_str(), example.wire.as_str());
         assert_eq!(mode.allows_core_reads(), example.allows_core_reads);
         assert_eq!(mode.allows_core_writes(), example.allows_core_writes);
         assert_wire_roundtrip(&mode, &example.wire);
@@ -256,8 +257,8 @@ fn validation_error_examples_are_complete_safe_and_stable() {
         let json = serde_json::to_string(&example.wire).unwrap();
         let error: ValidationError = serde_json::from_str(&json).unwrap();
 
-        assert_eq!(error.code(), example.wire);
-        assert_eq!(error.message(), example.message);
+        assert_eq!(error.code(), example.wire.as_str());
+        assert_eq!(error.message(), example.message.as_str());
         assert_wire_roundtrip(&error, &example.wire);
     }
 }
