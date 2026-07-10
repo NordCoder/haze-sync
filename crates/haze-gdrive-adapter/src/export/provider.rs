@@ -152,7 +152,10 @@ impl fmt::Debug for DriveUpdateExportRequest {
             .debug_struct("DriveUpdateExportRequest")
             .field("operation_id", &self.operation_id)
             .field("file_id", &self.file_id)
-            .field("has_expected_revision_token", &self.expected_revision_token.is_some())
+            .field(
+                "has_expected_revision_token",
+                &self.expected_revision_token.is_some(),
+            )
             .field("mime_type", &self.mime_type)
             .field("content_sha256", &self.content_sha256)
             .field("content", &"<redacted-file-bytes>")
@@ -339,7 +342,10 @@ impl fmt::Debug for FakeDriveExportProvider {
         formatter
             .debug_struct("FakeDriveExportProvider")
             .field("file_count", &self.files_by_id.len())
-            .field("applied_operation_count", &self.applied_by_operation_id.len())
+            .field(
+                "applied_operation_count",
+                &self.applied_by_operation_id.len(),
+            )
             .field("configured_error_count", &self.errors_by_operation.len())
             .field("mutation_count", &self.mutation_count)
             .finish()
