@@ -12,6 +12,7 @@ mod materializer;
 mod path_mapping;
 mod reconciliation;
 mod scanner;
+mod trash;
 
 pub use delete_guard::{
     WorktreeDeleteAuthorization, WorktreeDeleteBlockReason, WorktreeDeleteCandidate,
@@ -53,6 +54,11 @@ pub use scanner::{
     WorktreeScanError, WorktreeScanResult, WorktreeScanSkipReason, WorktreeScanSkipped,
     WorktreeScanner,
 };
+pub use trash::{
+    WorktreeTombstoneMaterializationOutcome, WorktreeTombstoneMaterializationRequest,
+    WorktreeTrashError, WorktreeTrashManager, WorktreeTrashPolicy, WorktreeTrashRecord,
+    WorktreeTrashRecordId,
+};
 
 /// Human-readable crate role used by skeleton smoke checks and documentation.
 pub const CRATE_ROLE: &str = "Built-in VPS worktree adapter foundations.";
@@ -71,6 +77,8 @@ mod echo_guard_tests;
 mod materializer_safety_tests;
 #[cfg(test)]
 mod reconciliation_tests;
+#[cfg(test)]
+mod trash_tests;
 
 #[cfg(test)]
 mod tests {
