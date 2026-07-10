@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256 as Sha256Digest};
 use std::{collections::BTreeMap, error::Error, fmt, str::FromStr};
 
 const MAX_IDEMPOTENCY_KEY_LEN: usize = 512;
-const MIN_STATUS_CODE: u16 = 100;
+const MIN_STATUS_CODE: u16 = 200;
 const MAX_STATUS_CODE: u16 = 599;
 const REDACTED_IDEMPOTENCY_KEY: &str = "<redacted-idempotency-key>";
 
@@ -196,7 +196,7 @@ impl From<RequestFingerprint> for Sha256 {
 
 /// JSON-safe response snapshot stored for a completed idempotent write.
 ///
-/// The snapshot is intentionally limited to an HTTP status, validated replay
+/// The snapshot is intentionally limited to a final HTTP status, validated replay
 /// headers, and a public JSON body. It must not contain raw file bytes,
 /// credentials, cookies, an idempotency key, or internal error details.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -239,13 +239,13 @@ impl StoredIdempotencyResponse {
         Self::new(status_code, body, BTreeMap::new())
     }
 
-    /// HTTP status code to return for replay.
+    /// Final HTTP status code to return for replay.
     #[must_use]
     pub const fn status_code(&self) -> u16 {
         self.status_code
     }
 
-    /// Safe replay headers. Sensitive headers are rejected by validation.
+    /// Safe replay headers. Sensitive and transport-specific headers are rejected.
     #[must_use]
     pub const fn headers(&self) -> &BTreeMap<String, String> {
         &self.headers
@@ -461,7 +461,7 @@ fn validate_response_header_name(name: &str) -> Result<String, IdempotencyError>
     }
 
     let normalized = name.to_ascii_lowercase();
-    if is_sensitive_response_header(&normalized) {
+    if is_unsafe_response_header(&normalized) {
         return Err(IdempotencyError::UnsafeResponseHeader);
     }
 
@@ -472,7 +472,7 @@ fn validate_response_header_value(value: &str) -> Result<(), IdempotencyError> {
     if value
         .as_bytes()
         .iter()
-        .any(|byte| matches!(*byte, b'\0' | b'\r' | b'\n') || *byte == 0x7f || *byte < b' ')
+        .any(|byte| !matches!(*byte, b' '..=b'~'))
     {
         return Err(IdempotencyError::UnsafeResponseHeader);
     }
@@ -480,14 +480,23 @@ fn validate_response_header_value(value: &str) -> Result<(), IdempotencyError> {
     Ok(())
 }
 
-fn is_sensitive_response_header(normalized_name: &str) -> bool {
+fn is_unsafe_response_header(normalized_name: &str) -> bool {
     matches!(
         normalized_name,
         "authorization"
+            | "connection"
+            | "content-encoding"
+            | "content-length"
             | "cookie"
             | "idempotency-key"
+            | "keep-alive"
+            | "proxy-authenticate"
             | "proxy-authorization"
             | "set-cookie"
+            | "te"
+            | "trailer"
+            | "transfer-encoding"
+            | "upgrade"
             | "x-api-key"
             | "x-auth-token"
             | "x-idempotency-key"
@@ -642,13 +651,18 @@ mod tests {
     }
 
     #[test]
-    fn stored_response_deserialization_rejects_bypassed_validation() {
-        let invalid_status = json!({
-            "status_code": 99,
-            "headers": {},
-            "body": {"status": "bad"}
-        });
-        assert!(serde_json::from_value::<StoredIdempotencyResponse>(invalid_status).is_err());
+    fn stored_response_status_and_deserialization_boundaries_are_validated() {
+        for invalid_status in [99, 100, 199, 600] {
+            let invalid = json!({
+                "status_code": invalid_status,
+                "headers": {},
+                "body": {"status": "bad"}
+            });
+            assert!(serde_json::from_value::<StoredIdempotencyResponse>(invalid).is_err());
+        }
+
+        assert!(StoredIdempotencyResponse::json(200, json!({})).is_ok());
+        assert!(StoredIdempotencyResponse::json(599, json!({})).is_ok());
 
         let unsafe_header = json!({
             "status_code": 200,
@@ -662,9 +676,18 @@ mod tests {
     fn unsafe_or_ambiguous_headers_are_rejected() {
         for name in [
             "Authorization",
+            "Connection",
+            "Content-Encoding",
+            "Content-Length",
             "Cookie",
-            "Set-Cookie",
             "Idempotency-Key",
+            "Keep-Alive",
+            "Proxy-Authenticate",
+            "Set-Cookie",
+            "TE",
+            "Trailer",
+            "Transfer-Encoding",
+            "Upgrade",
             "X-Api-Key",
             "X-Auth-Token",
         ] {
@@ -676,15 +699,14 @@ mod tests {
             );
         }
 
-        let mut newline = BTreeMap::new();
-        newline.insert(
-            "X-Revision-Id".to_owned(),
-            "rev_1\r\nInjected: yes".to_owned(),
-        );
-        assert_eq!(
-            StoredIdempotencyResponse::new(200, json!({}), newline),
-            Err(IdempotencyError::UnsafeResponseHeader)
-        );
+        for value in ["rev_1\r\nInjected: yes", "ключ"] {
+            let mut headers = BTreeMap::new();
+            headers.insert("X-Revision-Id".to_owned(), value.to_owned());
+            assert_eq!(
+                StoredIdempotencyResponse::new(200, json!({}), headers),
+                Err(IdempotencyError::UnsafeResponseHeader)
+            );
+        }
 
         let mut duplicate_after_normalization = BTreeMap::new();
         duplicate_after_normalization.insert("ETag".to_owned(), "one".to_owned());
