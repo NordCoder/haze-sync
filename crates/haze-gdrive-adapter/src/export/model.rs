@@ -25,7 +25,7 @@ impl fmt::Display for ExportModelError {
 
 impl Error for ExportModelError {}
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum CoreExportChange {
     UpsertFile {
         seq: u64,
@@ -105,6 +105,45 @@ impl CoreExportChange {
     pub fn updated_by(&self) -> &str {
         match self {
             Self::UpsertFile { updated_by, .. } | Self::Tombstone { updated_by, .. } => updated_by,
+        }
+    }
+}
+
+impl fmt::Debug for CoreExportChange {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UpsertFile {
+                seq,
+                path,
+                revision_id,
+                content_sha256,
+                size_bytes,
+                updated_by,
+                ..
+            } => formatter
+                .debug_struct("UpsertFile")
+                .field("seq", seq)
+                .field("operation_id", &"<redacted-idempotency-key>")
+                .field("path", path)
+                .field("revision_id", revision_id)
+                .field("content_sha256", content_sha256)
+                .field("size_bytes", size_bytes)
+                .field("updated_by", updated_by)
+                .finish(),
+            Self::Tombstone {
+                seq,
+                path,
+                tombstone_id,
+                updated_by,
+                ..
+            } => formatter
+                .debug_struct("Tombstone")
+                .field("seq", seq)
+                .field("operation_id", &"<redacted-idempotency-key>")
+                .field("path", path)
+                .field("tombstone_id", tombstone_id)
+                .field("updated_by", updated_by)
+                .finish(),
         }
     }
 }
