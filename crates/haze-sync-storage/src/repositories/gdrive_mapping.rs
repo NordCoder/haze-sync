@@ -28,8 +28,7 @@ const SELECT_BY_DRIVE_FILE_ID_SQL: &str =
      last_seen_at, delete_candidate_at \
      from gdrive_mapping where drive_file_id = $1";
 
-const UPSERT_SQL: &str =
-    "insert into gdrive_mapping ( \
+const UPSERT_SQL: &str = "insert into gdrive_mapping ( \
          path, drive_file_id, drive_parent_id, drive_name, mime_type, \
          md5_checksum, head_revision_id, drive_version, drive_modified_time, \
          core_revision_id, core_seq, last_imported_at, last_exported_at, \
@@ -184,25 +183,20 @@ fn gdrive_mapping_from_pg(row: &PgRow) -> RepositoryResult<GDriveMappingRow> {
         md5_checksum: row.try_get("md5_checksum").map_err(map_sqlx_error)?,
         head_revision_id: row.try_get("head_revision_id").map_err(map_sqlx_error)?,
         drive_version: row.try_get("drive_version").map_err(map_sqlx_error)?,
-        drive_modified_time: row
-            .try_get("drive_modified_time")
-            .map_err(map_sqlx_error)?,
+        drive_modified_time: row.try_get("drive_modified_time").map_err(map_sqlx_error)?,
         core_revision_id: row.try_get("core_revision_id").map_err(map_sqlx_error)?,
         core_seq: row.try_get("core_seq").map_err(map_sqlx_error)?,
         last_imported_at: row.try_get("last_imported_at").map_err(map_sqlx_error)?,
         last_exported_at: row.try_get("last_exported_at").map_err(map_sqlx_error)?,
         last_seen_at: row.try_get("last_seen_at").map_err(map_sqlx_error)?,
-        delete_candidate_at: row
-            .try_get("delete_candidate_at")
-            .map_err(map_sqlx_error)?,
+        delete_candidate_at: row.try_get("delete_candidate_at").map_err(map_sqlx_error)?,
     };
 
     validate_gdrive_mapping_row(mapped)
 }
 
 fn validate_gdrive_mapping_row(row: GDriveMappingRow) -> RepositoryResult<GDriveMappingRow> {
-    let normalized_path =
-        VaultPath::parse(&row.path).map_err(|_| RepositoryError::InvalidPath)?;
+    let normalized_path = VaultPath::parse(&row.path).map_err(|_| RepositoryError::InvalidPath)?;
     if normalized_path.as_str() != row.path {
         return Err(RepositoryError::InvalidPath);
     }
