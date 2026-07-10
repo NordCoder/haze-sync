@@ -1,6 +1,12 @@
 use super::*;
-use crate::drive::{DriveMetadata, MIME_GOOGLE_FOLDER, MIME_TEXT_MARKDOWN};
-use crate::state::EchoGuardEntry;
+use crate::config::AdapterMode;
+use crate::drive::{
+    DriveMetadata, ProviderError, ProviderErrorCategory, MIME_GOOGLE_FOLDER, MIME_TEXT_MARKDOWN,
+};
+use crate::scan::ImportExecution;
+use crate::state::{DriveChangeCursor, EchoGuard, EchoGuardEntry, SafeTimestamp};
+use std::collections::BTreeSet;
+use std::time::Duration;
 
 const POLLED_AT: &str = "2026-07-10T12:00:00Z";
 
