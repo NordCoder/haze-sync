@@ -49,7 +49,7 @@ async fn idempotency_check_or_store_roundtrips_first_writer_facts() {
         response_snapshot("accepted"),
     )
     .unwrap();
-    let first_record = match check_or_store_idempotency_record(&mut *tx, &first_input)
+    let first_record = match check_or_store_idempotency_record(&mut tx, &first_input)
         .await
         .unwrap()
     {
@@ -61,7 +61,7 @@ async fn idempotency_check_or_store_roundtrips_first_writer_facts() {
     assert_eq!(first_record.request_hash, request_hash.to_string());
     assert_eq!(first_record.response_json, response_snapshot("accepted"));
 
-    let loaded = read_idempotency_record(&mut *tx, &adapter_id, key)
+    let loaded = read_idempotency_record(&mut tx, &adapter_id, key)
         .await
         .unwrap()
         .unwrap();
@@ -75,7 +75,7 @@ async fn idempotency_check_or_store_roundtrips_first_writer_facts() {
     )
     .unwrap();
     assert_eq!(
-        check_or_store_idempotency_record(&mut *tx, &replay_input)
+        check_or_store_idempotency_record(&mut tx, &replay_input)
             .await
             .unwrap(),
         IdempotencyRepositoryOutcome::ReplaySameRequest {
@@ -91,7 +91,7 @@ async fn idempotency_check_or_store_roundtrips_first_writer_facts() {
     )
     .unwrap();
     assert_eq!(
-        check_or_store_idempotency_record(&mut *tx, &conflict_input)
+        check_or_store_idempotency_record(&mut tx, &conflict_input)
             .await
             .unwrap(),
         IdempotencyRepositoryOutcome::ConflictDifferentRequest {
@@ -100,7 +100,7 @@ async fn idempotency_check_or_store_roundtrips_first_writer_facts() {
     );
 
     assert_eq!(
-        insert_idempotency_record(&mut *tx, &replay_input)
+        insert_idempotency_record(&mut tx, &replay_input)
             .await
             .unwrap(),
         IdempotencyStoreOutcome::AlreadyExists {
@@ -108,7 +108,7 @@ async fn idempotency_check_or_store_roundtrips_first_writer_facts() {
         }
     );
     assert_eq!(
-        read_idempotency_record(&mut *tx, &adapter_id, key)
+        read_idempotency_record(&mut tx, &adapter_id, key)
             .await
             .unwrap()
             .unwrap(),
