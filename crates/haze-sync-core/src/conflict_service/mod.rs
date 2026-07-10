@@ -1,4 +1,4 @@
-//! Pure conflict-service value types and conflict path generation.
+//! Pure conflict preservation and resolution value types and planners.
 
 use chrono::{DateTime, Utc};
 use haze_sync_common::{
@@ -469,7 +469,9 @@ pub fn is_conflict_area_path(path: &VaultPath) -> bool {
 #[must_use]
 pub fn is_open_conflict_area_path(path: &VaultPath) -> bool {
     let mut segments = path.segments();
-    segments.next() == Some(CONFLICT_ROOT_SEGMENT) && segments.next() == Some(CONFLICT_OPEN_SEGMENT)
+    segments.next() == Some(CONFLICT_ROOT_SEGMENT)
+        && segments.next() == Some(CONFLICT_OPEN_SEGMENT)
+        && segments.next().is_some()
 }
 
 pub fn validate_original_path(path: &VaultPath) -> Result<(), ConflictPolicyError> {
@@ -680,6 +682,34 @@ mod tests {
     }
 
     #[test]
+    fn open_conflict_area_requires_a_materialized_path_segment() {
+        assert!(!is_open_conflict_area_path(&vault_path(
+            "_haze_conflicts/open"
+        )));
+        assert!(is_open_conflict_area_path(&vault_path(
+            "_haze_conflicts/open/a.md"
+        )));
+    }
+
+    #[test]
+    fn conflict_resolution_actions_have_stable_serde_names() {
+        for (action, expected_name) in [
+            (ConflictResolutionAction::AcceptCurrent, "accept_current"),
+            (ConflictResolutionAction::AcceptConflict, "accept_conflict"),
+            (ConflictResolutionAction::KeepBoth, "keep_both"),
+            (ConflictResolutionAction::MarkResolved, "mark_resolved"),
+        ] {
+            let serialized = serde_json::to_string(&action).expect("action should serialize");
+            assert_eq!(serialized, format!("\"{expected_name}\""));
+            assert_eq!(
+                serde_json::from_str::<ConflictResolutionAction>(&serialized)
+                    .expect("action should deserialize"),
+                action
+            );
+        }
+    }
+
+    #[test]
     fn accept_conflict_resolution_requires_new_current_revision_plan() {
         let request = ConflictResolutionRequest::new(
             conflict_record(ConflictRecordStatus::Open),
@@ -781,6 +811,24 @@ mod tests {
             resolved_at(),
         )
         .expect_err("invalid conflict materialization path should reject");
+
+        assert_eq!(
+            error,
+            ConflictResolutionError::InvalidConflictMaterializationPath
+        );
+    }
+
+    #[test]
+    fn resolution_rejects_open_conflict_area_root_without_materialized_copy() {
+        let mut conflict = conflict_record(ConflictRecordStatus::Open);
+        conflict.conflict_path = vault_path("_haze_conflicts/open");
+
+        let error = ConflictResolutionRequest::new(
+            conflict,
+            ConflictResolutionAction::MarkResolved,
+            resolved_at(),
+        )
+        .expect_err("open conflict-area root should not count as a conflict copy");
 
         assert_eq!(
             error,
