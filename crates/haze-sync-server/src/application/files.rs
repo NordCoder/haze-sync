@@ -107,11 +107,6 @@ pub(crate) struct AuthoritativeRevisionContent {
 
 impl AuthoritativeRevisionContent {
     #[must_use]
-    pub(crate) fn bytes(&self) -> &[u8] {
-        &self.bytes
-    }
-
-    #[must_use]
     pub(crate) fn into_bytes(self) -> Vec<u8> {
         self.bytes
     }
@@ -275,7 +270,7 @@ async fn persist_upsert_outcome(
     }
 }
 
-pub(crate) async fn persist_accepted_revision(
+async fn persist_accepted_revision(
     transaction: &mut Transaction<'_, Postgres>,
     actor: &ApplicationActor,
     revision: &StoredRevision,
@@ -595,7 +590,7 @@ async fn insert_content_blob(
 fn map_object_store_read_error(error: ObjectStoreError) -> ApplicationError {
     match error {
         ObjectStoreError::MissingBlob { .. } => ApplicationError::ContentUnavailable,
-        ObjectStoreError::HashMismatch { .. } | ObjectStoreError::SizeMismatch { .. } => {
+        ObjectStoreError::HashMismatch { .. } | ObjectStoreError::StoredBlobMismatch { .. } => {
             ApplicationError::ContentCorrupt
         }
         _ => ApplicationError::Internal,
