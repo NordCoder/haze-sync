@@ -49,6 +49,8 @@ impl ApplicationActor {
 pub(crate) enum ApplicationError {
     /// Required database/object-store dependencies are not configured.
     DependenciesUnavailable,
+    /// A caller supplied invalid internal cursor, bound, or command metadata.
+    InvalidInput,
     /// Requested authoritative file/revision metadata does not exist.
     NotFound,
     /// Request conflicts with current authoritative state.
@@ -70,6 +72,7 @@ impl ApplicationError {
     pub(crate) const fn code(self) -> &'static str {
         match self {
             Self::DependenciesUnavailable => "application_dependencies_unavailable",
+            Self::InvalidInput => "application_invalid_input",
             Self::NotFound => "application_not_found",
             Self::Conflict => "application_conflict",
             Self::InvalidContentHash => "application_invalid_content_hash",
@@ -83,6 +86,7 @@ impl ApplicationError {
     const fn message(self) -> &'static str {
         match self {
             Self::DependenciesUnavailable => "application dependencies are unavailable",
+            Self::InvalidInput => "application input is invalid",
             Self::NotFound => "authoritative file or revision was not found",
             Self::Conflict => "application command conflicts with current state",
             Self::InvalidContentHash => "application content hash is invalid",
