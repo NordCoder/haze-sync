@@ -35,7 +35,9 @@ pub enum TestSupportError {
     MissingDatabaseName,
     UnsafeDatabaseName,
     InvalidDatabaseUrl,
-    EnvironmentVariableNotUnicode { name: &'static str },
+    EnvironmentVariableNotUnicode {
+        name: &'static str,
+    },
     IncompleteStorageSchema,
     /// Pre-STOR-P10 path-only state cannot be assigned to an adapter/root safely.
     LegacyWorktreeStateNotEmpty,
