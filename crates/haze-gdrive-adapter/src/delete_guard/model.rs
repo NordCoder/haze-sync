@@ -64,10 +64,9 @@ impl CompleteDeleteScan {
         let mut recovered_candidates = Vec::new();
         for planned_import in &plan.imports {
             if planned_import.clear_delete_candidate {
-                let Some(recovered) = mapping_snapshot.recovered_candidate(
-                    &planned_import.provider_id,
-                    &planned_import.request.path,
-                ) else {
+                let Some(recovered) = mapping_snapshot
+                    .recovered_candidate(&planned_import.provider_id, &planned_import.request.path)
+                else {
                     return DeleteScanObservation::Unreliable(DeleteScanIssue::IncompleteScan);
                 };
                 recovered_candidates.push(recovered);
@@ -75,8 +74,8 @@ impl CompleteDeleteScan {
         }
         for unchanged in &plan.unchanged {
             if unchanged.clear_delete_candidate {
-                let Some(recovered) = mapping_snapshot
-                    .recovered_candidate(&unchanged.provider_id, &unchanged.path)
+                let Some(recovered) =
+                    mapping_snapshot.recovered_candidate(&unchanged.provider_id, &unchanged.path)
                 else {
                     return DeleteScanObservation::Unreliable(DeleteScanIssue::IncompleteScan);
                 };
