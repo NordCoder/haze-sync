@@ -19,8 +19,7 @@ pub(crate) use files::{
     ApplyFileCommand, ApplyFileOutcome, AuthoritativeRevisionContent, RevisionContentQuery,
 };
 pub(crate) use idempotency::{
-    delete_request_fingerprint, derive_worktree_delete_idempotency,
-    derive_worktree_put_idempotency, file_request_fingerprint, ApplicationIdempotency,
+    delete_request_fingerprint, file_request_fingerprint, ApplicationIdempotency,
 };
 
 use haze_sync_common::AdapterId;
