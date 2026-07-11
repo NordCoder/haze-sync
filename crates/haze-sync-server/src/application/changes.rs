@@ -136,9 +136,6 @@ mod tests {
             AuthoritativeChangesQuery::new(0, 1_001),
             Err(ApplicationError::InvalidInput)
         );
-        assert_eq!(
-            AuthoritativeChangesQuery::new(0, 1).unwrap().limit(),
-            1
-        );
+        assert_eq!(AuthoritativeChangesQuery::new(0, 1).unwrap().limit(), 1);
     }
 }
