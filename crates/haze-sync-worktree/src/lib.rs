@@ -5,6 +5,7 @@
 //! runtime behavior on top of these safe path-mapping primitives.
 
 mod delete_guard;
+mod doctor;
 mod echo_guard;
 mod file_import;
 mod hashing;
@@ -22,6 +23,12 @@ pub use delete_guard::{
     WorktreeDeleteGuardSummary, WorktreeDeletePlanError, WorktreeDeleteRunError,
     WorktreeDeleteRunner, WorktreeDeleteScan, WorktreeDeleteSubmission,
     WorktreeDeleteSubmissionReport, WorktreeGuardedDeletePlan,
+};
+pub use doctor::{
+    WorktreeDoctor, WorktreeDoctorFactSource, WorktreeDoctorHealth, WorktreeDoctorIssue,
+    WorktreeDoctorIssueKind, WorktreeDoctorReport, WorktreeDoctorRunner, WorktreeDoctorSnapshot,
+    WorktreeDoctorSummary, WorktreeRepairAction, WorktreeRepairActionKind,
+    WorktreeRepairAuthorization, WorktreeRepairPlan, WorktreeRepairPlanner, WorktreeRepairRisk,
 };
 pub use echo_guard::{
     WorktreeEchoDecision, WorktreeEchoGuard, WorktreeEchoGuardError, WorktreeEchoGuardPolicy,
@@ -87,6 +94,8 @@ pub const fn package_name() -> &'static str {
 mod delete_guard_reserved_tests;
 #[cfg(test)]
 mod delete_guard_tests;
+#[cfg(test)]
+mod doctor_tests;
 #[cfg(test)]
 mod echo_guard_tests;
 #[cfg(test)]
