@@ -18,6 +18,10 @@ fn test_support_feature_exports_safe_non_db_helpers_and_embedded_migrations() {
     assert!(path.starts_with("_haze_tests/"));
     assert_eq!(url.database_name(), "haze_sync_fanin_test");
     assert!(url.redacted().contains("<redacted>"));
-    assert_eq!(STORAGE_TEST_MIGRATIONS.len(), 9);
+    assert_eq!(STORAGE_TEST_MIGRATIONS.len(), 10);
     assert_eq!(STORAGE_TEST_MIGRATIONS[0].name, "0001_sync_adapters.sql");
+    assert_eq!(
+        STORAGE_TEST_MIGRATIONS.last().unwrap().name,
+        "0010_worktree_durable_state.sql"
+    );
 }
