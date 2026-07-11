@@ -20,5 +20,5 @@ ci_run_number: 979
 ci_run_attempt: 1
 known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
-blocker: GDA-P8 is implemented but formally red, and concrete GDrive service lifecycle, persistence/delete-candidate wiring, OAuth secrets, Server/API transport, and shutdown topology are not accepted
-unblock_condition: green GDA-P8 lifecycle plus explicit accepted GDrive/Storage/Server runtime-config deployment fan-in contract
+blocker: GDA-P8 fixer is green but GDA-P8C and concrete GDrive service lifecycle, persistence/delete-candidate wiring, OAuth secrets, Server/API transport, and shutdown topology are not accepted
+unblock_condition: green GDA-P8C acceptance plus explicit accepted GDrive/Storage/Server runtime-config deployment fan-in contract
