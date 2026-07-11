@@ -125,10 +125,7 @@ async fn put_file_route(
         base_revision_id: request.base_revision_id().cloned(),
         content_hash: request.content_sha256(),
         bytes: request.body().to_vec(),
-        idempotency: ApplicationIdempotency::new(
-            request.idempotency_key().as_str(),
-            fingerprint,
-        ),
+        idempotency: ApplicationIdempotency::new(request.idempotency_key().as_str(), fingerprint),
     };
     let outcome = application_services(&state)
         .await?
@@ -175,11 +172,9 @@ async fn changes_route(
         query.get("since").map(String::as_str),
         query.get("limit").map(String::as_str),
     )?;
-    let internal_query = AuthoritativeChangesQuery::new(
-        request.since_value(),
-        request.limit_value(),
-    )
-    .map_err(|_| ChangesRouteError::invalid_response_page())?;
+    let internal_query =
+        AuthoritativeChangesQuery::new(request.since_value(), request.limit_value())
+            .map_err(|_| ChangesRouteError::invalid_response_page())?;
     let batch = application_services(&state)
         .await?
         .authoritative_changes(internal_query)
@@ -243,12 +238,7 @@ fn change_entry_dto(change: AuthoritativeChange) -> Result<ChangeEntryDto, ApiEr
         tombstone_id: change.tombstone_id.map(TombstoneIdDto::from),
         conflict_id: change.conflict_id.map(ConflictIdDto::from),
         updated_by: AdapterIdDto::from(change.actor_id),
-        updated_at: TimestampDto::from(
-            change
-                .occurred_at
-                .format("%Y-%m-%dT%H:%M:%SZ")
-                .to_string(),
-        ),
+        updated_at: TimestampDto::from(change.occurred_at.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
     })
 }
 
