@@ -38,7 +38,9 @@ pub type RepositoryResult<T> = Result<T, RepositoryError>;
 #[non_exhaustive]
 pub enum RepositoryError {
     InvalidSequence,
-    InvalidLimit { max: u32 },
+    InvalidLimit {
+        max: u32,
+    },
     InvalidPath,
     InvalidIdentifier,
     InvalidHash,
@@ -116,9 +118,7 @@ impl RepositoryError {
                 "worktree instance binding does not match persisted state"
             }
             Self::InvalidWorktreeStateKind => "worktree path-state kind is invalid",
-            Self::InvalidWorktreeObservation => {
-                "worktree reconciliation observation is invalid"
-            }
+            Self::InvalidWorktreeObservation => "worktree reconciliation observation is invalid",
             Self::DatabaseOperationFailed => "storage database operation failed",
             Self::InvalidSizeBytes => "size is outside the supported storage range",
         }
