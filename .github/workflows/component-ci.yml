@@ -140,6 +140,7 @@ jobs:
               "test repositories::worktree_state::postgres_tests::durable_instances_and_path_state_are_isolated_and_transactional ... ok"
               "test test_support::postgres::tests::fresh_and_current_schema_preparation_is_idempotent ... ok"
               "test test_support::postgres::tests::migrates_empty_pre_p10_schema_and_rejects_nonempty_legacy_state ... ok"
+              "test migration_0010_sql_guard_preserves_nonempty_legacy_state ... ok"
             )
 
             for expected_test in "${expected_tests[@]}"; do
