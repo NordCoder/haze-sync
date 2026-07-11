@@ -1,41 +1,53 @@
-# W1-FIX-GDA-P8-CI — GDrive GDA-P8 validation correction
+# W1-GDA-P8C — GDrive delete-guard clean-code review
 
 Component: gdrive-adapter
 Path: crates/haze-gdrive-adapter
 Branch: component/gdrive-adapter
 PR: #50
-Role: fixer-worker
+Role: clean-code-reviewer
 
-Use only the GitHub connector. Do not merge the PR or change its lifecycle state.
+Work only through the GitHub connector. Do not merge the PR or change its lifecycle state.
 
-## Evidence
+## Context
 
-The final GDA-P8 source/test head has a failed Component CI result.
+GDA-P8 implementation and artifact-based CI correction are complete. Final source/test CI is green.
 
-- code_bearing_sha: 46a8840e143f0c911dc02a3107d0546bfd8242ed
-- workflow_run_id: 29125187320
-- run_number: 1587
-- run_attempt: 1
-- artifact_id: 8240045016
-- artifact_name: ci-diag__component-gdrive-adapter__wf-component-ci__run-29125187320__attempt-1
-- artifact_expires_at: 2026-07-11T21:37:36Z
+- code_bearing_sha: 0120134b3c1a7b446b6c1c96953ce9abe4971d55
+- workflow: Component CI
+- workflow_run_id: 29127127665
+- run_number: 1619
+- conclusion: success
 
-Use the diagnostics artifact as the authoritative failure evidence.
+## Read
 
-## Required work
+Read the project process files, current GDrive control files, GDA-P8 plan and implementation, delete-guard source/tests, fixer changes, accepted Core/API delete semantics, accepted Storage mapping/state boundaries, future Server/deployment fan-in requirements, and PR diff. Do not read diagnostics artifacts unless a later fixer prompt explicitly requires them.
 
-Read the project process files, current GDrive control files, GDA-P8 source/tests, PR diff, and every required file in artifact 8240045016. If the artifact is unavailable or incomplete, report FIX_BLOCKED_BY_LOGS.
+## Task
 
-Apply only the smallest correction demonstrated by the artifact. Preserve repeated authoritative absence, unreliable-scan blocking, movement versus disappearance classification, adapter count/ratio limits, injected Core delete guard, unavailable unaudited manual unlock, dry-run immutability, idempotent Core delete submission, mapping retirement only after accepted outcomes, redaction, and component boundaries.
+Review GDA-P8 conservative delete-candidate handling and mass-delete safety.
+
+Focus on:
+
+- complete versus unreliable scan evidence and ambiguity rejection;
+- first-absence candidate marking and distinct later authoritative confirmation;
+- recovery, identity movement, root/folder loss, auth loss, provider failure, and incomplete-scan classification;
+- adapter count/ratio thresholds and Core remaining the delete arbiter;
+- unavailable unaudited manual unlock;
+- dry-run immutability and mode enforcement;
+- stable operation identifiers, idempotent Core submission, unsafe-delete short-circuiting, and mapping retirement ordering;
+- redacted operator notices and Debug output;
+- injected state/Core/provider boundaries, tests, module shape, and readiness for later durable fan-in.
 
 ## Allowed files
 
 - crates/haze-gdrive-adapter/src/**
-- crates/haze-gdrive-adapter/docs/** only when directly required by diagnostics
+- crates/haze-gdrive-adapter/docs/**
 - crates/haze-gdrive-adapter/control/report.md
 
-Do not add Drive hard delete, live credentials/provider wiring, direct Storage/DB ownership, concrete Server/API transport, background scheduling, shared workflow/dependency changes, sibling changes, or unrelated test changes.
+## Boundaries
 
-Source/test/docs correction commits must run CI normally. A final report-only commit may skip CI.
+No Drive hard delete or trash call, live credentials/provider wiring, direct Storage/DB ownership, concrete Server/API transport, audited unlock invention, background scheduling, workflow/dependency changes, sibling changes, test deletion, or assertion weakening.
 
-Write only crates/haze-gdrive-adapter/control/report.md using REPORT_TYPE FIX and phase_id FIX-GDA-P8-CI.
+Source/test/docs review commits must run CI normally. A final report-only commit may skip CI.
+
+Write only crates/haze-gdrive-adapter/control/report.md using REPORT_TYPE CLEAN_CODE_REVIEW and phase_id GDA-P8C.
