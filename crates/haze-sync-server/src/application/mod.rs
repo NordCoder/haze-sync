@@ -9,6 +9,8 @@ mod deletes;
 mod files;
 mod idempotency;
 #[cfg(test)]
+pub(crate) mod test_db;
+#[cfg(test)]
 mod tests;
 
 pub(crate) use changes::{
