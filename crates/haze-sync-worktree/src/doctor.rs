@@ -1,9 +1,8 @@
 //! Safe Worktree doctor facts and non-destructive repair planning.
 //!
 //! Doctor output is derived from authoritative scan/reconciliation/runtime facts,
-//! never from watcher hints. Public facts are count/category based and may contain
-//! only validated vault-relative paths. Repair plans describe possible actions but
-//! execute nothing.
+//! never from watcher hints. Repair plans describe possible actions and risks but
+//! never carry execution authorization.
 
 use crate::{
     WorktreeEchoStatus, WorktreeReconciliationEntry, WorktreeReconciliationKind,
@@ -144,26 +143,12 @@ impl WorktreeDoctor {
             ..WorktreeDoctorSummary::default()
         };
         let mut issues = Vec::new();
-
         for entry in &snapshot.reconciliation_entries {
             classify_entry(entry, &mut summary, &mut issues);
         }
-        push_aggregate_issue(
-            summary.expired_echoes > 0,
-            WorktreeDoctorIssueKind::ExpiredEcho,
-            &mut issues,
-        );
-        push_aggregate_issue(
-            summary.partial_scan,
-            WorktreeDoctorIssueKind::PartialScan,
-            &mut issues,
-        );
-        push_aggregate_issue(
-            summary.runtime_degraded,
-            WorktreeDoctorIssueKind::RuntimeDegraded,
-            &mut issues,
-        );
-
+        push_aggregate_issue(summary.expired_echoes > 0, WorktreeDoctorIssueKind::ExpiredEcho, &mut issues);
+        push_aggregate_issue(summary.partial_scan, WorktreeDoctorIssueKind::PartialScan, &mut issues);
+        push_aggregate_issue(summary.runtime_degraded, WorktreeDoctorIssueKind::RuntimeDegraded, &mut issues);
         issues.sort_by(|left, right| {
             left.vault_path
                 .as_ref()
@@ -219,20 +204,12 @@ impl WorktreeRepairRisk {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub enum WorktreeRepairAuthorization {
-    #[default]
-    Unconfirmed,
-    ConfirmedByHost,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorktreeRepairAction {
     pub kind: WorktreeRepairActionKind,
     pub issue_kind: WorktreeDoctorIssueKind,
     pub vault_path: Option<VaultPath>,
     pub risk: WorktreeRepairRisk,
-    pub authorized: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -250,13 +227,13 @@ impl WorktreeRepairPlan {
     pub fn confirmation_required(&self) -> usize {
         self.actions
             .iter()
-            .filter(|action| action.risk.requires_confirmation() && !action.authorized)
+            .filter(|action| action.risk.requires_confirmation())
             .count()
     }
 
     #[must_use]
-    pub fn is_fully_authorized(&self) -> bool {
-        self.confirmation_required() == 0
+    pub fn requires_confirmation(&self) -> bool {
+        self.confirmation_required() > 0
     }
 }
 
@@ -265,16 +242,9 @@ pub struct WorktreeRepairPlanner;
 
 impl WorktreeRepairPlanner {
     #[must_use]
-    pub fn plan(
-        report: &WorktreeDoctorReport,
-        authorization: WorktreeRepairAuthorization,
-    ) -> WorktreeRepairPlan {
+    pub fn plan(report: &WorktreeDoctorReport) -> WorktreeRepairPlan {
         WorktreeRepairPlan {
-            actions: report
-                .issues
-                .iter()
-                .map(|issue| repair_for_issue(issue, authorization))
-                .collect(),
+            actions: report.issues.iter().map(repair_for_issue).collect(),
         }
     }
 }
@@ -327,9 +297,6 @@ fn classify_skip(
 ) -> Option<WorktreeDoctorIssueKind> {
     match entry.skip_reason? {
         WorktreeScanSkipReason::ReservedPath => {
-            // The scanner intentionally emits the managed `_haze_runtime` root as
-            // an unscoped reserved skip. Only a path-scoped reserved fact is an
-            // operator-visible collision/violation.
             entry.vault_path.as_ref()?;
             summary.reserved_path_violations += 1;
             Some(WorktreeDoctorIssueKind::ReservedPathViolation)
@@ -378,8 +345,7 @@ fn runtime_is_degraded(status: WorktreeRuntimeStatus) -> bool {
 }
 
 fn health_for(summary: WorktreeDoctorSummary) -> WorktreeDoctorHealth {
-    if summary.missing_files > 0 || summary.dirty_files > 0 || summary.reserved_path_violations > 0
-    {
+    if summary.missing_files > 0 || summary.dirty_files > 0 || summary.reserved_path_violations > 0 {
         WorktreeDoctorHealth::Unhealthy
     } else if summary.issue_count() > 0 {
         WorktreeDoctorHealth::Degraded
@@ -388,10 +354,7 @@ fn health_for(summary: WorktreeDoctorSummary) -> WorktreeDoctorHealth {
     }
 }
 
-fn repair_for_issue(
-    issue: &WorktreeDoctorIssue,
-    authorization: WorktreeRepairAuthorization,
-) -> WorktreeRepairAction {
+fn repair_for_issue(issue: &WorktreeDoctorIssue) -> WorktreeRepairAction {
     let (kind, risk) = match issue.kind {
         WorktreeDoctorIssueKind::MissingFile => (
             WorktreeRepairActionKind::RestoreMissingFromCore,
@@ -412,11 +375,13 @@ fn repair_for_issue(
             WorktreeRepairActionKind::LeaveSkippedEntryUnchanged,
             WorktreeRepairRisk::None,
         ),
-        WorktreeDoctorIssueKind::StaleEcho | WorktreeDoctorIssueKind::ExpiredEcho => (
+        WorktreeDoctorIssueKind::StaleEcho => (
             WorktreeRepairActionKind::ClearStaleEchoMetadata,
             WorktreeRepairRisk::Delete,
         ),
-        WorktreeDoctorIssueKind::PartialScan | WorktreeDoctorIssueKind::RuntimeDegraded => {
+        WorktreeDoctorIssueKind::ExpiredEcho
+        | WorktreeDoctorIssueKind::PartialScan
+        | WorktreeDoctorIssueKind::RuntimeDegraded => {
             (WorktreeRepairActionKind::Rescan, WorktreeRepairRisk::None)
         }
     };
@@ -425,7 +390,5 @@ fn repair_for_issue(
         issue_kind: issue.kind,
         vault_path: issue.vault_path.clone(),
         risk,
-        authorized: !risk.requires_confirmation()
-            || authorization == WorktreeRepairAuthorization::ConfirmedByHost,
     }
 }
