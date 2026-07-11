@@ -9,6 +9,7 @@ use haze_sync_storage::LocalObjectStore;
 use sqlx::PgPool;
 
 use crate::{
+    application::ServerApplicationServices,
     config::{ObjectStoreConfig, ServerConfig},
     readiness::ReadinessState,
 };
@@ -83,6 +84,15 @@ impl ServerAppState {
     #[must_use]
     pub const fn object_store(&self) -> Option<&LocalObjectStore> {
         self.object_store.as_ref()
+    }
+
+    /// Build reusable application services only when all authoritative dependencies exist.
+    #[must_use]
+    pub fn application_services(&self) -> Option<ServerApplicationServices> {
+        Some(ServerApplicationServices::new(
+            self.db_pool.as_ref()?.clone(),
+            self.object_store.as_ref()?.clone(),
+        ))
     }
 
     /// Return the loaded server configuration, when startup supplied one.
@@ -167,6 +177,7 @@ mod tests {
         let rendered = format!("{state:?} {report:?}");
 
         assert!(!report.is_ready());
+        assert!(state.application_services().is_none());
         assert!(!rendered.contains("postgres://"));
         assert!(!rendered.contains("secret"));
         assert!(!rendered.contains("/srv/"));
