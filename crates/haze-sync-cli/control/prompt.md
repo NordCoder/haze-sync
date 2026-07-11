@@ -1,4 +1,4 @@
-# W1-CLI-P6-BLOCKED — Operator endpoint and runtime acceptance gate
+# W1-CLI-P6-BLOCKED-BY-RUNTIME-FAN-IN — Operator/runtime acceptance gate
 
 Component: cli
 Path: crates/haze-sync-cli
@@ -12,22 +12,27 @@ This is a hold notice, not an executable worker prompt.
 
 CLI-P5 implementation, CI correction, and clean-code review are accepted with green CI.
 
-Worktree WT-P8C is now accepted with green post-fix CI, and WT-P9 Worktree-owned doctor/repair planning is queued. GDrive GDA-P8 implementation and fixer are green, while GDA-P8C clean-code review is queued. Server's Storage feature-isolation correction is green and awaiting clean-code review, but it adds no bootstrap or sync operator endpoints.
+The following dependencies are now accepted:
+
+- GDrive Adapter component-local lifecycle through GDA-P8C and its CI correction;
+- Storage component-local lifecycle and Server-owned production feature isolation;
+- Worktree WT-P9 implementation and post-fix code-bearing CI.
+
+WT-P9C clean-code review remains active. Server/API do not yet expose accepted bootstrap/import/export/sync-once operator contracts or concrete Worktree/GDrive runtime composition.
 
 ## Blocked next phase
 
-CLI-P6 owns bootstrap and sync operation commands. It may call only accepted Server/API operator endpoints or an explicitly accepted local orchestration contract.
+CLI-P6 owns bootstrap and sync operation commands. It may call only accepted Server/API operator endpoints or an explicitly accepted orchestration contract.
 
-The following remain unavailable:
+The remaining blockers are:
 
-- accepted bootstrap/import/export/sync-once operator endpoints;
-- final WT-P9 Worktree diagnostics/hosting boundary;
-- accepted GDA-P8C delete-safety lifecycle and concrete runtime fan-in;
-- accepted Server composition of Worktree/GDrive runtime operations;
-- stable safe progress/result and failure contracts for command rendering.
+- WT-P9C clean acceptance and final Worktree hosting boundary;
+- accepted Server composition of Worktree and GDrive runtime operations;
+- accepted API/Server bootstrap, import/export, sync-once, progress, result, and safe failure contracts;
+- an explicit ownership decision for any local orchestration that is not Server-hosted.
 
-CLI must not invent local orchestration, direct database access, provider calls, or hidden runtime ownership.
+CLI must not invent direct database access, provider calls, hidden daemon ownership, or destructive repair execution.
 
 ## Unblock condition
 
-Green WT-P9 and GDA-P8C lifecycle acceptance plus accepted Server/API bootstrap and sync contracts and required runtime fan-in, or a dedicated CLI fan-in contract. Until then, do not launch a worker from this hold notice.
+WT-P9C `CLEAN_ACCEPT` with green final code-bearing CI plus an accepted Server/API operator and runtime fan-in contract, or a dedicated explicit CLI fan-in contract. Until then, do not launch a worker from this hold notice.
