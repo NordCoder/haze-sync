@@ -27,8 +27,8 @@ pub use delete_guard::{
 pub use doctor::{
     WorktreeDoctor, WorktreeDoctorFactSource, WorktreeDoctorHealth, WorktreeDoctorIssue,
     WorktreeDoctorIssueKind, WorktreeDoctorReport, WorktreeDoctorRunner, WorktreeDoctorSnapshot,
-    WorktreeDoctorSummary, WorktreeRepairAction, WorktreeRepairActionKind,
-    WorktreeRepairAuthorization, WorktreeRepairPlan, WorktreeRepairPlanner, WorktreeRepairRisk,
+    WorktreeDoctorSummary, WorktreeRepairAction, WorktreeRepairActionKind, WorktreeRepairPlan,
+    WorktreeRepairPlanner, WorktreeRepairRisk,
 };
 pub use echo_guard::{
     WorktreeEchoDecision, WorktreeEchoGuard, WorktreeEchoGuardError, WorktreeEchoGuardPolicy,
