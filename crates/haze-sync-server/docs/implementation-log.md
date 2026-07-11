@@ -108,3 +108,11 @@ Product source, Cargo manifests, migrations, workflows and sibling component fil
 
 Status: ARCHITECT_CHANGED_CONTRACTS_PENDING_CI
 Follow-ups: observe normal Component CI for the final documentation-bearing SHA. If green, activate WT-P10, STOR-P10 and SRV-P7B2 as the next contract-owner phases. Do not start SRV-P7B3 until all three are clean-accepted and synchronized.
+
+### 2026-07-11 — W1/SRV-P7B2
+
+Agent: implementation-worker
+Branch: component/server
+Summary: Extracted reusable async Server application services for authoritative file PUT, guarded DELETE, bounded changes, and verified revision-content retrieval. HTTP routes now retain transport parsing, authentication, authorization, DTO and status mapping while application services own transaction, path-lock, idempotency, Core planning, object-store and Storage choreography. Added typed internal actors/outcomes, deterministic path-hashed future Worktree idempotency derivation, strict DB-backed service tests and route parity tests. Removed the former route-private file planning/persistence modules. No Worktree executor, scheduler, public API, schema, configuration, Cargo or workflow behavior was added.
+Status: SELF_ACCEPT_PENDING_CI
+Follow-ups: resolve the exact diagnostics artifact for the final code-bearing Component CI run, then perform mandatory clean-code review only after authoritative green CI.
