@@ -30,23 +30,16 @@ use std::{error::Error, fmt};
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum TestSupportError {
-    /// No explicit test-only database URL was configured.
     MissingTestDatabaseUrl,
-    /// The configured database URL does not use a PostgreSQL URL scheme.
     UnsupportedDatabaseUrlScheme,
-    /// The configured database URL does not include an explicit database name.
     MissingDatabaseName,
-    /// The configured database name is not safe for destructive test helpers.
     UnsafeDatabaseName,
-    /// The configured database URL could not be interpreted safely.
     InvalidDatabaseUrl,
-    /// An environment variable was set but was not valid Unicode.
     EnvironmentVariableNotUnicode { name: &'static str },
-    /// Existing storage tables represent a partial or ambiguous test schema.
     IncompleteStorageSchema,
-    /// A test-only filesystem helper failed without exposing local paths.
+    /// Pre-STOR-P10 path-only state cannot be assigned to an adapter/root safely.
+    LegacyWorktreeStateNotEmpty,
     FilesystemOperationFailed,
-    /// A test-only database helper failed without exposing connection details.
     DatabaseOperationFailed,
 }
 
@@ -72,7 +65,10 @@ impl fmt::Display for TestSupportError {
                 write!(formatter, "environment variable {name} is not valid Unicode")
             }
             Self::IncompleteStorageSchema => formatter.write_str(
-                "test database contains a partial storage schema; use a clean dedicated test database",
+                "test database contains a partial or incompatible storage schema; use a clean dedicated test database",
+            ),
+            Self::LegacyWorktreeStateNotEmpty => formatter.write_str(
+                "legacy Worktree state requires explicit operator migration before STOR-P10",
             ),
             Self::FilesystemOperationFailed => {
                 formatter.write_str("test filesystem operation failed")
@@ -100,6 +96,7 @@ mod tests {
                 name: HAZE_SYNC_TEST_DATABASE_URL_ENV,
             },
             TestSupportError::IncompleteStorageSchema,
+            TestSupportError::LegacyWorktreeStateNotEmpty,
             TestSupportError::FilesystemOperationFailed,
             TestSupportError::DatabaseOperationFailed,
         ];
@@ -109,6 +106,7 @@ mod tests {
             assert!(!displayed.contains("postgres://user:"));
             assert!(!displayed.contains("password"));
             assert!(!displayed.contains("/srv/"));
+            assert!(!displayed.contains("root_fingerprint"));
             assert!(std::error::Error::source(&error).is_none());
         }
     }
