@@ -292,11 +292,16 @@ fn async_executor_is_awaited_and_real_summary_or_failure_is_returned() {
         }
     );
 
-    runtime.executor_mut().push_failure(WorktreeRuntimeCycleFailure::Export);
+    runtime
+        .executor_mut()
+        .push_failure(WorktreeRuntimeCycleFailure::Export);
     let clock = runtime.cancellation_token();
     assert!(!clock.is_cancelled());
     runtime.request_cancel().unwrap();
-    assert_eq!(block_on(runtime.poll()).unwrap(), WorktreeRuntimePoll::Cancelled);
+    assert_eq!(
+        block_on(runtime.poll()).unwrap(),
+        WorktreeRuntimePoll::Cancelled
+    );
 }
 
 #[test]
@@ -389,7 +394,10 @@ fn cancellation_before_due_cycle_prevents_execution() {
     runtime.start().unwrap();
     runtime.request_cancel().unwrap();
 
-    assert_eq!(block_on(runtime.poll()).unwrap(), WorktreeRuntimePoll::Cancelled);
+    assert_eq!(
+        block_on(runtime.poll()).unwrap(),
+        WorktreeRuntimePoll::Cancelled
+    );
     assert!(runtime.executor().requests.is_empty());
 }
 
@@ -423,8 +431,14 @@ fn in_flight_cancellation_maps_safely_and_prevents_later_cycles() {
         }
     );
     assert_eq!(handle.active(), 0);
-    assert_eq!(runtime.status().lifecycle, WorktreeRuntimeLifecycle::Cancelling);
-    assert_eq!(block_on(runtime.poll()).unwrap(), WorktreeRuntimePoll::Cancelled);
+    assert_eq!(
+        runtime.status().lifecycle,
+        WorktreeRuntimeLifecycle::Cancelling
+    );
+    assert_eq!(
+        block_on(runtime.poll()).unwrap(),
+        WorktreeRuntimePoll::Cancelled
+    );
 }
 
 #[test]
@@ -449,12 +463,18 @@ fn modes_include_explicit_inert_dry_run() {
 
     let mut disabled = service(WorktreeMode::Disabled, FakeClock::new());
     assert!(!disabled.start().unwrap().startup_cycle_pending);
-    assert_eq!(block_on(disabled.poll()).unwrap(), WorktreeRuntimePoll::Disabled);
+    assert_eq!(
+        block_on(disabled.poll()).unwrap(),
+        WorktreeRuntimePoll::Disabled
+    );
     assert!(disabled.executor().requests.is_empty());
 
     let mut dry_run = service(WorktreeMode::DryRun, FakeClock::new());
     assert!(!dry_run.start().unwrap().startup_cycle_pending);
-    assert_eq!(block_on(dry_run.poll()).unwrap(), WorktreeRuntimePoll::DryRun);
+    assert_eq!(
+        block_on(dry_run.poll()).unwrap(),
+        WorktreeRuntimePoll::DryRun
+    );
     assert!(dry_run.executor().requests.is_empty());
     assert!(WorktreeMode::DryRun.allows_manual_planning());
     assert!(!WorktreeMode::DryRun.permits_mutation());
@@ -482,7 +502,10 @@ fn watcher_close_and_failure_keep_periodic_correctness_and_cleanup() {
     );
     runtime.start().unwrap();
     block_on(runtime.poll()).unwrap();
-    assert_eq!(runtime.status().watcher, WorktreeRuntimeWatcherState::Closed);
+    assert_eq!(
+        runtime.status().watcher,
+        WorktreeRuntimeWatcherState::Closed
+    );
     clock.advance(Duration::from_secs(10));
     assert!(matches!(
         block_on(runtime.poll()).unwrap(),
@@ -491,12 +514,17 @@ fn watcher_close_and_failure_keep_periodic_correctness_and_cleanup() {
             ..
         }
     ));
-    assert_eq!(runtime.shutdown().unwrap().watcher, WorktreeRuntimeWatcherState::Stopped);
+    assert_eq!(
+        runtime.shutdown().unwrap().watcher,
+        WorktreeRuntimeWatcherState::Stopped
+    );
     assert_eq!(runtime.watcher_mut().shutdowns, 1);
 
     let clock = FakeClock::new();
     let mut watcher = FakeWatcher::default();
-    watcher.polls.push_back(Err(WorktreeWatcherFailure::Shutdown));
+    watcher
+        .polls
+        .push_back(Err(WorktreeWatcherFailure::Shutdown));
     let mut runtime = WorktreeRuntimeService::new(
         WorktreeMode::ImportOnly,
         policy(),
@@ -516,7 +544,9 @@ fn watcher_close_and_failure_keep_periodic_correctness_and_cleanup() {
 fn summary_contract_validation_and_budgets_remain_exact() {
     let clock = FakeClock::new();
     let mut runtime = service(WorktreeMode::ImportOnly, clock.clone());
-    runtime.executor_mut().push_summary(WorktreeRuntimeCycleSummary::default());
+    runtime
+        .executor_mut()
+        .push_summary(WorktreeRuntimeCycleSummary::default());
     runtime.start().unwrap();
     assert!(matches!(
         block_on(runtime.poll()).unwrap(),
@@ -527,11 +557,13 @@ fn summary_contract_validation_and_budgets_remain_exact() {
     ));
 
     clock.advance(Duration::from_secs(10));
-    runtime.executor_mut().push_summary(WorktreeRuntimeCycleSummary {
-        full_scan_completed: true,
-        planned_imports: 5,
-        ..WorktreeRuntimeCycleSummary::default()
-    });
+    runtime
+        .executor_mut()
+        .push_summary(WorktreeRuntimeCycleSummary {
+            full_scan_completed: true,
+            planned_imports: 5,
+            ..WorktreeRuntimeCycleSummary::default()
+        });
     assert!(matches!(
         block_on(runtime.poll()).unwrap(),
         WorktreeRuntimePoll::CycleRejected {
@@ -541,10 +573,12 @@ fn summary_contract_validation_and_budgets_remain_exact() {
     ));
 
     let mut export = service(WorktreeMode::ExportOnly, FakeClock::new());
-    export.executor_mut().push_summary(WorktreeRuntimeCycleSummary {
-        planned_imports: 1,
-        ..WorktreeRuntimeCycleSummary::default()
-    });
+    export
+        .executor_mut()
+        .push_summary(WorktreeRuntimeCycleSummary {
+            planned_imports: 1,
+            ..WorktreeRuntimeCycleSummary::default()
+        });
     export.start().unwrap();
     assert!(matches!(
         block_on(export.poll()).unwrap(),
