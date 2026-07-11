@@ -4,7 +4,7 @@ use crate::scan::{
     DeleteCandidatePlan, FullScanError, FullScanPlan, ScanSkipReason, SkippedScanEntry,
 };
 use crate::state::{GDriveMapping, SafeTimestamp, VaultPath};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt;
 
@@ -31,10 +31,17 @@ pub struct MovedProviderIdentity {
     pub observed_path: Option<VaultPath>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct RecoveredDeleteCandidate {
+    pub provider_id: String,
+    pub path: VaultPath,
+    pub first_detected_at: SafeTimestamp,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompleteDeleteScan {
     pub delete_candidates: Vec<DeleteCandidatePlan>,
-    pub recovered_paths: Vec<VaultPath>,
+    pub recovered_candidates: Vec<RecoveredDeleteCandidate>,
     pub moved_provider_identities: Vec<MovedProviderIdentity>,
     pub total_mapped_files: u64,
 }
@@ -50,24 +57,33 @@ impl CompleteDeleteScan {
             return DeleteScanObservation::Unreliable(DeleteScanIssue::IncompleteScan);
         }
 
-        let mut recovered_paths = Vec::new();
+        let Some(mapping_snapshot) = MappingSnapshot::new(mappings) else {
+            return DeleteScanObservation::Unreliable(DeleteScanIssue::IncompleteScan);
+        };
+
+        let mut recovered_candidates = Vec::new();
         for planned_import in &plan.imports {
             if planned_import.clear_delete_candidate {
-                recovered_paths.push(planned_import.request.path.clone());
+                let Some(recovered) = mapping_snapshot.recovered_candidate(
+                    &planned_import.provider_id,
+                    &planned_import.request.path,
+                ) else {
+                    return DeleteScanObservation::Unreliable(DeleteScanIssue::IncompleteScan);
+                };
+                recovered_candidates.push(recovered);
             }
         }
         for unchanged in &plan.unchanged {
             if unchanged.clear_delete_candidate {
-                recovered_paths.push(unchanged.path.clone());
+                let Some(recovered) = mapping_snapshot
+                    .recovered_candidate(&unchanged.provider_id, &unchanged.path)
+                else {
+                    return DeleteScanObservation::Unreliable(DeleteScanIssue::IncompleteScan);
+                };
+                recovered_candidates.push(recovered);
             }
         }
-        recovered_paths.sort();
-        recovered_paths.dedup();
 
-        let mappings_by_provider_id = mappings
-            .iter()
-            .map(|mapping| (mapping.drive_file_id.as_str(), mapping))
-            .collect::<BTreeMap<_, _>>();
         let mut moved_provider_identities = plan
             .unsupported
             .iter()
@@ -86,24 +102,117 @@ impl CompleteDeleteScan {
         });
         moved_provider_identities.dedup();
         for moved in &moved_provider_identities {
-            let Some(mapping) = mappings_by_provider_id.get(moved.provider_id.as_str()) else {
+            let Some(mapping) = mapping_snapshot.by_provider_id(moved.provider_id.as_str()) else {
                 return DeleteScanObservation::Unreliable(DeleteScanIssue::IncompleteScan);
             };
-            recovered_paths.push(mapping.vault_path.clone());
+            if let Some(first_detected_at) = mapping.delete_candidate_since.clone() {
+                recovered_candidates.push(RecoveredDeleteCandidate {
+                    provider_id: mapping.drive_file_id.clone(),
+                    path: mapping.vault_path.clone(),
+                    first_detected_at,
+                });
+            }
         }
-        recovered_paths.sort();
-        recovered_paths.dedup();
+        recovered_candidates.sort();
+        recovered_candidates.dedup();
 
         let mut delete_candidates = plan.delete_candidates;
-        delete_candidates.sort_by(|left, right| left.path.cmp(&right.path));
+        delete_candidates.sort_by(|left, right| {
+            left.path
+                .cmp(&right.path)
+                .then_with(|| left.provider_id.cmp(&right.provider_id))
+        });
+        if !mapping_snapshot.delete_candidates_match(&delete_candidates)
+            || scan_actions_overlap(&delete_candidates, &recovered_candidates)
+        {
+            return DeleteScanObservation::Unreliable(DeleteScanIssue::IncompleteScan);
+        }
 
         DeleteScanObservation::Complete(Self {
             delete_candidates,
-            recovered_paths,
+            recovered_candidates,
             moved_provider_identities,
             total_mapped_files: mappings.len() as u64,
         })
     }
+}
+
+struct MappingSnapshot<'a> {
+    by_provider_id: BTreeMap<&'a str, &'a GDriveMapping>,
+    by_path: BTreeMap<&'a VaultPath, &'a GDriveMapping>,
+}
+
+impl<'a> MappingSnapshot<'a> {
+    fn new(mappings: &'a [GDriveMapping]) -> Option<Self> {
+        let mut by_provider_id = BTreeMap::new();
+        let mut by_path = BTreeMap::new();
+        for mapping in mappings {
+            if by_provider_id
+                .insert(mapping.drive_file_id.as_str(), mapping)
+                .is_some()
+                || by_path.insert(&mapping.vault_path, mapping).is_some()
+            {
+                return None;
+            }
+        }
+        Some(Self {
+            by_provider_id,
+            by_path,
+        })
+    }
+
+    fn by_provider_id(&self, provider_id: &str) -> Option<&'a GDriveMapping> {
+        self.by_provider_id.get(provider_id).copied()
+    }
+
+    fn recovered_candidate(
+        &self,
+        provider_id: &str,
+        path: &VaultPath,
+    ) -> Option<RecoveredDeleteCandidate> {
+        let mapping = self.by_provider_id(provider_id)?;
+        if mapping.vault_path != *path || self.by_path.get(path).copied()? != mapping {
+            return None;
+        }
+        Some(RecoveredDeleteCandidate {
+            provider_id: mapping.drive_file_id.clone(),
+            path: mapping.vault_path.clone(),
+            first_detected_at: mapping.delete_candidate_since.clone()?,
+        })
+    }
+
+    fn delete_candidates_match(&self, candidates: &[DeleteCandidatePlan]) -> bool {
+        let mut provider_ids = BTreeSet::new();
+        let mut paths = BTreeSet::new();
+        candidates.iter().all(|candidate| {
+            let Some(mapping) = self.by_provider_id(&candidate.provider_id) else {
+                return false;
+            };
+            provider_ids.insert(candidate.provider_id.as_str())
+                && paths.insert(&candidate.path)
+                && mapping.vault_path == candidate.path
+                && mapping.core_revision == candidate.base_revision_id
+                && mapping.delete_candidate_since == candidate.previously_detected_at
+        })
+    }
+}
+
+fn scan_actions_overlap(
+    delete_candidates: &[DeleteCandidatePlan],
+    recovered_candidates: &[RecoveredDeleteCandidate],
+) -> bool {
+    let recovered_provider_ids = recovered_candidates
+        .iter()
+        .map(|candidate| candidate.provider_id.as_str())
+        .collect::<BTreeSet<_>>();
+    let recovered_paths = recovered_candidates
+        .iter()
+        .map(|candidate| &candidate.path)
+        .collect::<BTreeSet<_>>();
+    delete_candidates.iter().any(|candidate| {
+        recovered_provider_ids.contains(candidate.provider_id.as_str())
+            || recovered_paths.contains(&candidate.path)
+    })
 }
 
 fn scan_entry_makes_scan_incomplete(entry: &SkippedScanEntry) -> bool {
@@ -246,6 +355,7 @@ impl CoreDeleteGuardDecision {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DeleteBlockReason {
     ScanUnreliable(DeleteScanIssue),
+    StateChangedSinceScan,
     ModeDoesNotImportDeletes {
         mode: AdapterMode,
     },
@@ -288,7 +398,9 @@ pub enum DeleteSafetyNotice {
 pub struct DeleteReconciliationOutcome {
     pub execution: Option<DeleteExecution>,
     pub candidates_marked: usize,
+    pub candidate_mark_previews: usize,
     pub candidates_cleared: usize,
+    pub candidate_clear_previews: usize,
     pub confirmed_candidates: usize,
     pub delete_submissions: usize,
     pub delete_previews: usize,
@@ -305,7 +417,9 @@ impl Default for DeleteReconciliationOutcome {
         Self {
             execution: None,
             candidates_marked: 0,
+            candidate_mark_previews: 0,
             candidates_cleared: 0,
+            candidate_clear_previews: 0,
             confirmed_candidates: 0,
             delete_submissions: 0,
             delete_previews: 0,
