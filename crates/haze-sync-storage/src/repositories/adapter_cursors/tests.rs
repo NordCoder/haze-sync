@@ -77,11 +77,11 @@ fn exact_cursor_transition_accepts_only_contiguous_successor() {
     );
     assert_eq!(
         validate_exact_transition(i64::MAX, i64::MAX),
-        Err(RepositoryError::CursorRegression)
+        Err(RepositoryError::CursorOverflow)
     );
     assert_eq!(
         validate_exact_transition(i64::MAX, 0),
-        Err(RepositoryError::CursorRegression)
+        Err(RepositoryError::CursorOverflow)
     );
     assert_eq!(
         validate_exact_transition(-1, 0),
