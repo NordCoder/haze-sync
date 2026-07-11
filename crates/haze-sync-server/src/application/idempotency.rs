@@ -1,6 +1,4 @@
-use super::{
-    lower_hex, ApplicationActor, ApplicationError, ApplyDeleteOutcome, ApplyFileOutcome,
-};
+use super::{lower_hex, ApplicationActor, ApplicationError, ApplyDeleteOutcome, ApplyFileOutcome};
 use chrono::{DateTime, Utc};
 use haze_sync_api::{
     dto::{
@@ -110,6 +108,8 @@ pub(crate) fn delete_request_fingerprint(
     }))
 }
 
+/// Reserved for the bounded Worktree executor introduced by SRV-P7B3.
+#[allow(dead_code)]
 #[must_use]
 pub(crate) fn derive_worktree_put_idempotency(
     adapter_id: &AdapterId,
@@ -123,8 +123,7 @@ pub(crate) fn derive_worktree_put_idempotency(
     let base = base_revision_id.map(RevisionId::as_str).unwrap_or("null");
     let key = format!(
         "wt:v1:{}:put:{path_hash}:{base}:{}",
-        adapter_id,
-        content_hash
+        adapter_id, content_hash
     );
     ApplicationIdempotency::new(
         key,
@@ -132,6 +131,8 @@ pub(crate) fn derive_worktree_put_idempotency(
     )
 }
 
+/// Reserved for the bounded Worktree executor introduced by SRV-P7B3.
+#[allow(dead_code)]
 #[must_use]
 pub(crate) fn derive_worktree_delete_idempotency(
     adapter_id: &AdapterId,
@@ -164,8 +165,12 @@ pub(super) async fn store_file_outcome(
     idempotency: &ApplicationIdempotency,
     outcome: &ApplyFileOutcome,
 ) -> Result<Option<ApplyFileOutcome>, ApplicationError> {
-    let response = StoredIdempotencyResponse::json(200, serde_json::to_value(encode_file_outcome(outcome)).map_err(|_| ApplicationError::Internal)?)
-        .map_err(|_| ApplicationError::Internal)?;
+    let response = StoredIdempotencyResponse::json(
+        200,
+        serde_json::to_value(encode_file_outcome(outcome))
+            .map_err(|_| ApplicationError::Internal)?,
+    )
+    .map_err(|_| ApplicationError::Internal)?;
     store_outcome(transaction, actor, idempotency, response)
         .await?
         .map(decode_file_response)
@@ -189,7 +194,8 @@ pub(super) async fn store_delete_outcome(
 ) -> Result<Option<ApplyDeleteOutcome>, ApplicationError> {
     let response = StoredIdempotencyResponse::json(
         delete_status(outcome),
-        serde_json::to_value(encode_delete_outcome(outcome)).map_err(|_| ApplicationError::Internal)?,
+        serde_json::to_value(encode_delete_outcome(outcome))
+            .map_err(|_| ApplicationError::Internal)?,
     )
     .map_err(|_| ApplicationError::Internal)?;
     store_outcome(transaction, actor, idempotency, response)
@@ -203,14 +209,14 @@ async fn read_replay(
     actor: &ApplicationActor,
     idempotency: &ApplicationIdempotency,
 ) -> Result<Option<StoredIdempotencyResponse>, ApplicationError> {
-    let mut connection = pool.acquire().await.map_err(|_| ApplicationError::Internal)?;
-    let Some(record) = read_idempotency_record(
-        &mut connection,
-        actor.adapter_id(),
-        idempotency.key(),
-    )
-    .await
-    .map_err(|_| ApplicationError::Internal)?
+    let mut connection = pool
+        .acquire()
+        .await
+        .map_err(|_| ApplicationError::Internal)?;
+    let Some(record) =
+        read_idempotency_record(&mut connection, actor.adapter_id(), idempotency.key())
+            .await
+            .map_err(|_| ApplicationError::Internal)?
     else {
         return Ok(None);
     };
@@ -239,7 +245,7 @@ async fn store_outcome(
         serde_json::to_value(response).map_err(|_| ApplicationError::Internal)?,
     )
     .map_err(|_| ApplicationError::Internal)?;
-    match insert_idempotency_record(&mut **transaction, &input)
+    match insert_idempotency_record(transaction, &input)
         .await
         .map_err(|_| ApplicationError::Internal)?
     {
@@ -286,13 +292,20 @@ fn encode_file_outcome(outcome: &ApplyFileOutcome) -> PutFileResponse {
     }
 }
 
-fn decode_file_response(response: StoredIdempotencyResponse) -> Result<ApplyFileOutcome, ApplicationError> {
-    let body: PutFileResponse = serde_json::from_value(response.body().clone())
-        .map_err(|_| ApplicationError::Internal)?;
+fn decode_file_response(
+    response: StoredIdempotencyResponse,
+) -> Result<ApplyFileOutcome, ApplicationError> {
+    let body: PutFileResponse =
+        serde_json::from_value(response.body().clone()).map_err(|_| ApplicationError::Internal)?;
     match body {
-        PutFileResponse::Accepted { path, revision_id, seq } => Ok(ApplyFileOutcome::Accepted {
+        PutFileResponse::Accepted {
+            path,
+            revision_id,
+            seq,
+        } => Ok(ApplyFileOutcome::Accepted {
             path: VaultPath::try_from(path).map_err(|_| ApplicationError::Internal)?,
-            revision_id: RevisionId::try_from(revision_id).map_err(|_| ApplicationError::Internal)?,
+            revision_id: RevisionId::try_from(revision_id)
+                .map_err(|_| ApplicationError::Internal)?,
             content_hash: None,
             seq,
         }),
@@ -312,7 +325,8 @@ fn decode_file_response(response: StoredIdempotencyResponse) -> Result<ApplyFile
             seq,
         } => Ok(ApplyFileOutcome::ConflictSaved {
             path: VaultPath::try_from(path).map_err(|_| ApplicationError::Internal)?,
-            conflict_id: ConflictId::try_from(conflict_id).map_err(|_| ApplicationError::Internal)?,
+            conflict_id: ConflictId::try_from(conflict_id)
+                .map_err(|_| ApplicationError::Internal)?,
             materialized_path: VaultPath::try_from(materialized_path)
                 .map_err(|_| ApplicationError::Internal)?,
             policy_applied: policy_from_dto(policy_applied),
@@ -344,8 +358,8 @@ fn encode_delete_outcome(outcome: &ApplyDeleteOutcome) -> DeleteFileResponse {
 fn decode_delete_response(
     response: StoredIdempotencyResponse,
 ) -> Result<ApplyDeleteOutcome, ApplicationError> {
-    let body: DeleteFileResponse = serde_json::from_value(response.body().clone())
-        .map_err(|_| ApplicationError::Internal)?;
+    let body: DeleteFileResponse =
+        serde_json::from_value(response.body().clone()).map_err(|_| ApplicationError::Internal)?;
     match body {
         DeleteFileResponse::Tombstoned {
             path,
@@ -405,6 +419,7 @@ const fn policy_from_dto(policy: ConflictPolicyDto) -> ConflictPolicy {
     }
 }
 
+#[allow(dead_code)]
 fn normalized_path_hash(path: &VaultPath) -> String {
     let digest = Sha256::digest(path.as_str().as_bytes());
     lower_hex(&digest)
@@ -430,20 +445,10 @@ mod tests {
         let adapter = AdapterId::parse("worktree").unwrap();
         let path = VaultPath::parse("Notes/a.md").unwrap();
         let base = RevisionId::parse("rev_base").unwrap();
-        let first = derive_worktree_put_idempotency(
-            &adapter,
-            &path,
-            Some(&base),
-            hash('a'),
-            b"bytes",
-        );
-        let same = derive_worktree_put_idempotency(
-            &adapter,
-            &path,
-            Some(&base),
-            hash('a'),
-            b"bytes",
-        );
+        let first =
+            derive_worktree_put_idempotency(&adapter, &path, Some(&base), hash('a'), b"bytes");
+        let same =
+            derive_worktree_put_idempotency(&adapter, &path, Some(&base), hash('a'), b"bytes");
         let other_path = derive_worktree_put_idempotency(
             &adapter,
             &VaultPath::parse("Notes/b.md").unwrap(),
@@ -466,13 +471,8 @@ mod tests {
         let base = RevisionId::parse("rev_base").unwrap();
         let delete = derive_worktree_delete_idempotency(&adapter, &path, Some(&base), 1);
         let null_delete = derive_worktree_delete_idempotency(&adapter, &path, None, 1);
-        let put = derive_worktree_put_idempotency(
-            &adapter,
-            &path,
-            Some(&base),
-            hash('a'),
-            b"bytes",
-        );
+        let put =
+            derive_worktree_put_idempotency(&adapter, &path, Some(&base), hash('a'), b"bytes");
 
         assert_ne!(delete, null_delete);
         assert_ne!(delete, put);
