@@ -1,5 +1,9 @@
 # W1-SRV-STOR-TEST-SUPPORT-FAN-IN-C — Storage feature-isolation clean-code review
 
+Before starting, name this worker chat exactly:
+
+`server — W1 SRV-STOR-TEST-SUPPORT-FAN-IN-C Clean-Code Review`
+
 Component: server
 Path: crates/haze-sync-server
 Branch: component/server
