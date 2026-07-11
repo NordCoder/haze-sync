@@ -1,106 +1,110 @@
-# W1-STOR-P10-DB-VERIFY — Live PostgreSQL verification for durable Worktree state
+# W1-STOR-P10-BRANCH-SYNC — Synchronize with main and execute PostgreSQL verification
 
 Before starting, name this worker chat exactly:
 
-`storage — W1 STOR-P10 PostgreSQL Verification`
+`storage — W1 STOR-P10 Branch Sync and PostgreSQL Run`
 
 Component: storage
 Path: crates/haze-sync-storage
 Branch: component/storage
 PR: #47
 Role: implementation-worker
-Phase: STOR-P10-DB-VERIFY
+Phase: STOR-P10-BRANCH-SYNC-DB-CI
 
-Work only through the GitHub connector. Do not merge the PR, change draft state, rebase, reset, rewrite history, force-push, modify `main`, or modify sibling branches.
+Work through the GitHub connector. Do not merge PR #47 into `main`, change its draft state, rebase, reset, rewrite history, force-push, modify sibling branches, or discard accepted Storage changes.
 
 ## Trigger
 
-STOR-P10 implementation and artifact correction are complete, and ordinary Component CI is green, but lifecycle acceptance remains blocked because mandatory strict PostgreSQL tests were explicitly ignored and never executed.
+STOR-P10 implementation and artifact correction are complete. A Storage-only PostgreSQL verification job was added, but GitHub did not create a pull-request workflow run because PR #47 is currently non-mergeable.
 
 Accepted evidence:
 
-- STOR-P10 implementation SHA before fixer: `63d80764933cba5f23fb43bad44201a75e1dc16a`
-- final post-fix code-bearing SHA: `abca69058390983894465cef9d66c38960fae4c7`
-- fixer status: `FIX_COMPLETE`
-- authoritative green Component CI: run `29167108216`, run number `1792`, conclusion `success`
-- missing command/evidence: `cargo test -p haze-sync-storage --features test-support -- --ignored` against a dedicated reachable `HAZE_SYNC_TEST_DATABASE_URL`
+- accepted post-fix Storage code-bearing SHA: `abca69058390983894465cef9d66c38960fae4c7`;
+- ordinary green Component CI: run `29167108216`, run number `1792`;
+- verification tooling/docs SHA before its report-only commit: `a9b916d740439f8ceb4d7e2a4b9beebb962857fb`;
+- verification report status: `BLOCKED_BY_TOOLING`;
+- PR #47 was observed open, draft, unmerged, and `mergeable: false`;
+- current observed `main` head: `c1e69a664388b0cba028170e8398b9088218957d`;
+- current merge base before synchronization: `9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2`.
 
-Archived fixer evidence is under `crates/haze-sync-storage/control/log/20260711-204500Z-W1-FIX-STOR-P10-CI-*` and is pinned by immutable original blob SHAs.
+The previous verification phase already added a Storage-only `storage-postgres` job that provisions `postgres:16-alpine`, binds a synthetic test-only `HAZE_SYNC_TEST_DATABASE_URL`, executes `cargo test -p haze-sync-storage --features test-support -- --ignored`, and verifies the four mandatory STOR-P10 test names. Do not redesign that job unless synchronization or live execution proves a defect.
 
 ## Goal
 
-Provide real, repeatable, secret-free PostgreSQL acceptance evidence for STOR-P10 migration, instance binding, path-state, transaction, rollback, and exact cursor behavior. Ordinary workspace tests with ignored DB tests are not sufficient.
+Create a real, non-force, two-parent merge of current `main` into `component/storage`, resolve the CI-file conflict without losing either side, restore PR mergeability, and obtain an authoritative pull-request Component CI run that executes both:
 
-## Required approach
+1. the ordinary Rust workspace job; and
+2. the Storage PostgreSQL verification job.
 
-Inspect the current shared Component CI workflow and Storage strict test-support contract. Implement the smallest safe branch-local CI/test-harness change that:
+A fabricated merge commit whose tree simply ignores `main` changes is forbidden.
 
-1. provisions an ephemeral PostgreSQL service in GitHub Actions with non-secret test-only credentials;
-2. waits for database readiness deterministically;
-3. exposes a test-only `HAZE_SYNC_TEST_DATABASE_URL` to the strict Storage verification command;
-4. executes exactly the mandatory ignored PostgreSQL tests with `--features test-support -- --ignored`;
-5. fails the workflow when any strict DB test is skipped, cannot connect, times out, or fails;
-6. preserves ordinary fmt/check/test/clippy/finalizer gates;
-7. uploads normal diagnostics on failure;
-8. does not commit real credentials or depend on repository secrets;
-9. does not silently make DB verification optional.
+## Required synchronization protocol
 
-Prefer an explicit Storage-only verification step/job conditioned on `component/storage` rather than imposing unnecessary database work on unrelated component branches. Keep any shared workflow change conservative and documented.
+1. Re-read the current heads of `component/storage` and `main` immediately before constructing the merge.
+2. Recompute the merge base and compare merge-base..main and merge-base..component/storage.
+3. If `main` moved beyond the observed head, include every new main change and document it. Do not rely blindly on the file list below.
+4. At the observed main head, main changed exactly these paths since the old merge base:
+   - `.github/docs/ci-diagnostics-artifacts.md`
+   - `.github/scripts/ci-finalize.sh`
+   - `.github/scripts/ci-run.sh`
+   - `.github/workflows/ci.yml`
+   - `.github/workflows/component-ci.yml`
+   - `.github/workflows/obsidian-plugin.yml`
+   - `.github/workflows/rust.yml`
+5. The final merge tree must contain exact current-main content for every main-changed path not intentionally extended by this Storage phase.
+6. `.github/workflows/component-ci.yml` must be a semantic merge of current main plus the accepted Storage-only `storage-postgres` job. Preserve main's ordinary Rust job, diagnostics wrapper/finalizer, artifact upload, pull-request trigger, workflow dispatch, permissions, and concurrency behavior.
+7. Preserve every Storage product/schema/test/docs/control change already present on the component branch.
+8. Construct a true merge commit with:
+   - first parent: the current component/storage head at execution time;
+   - second parent: the current main head at execution time;
+   - a merged tree containing both sides' accepted changes.
+9. Move `component/storage` to the new merge commit using a fast-forward ref update only. Never force-update.
+10. Verify PR #47 becomes mergeable and obtains a non-null merge commit SHA.
 
-## Mandatory verification coverage
+GitHub git-data operations such as tree creation, multi-parent commit creation, and non-force ref update are authorized for this exact synchronization. Do not create an ours-only merge or omit non-conflicting main changes.
 
-The live PostgreSQL run must prove the existing STOR-P10 tests for:
+## Required CI execution
 
-- migration from supported pre-P10 schemas;
-- fail-closed handling of incompatible or non-empty legacy Worktree state;
-- first bind and identical rebind;
-- root fingerprint and version mismatch rejection;
-- adapter-instance isolation;
-- present/tombstoned invariants;
-- deterministic bounded snapshot ordering;
-- caller-owned transaction rollback;
-- cursor initialization and exact N-to-N+1 advancement;
-- regression, gap, stale expected value, overflow and concurrent race rejection;
-- no false path-state or cursor claims after rollback;
-- safe redacted errors.
+After the merge commit updates the branch:
 
-Do not weaken, unignore, delete, or rewrite tests merely to obtain green CI. If a live test reveals a genuine Storage defect, apply the smallest Storage-owned correction and document it precisely.
+- observe the new pull-request Component CI run associated with the synchronized branch head;
+- require the ordinary Rust workspace job to pass fmt, check, workspace tests, clippy, and diagnostics finalization;
+- require the Storage PostgreSQL job to provision PostgreSQL successfully and execute exactly:
+  `cargo test -p haze-sync-storage --features test-support -- --ignored`;
+- require evidence checks for these four tests to pass:
+  - `repositories::adapter_cursors::postgres_tests::exact_cursor_progression_is_locked_contiguous_and_rollback_safe`;
+  - `repositories::worktree_state::postgres_tests::durable_instances_and_path_state_are_isolated_and_transactional`;
+  - `test_support::postgres::tests::fresh_and_current_schema_preparation_is_idempotent`;
+  - `test_support::postgres::tests::migrates_empty_pre_p10_schema_and_rejects_nonempty_legacy_state`;
+- require both diagnostics finalizers to pass.
+
+If CI is red, record the exact synchronized code-bearing/tooling SHA, run id, run number, failed job/check, and diagnostics artifact metadata. Do not read diagnostics artifacts in this implementation role and do not guess.
+
+If GitHub still does not schedule a run after a genuine merge commit and PR mergeability is restored, report `BLOCKED_BY_TOOLING` with exact evidence. Do not create meaningless commits repeatedly.
 
 ## Preservation requirements
 
 Preserve:
 
-- migration `0010_worktree_durable_state.sql` fail-before-destructive semantics;
-- versioned adapter/root-fingerprint binding with no raw-root persistence;
+- migration `0010_worktree_durable_state.sql` fail-before-destructive behavior;
+- versioned adapter/root-fingerprint binding without raw-root persistence;
 - per-instance present/tombstoned state;
 - bounded deterministic snapshots;
-- caller-transaction-owned repositories;
-- exact contiguous cursor advancement;
-- no hard delete or implicit cleanup;
-- passive Storage ownership;
-- no Server runtime, Worktree filesystem, Core policy, API DTO, provider or deployment behavior.
+- caller-owned transaction semantics;
+- exact contiguous cursor advancement and rollback safety;
+- no hard delete, implicit cleanup, or production database credentials;
+- Storage-passive ownership and all existing tests/assertions.
 
-## Allowed files
+Do not modify Server, Worktree, Core, API, CLI, Deployment, provider behavior, production migration policy, or unrelated workflow logic.
 
-- `.github/workflows/component-ci.yml` only for the minimum DB-capable verification wiring;
-- `.github/scripts/**` only if a small reusable readiness/verification helper is strictly necessary;
-- STOR-P10 Storage tests/test-support files only when live execution proves a defect or harness issue;
-- STOR-P10 docs/implementation log for factual verification instructions;
+## Allowed files and operations
+
+- the merge commit and exact conflict resolutions required to synchronize current main;
+- `.github/workflows/component-ci.yml` only for preserving the accepted Storage PostgreSQL job over current main;
+- Storage verification docs only if synchronization changes a documented fact;
 - `crates/haze-sync-storage/control/report.md`.
 
-Forbidden:
-
-- Server, Worktree, Core, API, CLI or Deployment source changes;
-- production database URLs, secrets or external managed database dependencies;
-- migration redesign without a live-test-proven defect;
-- optional/silent DB test skipping;
-- destructive cleanup, hard delete or production migration execution policy;
-- unrelated workflow refactoring;
-- archiving control files.
-
-## CI acceptance
-
-The final code-bearing/tooling SHA must have a green Component CI run that visibly includes successful execution of the strict ignored PostgreSQL command. A green ordinary workspace run without that command is not acceptance evidence.
+Do not archive control files.
 
 ## Report
 
@@ -109,8 +113,8 @@ Write `crates/haze-sync-storage/control/report.md` using `report-template.md`.
 Set:
 
 - `REPORT_TYPE: IMPLEMENTATION`
-- `phase_id: STOR-P10-DB-VERIFY`
-- `chat_name: storage — W1 STOR-P10 PostgreSQL Verification`
+- `phase_id: STOR-P10-BRANCH-SYNC-DB-CI`
+- `chat_name: storage — W1 STOR-P10 Branch Sync and PostgreSQL Run`
 
 Use one honest status:
 
@@ -121,4 +125,4 @@ Use one honest status:
 - `BLOCKED_BY_SCOPE`
 - `BLOCKED_BY_CONTRACT`
 
-The report must include exact workflow/test-harness changes, PostgreSQL image/version and readiness method, the exact strict command executed, which ignored tests actually ran, failures/corrections, final code-bearing SHA, authoritative CI run, secrecy assessment, and whether STOR-P10 is ready for mandatory clean-code review.
+The report must include old/new branch head, exact main head and merge base, both merge parents, all main-changed paths incorporated, conflict resolutions, final workflow SHA, PR mergeability after sync, exact CI run/jobs, strict PostgreSQL command and four-test evidence, final accepted code-bearing/tooling SHA, secrecy assessment, and whether STOR-P10 is ready for mandatory clean-code review.
