@@ -1,5 +1,9 @@
 # W1-FIX-GDA-P8C-CI — GDrive diagnostics CI correction
 
+Before starting, name this worker chat exactly:
+
+`gdrive-adapter — W1 GDA-P8C CI Fix`
+
 Component: gdrive-adapter
 Path: crates/haze-gdrive-adapter
 Branch: component/gdrive-adapter
