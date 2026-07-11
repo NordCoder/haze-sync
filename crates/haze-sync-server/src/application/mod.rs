@@ -8,6 +8,8 @@ mod changes;
 mod deletes;
 mod files;
 mod idempotency;
+#[cfg(test)]
+mod tests;
 
 pub(crate) use changes::{
     AuthoritativeChange, AuthoritativeChangeBatch, AuthoritativeChangesQuery,
@@ -68,21 +70,6 @@ pub(crate) enum ApplicationError {
 }
 
 impl ApplicationError {
-    #[must_use]
-    pub(crate) const fn code(self) -> &'static str {
-        match self {
-            Self::DependenciesUnavailable => "application_dependencies_unavailable",
-            Self::InvalidInput => "application_invalid_input",
-            Self::NotFound => "application_not_found",
-            Self::Conflict => "application_conflict",
-            Self::InvalidContentHash => "application_invalid_content_hash",
-            Self::IdempotencyMismatch => "application_idempotency_mismatch",
-            Self::ContentUnavailable => "application_content_unavailable",
-            Self::ContentCorrupt => "application_content_corrupt",
-            Self::Internal => "application_internal_failure",
-        }
-    }
-
     const fn message(self) -> &'static str {
         match self {
             Self::DependenciesUnavailable => "application dependencies are unavailable",
@@ -110,12 +97,12 @@ impl std::error::Error for ApplicationError {}
 #[derive(Clone)]
 pub(crate) struct ServerApplicationServices {
     pool: PgPool,
-    object_store: LocalObjectStore,
+    object_store: Option<LocalObjectStore>,
 }
 
 impl ServerApplicationServices {
     #[must_use]
-    pub(crate) fn new(pool: PgPool, object_store: LocalObjectStore) -> Self {
+    pub(crate) fn new(pool: PgPool, object_store: Option<LocalObjectStore>) -> Self {
         Self { pool, object_store }
     }
 
@@ -123,7 +110,11 @@ impl ServerApplicationServices {
         &self,
         command: ApplyFileCommand,
     ) -> Result<ApplyFileOutcome, ApplicationError> {
-        files::apply_file(&self.pool, &self.object_store, command).await
+        let object_store = self
+            .object_store
+            .as_ref()
+            .ok_or(ApplicationError::DependenciesUnavailable)?;
+        files::apply_file(&self.pool, object_store, command).await
     }
 
     pub(crate) async fn apply_delete(
@@ -144,7 +135,11 @@ impl ServerApplicationServices {
         &self,
         query: RevisionContentQuery,
     ) -> Result<AuthoritativeRevisionContent, ApplicationError> {
-        files::revision_content(&self.pool, &self.object_store, query).await
+        let object_store = self
+            .object_store
+            .as_ref()
+            .ok_or(ApplicationError::DependenciesUnavailable)?;
+        files::revision_content(&self.pool, object_store, query).await
     }
 }
 
@@ -153,7 +148,10 @@ impl fmt::Debug for ServerApplicationServices {
         formatter
             .debug_struct("ServerApplicationServices")
             .field("pool", &"[REDACTED]")
-            .field("object_store", &"[REDACTED]")
+            .field(
+                "object_store",
+                &self.object_store.as_ref().map(|_| "[REDACTED]"),
+            )
             .finish()
     }
 }
