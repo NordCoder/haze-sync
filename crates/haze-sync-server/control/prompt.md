@@ -1,26 +1,27 @@
-# W1-SRV-P7A-CLEAN — Clean-code review of Worktree snapshot fan-in and Server composition
+# W1-SRV-P7B1 — Real Worktree cycle executor contract fan-in
 
 Before starting, name this worker chat exactly:
 
-`server — W1 SRV-P7A Clean-Code Review`
+`server — W1 SRV-P7B1 Worktree Cycle Executor`
 
 Component: server
 Path: crates/haze-sync-server
 Branch: component/server
 PR: #45
-Role: clean-code-reviewer
+Role: implementation-worker
 
 Work only through the GitHub connector. Do not merge the PR, change its draft state, rebase, reset, rewrite history, force-push, modify `main`, modify `component/worktree`, or modify sibling branches.
 
-## Accepted implementation evidence
+## Accepted baseline
 
-Review the completed SRV-P7A implementation at the exact final code-bearing SHA:
+SRV-P7A is fully accepted:
 
-- final_code_bearing_sha: `37706634fd8dd2d9b299a1c453718f2de63981d0`
-- authoritative workflow: `Component CI`
-- workflow_run_id: `29161721748`
-- run_number: `1704`
-- status: `completed`
+- implementation: `SELF_ACCEPT`
+- CI fixer: `FIX_COMPLETE`
+- clean-code review: `CLEAN_ACCEPT`
+- final reviewed code-bearing SHA: `37706634fd8dd2d9b299a1c453718f2de63981d0`
+- authoritative Component CI run: `29161721748`
+- run number: `1704`
 - conclusion: `success`
 - passed gates: cargo fmt, cargo check, cargo test, cargo clippy, Finalize CI diagnostics
 
@@ -29,134 +30,194 @@ Accepted Worktree fan-in source:
 - source branch: `component/worktree`
 - source SHA: `4f7bc748d9b901d7d5c3e43c845ba407c0c36e59`
 - source CI run: `29152965199`, run number `1665`, conclusion `success`
-- synchronized product inventory: `32/32` destination blobs identical to the exact source paths
+- synchronized product files: `32/32` exact destination/source blob identity
 - non-identical synchronized files: none
 - Worktree `control/**`, prompt, report, state, and workflow files copied: none
 
-The post-implementation fixer used exact diagnostics artifact `8250773210`, found only rustfmt differences, changed no behavior, and produced the green run above.
+The active Server boundary currently:
+
+- maps all shared adapter modes explicitly;
+- keeps Disabled inert;
+- keeps DryRun unsupported;
+- constructs, starts, retains, and shuts down the composition boundary safely;
+- reports enabled modes as `Unavailable(CycleExecutorNotWired)`;
+- does not yet execute a real Core/API/Storage-backed Worktree cycle.
+
+## Why this is a bounded mini-phase
+
+This phase is `SRV-P7B1`, not the whole of broad SRV-P7B. Its purpose is to determine and implement the smallest real cycle-execution bridge supported by the already accepted public contracts.
+
+Do not combine this with an unbounded scheduler, watcher implementation, public status route, deployment topology, CLI integration, provider integration, or new configuration vocabulary.
 
 ## Required reads
 
 Before editing, read:
 
-- project implementation manifest, report template, clean-code-reviewer prompt, and GitHub connector guidance;
-- this active prompt and current Server control state;
-- Server component contract, implementation plan, dependency map, decisions, implementation log, Cargo manifest, `src/main.rs`, configuration/state/readiness/routes, and `src/worktree_runtime.rs`;
-- accepted Worktree runtime contract and public runtime types already synchronized into this branch;
-- archived SRV-P7A implementation prompt;
-- archived SRV-P7A report-recovery prompt and report;
-- archived SRV-P7A-FIX implementation prompt and report;
-- archived FIX-SRV-P7A-CI fixer prompt and report;
-- the relevant Server and Worktree product diff for SRV-P7A.
+- project implementation manifest, report template, implementation-worker prompt, and GitHub connector guidance;
+- current Server control state and this prompt;
+- archived SRV-P7A implementation, recovery, fixer, and clean-review prompt/report evidence;
+- Server component contract, implementation plan SRV-P7 section, dependency map, decisions, implementation log, Cargo manifest, `src/main.rs`, `src/worktree_runtime.rs`, config, state, readiness, route transaction helpers, and existing Core/API/Storage integration code;
+- accepted Worktree contract/docs and all public scanner, import-planning, guarded-delete, reconciliation, materialization, trash, echo-guard, and runtime-cycle interfaces already synchronized into this branch;
+- Core/API/Storage public contracts used by existing PUT, DELETE, changes, current-revision, content retrieval, conflict preservation, operation-log, and object-store paths.
 
-Do not download or read CI diagnostics artifacts. The active code-bearing CI is green and this prompt does not authorize diagnostics access.
+Do not read or download CI diagnostics artifacts unless a new CI run fails and the Orchestrator later assigns a fixer prompt with exact artifact metadata.
 
-## Review scope
+## Part A — Mandatory contract-feasibility audit
 
-Review the complete SRV-P7A result, with primary attention to Server-owned code:
+Before product edits, prove whether the current accepted contracts can support a real Server-owned implementation of `WorktreeRuntimeCycle` without architectural violations.
 
-- `crates/haze-sync-server/Cargo.toml` dependency direction and necessity;
-- `crates/haze-sync-server/src/main.rs` construction, ownership, startup, serve, shutdown, and error paths;
-- `crates/haze-sync-server/src/worktree_runtime.rs` mode mapping, lifecycle state machine, safe status/debug output, tests, and complexity;
-- factual accuracy of the SRV-P7A implementation-log entry;
-- exact preservation of the accepted Worktree snapshot.
+Verify explicitly:
 
-## Required review questions
+1. how a cycle obtains authoritative Worktree state and Core revisions;
+2. how local put/delete facts can reuse accepted Core/API/Storage transaction semantics instead of duplicating route policy;
+3. how bounded authoritative exports can retrieve revision metadata and bytes;
+4. how Worktree applied-state/reconciliation state is loaded and persisted, if persistence is required;
+5. whether the synchronous `WorktreeRuntimeCycle::run_cycle` contract can safely compose the current asynchronous SQLx/Tokio Server/Storage interfaces;
+6. whether existing config provides every value needed for a real executor and deterministic invocation;
+7. whether implementation would require nested runtimes, `block_on`, route self-calls, fake clients, in-memory production-only state, hidden globals, or duplicated transaction/policy code.
 
-Correctness and lifecycle:
+If the accepted contracts are insufficient, do not improvise. Write an implementation report with:
 
-1. Is `worktree_runtime.rs` definitely part of the active crate graph and compiled test target?
-2. Is `ServerWorktreeRuntime` constructed from the existing configured mode and root before config ownership is moved?
-3. Is `start` called exactly once?
-4. Is the boundary retained for the entire serve lifetime?
-5. Is `shutdown` attempted exactly once after both successful and failed serve completion?
-6. Can an error path accidentally skip shutdown, double-start, double-shutdown, or restart after shutdown?
-7. Are lifecycle failures mapped to stable, secret-safe startup errors?
+- `STATUS: BLOCKED_BY_CONTRACT`;
+- the exact missing or incompatible contract;
+- exact source locations proving the mismatch;
+- the minimum owner component and API change required;
+- why any tempting workaround would be unsafe or architecturally invalid;
+- no speculative product implementation.
 
-Behavioral honesty:
+A truthful contract blocker is an acceptable outcome for this mini-phase.
 
-8. Is Disabled completely inert?
-9. Are enabled modes honestly unavailable with `CycleExecutorNotWired`, without appearing healthy or operational?
-10. Is DryRun explicitly unsupported rather than silently mapped to another mode?
-11. Is there any fake watcher, executor, scan/import/export loop, mutation, provider call, repair execution, or background task?
-12. Does dependency-free router/state construction remain unchanged?
+## Part B — Implementation, only if current contracts are sufficient
 
-Clean code and tests:
+If and only if Part A proves the existing contracts are sufficient, implement the smallest real Server-owned cycle executor bridge.
 
-13. Are module boundaries, naming, ownership, and helper abstractions proportionate and clear?
-14. Is there unnecessary duplication or complexity in lifecycle orchestration?
-15. Do tests prove exhaustive mode mapping, disabled inertness, explicit start/shutdown semantics, shutdown after success and failure, restart prevention, and redaction?
-16. Do any tests overclaim real Worktree execution that remains deferred to SRV-P7B?
-17. Are absolute roots, database URLs, tokens, raw filesystem errors, or internal debug payloads exposed through status, Debug, Display, logs, or errors?
+Required properties:
 
-Contract and fan-in:
+1. Implement a real `WorktreeRuntimeCycle` adapter in Server-owned code.
+2. Reuse accepted Core/API/Storage services or extracted transaction boundaries; do not invoke Server HTTP routes internally.
+3. Do not reimplement Core base-revision, conflict, delete-guard, idempotency, or overwrite policy inside the executor.
+4. For modes that observe/import local state, require an authoritative full scan before planning any local facts.
+5. Respect `max_import_actions`, `max_delete_candidates`, and `max_export_actions` exactly.
+6. Never submit more imports than were planned.
+7. Preserve conflict-saving and tombstone semantics through the accepted Core/API/Storage path.
+8. For export-capable modes, materialize only authoritative bounded revisions/changes and preserve dirty local changes through Worktree’s accepted deferral/import contract.
+9. Keep Disabled inert and DryRun unsupported.
+10. Return only accepted safe `WorktreeRuntimeCycleFailure` categories; do not expose DB URLs, absolute roots, tokens, raw SQLx/I/O errors, request bodies, or internal debug payloads.
+11. Do not create a fake watcher or executor.
+12. Do not claim hosted periodic execution unless a real, explicit, bounded host invocation is implemented and tested.
+13. If only a deterministic explicit one-cycle bridge is possible with current config, keep periodic/background hosting honestly deferred to `SRV-P7B2` and report that limitation precisely.
+14. Preserve the accepted 32-file Worktree snapshot exactly; no edits under `crates/haze-sync-worktree/**`.
 
-18. Does Server remain composition-only rather than embedding Worktree policy or provider behavior?
-19. Are all 32 accepted Worktree product files still exact and unchanged?
-20. Were any Worktree control/workflow files introduced after the recovery audit?
-21. Are real Core/API/Storage-backed cycle execution and hosted runtime behavior still clearly deferred to SRV-P7B?
+## Async/sync hard rule
 
-## Allowed changes
+The Worktree runtime cycle trait is synchronous while Server/Storage may use async SQLx/Tokio interfaces.
 
-You may make only narrowly justified clean-code or correctness changes inside:
+Forbidden workarounds:
 
-- `crates/haze-sync-server/src/main.rs`
+- creating a nested Tokio runtime;
+- calling `Handle::block_on` from an async runtime thread;
+- using ad hoc blocking around async DB operations;
+- spawning detached tasks and returning a fabricated synchronous summary;
+- using test doubles or in-memory repositories in production wiring;
+- calling localhost HTTP routes as an internal client;
+- weakening the Worktree runtime contract.
+
+If this boundary cannot be implemented correctly with current contracts, return `BLOCKED_BY_CONTRACT`.
+
+## Tests
+
+If implementation proceeds, add focused Server-local tests proving:
+
+- full scan precedes local fact planning where required;
+- mode permissions are enforced for import and export work;
+- all three budgets are hard bounds;
+- import counts cannot exceed planned counts;
+- Core/API/Storage failures map to safe cycle categories;
+- conflict/tombstone outcomes are preserved;
+- dirty local content is not overwritten by exports;
+- Disabled performs no filesystem, DB, object-store, or mutation work;
+- DryRun remains unsupported;
+- no absolute root, DB URL, token, raw SQLx/I/O error, or request body appears in status/errors/debug output;
+- any explicit invocation lifecycle is deterministic, cancellable where applicable, and does not overlap cycles;
+- dependency-free router/state tests remain unchanged.
+
+Do not weaken or delete existing tests.
+
+## Allowed files
+
 - `crates/haze-sync-server/src/worktree_runtime.rs`
-- Server-local tests in those files
-- `crates/haze-sync-server/docs/implementation-log.md` only for factual correction
+- a new Server-local module under `crates/haze-sync-server/src/` only when narrowly required for the real executor bridge
+- `crates/haze-sync-server/src/main.rs` only for explicit bounded invocation/composition changes
+- existing Server-local transaction/service helpers only when necessary to expose reusable, behavior-preserving internal boundaries
+- Server-local tests for those files
+- `crates/haze-sync-server/docs/implementation-log.md`
+- `crates/haze-sync-server/docs/decisions.md` only for a factual decision record
 - `crates/haze-sync-server/control/report.md`
 
-If a required correction needs another Server-local product file, Cargo dependency change, public route/DTO change, or any sibling component change, do not expand silently. Report `CLEAN_BLOCKED_BY_SCOPE` or `CLEAN_BLOCKED_BY_CONTRACT` with the exact required change.
+If implementation requires changes outside this list, report `BLOCKED_BY_SCOPE` or `BLOCKED_BY_CONTRACT`; do not expand silently.
 
 ## Forbidden scope
 
 - no changes under `crates/haze-sync-worktree/**`;
-- no Core/API/Storage/Common/GDrive/Obsidian/CLI/Deployment changes;
-- no Cargo dependency or feature changes;
+- no Core/API/Storage/Common/GDrive/Obsidian/CLI/Deployment source changes;
+- no Cargo dependency or feature changes unless an existing accepted dependency is merely used;
+- no migrations or schema changes;
 - no new HTTP route or public DTO;
-- no SRV-P7B cycle executor, watcher, polling loop, import/export runtime, persistence wiring, or provider integration;
-- no hidden global or unbounded/background task;
+- no public readiness/status contract change;
+- no new environment variable or configuration field;
+- no watcher implementation;
+- no unbounded or detached background task;
+- no provider calls;
 - no hard delete or automatic destructive repair;
 - no workflow changes;
-- no test deletion or assertion weakening;
 - no unrelated cleanup;
 - do not archive control files.
 
 ## CI policy
 
-- If you change product source, tests, or documentation, commit normally and require a new code-bearing Component CI run.
-- Do not use CI skip for source, tests, docs, manifests, dependencies, or validation changes.
-- If no product change is required, the existing green code-bearing run `29161721748` is valid evidence; only the final report-only commit may use `[skip ci]`.
-- A skipped run is never CI evidence.
+If product source, tests, or docs change, commit normally and require a new code-bearing Component CI run.
+
+Required gates:
+
+- cargo fmt;
+- cargo check;
+- cargo test;
+- cargo clippy with warnings denied;
+- Finalize CI diagnostics.
+
+CI skip is permitted only for the final report-only commit. A skipped run is never code-bearing evidence.
+
+If CI fails, do not inspect raw job logs or guess. Record the exact failing run and stop; the Orchestrator will retrieve exact diagnostics artifact metadata and assign a fixer.
 
 ## Report
 
-Write only `crates/haze-sync-server/control/report.md` using `report-template.md`.
+Write `crates/haze-sync-server/control/report.md` using `report-template.md`.
 
 Set:
 
-- `REPORT_TYPE: CLEAN_CODE_REVIEW`
-- `phase_id: SRV-P7A-CLEAN`
-- `chat_name: server — W1 SRV-P7A Clean-Code Review`
+- `REPORT_TYPE: IMPLEMENTATION`
+- `phase_id: SRV-P7B1`
+- `chat_name: server — W1 SRV-P7B1 Worktree Cycle Executor`
 
-Use an honest status from:
+Use an honest status, including as applicable:
 
-- `CLEAN_ACCEPT`
-- `CLEAN_ACCEPT_PENDING_CI`
-- `CLEAN_NEEDS_FIX`
-- `CLEAN_BLOCKED_BY_CONTRACT`
-- `CLEAN_BLOCKED_BY_SCOPE`
-- `CLEAN_BLOCKED_BY_TOOLING`
+- `SELF_ACCEPT`
+- `SELF_ACCEPT_PENDING_CI`
+- `SELF_NEEDS_FIX`
+- `BLOCKED_BY_CONTRACT`
+- `BLOCKED_BY_SCOPE`
+- `BLOCKED_BY_TOOLING`
 
-The report must state:
+The report must include:
 
-- exact reviewed code-bearing SHA;
-- exact changed files, if any;
-- lifecycle and error-path findings;
-- test adequacy;
+- complete Part A contract-feasibility findings;
+- exact contracts and source paths inspected;
+- whether sync/async composition is valid;
+- exact changed files and behavior, if implementation proceeded;
+- exact tests and mode/budget guarantees;
+- exact final code-bearing SHA and authoritative CI run, if any;
 - secrecy and non-goal assessment;
-- Worktree snapshot/control-file preservation result;
-- authoritative CI evidence;
-- whether SRV-P7A is ready for Orchestrator progression to the next Server phase.
+- whether periodic/background hosting remains deferred to `SRV-P7B2`;
+- an exact next-agent recommendation.
 
-Do not implement SRV-P7B in this review.
+Do not recommend clean-code review unless implementation is complete, self-accepted, and authoritative CI is green.
