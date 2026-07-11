@@ -6,9 +6,7 @@ use haze_sync_api::contracts::headers::{
     IDEMPOTENCY_KEY_HEADER, X_BASE_REVISION_ID_HEADER, X_CONTENT_SHA256_HEADER,
 };
 use haze_sync_core::revision_service::compute_content_hash;
-use haze_sync_storage::{
-    test_support::connect_test_database_from_env, LocalObjectStore,
-};
+use haze_sync_storage::{test_support::connect_test_database_from_env, LocalObjectStore};
 use http_body_util::BodyExt as _;
 use std::{
     fs,
