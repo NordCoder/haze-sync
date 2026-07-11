@@ -7,6 +7,8 @@ status: PROMPT_READY
 active_prompt: crates/haze-sync-server/control/prompt.md
 active_report: crates/haze-sync-server/control/report.md
 active_agent_role: clean-code-reviewer
+assigned_chat_name: server — W1 SRV-STOR-TEST-SUPPORT-FAN-IN-C Clean-Code Review
+prompt_revision: chat assignment verified by Orchestrator
 
 wave: W1
 phase: SRV-STOR-TEST-SUPPORT-FAN-IN-C
