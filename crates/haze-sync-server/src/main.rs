@@ -17,6 +17,7 @@ use crate::{
     worktree_runtime::{ServerWorktreeLifecycleError, ServerWorktreeRuntime},
 };
 
+mod application;
 pub mod config;
 pub mod db;
 pub mod http;
