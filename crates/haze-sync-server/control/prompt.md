@@ -1,236 +1,293 @@
-# W1-ARCH-SRV-P7B — Resolve the Worktree async execution contract
+# W1-SRV-P7B2 — Reusable async Server application services
 
 Before starting, name this worker chat exactly:
 
-`server — W1 SRV-P7B Architecture Decision`
+`server — W1 SRV-P7B2 Application Services`
 
 Component: server
 Path: crates/haze-sync-server
 Branch: component/server
 PR: #45
-Role: architect
+Role: implementation-worker
 
-Work only through the GitHub connector. Do not merge the PR, change its draft state, rebase, reset, rewrite history, force-push, modify `main`, modify sibling branches, or implement product code.
+Work only through the GitHub connector. Do not merge the PR, change its draft state, rebase, reset, rewrite history, force-push, modify `main`, modify sibling branches, or implement Worktree runtime hosting.
 
-## Trigger
+## Accepted architecture authority
 
-SRV-P7B1 completed its mandatory feasibility audit and returned `BLOCKED_BY_CONTRACT`. The archived evidence is:
+The completed architecture phase `ARCH-SRV-P7B-CONTRACTS` returned `ARCHITECT_CHANGED_CONTRACTS` and accepted one target architecture.
 
-- prompt: `crates/haze-sync-server/control/log/20260711-184500Z-W1-SRV-P7B1-implementation-worker-prompt.md`
-- report: `crates/haze-sync-server/control/log/20260711-184500Z-W1-SRV-P7B1-implementation-worker-report.md`
+Authoritative evidence:
 
-The blocker is architectural, not a local implementation defect:
+- documentation-bearing SHA: `b98f5079ed90ccf7eaec79e617ae591e0c308ff4`
+- Component CI run: `29165123142`, run number `1719`, conclusion `success`
+- final architecture report-only commit: `22b5e993431a1c0a858716ac835a3ece8ade6d5c`
+- archived architecture report: `crates/haze-sync-server/control/log/20260711-191500Z-W1-ARCH-SRV-P7B-CONTRACTS-architect-report.md`
 
-1. Worktree runtime scheduling and `WorktreeRuntimeCycle::run_cycle` are synchronous.
-2. Authoritative Server/Storage operations are asynchronous SQLx/Tokio operations.
-3. Correct PUT/DELETE/conflict/idempotency/export behavior is currently embedded in private async route orchestration rather than reusable internal services.
-4. Durable Worktree applied/reconciliation state and export-cursor contracts are not accepted.
-5. Runtime budgets and invocation policy are absent from accepted configuration.
+The chosen design places reusable asynchronous application transaction services in Server. HTTP routes and the future Worktree executor must consume the same services. Routes remain transport adapters; Core remains the policy owner; Storage remains passive and caller-transaction-owned.
 
-Changing only Server implementation code is insufficient. Forbidden workarounds include nested Tokio runtimes, `Handle::block_on`, ad hoc blocking, internal HTTP self-calls, detached tasks with fabricated synchronous summaries, duplicated route policy, and fake in-memory production state.
+Accepted Server baseline:
 
-## Accepted baseline
-
-SRV-P7A remains fully accepted:
-
-- implementation: `SELF_ACCEPT`
-- fixer: `FIX_COMPLETE`
-- clean review: `CLEAN_ACCEPT`
-- final code-bearing SHA: `37706634fd8dd2d9b299a1c453718f2de63981d0`
+- SRV-P7A final code-bearing SHA: `37706634fd8dd2d9b299a1c453718f2de63981d0`
 - Component CI run: `29161721748`, run number `1704`, conclusion `success`
+- SRV-P7A clean status: `CLEAN_ACCEPT`
+- existing Worktree composition remains honestly unavailable until later SRV-P7B3/P7B4 phases.
 
-Accepted Worktree snapshot:
+Parallel owner phases:
 
-- source: `component/worktree@4f7bc748d9b901d7d5c3e43c845ba407c0c36e59`
-- source CI: `29152965199`, run number `1665`, conclusion `success`
-- synchronized product files: `32/32` exact blob identity
-
-Do not reopen accepted SRV-P7A behavior except where the new contract decision explicitly requires a later owner-component change.
+- `WT-P10` changes the Worktree-owned awaitable runtime contract on `component/worktree`;
+- `STOR-P10` adds durable Worktree state/cursor repositories on `component/storage`;
+- this phase must not depend on unaccepted intermediate commits from either branch.
 
 ## Required reads
 
-Read before deciding:
+Before editing, read:
 
-- project implementation manifest, report template, GitHub connector guidance, and architecture/worker process rules;
-- current Server state and this prompt;
-- the archived SRV-P7B1 prompt/report;
-- all archived SRV-P7A implementation, recovery, fixer, and clean-review evidence;
-- Server component contract, implementation plan, dependency map, decisions, implementation log, Cargo manifest, config, startup, state, readiness, `worktree_runtime.rs`, route transaction helpers, repository use, and object-store integration;
-- Worktree component contract, runtime-service docs, dependency map, decisions, scanner/import/delete/reconciliation/materialization/echo/trash public interfaces, and runtime traits;
-- Storage contracts, repository traits, migrations/tables related to operation log, revisions, conflicts, idempotency, tombstones, adapter/worktree state, and any existing worktree-state schema;
-- Core/API contracts governing base revisions, conflicts, deletes, idempotency, changes, and public/internal DTO ownership;
-- CLI and Deployment blockers that depend on accepted Server runtime/operator fan-in.
+- project implementation manifest, report template, implementation-worker prompt, and GitHub connector guidance;
+- current Server control state and this prompt;
+- archived architecture prompt/report and updated Server contract/plan/dependency-map/decisions/log at exact SHA `b98f5079ed90ccf7eaec79e617ae591e0c308ff4`;
+- Server Cargo manifest, state, object-store integration, HTTP error mapping, auth/actor types, all file PUT/GET/changes routes, DELETE routes, conflict routes, planning/persistence helpers, transaction helpers, advisory-lock usage, idempotency handling, operation-log/revision/content repositories, and DB-backed tests;
+- Core contracts for base revision, same-content, conflict preservation, delete guard, tombstone and idempotency decisions;
+- API contracts for request parsing and public DTO/status/error ownership;
+- Storage repository contracts currently consumed by Server.
 
-Do not read CI diagnostic artifacts. This is an architecture pass, not a fixer pass.
+Do not read CI diagnostics artifacts unless a later exact fixer prompt authorizes them.
 
-## Required architecture decision
+## Goal
 
-Produce one preferred target architecture. Do not return a menu of equally ranked options.
+Extract and implement one reusable asynchronous internal application-service layer that owns correct transaction orchestration for file mutation, guarded delete, authoritative changes, and revision-content retrieval.
 
-You must resolve all four decision areas below.
+Both HTTP routes and the future Worktree executor must be able to call the same typed services without invoking HTTP handlers or duplicating Core/transaction policy.
 
-### Decision A — Async Worktree runtime boundary
+This phase does not implement a Worktree executor, scheduler, host task, runtime status route, Storage migration, or public API change.
 
-Choose the exact async-compatible contract and ownership model that replaces or supplements the incompatible synchronous cycle boundary.
+## Target module boundary
 
-Evaluate at minimum:
+Prefer the accepted architecture names unless current code proves a narrower equivalent is cleaner:
 
-- making the Worktree runtime service and cycle executor natively async;
-- keeping synchronous filesystem primitives but introducing an async host/executor orchestration layer;
-- preserving a synchronous scheduler only if it can remain correct without blocking async authoritative operations.
+- `src/application/mod.rs`
+- `src/application/files.rs`
+- `src/application/deletes.rs`
+- `src/application/changes.rs`
+- `src/application/idempotency.rs`
+- `ServerApplicationServices`
+- `ApplicationActor`
+- `ApplyFileCommand` / `ApplyFileOutcome`
+- `ApplyDeleteCommand` / `ApplyDeleteOutcome`
+- `AuthoritativeChangesQuery` / `AuthoritativeChangeBatch`
+- `RevisionContentQuery` / `AuthoritativeRevisionContent`
+- `ApplicationError`
 
-The chosen design must specify:
+Do not create a generic framework. Keep the boundary explicit, typed, Server-internal, and aligned with current route behavior.
 
-- exact trait/type ownership by component;
-- proposed method signatures at contract level;
-- whether `poll`, `run_cycle`, or both become async-compatible;
-- cancellation and shutdown semantics;
-- at-most-one-cycle/no-overlap guarantees;
-- watcher-hint and periodic full-scan correctness;
-- safe failure and count-only status mapping;
-- compatibility/migration path for existing Worktree tests and public types;
-- why the rejected designs are inferior or unsafe.
+## Required operations
 
-Do not solve this with blocking or hidden task spawning.
+### 1. File create/update application service
 
-### Decision B — Reusable Server application-service boundary
+Implement an async service operation equivalent to current correct PUT behavior.
 
-Define the internal async service layer that both HTTP routes and Worktree execution will use.
+Input must already be normalized/validated internal data and include:
 
-Specify concrete service operations and contracts for at least:
+- actor/source identity;
+- vault path;
+- explicit known or null base revision;
+- content hash and bytes;
+- durable idempotency metadata/fingerprint.
 
-- import/create-or-update from a normalized local Worktree fact;
-- guarded local delete/tombstone submission;
-- bounded authoritative changes/export retrieval;
-- revision metadata and content retrieval needed for materialization;
-- conflict-saving outcomes;
-- idempotency ownership and key derivation for non-HTTP Worktree operations;
-- transaction, advisory-lock, object-store, operation-log, and commit ownership.
+The service owns:
 
-The architecture must guarantee that:
+- durable idempotency lookup and same-key fingerprint comparison;
+- SQLx transaction begin;
+- normalized path advisory lock;
+- authoritative current object/revision read;
+- Core planning/decision;
+- content-addressed object-store coordination;
+- object/revision/current-state persistence;
+- conflict preservation where Core requires it;
+- operation-log append;
+- safe replay outcome persistence;
+- commit or rollback.
 
-- routes become transport adapters over reusable services rather than the only owners of correct behavior;
-- Core policy is not duplicated in Server;
-- Worktree never calls HTTP handlers internally;
-- Worktree execution receives typed outcomes compatible with its accepted planning/materialization contracts;
-- route behavior and public API shapes remain backward-compatible.
+Typed outcomes must preserve at least:
 
-Name the proposed Server modules/types and identify which existing private route helpers should be extracted, retained, or deleted in later implementation phases.
+- accepted authoritative revision/content metadata;
+- same-content replay/no-op with authoritative metadata;
+- conflict saved with safe conflict identity/path metadata already allowed internally;
+- stale/invalid-base/unsafe/policy rejection;
+- idempotency mismatch;
+- safe not-found/internal categories where applicable.
 
-### Decision C — Durable Worktree state and cursor persistence
+Do not return public API DTOs from application services.
 
-Choose the owner and contract for:
+### 2. Guarded delete application service
 
-- last-applied Worktree path/revision/content-hash state;
-- reconciliation state;
-- authoritative export cursor/checkpoint;
-- runtime counters/status that must survive restart, if any;
-- atomicity between accepted Core mutations/materialization and state advancement.
+Implement an async service operation equivalent to current correct DELETE behavior.
 
-Determine whether the existing Storage schema is sufficient. If not, define the minimum migration/schema change and repository interfaces without implementing them.
+Input must include:
 
-Specify:
+- actor/source identity;
+- vault path;
+- explicit known or null base revision as accepted by current contract;
+- delete-guard metadata required by Core;
+- durable idempotency metadata/fingerprint.
 
-- owning component;
-- data model and keys;
-- serialization/versioning policy;
-- load/save/update transaction semantics;
-- crash/restart behavior;
-- cursor advancement rules;
-- whether state is per adapter instance, vault, root, or another identity;
-- cleanup/retention policy;
-- tests required to prove no skipped export, duplicate unsafe import, or false last-applied state.
+The service owns:
 
-Production-only in-memory state is not acceptable.
+- idempotency lookup/fingerprint comparison;
+- SQLx transaction and advisory path lock;
+- current object/revision read;
+- Core delete-guard evaluation;
+- tombstone persistence and current-state clearing;
+- operation-log append;
+- idempotent replay outcome persistence;
+- commit/rollback.
 
-### Decision D — Runtime policy, configuration, and invocation
+Typed outcomes must preserve tombstoned, not-found, rejected/guarded, stale/invalid base, replay, and safe failure semantics. No hard delete, filesystem trash, or provider side effect.
 
-Define accepted ownership and defaults for:
+### 3. Bounded authoritative changes service
 
-- import/delete/export budgets;
-- periodic correctness interval;
-- watcher hint debounce and hint budget;
-- explicit one-cycle/manual invocation, if retained;
-- adapter identity and durable-state binding;
-- startup behavior;
-- cancellation and graceful shutdown;
-- readiness/status semantics;
-- disabled, read-only, import-only, export-only, bidirectional, and DryRun behavior.
+Implement an async read service for ordered authoritative changes:
 
-Choose whether values are:
+- input: internal cursor/sequence position and explicit bounded limit;
+- output: ordered change records plus `from`, `to`, and `has_more` semantics compatible with current changes behavior;
+- use existing operation-log repository contracts;
+- reject zero/unbounded/unsafe limits;
+- do not expose raw external cursor JSON, database details, or provider payloads.
 
-- explicit config fields;
-- deterministic documented defaults;
-- or a bounded mixture of both.
+This service will later feed the Worktree executor but must also preserve current HTTP changes-route behavior.
 
-No hidden unbounded background work is allowed. Any hosted loop must be explicit, cancellable, bounded, observable through safe status, and owned by a named component.
+### 4. Revision metadata and content retrieval service
 
-## Required phased execution plan
+Implement an async read service that returns verified authoritative revision metadata and bytes needed for materialization:
 
-Convert the architecture into small owner-aligned implementation phases. At minimum decide whether separate phases are required for:
+- resolve the requested authoritative path/revision through existing Storage repositories;
+- load content-addressed bytes through the object store;
+- verify expected metadata/hash consistency using existing accepted utilities;
+- return a typed internal outcome;
+- map missing/corrupt/unavailable conditions to stable safe categories without raw path, DB URL, SQLx/I/O error, or bytes in Debug/Display.
 
-1. Worktree async runtime contract change;
-2. Server reusable application-service extraction;
-3. Storage durable state/cursor repository and migration;
-4. Server real bounded Worktree cycle executor;
-5. Server hosted scheduling/startup/shutdown integration;
-6. safe status/readiness integration;
-7. CLI operator commands;
-8. Deployment runtime/config fan-in.
+Do not perform Worktree filesystem materialization in this phase.
 
-For each phase provide:
+## Actor and idempotency ownership
 
-- phase ID and exact suggested chat name;
-- owner component and branch;
-- role;
-- prerequisites;
-- allowed files;
-- forbidden scope;
-- deliverables;
-- test/CI requirements;
-- clean-code review gate;
-- downstream unblocks.
+Define `ApplicationActor` or an equivalent internal source identity that distinguishes HTTP principals from future Worktree execution without importing HTTP DTOs into service contracts.
 
-The order must prevent two branches from independently defining the same contract. Contract-owner phases must precede consumers.
+Preserve HTTP client-supplied idempotency behavior exactly.
 
-## Required documentation changes
+Add deterministic Worktree idempotency derivation helpers for future use, following the accepted architecture vocabulary:
 
-This architect may update only Server-owned documentation on `component/server`:
+- put: `wt:v1:<adapter_id>:put:<path_hash>:<base_or_null>:<content_hash>`
+- delete: `wt:v1:<adapter_id>:delete:<path_hash>:<base_or_null>`
 
+Requirements:
+
+- use normalized vault-path hashing, never raw path text in the key where the architecture requires `path_hash`;
+- output is deterministic and retry-stable;
+- equivalent normalized inputs yield identical keys/fingerprints;
+- materially different path/base/hash inputs cannot alias in tests;
+- key values are never logged, displayed, exposed in status, or returned in public errors;
+- do not invoke Worktree execution from these helpers.
+
+If existing idempotency repository constraints require a typed adaptation, keep it Server-internal and document it. Do not change public API headers or DTOs.
+
+## Route delegation and parity
+
+Refactor existing routes to call the application services.
+
+Routes must retain ownership only of:
+
+- HTTP path/header/body parsing through API contracts;
+- authentication and authorization mapping;
+- construction of normalized internal commands;
+- translation of typed application outcomes/errors into existing public API DTOs/status codes.
+
+Extract or retire current private route helpers only after parity tests prove the new service path preserves behavior.
+
+Do not leave two independent production implementations of PUT or DELETE transaction choreography. Temporary test-only comparison helpers may exist only within the same phase and must be removed before self-acceptance.
+
+## Required compatibility
+
+Preserve exactly:
+
+- all existing public routes, methods, headers, request/response DTOs, status codes, and safe error bodies;
+- Core ownership of overwrite/conflict/delete policy;
+- Storage caller-transaction ownership;
+- advisory-lock and atomic commit behavior;
+- content-addressed object-store replay safety;
+- conflict-saving and tombstone semantics;
+- dependency-free router construction and passive-safe tests;
+- SRV-P7A startup/worktree composition behavior;
+- no provider calls, hard delete, repair execution, or hidden background work.
+
+A DB rollback may leave an unreferenced content-addressed blob, but it must never make that blob authoritative without committed metadata. Preserve current cleanup/non-cleanup contract; do not add destructive orphan cleanup.
+
+## Tests
+
+Add focused unit and DB-backed integration/parity tests proving:
+
+- file service accepted, same-content, stale/invalid-base, conflict-saved, idempotent replay, and same-key/different-fingerprint behavior;
+- delete service tombstone, guard rejection, not-found, replay, stale/invalid-base, and rollback behavior;
+- advisory locking and transaction ownership remain correct;
+- operation-log and idempotency records commit atomically with authoritative mutation;
+- failed transactions do not leave authoritative current-state/revision/conflict/tombstone/log/idempotency claims;
+- route outputs for representative PUT/DELETE/changes/GET cases are byte/DTO/status compatible before and after extraction;
+- changes service ordering, bounds, `from/to/has_more`, and empty results;
+- revision-content service detects missing metadata/blob and hash inconsistency safely;
+- deterministic Worktree idempotency derivation is stable, domain-separated, and secret-safe;
+- application-service Debug/Display/error output contains no DB URL, tokens, idempotency keys, raw vault/local paths beyond already accepted safe vault-relative context, request bytes, SQLx/I/O error, or internal payload;
+- dependency-free router tests remain unchanged and no database work occurs during router construction.
+
+Mandatory DB-backed acceptance tests must use the established strict test-support path and run in Component CI. Do not silently treat required DB tests as optional/not-run.
+
+## Allowed files
+
+- `crates/haze-sync-server/src/application/**`
+- `crates/haze-sync-server/src/routes/v1.rs`
+- `crates/haze-sync-server/src/routes/v1/**`
+- `crates/haze-sync-server/src/routes/delete.rs` and current delete submodules
+- current GET/changes/conflict route modules only where needed to delegate to read/application services
+- `crates/haze-sync-server/src/state.rs` only for explicit service construction/access
+- existing Server-local transaction/error/idempotency helpers narrowly required by extraction
+- Server-local unit and DB-backed tests for the above
+- `crates/haze-sync-server/src/main.rs` only if module declaration/export is required; no startup/lifecycle behavior change
 - `crates/haze-sync-server/docs/component-contract.md`
 - `crates/haze-sync-server/docs/implementation-plan.md`
 - `crates/haze-sync-server/docs/dependency-map.md`
 - `crates/haze-sync-server/docs/decisions.md`
 - `crates/haze-sync-server/docs/implementation-log.md`
+- a focused application-services doc if useful
 - `crates/haze-sync-server/control/report.md`
 
-Use Server docs to record the accepted cross-component decision and the required owner-component follow-up phases. Do not modify Worktree, Storage, Core, API, Common, CLI, Deployment, source code, Cargo manifests, migrations, workflows, or sibling control files in this branch.
+If another Server-local file is compile-proven necessary, document the exact need. Do not modify sibling components.
 
-If the correct decision cannot be made from current evidence, return `ARCHITECT_BLOCKED` and state the exact missing evidence. Do not invent contracts.
+## Forbidden scope
 
-## Architecture invariants
-
-The final decision must preserve:
-
-- Core ownership of sync/conflict/delete policy;
-- API ownership of public HTTP DTOs and parsing;
-- Storage ownership of durable persistence primitives;
-- Worktree ownership of scanning, planning, reconciliation, materialization, echo suppression, trash, and runtime scheduling primitives;
-- Server ownership of runtime composition, application-service transactions, and host lifecycle;
-- no provider behavior inside generic Server routes;
-- no hard delete;
-- no automatic destructive repair;
-- no raw secrets, DB URLs, tokens, absolute roots, raw SQLx/I/O errors, or internal payloads in status/errors/logs;
-- dependency-free router tests and existing public route behavior;
-- accepted Worktree snapshot behavior until an explicit Worktree-owner contract phase changes it.
+- no changes under `crates/haze-sync-worktree/**` or `crates/haze-sync-storage/**`;
+- no migration/schema changes;
+- no Worktree concrete executor, scanner/reconciliation/materialization composition, runtime polling, host task, watcher, or scheduling;
+- no Server config/runtime-policy/status/readiness changes for future hosted Worktree behavior;
+- no new public route, DTO, header, status vocabulary, or API contract;
+- no Core policy change;
+- no provider behavior or internal HTTP self-calls;
+- no nested runtime, `block_on`, detached task, or background loop;
+- no hard delete, destructive cleanup, or automatic repair;
+- no Cargo dependency/feature change unless compile-proven and explicitly reported as a blocker before expansion;
+- no workflow changes;
+- no unrelated cleanup;
+- do not archive control files.
 
 ## CI policy
 
-Documentation changes must run Component CI normally. Do not use CI skip for contract, plan, dependency-map, decision, or implementation-log changes.
+All source/test/docs changes must run normal Component CI.
 
-Only the final report-only commit may use `[skip ci]`. A skipped run is not architecture validation evidence.
+Required gates:
 
-If docs CI fails, record the exact run and stop. Do not inspect raw logs or guess; Orchestrator will route an artifact-based fixer if required.
+- cargo fmt;
+- cargo check;
+- cargo test, including mandatory DB-backed parity tests;
+- cargo clippy with warnings denied;
+- Finalize CI diagnostics.
+
+Only the final report-only commit may use `[skip ci]`. If CI fails, record the exact code-bearing SHA and run and stop; do not read raw logs or guess.
 
 ## Report
 
@@ -238,29 +295,17 @@ Write `crates/haze-sync-server/control/report.md` using `report-template.md`.
 
 Set:
 
-- `REPORT_TYPE: ARCHITECT_REVIEW`
-- `phase_id: ARCH-SRV-P7B-CONTRACTS`
-- `chat_name: server — W1 SRV-P7B Architecture Decision`
+- `REPORT_TYPE: IMPLEMENTATION`
+- `phase_id: SRV-P7B2`
+- `chat_name: server — W1 SRV-P7B2 Application Services`
 
-Use one honest status:
+Use an honest status:
 
-- `ARCHITECT_ACCEPT`
-- `ARCHITECT_CHANGED_CONTRACTS`
-- `ARCHITECT_NEEDS_CHANGES`
-- `ARCHITECT_BLOCKED`
+- `SELF_ACCEPT`
+- `SELF_ACCEPT_PENDING_CI`
+- `SELF_NEEDS_FIX`
+- `BLOCKED_BY_CONTRACT`
+- `BLOCKED_BY_SCOPE`
+- `BLOCKED_BY_TOOLING`
 
-The report must include:
-
-- the chosen target architecture, not only the problem statement;
-- exact contract decisions A–D;
-- rejected alternatives and rationale;
-- exact owner components for every contract;
-- compatibility and migration strategy;
-- persistence and crash-recovery semantics;
-- security/secrecy assessment;
-- phased implementation order with exact suggested chats;
-- which prompts the Orchestrator should activate next and which components remain blocked;
-- changed documentation files;
-- CI evidence for documentation changes, if any.
-
-Do not implement source code in this architecture phase.
+The report must include exact service APIs/types, extracted route helpers, parity guarantees, transaction/idempotency ownership, DB tests actually run, changed files, final code-bearing SHA, authoritative CI evidence, secrecy/non-goal assessment, and readiness for mandatory clean-code review.
