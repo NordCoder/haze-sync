@@ -10,7 +10,7 @@ Prompt: `crates/haze-sync-storage/control/prompt.md`
 
 Report: `crates/haze-sync-storage/control/report.md`
 
-## Summary
+## Implementation summary
 
 Implemented the Storage side of the accepted durable Worktree architecture.
 Migration 0010 refuses non-empty legacy path-only state before destructive SQL,
@@ -24,10 +24,39 @@ transaction-only exact-contiguous cursor advancement. The broad monotonic cursor
 API remains source-compatible for other adapters. Root fingerprints and raw
 external cursor JSON remain non-public/redacted.
 
-Test support now recognizes fresh, exact pre-P10 and exact current schemas. Pure
+Test support recognizes fresh, exact pre-P10 and exact current schemas. Pure
 checks run in Component CI. Mandatory PostgreSQL migration/state/cursor tests are
-explicitly ignored in ordinary CI and require the strict dedicated-database
+explicitly ignored in ordinary tests and require the strict dedicated-database
 command; absence of that infrastructure is not converted into a passing result.
+
+## CI correction
+
+The first STOR-P10 workflow run exposed only formatter differences and a stale
+migration-count smoke assertion. `FIX-STOR-P10-CI` corrected those issues. The
+post-fix source SHA `abca69058390983894465cef9d66c38960fae4c7` passed ordinary
+Component CI run `29167108216`.
+
+## PostgreSQL verification phase
+
+`STOR-P10-DB-VERIFY` adds a Storage-only Component CI job with:
+
+- `postgres:16-alpine` as an ephemeral service;
+- synthetic non-secret credentials and a dedicated test-named database;
+- container health checking plus a bounded explicit `pg_isready` loop;
+- `RUST_TEST_THREADS=1` for exclusive shared-database harness operations;
+- the exact command:
+
+  ```bash
+  cargo test -p haze-sync-storage --features test-support -- --ignored
+  ```
+
+- evidence validation requiring all four mandatory ignored test names to finish
+  with `ok`;
+- the standard diagnostics wrapper/finalizer and a distinct PostgreSQL-job
+  artifact name on failure.
+
+This verification job is conditioned on `component/storage`; unrelated component
+branches do not provision PostgreSQL.
 
 ## Commits
 
@@ -36,24 +65,20 @@ See the `component/storage` history beginning after accepted baseline
 
 ## Status
 
-`SELF_ACCEPT_PENDING_CI` until final source/docs Component CI completes.
+`SELF_ACCEPT_PENDING_CI` until a code-bearing workflow run proves both:
 
-Full lifecycle acceptance additionally requires execution of:
+1. the ordinary Rust workspace job is green;
+2. the Storage PostgreSQL verification job actually executes all mandatory
+   ignored tests and is green.
 
-```bash
-HAZE_SYNC_TEST_DATABASE_URL='<dedicated test DB>' \
-  cargo test -p haze-sync-storage --features test-support -- --ignored
-```
-
-If the current environment cannot provide that database, report
-`BLOCKED_BY_TOOLING` rather than claiming the PostgreSQL evidence passed.
+A green ordinary job alone is not acceptance evidence.
 
 ## Preserved boundaries
 
 - no Server runtime/executor code;
 - no Worktree filesystem or reconciliation semantics;
 - no Core/API/provider changes;
-- no workflow/dependency/sibling edits;
+- no production database secrets or external managed services;
 - no raw root persistence;
 - no hard delete;
 - caller-owned transaction boundaries preserved.
