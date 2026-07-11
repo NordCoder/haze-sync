@@ -1,531 +1,222 @@
 # Implementation Plan: server
 
-## Current state
-
-Server is a post-W3 integration shell with real route wiring for the current Core/API/Storage surfaces.
-
-Implemented responsibilities:
-
-- Axum router composition for `/health`, `/ready`, and `/v1` routes.
-- Dependency-free router construction for route-shell tests.
-- Explicit `ServerAppState` carrying optional PostgreSQL pool, local object store, config, and auth state.
-- Safe config parsing and redaction primitives.
-- Safe readiness checks for database and object-store dependencies.
-- Database migration/readiness helpers.
-- Bearer-token authentication execution through disabled/static/database auth states.
-- Runtime route wiring for server-info, file PUT/GET, changes feed, conflicts, DELETE tombstones, and read-only admin/status.
-- Transaction orchestration for PUT and DELETE routes that need multi-step Storage writes.
-- Safe internal-to-public error mapping at the route boundary.
-
-Server still intentionally does not start a production listener, own provider runtimes, run adapter loops, call Google Drive/Obsidian/worktree providers, or hard-delete data.
-
-## Target state
-
-The server component should remain the runtime composition boundary for Haze Sync:
-
-- construct and run the Axum HTTP server from explicit configuration;
-- wire API parsers/DTOs to Core policy services and Storage repositories;
-- keep route-level transaction boundaries clear and testable;
-- expose safe health/readiness/admin status surfaces;
-- execute adapter/admin auth without leaking tokens or token hashes;
-- report all internal failures through stable public error responses;
-- avoid embedding provider runtime behavior or Core policy decisions.
-
-Server is V1-ready when:
-
-- production startup/listener/graceful shutdown behavior exists and is documented;
-- config loading creates explicit runtime state without leaking secrets;
-- health/readiness/server-info/admin/status outputs are safe and honest;
-- file PUT/GET/changes routes preserve API/Core/Storage semantics under transaction discipline;
-- conflict/delete/idempotency routes are transaction-safe and policy-aligned;
-- worktree runtime composition, if hosted by Server, is integrated through the Worktree component contract;
-- adapter mode/status enforcement at runtime is explicit;
-- route tests and cross-component E2E tests cover safety-critical behavior.
-
-As later components mature, Server should integrate them only through explicit fan-in prompts and component contracts.
-
-## Implementation phases
-
-### SRV-P1 — Component contract and planning normalization
-
-Status: completed by T0-P3 plus this Architect planning pass.
-
-Goal:
-
-```text
-Keep Server docs accurate enough that future fan-in workers can modify runtime
-wiring without moving Core policy, API DTO ownership, or Storage schema behavior
-into Server.
-```
-
-Allowed scope:
-
-```text
-crates/haze-sync-server/docs/**
-crates/haze-sync-server/control/state.md when explicitly assigned by Orchestrator
-```
-
-Completed deliverables:
-
-- current server component contract;
-- dependency map;
-- implementation log entry;
-- baseline server process-test decision;
-- expanded phased implementation plan.
-
-Non-goals:
-
-- no product code changes;
-- no route refactor;
-- no runtime behavior changes;
-- no sibling component changes;
-- no CI/workflow edits.
-
-Acceptance:
-
-- docs describe current route/runtime surface;
-- docs distinguish Server runtime ownership from API/Core/Storage/adapters;
-- future server phases are implementable as explicit fan-in/integration work.
-
-### SRV-P2 — Router, state, auth, and safe error audit
-
-Goal:
-
-```text
-Audit current Server runtime shell and route behavior against component contracts,
-then harden tests/docs around passive-safe dependency-free behavior and public
-error sanitization.
-```
-
-Allowed scope:
-
-```text
-crates/haze-sync-server/src/routes/**
-crates/haze-sync-server/src/state.rs
-crates/haze-sync-server/src/http/**
-crates/haze-sync-server/src/config/**
-crates/haze-sync-server/src/readiness/**
-crates/haze-sync-server/docs/**
-```
-
-Likely work:
-
-- verify router construction remains explicit and free of hidden globals;
-- verify dependency-free router routes fail safely without mutation;
-- test auth states: disabled, static principal, database lookup failure, role checks;
-- audit `Debug` implementations for redaction;
-- test public error bodies for absence of tokens, token hashes, idempotency keys, DB URLs, object-store roots, local paths, stack traces, raw SQLx errors, and request bodies;
-- document any route that is intentionally placeholder or partial.
-
-Non-goals:
-
-- no production listener;
-- no provider runtime;
-- no broad route decomposition unless scoped;
-- no Core policy changes;
-- no Storage schema changes.
-
-Contract-change triggers:
-
-- adding hidden global runtime state;
-- changing API public error shapes inside Server;
-- moving token creation/rotation into Server routes;
-- exposing raw runtime internals in public responses.
-
-Acceptance:
-
-- route shell behavior is safe and documented;
-- auth/error boundaries are tested;
-- public outputs remain sanitized.
-
-### SRV-P3 — Production startup, config loading, listener, and graceful shutdown
-
-Goal:
-
-```text
-Turn the server binary from scaffold construction into explicit production startup
-without changing route semantics or introducing hidden behavior.
-```
-
-Allowed scope:
-
-```text
-crates/haze-sync-server/src/main.rs
-crates/haze-sync-server/src/config/**
-crates/haze-sync-server/src/db/**
-crates/haze-sync-server/src/state.rs
-crates/haze-sync-server/docs/**
-```
-
-Likely work:
-
-- load runtime config from environment/files according to accepted config contract;
-- create PostgreSQL pool and local object store from config;
-- build `ServerAppState` explicitly;
-- bind and serve Axum listener;
-- implement graceful shutdown signal handling;
-- define startup failure messages that are useful but secret-safe;
-- keep migrations policy explicit: disabled/manual/auto only if accepted by contract.
-
-Non-goals:
-
-- no adapter loops;
-- no provider calls;
-- no worktree runtime unless separately scoped;
-- no deployment scripts unless deployment component scopes them;
-- no route behavior rewrite.
-
-Contract-change triggers:
-
-- auto-running migrations without accepted policy;
-- changing configuration variable names/schema;
-- introducing production secrets into repo/tests;
-- starting background adapter jobs implicitly.
-
-Acceptance:
-
-- server can start from explicit config in a local/prod-like environment;
-- startup logs/errors are sanitized;
-- route behavior remains compatible with existing API contracts.
-
-### SRV-P4 — File PUT/GET/changes transaction fan-in hardening
-
-Goal:
-
-```text
-Harden normal file flow route integration across API/Core/Storage/ObjectStore with
-clear transaction boundaries and no silent overwrite behavior.
-```
-
-Allowed scope:
-
-```text
-crates/haze-sync-server/src/routes/v1/** or current file/changes route modules
-crates/haze-sync-server/src/state.rs
-crates/haze-sync-server/src/http/**
-crates/haze-sync-server/docs/**
-```
-
-Likely work:
-
-- ensure PUT uses API header/path parsers and Core revision outcomes;
-- acquire per-path PostgreSQL advisory lock before mutation;
-- coordinate object-store write, content-blob metadata, sync object/current revision, file revision, operation log, and idempotency response storage;
-- ensure same-content and hash-mismatch outcomes map to safe API responses;
-- implement GET file metadata/content path using Storage/ObjectStore safely;
-- implement changes feed from operation-log repository with API DTO mapping;
-- add DB-backed route tests when test support is available.
-
-Non-goals:
-
-- no conflict resolution route behavior beyond conflict-saved preservation fan-in if scoped;
-- no adapter loops;
-- no provider runtime;
-- no API DTO redesign;
-- no Storage schema change unless explicitly scoped.
-
-Contract-change triggers:
-
-- bypassing Core base-revision semantics;
-- using route-local overwrite policy;
-- storing idempotency responses with unsafe raw values;
-- leaking DB/object-store internals in route errors.
-
-Acceptance:
-
-- normal file flow works transactionally in server integration tests;
-- stale/unknown-base writes do not overwrite current content;
-- changes feed is stable and API-compatible.
-
-### SRV-P5 — Conflict, delete, and idempotency route fan-in hardening
-
-Goal:
-
-```text
-Harden Server integration for conflict preservation, conflict resolution metadata,
-delete/tombstone semantics, mass-delete guard, and durable idempotency.
-```
-
-Allowed scope:
-
-```text
-crates/haze-sync-server/src/routes/conflicts/**
-crates/haze-sync-server/src/routes/delete/**
-crates/haze-sync-server/src/routes/v1/** if file-write conflict preservation is there
-crates/haze-sync-server/src/http/**
-crates/haze-sync-server/docs/**
-```
-
-Likely work:
-
-- persist `conflict_saved` outcomes from Core as conflict-copy content/revision/row/operation entries without overwriting current revision;
-- wire conflict list/status filtering through Storage repositories and API DTOs;
-- implement only accepted conflict resolution actions and honestly return partial/not-implemented behavior where needed;
-- ensure DELETE requires base/null-base and idempotency metadata;
-- acquire path locks for delete mutations;
-- evaluate Core delete guard before tombstone persistence;
-- persist tombstones, clear current state, append operation-log entries, and store idempotency responses atomically;
-- test idempotent replay and same-key different-request conflicts.
-
-Non-goals:
-
-- no hard delete;
-- no retention cleanup job;
-- no provider/worktree trash side effects;
-- no Web UI conflict center;
-- no policy expansion such as latest-wins/incoming-wins.
-
-Contract-change triggers:
-
-- implementing hard delete;
-- adding route-local conflict/delete policy;
-- changing public conflict resolution vocabulary;
-- exposing raw conflict bytes or idempotency keys publicly.
-
-Acceptance:
-
-- conflict and delete routes preserve Core/API/Storage semantics;
-- all mutation paths are transaction-bound and locked where needed;
-- public responses remain sanitized.
-
-### SRV-P6 — Admin/status, readiness, doctor, and observability hardening
-
-Goal:
-
-```text
-Expose honest, read-only operational surfaces that help operators without leaking
-secrets, raw cursors, DB URLs, local paths, provider payloads, or stack traces.
-```
-
-Allowed scope:
-
-```text
-crates/haze-sync-server/src/routes/admin/**
-crates/haze-sync-server/src/readiness/**
-crates/haze-sync-server/src/db/**
-crates/haze-sync-server/src/http/**
-crates/haze-sync-server/docs/**
-```
-
-Likely work:
-
-- harden `/ready` and DB/object-store readiness checks;
-- map adapter summaries, cursor presence, pause support, and mode/status summaries safely;
-- add doctor route or server-side doctor inputs only when Core/API contracts exist;
-- ensure skipped/not-run checks are represented honestly;
-- add structured logs/tracing with redaction guarantees if scoped;
-- add metrics endpoint only if system scope accepts it.
-
-Non-goals:
-
-- no admin mutations by default;
-- no repair execution;
-- no token rotation;
-- no provider calls unless a provider component contract supplies safe checks;
-- no raw cursor/status payload exposure.
-
-Contract-change triggers:
-
-- adding pause/resume/admin mutation routes;
-- exposing raw runtime/provider diagnostics;
-- claiming live checks were run when they were skipped;
-- adding metrics/logging dependencies that leak secrets.
-
-Acceptance:
-
-- operational outputs are safe and useful;
-- read-only admin/status semantics remain clear;
-- doctor/readiness claims are honest.
-
-### SRV-P7 — Worktree runtime composition fan-in
-
-Goal:
-
-```text
-Integrate the Worktree runtime into Server only as composition, while keeping
-scanner/writer/materializer/repair logic owned by the Worktree component.
-```
-
-Allowed scope:
-
-```text
-crates/haze-sync-server/src/**
-crates/haze-sync-server/docs/**
-crates/haze-sync-worktree/** only if a dedicated cross-component fan-in explicitly scopes it
-```
-
-Likely work:
-
-- add config flags for worktree runtime mode only after config contract exists;
-- instantiate Worktree component services from explicit Server config/state;
-- ensure worktree import/export respects adapter mode and Core/API safety semantics;
-- expose safe status/readiness summaries;
-- implement graceful startup/shutdown coordination if background tasks are accepted;
-- preserve Worktree logic ownership outside Server.
-
-Non-goals:
-
-- no Worktree scanner/materializer logic inside Server route modules;
-- no provider/GDrive behavior;
-- no hidden background jobs by default;
-- no hard delete/trash behavior outside Worktree contract.
-
-Contract-change triggers:
-
-- moving Worktree business logic into Server;
-- starting background tasks without config/ops docs;
-- bypassing Core/API write semantics;
-- changing deployment topology.
-
-Acceptance:
-
-- Server can host Worktree runtime if configured;
-- boundaries remain clean;
-- startup/shutdown/status behavior is testable and documented.
-
-### SRV-P8 — Adapter mode enforcement and external adapter integration surfaces
-
-Goal:
-
-```text
-Provide runtime integration points for adapter modes, adapter auth, and external
-adapter clients without embedding provider runtimes in generic Server routes.
-```
-
-Allowed scope:
-
-```text
-crates/haze-sync-server/src/**
-crates/haze-sync-server/docs/**
-```
-
-Likely work:
-
-- enforce adapter role/mode at route/runtime boundaries;
-- expose read-only adapter status summaries;
-- support safe adapter registration/token lookup only if accepted by auth contract;
-- provide provider-neutral integration endpoints/metadata consumed by GDrive/Obsidian/Worktree clients;
-- ensure dry-run/import-only/export-only/bidirectional semantics are represented where Server must know them.
-
-Non-goals:
-
-- no Google Drive API calls;
-- no Obsidian plugin internals;
-- no provider webhook runtime unless explicitly scoped;
-- no direct adapter DB ownership changes.
-
-Contract-change triggers:
-
-- adding adapter mutation/admin APIs;
-- changing token model;
-- embedding provider SDKs in Server;
-- exposing raw external cursors or provider payloads.
-
-Acceptance:
-
-- adapter clients can authenticate and receive consistent mode/status behavior;
-- Server remains provider-neutral;
-- public surfaces remain safe.
-
-### SRV-P9 — Server E2E and failure-injection hardening
-
-Goal:
-
-```text
-Prove Server integration behavior under realistic local failures before real-vault
-rollout.
-```
-
-Allowed scope:
-
-```text
-crates/haze-sync-server/**
-tests/e2e/** only if explicitly scoped as cross-component integration
-crates/haze-sync-storage/test support only through accepted interfaces
-```
-
-Likely work:
-
-- DB-backed route integration tests for PUT/GET/changes/conflict/delete/admin/status;
-- failure-injection tests for object-store write before DB commit, DB failure after object-store write, duplicate idempotency, concurrent same-path writes, stale base conflicts, and mass delete blocks;
-- ensure readiness/doctor/admin status reflect failure modes honestly;
-- verify no public response leaks secrets or raw internals.
-
-Non-goals:
-
-- no live provider/GDrive tests;
-- no production deployment automation;
-- no real vault mutation;
-- no broad route redesign.
-
-Contract-change triggers:
-
-- test requirements revealing missing Core/Storage/API contract support;
-- needing deployment/CI changes outside Server scope;
-- discovering unsafe partial commit behavior requiring architecture review.
-
-Acceptance:
-
-- Server behavior is covered by local integration tests;
-- failure modes preserve data and secrecy;
-- remaining production rollout blockers are explicit.
-
-## Dependency gates
-
-Server may integrate only stable upstream contracts:
-
-- API route parsers, DTOs, header constants, auth primitives, and public error formats.
-- Core revision/conflict/delete/tombstone/idempotency primitives.
-- Storage migrations, repositories, locks, object-store primitives, and test support.
-- Common value/domain types.
-
-Server implementation phases that wire multiple components should run after the relevant component contracts and plans are stable.
-
-Server must stop or request a contract change when a requested change requires:
-
-- modifying another component contract;
-- inventing Core policy in route code;
-- changing API DTO/error shapes outside API ownership;
-- changing Storage schema/repository contracts outside Storage ownership;
-- adding provider runtime behavior;
-- adding hard-delete behavior;
-- moving Worktree/GDrive/Obsidian logic into Server without explicit fan-in scope.
-
-## Known risks
-
-- Route modules can become oversized because Server is an integration boundary. Refactors should preserve route contracts and remain server-local unless fan-in explicitly allows cross-component cleanup.
-- Runtime transaction boundaries must stay aligned with Storage repository behavior and Core policy outcomes.
-- Auth/database lookup failures must remain sanitized while still being operationally diagnosable through safe logs/metrics in later phases.
-- Dependency-free route-shell behavior must not be mistaken for production readiness.
-- Admin/status surfaces must remain read-only until mutation support is explicitly scoped.
-- Object-store writes that happen before database commit require future failure-injection coverage and repair/doctor follow-up.
-- Startup/migration policy can cause data loss or downtime if hidden inside server boot without operational docs.
-- Worktree runtime hosting can collapse boundaries if Server starts owning scanner/materializer logic.
-
-## Deferred work
-
-Deferred outside this Architect documentation/planning pass:
-
-- run shell checks or observe CI for this branch;
-- execute SRV-P2 through SRV-P9 implementation/clean-code/CI phases;
-- production listener startup and graceful shutdown;
-- runtime config loading in `main`;
-- explicit migration runner policy at startup or CLI boundary;
-- structured tracing/logging initialization with secret redaction guarantees;
-- Prometheus/metrics route if product scope requires it;
-- full adapter mode enforcement at server/runtime boundaries;
-- Worktree runtime composition;
-- provider adapter orchestration outside Server until scoped fan-in;
-- broader route-module decomposition after behavior is stabilized and covered by tests.
-
-## Completion criteria for the component
-
-`haze-sync-server` is V1-ready when:
-
-- startup, config, state, readiness, and graceful shutdown are explicit and tested;
-- route wiring preserves API/Core/Storage semantics;
-- mutation routes are transaction-bound, locked where necessary, idempotent where required, and safe under stale/unknown bases;
-- conflict/delete/admin/status behavior is honest and sanitized;
-- worktree hosting and adapter mode enforcement are explicit fan-in work, not hidden route behavior;
-- E2E/failure-injection tests cover critical data-loss and secrecy risks;
-- no provider runtime, hard-delete behavior, or Core policy duplication enters Server without explicit contract change.
+## Current accepted baseline
+
+Server already provides production startup, explicit state, auth, readiness, normal file routes, conflict/delete/idempotency fan-in and read-only admin status. SRV-P7A is accepted at code-bearing SHA `37706634fd8dd2d9b299a1c453718f2de63981d0` with Component CI run `29161721748` successful.
+
+The accepted Worktree product snapshot is `component/worktree@4f7bc748d9b901d7d5c3e43c845ba407c0c36e59` and remains unchanged by this architecture phase.
+
+SRV-P7B1 proved that real Worktree execution is blocked by contract: the Worktree scheduler/cycle boundary is synchronous while authoritative Server/Storage operations are async; correct write/delete/conflict/idempotency behavior is route-private; durable Worktree state/export checkpoint and runtime policy are incomplete.
+
+## Preferred target
+
+The preferred architecture is:
+
+1. Worktree owns an async-compatible scheduler and cycle-executor contract while retaining synchronous filesystem primitives.
+2. Storage owns versioned durable Worktree instance/path state and monotonic export checkpoint primitives.
+3. Server owns reusable async application services used by both HTTP routes and Worktree execution.
+4. Server owns one explicit bounded, cancellable, joined Worktree host task.
+5. API owns any new public operator/status DTOs; CLI and Deployment consume accepted Server/API/config contracts later.
+
+Contract-owner phases precede consumer phases. No two branches may independently define the same contract.
+
+## Ordered implementation phases
+
+### 1. WT-P10 — Async runtime contract
+
+- Suggested chat: `worktree — W1 WT-P10 Async Runtime Contract`
+- Owner: worktree
+- Branch: `component/worktree`
+- Role: implementation-worker
+- Prerequisites: accepted SRV-P7B architecture decision; accepted Worktree snapshot.
+- Allowed files: `crates/haze-sync-worktree/src/runtime.rs`, runtime tests, `src/lib.rs`, Worktree-owned docs/control files explicitly assigned by Orchestrator.
+- Forbidden: Server/Storage/API source, DB code, HTTP, provider behavior, nested runtimes, blocking bridges, hidden task spawning.
+- Deliverables:
+  - make `WorktreeRuntimeCycle::run_cycle` awaitable with cooperative cancellation;
+  - make `WorktreeRuntimeService::poll` awaitable and still execute at most one cycle;
+  - preserve synchronous watcher/start/status/shutdown where no async authority is needed;
+  - preserve full-scan correctness, hint coalescing, budgets, count-only status and no overlap;
+  - represent DryRun explicitly without changing filesystem/import/export behavior outside the runtime contract;
+  - migrate existing tests to async tests and add cancellation/no-overlap coverage.
+- Test/CI: fmt, check, test and clippy for Worktree and workspace through normal Component CI.
+- Clean gate: mandatory clean-code review after green CI.
+- Unblocks: SRV-P7B3 executor and SRV-P7B4 host.
+
+### 2. STOR-P10 — Durable Worktree instance, path state and cursor
+
+- Suggested chat: `storage — W1 STOR-P10 Worktree Durable State`
+- Owner: storage
+- Branch: `component/storage`
+- Role: implementation-worker
+- Prerequisites: accepted SRV-P7B architecture decision; no dependency on Server implementation.
+- Allowed files: Storage migrations/schema/models/repositories/tests and Storage-owned docs/control files explicitly assigned.
+- Forbidden: Core policy, Server orchestration, Worktree filesystem behavior, API DTOs, direct runtime loops.
+- Deliverables:
+  - versioned runtime-instance binding keyed by Worktree `adapter_id`, including non-public root fingerprint;
+  - path state keyed by `(adapter_id, path)` with explicit present/tombstoned kind, last-applied revision/hash and reconciliation fields;
+  - migration from or replacement of the path-only `worktree_state` schema without losing valid rows silently;
+  - typed repositories for bind/load/upsert/delete/scan snapshot operations;
+  - locked, monotonic, contiguous export checkpoint operations using `adapter_cursors.last_core_seq`;
+  - safe repository errors and row models;
+  - tests for regression rejection, instance mismatch, version mismatch and transaction rollback.
+- Test/CI: Storage unit/DB integration tests, migration tests, workspace Component CI.
+- Clean gate: mandatory clean-code review after green CI.
+- Unblocks: SRV-P7B3 executor and deployment migration runbook.
+
+### 3. SRV-P7B2 — Reusable application services
+
+- Suggested chat: `server — W1 SRV-P7B2 Application Services`
+- Owner: server
+- Branch: `component/server`
+- Role: implementation-worker
+- Prerequisites: this architecture decision; existing route behavior and SRV-P7A remain accepted.
+- Allowed files: `crates/haze-sync-server/src/application/**`, route modules needed only to delegate, state/tests/docs/control files explicitly assigned.
+- Forbidden: Worktree cycle execution, hosted loop, schema/migration changes, public DTO changes, route behavior changes, provider behavior.
+- Deliverables:
+  - `ServerApplicationServices` and typed actor/command/outcome/error contracts;
+  - async file apply, guarded delete, bounded changes retrieval and verified revision-content retrieval;
+  - deterministic Worktree idempotency derivation helper without logging keys;
+  - extract route-private planning/persistence/idempotency/delete transaction logic;
+  - routes become thin parsing/auth/DTO adapters over the services;
+  - preserve public HTTP status/body/header behavior and dependency-free router tests.
+- Test/CI: parity tests for existing PUT/DELETE/GET/changes behavior, DB-backed transaction/idempotency/conflict tests, normal Component CI.
+- Clean gate: mandatory clean-code review after green CI.
+- Unblocks: SRV-P7B3 executor and later non-HTTP internal consumers.
+
+### 4. SRV-P7B3 — Real bounded Worktree cycle executor
+
+- Suggested chat: `server — W1 SRV-P7B3 Bounded Worktree Executor`
+- Owner: server
+- Branch: `component/server`
+- Role: implementation-worker
+- Prerequisites: WT-P10 clean-accepted and synchronized; STOR-P10 clean-accepted and synchronized; SRV-P7B2 clean-accepted.
+- Allowed files: Server Worktree executor/application composition/tests/docs/control; synchronized accepted owner-component product files only when Orchestrator explicitly scopes fan-in.
+- Forbidden: scheduler ownership changes, route-policy duplication, internal HTTP, unbounded work, hidden task, public DTO changes, provider behavior.
+- Deliverables:
+  - `ServerWorktreeCycleExecutor` implementing the async Worktree contract;
+  - bounded state load, full scan, reconciliation, import, guarded delete, export query, revision fetch, materialization and checkpoint flow;
+  - application-service use for every authoritative mutation;
+  - Storage repository use for durable state/cursor;
+  - awaited bounded blocking-pool use only for synchronous filesystem phases;
+  - cooperative cancellation and count-only summaries;
+  - deterministic replay/crash tests for import and export checkpoints.
+- Test/CI: focused unit tests, DB/object-store/temp-worktree integration tests, failure injection, workspace Component CI.
+- Clean gate: mandatory clean-code review after green CI.
+- Unblocks: SRV-P7B4 host and manual one-cycle operation.
+
+### 5. SRV-P7B4 — Hosted scheduling, startup and shutdown
+
+- Suggested chat: `server — W1 SRV-P7B4 Hosted Worktree Runtime`
+- Owner: server
+- Branch: `component/server`
+- Role: implementation-worker
+- Prerequisites: SRV-P7B3 clean-accepted.
+- Allowed files: Server config, startup, `worktree_runtime.rs` or replacement host module, state/tests/docs/control.
+- Forbidden: API DTO expansion, CLI/deploy files, detached tasks, multiple concurrent cycles, implicit migrations, unbounded retry loops.
+- Deliverables:
+  - `ServerWorktreeRuntimeHost` with one joined Tokio task;
+  - explicit policy config and validated defaults;
+  - startup identity binding before first cycle;
+  - periodic and watcher-hint scheduling plus explicit manual request channel;
+  - at-most-one-cycle guarantee and busy/coalesced manual behavior;
+  - graceful cancellation, bounded shutdown and task join;
+  - exact mode behavior including manual-only DryRun.
+- Test/CI: Tokio paused-time scheduler tests, startup/shutdown/error tests, no-overlap tests, Component CI.
+- Clean gate: mandatory clean-code review after green CI.
+- Unblocks: public status/readiness and Deployment hosting.
+
+### 6. API-P8 — Passive Worktree runtime status contract
+
+- Suggested chat: `api — W1 API-P8 Worktree Runtime Status Contract`
+- Owner: api
+- Branch: `component/api`
+- Role: implementation-worker
+- Prerequisites: SRV-P7B4 internal status vocabulary accepted; no Server/API parallel DTO invention.
+- Allowed files: API passive DTO/parser/error tests and API-owned docs/control.
+- Forbidden: Server runtime, database, filesystem, provider calls, mutation execution.
+- Deliverables:
+  - safe DTOs for configured mode, lifecycle, readiness category, in-progress flag, pending hint count, since-start counters, last-cycle cause/result category and cursor presence;
+  - passive manual one-cycle request/response contract if Orchestrator accepts a public operator route;
+  - no raw root, cursor, key, SQLx/I/O error or payload fields.
+- Test/CI: serde/backward-compatibility/redaction tests and normal Component CI.
+- Clean gate: mandatory clean-code review after green CI.
+- Unblocks: SRV-P7B5 and CLI operator work.
+
+### 7. SRV-P7B5 — Safe status and readiness integration
+
+- Suggested chat: `server — W1 SRV-P7B5 Worktree Status and Readiness`
+- Owner: server
+- Branch: `component/server`
+- Role: implementation-worker
+- Prerequisites: SRV-P7B4 and API-P8 clean-accepted and synchronized.
+- Allowed files: Server readiness/admin/operator route mapping, state/tests/docs/control.
+- Forbidden: API shape invention, repair/destructive actions, raw diagnostics, provider behavior.
+- Deliverables:
+  - Worktree readiness component and safe admin status mapping;
+  - enabled-mode readiness requires config, durable binding and live non-failed host;
+  - Disabled does not make Server unready;
+  - cycle failure degrades Worktree readiness/status but not `/health`;
+  - optional explicit one-cycle endpoint delegates to the single host and cannot overlap;
+  - dependency-free router behavior remains unchanged.
+- Test/CI: route/status/redaction/readiness tests and normal Component CI.
+- Clean gate: mandatory clean-code review after green CI.
+- Unblocks: CLI-P6A and Deployment fan-in.
+
+### 8. CLI-P6A — Worktree status and explicit sync-once operator commands
+
+- Suggested chat: `cli — W1 CLI-P6A Worktree Sync Once`
+- Owner: cli
+- Branch: `component/cli`
+- Role: implementation-worker
+- Prerequisites: API-P8 and SRV-P7B5 clean-accepted.
+- Allowed files: CLI source/tests/docs/control.
+- Forbidden: direct DB/filesystem mutation, local runtime hosting, provider calls, bypassing Server/API, automatic repair.
+- Deliverables:
+  - read-only Worktree runtime status;
+  - explicit `sync once`/DryRun invocation through Server API only;
+  - safe busy/not-ready/cancelled/failure mapping;
+  - no raw token, cursor, root or internal error output.
+- Test/CI: parser/client/output/redaction tests and Component CI.
+- Clean gate: mandatory clean-code review after green CI.
+- Unblocks: operator-controlled rollout and bootstrap checks.
+
+### 9. DEP-P5A — Worktree runtime/config fan-in
+
+- Suggested chat: `deployment — W1 DEP-P5A Worktree Runtime Fan-In`
+- Owner: deployment
+- Branch: `component/deployment`
+- Role: implementation-worker
+- Prerequisites: STOR-P10, SRV-P7B4 and SRV-P7B5 clean-accepted; migration execution policy accepted.
+- Allowed files: `deploy/**`, `.env.example` only for placeholder alignment, Deployment docs/control.
+- Forbidden: product source, real secrets, automatic bidirectional enablement, hidden migration execution, destructive cleanup.
+- Deliverables:
+  - documented env/config keys and defaults;
+  - stable Worktree adapter identity and root binding procedure;
+  - directory permissions and service lifecycle;
+  - migration/backup/rollback steps;
+  - staged disabled -> export/import -> bidirectional rollout;
+  - shutdown/readiness/status runbook.
+- Test/CI: compose/config syntax validation and normal applicable Component CI.
+- Clean gate: mandatory clean-code review after green CI.
+- Unblocks: deployment-ready hosted Worktree runtime.
+
+## Cross-phase acceptance rules
+
+- Every code-bearing phase runs normal Component CI; no CI skip.
+- Each owner phase receives mandatory clean-code review after green CI.
+- Consumer phases may start only from exact accepted owner-component SHAs synchronized by an explicit fan-in prompt.
+- No phase may independently redesign another component's contract.
+- Source behavior accepted in SRV-P7A remains closed unless the relevant phase explicitly changes it.
+- No phase may add nested runtimes, blocking async bridges, detached execution, internal HTTP self-calls, fake production state, hard delete or automatic destructive repair.
+
+## Completion criteria for SRV-P7B
+
+SRV-P7B is complete only when:
+
+- Worktree cycle execution is natively awaitable and no-overlap;
+- routes and Worktree use one reusable Server application-service layer;
+- Worktree instance/path state and export cursor are durable and crash-recoverable;
+- the real executor is bounded, cancellable and policy-aligned;
+- the hosted loop is explicit, joined, configurable and observable;
+- status/readiness are safe and honest;
+- CLI and Deployment consume accepted contracts without bypassing Server/Core/Storage ownership.
