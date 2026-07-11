@@ -6,12 +6,16 @@
 //! whenever the selected mode observes local filesystem state.
 
 use std::fmt;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 /// Worktree adapter operating mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WorktreeMode {
-    /// Runtime is inert: no watcher, scan, import, or export work.
+    /// Runtime is completely inert.
     Disabled,
     /// Adapter may read Core/apply exports but must not write local facts to Core.
     ReadOnly,
@@ -21,13 +25,24 @@ pub enum WorktreeMode {
     ExportOnly,
     /// Observe/import local facts and apply Core exports.
     Bidirectional,
+    /// Explicit planning-only representation for a future manual Server command.
+    ///
+    /// Dry-run never starts automatic cycles and grants no mutation,
+    /// materialization, cursor-advance, trash, echo, or durable-state permission.
+    DryRun,
 }
 
 impl WorktreeMode {
-    /// Whether any runtime cycle is enabled.
+    /// Whether the mode is distinct from the completely disabled adapter.
     #[must_use]
     pub const fn is_enabled(self) -> bool {
         !matches!(self, Self::Disabled)
+    }
+
+    /// Whether startup/periodic/watcher cycles may run automatically.
+    #[must_use]
+    pub const fn runs_automatically(self) -> bool {
+        !matches!(self, Self::Disabled | Self::DryRun)
     }
 
     /// Whether this mode observes local state through authoritative scans.
@@ -36,7 +51,7 @@ impl WorktreeMode {
         matches!(self, Self::ImportOnly | Self::Bidirectional)
     }
 
-    /// Whether local facts may be planned/submitted as imports.
+    /// Whether local facts may be submitted to Core.
     #[must_use]
     pub const fn imports_local(self) -> bool {
         matches!(self, Self::ImportOnly | Self::Bidirectional)
@@ -50,48 +65,45 @@ impl WorktreeMode {
             Self::ReadOnly | Self::ExportOnly | Self::Bidirectional
         )
     }
+
+    /// Whether a future host may use this representation for manual planning.
+    #[must_use]
+    pub const fn allows_manual_planning(self) -> bool {
+        matches!(self, Self::DryRun)
+    }
+
+    /// Whether any mutation permission is represented by this mode.
+    #[must_use]
+    pub const fn permits_mutation(self) -> bool {
+        self.imports_local() || self.exports_core()
+    }
 }
 
 /// Monotonic clock used by the host-driven scheduler.
 pub trait WorktreeRuntimeClock {
-    /// Monotonic elapsed time from an arbitrary process-local origin.
     fn now(&self) -> Duration;
 }
 
-/// One path-free watcher hint.
-///
-/// `sequence` is diagnostic only. The runtime never relies on ordering or
-/// uniqueness, so duplicate, missing, and reordered hints remain safe.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct WorktreeWatcherHint {
-    /// Optional watcher-local sequence value, ignored for correctness.
     pub sequence: u64,
 }
 
-/// Result of polling an optional filesystem watcher once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WorktreeWatcherPoll {
-    /// One latency hint was available.
     Hint(WorktreeWatcherHint),
-    /// No hint is currently available.
     Idle,
-    /// Watcher stream ended; periodic scans continue to provide correctness.
     Closed,
 }
 
-/// Safe watcher failure category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WorktreeWatcherFailure {
-    /// Watcher could not start.
     Start,
-    /// Watcher polling failed.
     Poll,
-    /// Watcher shutdown failed.
     Shutdown,
 }
 
 impl WorktreeWatcherFailure {
-    /// Stable machine-readable category.
     #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
@@ -102,98 +114,76 @@ impl WorktreeWatcherFailure {
     }
 }
 
-/// Optional watcher integration owned by a future host/composition layer.
-///
-/// The runtime normalizes an error to the operation that observed it, so public
-/// status remains correct even if an implementation returns the wrong variant.
 pub trait WorktreeWatcher {
-    /// Start watcher resources.
     fn start(&mut self) -> Result<(), WorktreeWatcherFailure>;
-
-    /// Poll at most one path-free latency hint.
     fn poll_hint(&mut self) -> Result<WorktreeWatcherPoll, WorktreeWatcherFailure>;
-
-    /// Stop watcher resources.
     fn shutdown(&mut self) -> Result<(), WorktreeWatcherFailure>;
 }
 
-/// Why an authoritative runtime cycle was scheduled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WorktreeRuntimeCycleCause {
-    /// First cycle after explicit runtime startup.
     Startup,
-    /// Debounced watcher hints requested lower-latency work.
     WatcherHint,
-    /// Periodic correctness cycle, independent of watcher delivery.
     Periodic,
 }
 
-/// Bounded planning/submission budget communicated to the cycle executor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct WorktreeRuntimeCycleBudget {
-    /// Maximum put/import actions the executor may plan in one cycle.
     pub max_import_actions: usize,
-    /// Maximum guarded local-delete candidates the executor may plan in one cycle.
     pub max_delete_candidates: usize,
-    /// Maximum Core export/materialization actions the executor may apply in one cycle.
     pub max_export_actions: usize,
 }
 
-/// Contract for one scan/import/export cycle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct WorktreeRuntimeCycleRequest {
-    /// Scheduling cause.
     pub cause: WorktreeRuntimeCycleCause,
-    /// Active adapter mode.
     pub mode: WorktreeMode,
-    /// A full scan must be completed before local facts are considered.
     pub full_scan_required: bool,
-    /// Local import planning/submission is allowed.
     pub import_enabled: bool,
-    /// Core export/materialization is allowed.
     pub export_enabled: bool,
-    /// Per-cycle bounded work budget.
     pub budget: WorktreeRuntimeCycleBudget,
-    /// Number of watcher hints coalesced into this cycle.
     pub coalesced_watcher_hints: usize,
 }
 
-/// Count-only result from one authoritative cycle.
+impl WorktreeRuntimeCycleRequest {
+    /// Build an explicit future manual dry-run request with no mutation rights.
+    #[must_use]
+    pub const fn manual_dry_run(
+        budget: WorktreeRuntimeCycleBudget,
+    ) -> WorktreeRuntimeCycleRequest {
+        Self {
+            cause: WorktreeRuntimeCycleCause::Periodic,
+            mode: WorktreeMode::DryRun,
+            full_scan_required: true,
+            import_enabled: false,
+            export_enabled: false,
+            budget,
+            coalesced_watcher_hints: 0,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct WorktreeRuntimeCycleSummary {
-    /// Whether the required full scan completed.
     pub full_scan_completed: bool,
-    /// Number of stable local files observed by the full scan.
     pub scanned_files: usize,
-    /// Number of safely skipped filesystem entries.
     pub skipped_entries: usize,
-    /// Number of put/import actions planned.
     pub planned_imports: usize,
-    /// Number of guarded delete candidates planned.
     pub planned_deletes: usize,
-    /// Number of accepted/submitted local import actions.
     pub submitted_imports: usize,
-    /// Number of Core export/materialization actions applied.
     pub applied_exports: usize,
 }
 
-/// Safe cycle failure category supplied by the executor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WorktreeRuntimeCycleFailure {
-    /// Authoritative scan failed.
     Scan,
-    /// Import/delete planning failed.
     Plan,
-    /// Core/API submission failed.
     Submit,
-    /// Core export/materialization failed.
     Export,
-    /// Host cancelled the executor cooperatively.
     Cancelled,
 }
 
 impl WorktreeRuntimeCycleFailure {
-    /// Stable machine-readable category.
     #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
@@ -206,20 +196,59 @@ impl WorktreeRuntimeCycleFailure {
     }
 }
 
-/// Host-provided authoritative cycle executor.
+/// Cooperative cancellation shared with a future Server-owned executor.
 ///
-/// When `full_scan_required` is true, implementations must run the full scanner
-/// before deriving local import/delete facts. Watcher hints must never be treated
-/// as file facts themselves.
-pub trait WorktreeRuntimeCycle {
-    /// Run one bounded cycle synchronously.
-    fn run_cycle(
-        &mut self,
-        request: WorktreeRuntimeCycleRequest,
-    ) -> Result<WorktreeRuntimeCycleSummary, WorktreeRuntimeCycleFailure>;
+/// The token carries only one atomic boolean. It contains no paths, payloads,
+/// cursors, credentials, or runtime handles.
+#[derive(Clone, Default)]
+pub struct WorktreeCancellationToken {
+    cancelled: Arc<AtomicBool>,
 }
 
-/// Runtime scheduler policy.
+impl WorktreeCancellationToken {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Release);
+    }
+
+    #[must_use]
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::Acquire)
+    }
+}
+
+impl fmt::Debug for WorktreeCancellationToken {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("WorktreeCancellationToken")
+            .field("cancelled", &self.is_cancelled())
+            .finish()
+    }
+}
+
+/// Awaitable, `Send` cycle result without an async-trait dependency.
+pub type WorktreeRuntimeCycleFuture<'a> = Pin<
+    Box<
+        dyn Future<
+                Output = Result<WorktreeRuntimeCycleSummary, WorktreeRuntimeCycleFailure>,
+            > + Send
+            + 'a,
+    >,
+>;
+
+/// Host-provided authoritative async cycle executor.
+pub trait WorktreeRuntimeCycle {
+    fn run_cycle<'a>(
+        &'a mut self,
+        request: WorktreeRuntimeCycleRequest,
+        cancellation: WorktreeCancellationToken,
+    ) -> WorktreeRuntimeCycleFuture<'a>;
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct WorktreeRuntimePolicy {
     debounce: Duration,
@@ -229,7 +258,6 @@ pub struct WorktreeRuntimePolicy {
 }
 
 impl WorktreeRuntimePolicy {
-    /// Construct a bounded scheduler policy.
     pub fn new(
         debounce: Duration,
         periodic_cycle_interval: Duration,
@@ -256,39 +284,31 @@ impl WorktreeRuntimePolicy {
         })
     }
 
-    /// Debounce duration applied to watcher hints.
     #[must_use]
     pub const fn debounce(self) -> Duration {
         self.debounce
     }
 
-    /// Maximum time between correctness cycles while enabled.
     #[must_use]
     pub const fn periodic_cycle_interval(self) -> Duration {
         self.periodic_cycle_interval
     }
 
-    /// Maximum watcher entries consumed by one host poll.
     #[must_use]
     pub const fn max_watcher_hints_per_poll(self) -> usize {
         self.max_watcher_hints_per_poll
     }
 
-    /// Bounded work budget for every cycle.
     #[must_use]
     pub const fn budget(self) -> WorktreeRuntimeCycleBudget {
         self.budget
     }
 }
 
-/// Invalid runtime policy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WorktreeRuntimePolicyError {
-    /// Periodic correctness interval must be non-zero.
     ZeroPeriodicInterval,
-    /// Host poll must be allowed to consume at least one watcher hint.
     ZeroHintBudget,
-    /// Each action class must have a non-zero explicit cycle bound.
     ZeroCycleBudget,
 }
 
@@ -304,139 +324,87 @@ impl fmt::Display for WorktreeRuntimePolicyError {
 
 impl std::error::Error for WorktreeRuntimePolicyError {}
 
-/// Explicit runtime lifecycle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WorktreeRuntimeLifecycle {
-    /// Constructed but not started.
     Created,
-    /// Started and eligible to run cycles.
     Running,
-    /// Cancellation requested; no new cycle may start.
     Cancelling,
-    /// Watcher resources were shut down and the runtime cannot restart.
     Shutdown,
 }
 
-/// Current optional watcher state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WorktreeRuntimeWatcherState {
-    /// Mode does not observe local filesystem state.
     Disabled,
-    /// Watcher started successfully.
     Running,
-    /// Watcher ended normally; periodic scans continue.
     Closed,
-    /// Watcher failed; periodic scans continue.
     Failed(WorktreeWatcherFailure),
-    /// Runtime shutdown completed.
     Stopped,
 }
 
-/// Last completed cycle outcome.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WorktreeRuntimeLastCycle {
-    /// Cycle completed and passed mode/budget validation.
     Completed(WorktreeRuntimeCycleSummary),
-    /// Executor returned a safe failure category.
     Failed(WorktreeRuntimeCycleFailure),
-    /// Executor violated its full-scan, mode, or budget contract.
     Rejected(WorktreeRuntimeContractViolation),
 }
 
-/// Safe scheduler status without local absolute paths.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct WorktreeRuntimeStatus {
-    /// Explicit lifecycle state.
     pub lifecycle: WorktreeRuntimeLifecycle,
-    /// Active adapter mode.
     pub mode: WorktreeMode,
-    /// Optional watcher health.
     pub watcher: WorktreeRuntimeWatcherState,
-    /// Whether a startup cycle is still pending.
     pub startup_cycle_pending: bool,
-    /// Whether the synchronous executor is currently active.
     pub cycle_in_progress: bool,
-    /// Number of coalesced watcher hints awaiting a cycle.
     pub pending_watcher_hints: usize,
-    /// Total watcher hints observed since startup.
     pub watcher_hints_observed: u64,
-    /// Total authoritative cycles completed successfully.
     pub cycles_completed: u64,
-    /// Total executor failures or contract rejections.
     pub cycles_failed: u64,
-    /// Cause of the most recently attempted cycle.
     pub last_cycle_cause: Option<WorktreeRuntimeCycleCause>,
-    /// Count-only last cycle outcome.
     pub last_cycle: Option<WorktreeRuntimeLastCycle>,
 }
 
-/// Start result useful to a host/Server composition layer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct WorktreeRuntimeStartSummary {
-    /// Whether watcher startup succeeded.
     pub watcher: WorktreeRuntimeWatcherState,
-    /// Whether the host should immediately poll a startup cycle.
     pub startup_cycle_pending: bool,
 }
 
-/// Shutdown result useful to a host/Server composition layer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct WorktreeRuntimeShutdownSummary {
-    /// Final watcher state. A failure is safe and count/path-free.
     pub watcher: WorktreeRuntimeWatcherState,
-    /// Number of cycles completed before shutdown.
     pub cycles_completed: u64,
 }
 
-/// Result of one host-driven poll.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WorktreeRuntimePoll {
-    /// No cycle was due.
     Idle,
-    /// Runtime is disabled by mode.
     Disabled,
-    /// Cancellation prevents new cycle work.
+    DryRun,
     Cancelled,
-    /// One bounded cycle completed.
     CycleCompleted {
-        /// Scheduling cause.
         cause: WorktreeRuntimeCycleCause,
-        /// Count-only cycle result.
         summary: WorktreeRuntimeCycleSummary,
     },
-    /// Executor returned a safe failure category.
     CycleFailed {
-        /// Scheduling cause.
         cause: WorktreeRuntimeCycleCause,
-        /// Safe failure category.
         failure: WorktreeRuntimeCycleFailure,
     },
-    /// Executor violated the runtime request contract.
     CycleRejected {
-        /// Scheduling cause.
         cause: WorktreeRuntimeCycleCause,
-        /// Safe violation category.
         violation: WorktreeRuntimeContractViolation,
     },
 }
 
-/// Executor contract violation detected by the scheduler.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WorktreeRuntimeContractViolation {
-    /// Local-observing mode did not complete the required full scan.
     RequiredScanMissing,
-    /// Executor planned or submitted local imports while mode forbids them.
     ImportModeViolation,
-    /// Executor applied exports while mode forbids them.
     ExportModeViolation,
-    /// Planned/submitted work exceeded the explicit cycle budget.
     BudgetExceeded,
-    /// Submitted import count exceeded planned imports.
     InvalidImportCounts,
 }
 
 impl WorktreeRuntimeContractViolation {
-    /// Stable machine-readable category.
     #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
@@ -449,14 +417,10 @@ impl WorktreeRuntimeContractViolation {
     }
 }
 
-/// Lifecycle misuse.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WorktreeRuntimeLifecycleError {
-    /// Runtime was already started or is cancelling.
     AlreadyStarted,
-    /// Runtime was already shut down and cannot restart.
     AlreadyShutdown,
-    /// Runtime must be started before polling or cancellation.
     NotStarted,
 }
 
@@ -472,17 +436,14 @@ impl fmt::Display for WorktreeRuntimeLifecycleError {
 
 impl std::error::Error for WorktreeRuntimeLifecycleError {}
 
-/// Hostable, synchronous Worktree runtime service.
-///
-/// The host decides when to call `poll`; this type never spawns a task. A poll
-/// executes at most one cycle, making overlap impossible inside the service.
-#[derive(Debug)]
+/// Hostable Worktree runtime service. It never spawns or detaches a task.
 pub struct WorktreeRuntimeService<C, W, X> {
     mode: WorktreeMode,
     policy: WorktreeRuntimePolicy,
     clock: C,
     watcher: W,
     executor: X,
+    cancellation: WorktreeCancellationToken,
     lifecycle: WorktreeRuntimeLifecycle,
     watcher_state: WorktreeRuntimeWatcherState,
     startup_cycle_pending: bool,
@@ -497,13 +458,33 @@ pub struct WorktreeRuntimeService<C, W, X> {
     last_cycle: Option<WorktreeRuntimeLastCycle>,
 }
 
+impl<C, W, X> fmt::Debug for WorktreeRuntimeService<C, W, X> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("WorktreeRuntimeService")
+            .field("mode", &self.mode)
+            .field("policy", &self.policy)
+            .field("lifecycle", &self.lifecycle)
+            .field("watcher_state", &self.watcher_state)
+            .field("startup_cycle_pending", &self.startup_cycle_pending)
+            .field("cycle_in_progress", &self.cycle_in_progress)
+            .field("pending_watcher_hints", &self.pending_watcher_hints)
+            .field("watcher_hints_observed", &self.watcher_hints_observed)
+            .field("cycles_completed", &self.cycles_completed)
+            .field("cycles_failed", &self.cycles_failed)
+            .field("last_cycle_cause", &self.last_cycle_cause)
+            .field("last_cycle", &self.last_cycle)
+            .field("cancelled", &self.cancellation.is_cancelled())
+            .finish()
+    }
+}
+
 impl<C, W, X> WorktreeRuntimeService<C, W, X>
 where
     C: WorktreeRuntimeClock,
     W: WorktreeWatcher,
     X: WorktreeRuntimeCycle,
 {
-    /// Construct an inert service. Call `start` explicitly.
     #[must_use]
     pub fn new(
         mode: WorktreeMode,
@@ -518,6 +499,7 @@ where
             clock,
             watcher,
             executor,
+            cancellation: WorktreeCancellationToken::new(),
             lifecycle: WorktreeRuntimeLifecycle::Created,
             watcher_state: WorktreeRuntimeWatcherState::Disabled,
             startup_cycle_pending: false,
@@ -533,7 +515,6 @@ where
         }
     }
 
-    /// Start lifecycle and optional watcher resources.
     pub fn start(&mut self) -> Result<WorktreeRuntimeStartSummary, WorktreeRuntimeLifecycleError> {
         match self.lifecycle {
             WorktreeRuntimeLifecycle::Created => {}
@@ -547,10 +528,10 @@ where
 
         let now = self.clock.now();
         self.lifecycle = WorktreeRuntimeLifecycle::Running;
-        self.startup_cycle_pending = self.mode.is_enabled();
+        self.startup_cycle_pending = self.mode.runs_automatically();
         self.next_periodic_cycle = self
             .mode
-            .is_enabled()
+            .runs_automatically()
             .then(|| add_saturating(now, self.policy.periodic_cycle_interval));
         self.watcher_state = if self.mode.observes_local() {
             match self.watcher.start() {
@@ -567,7 +548,12 @@ where
         })
     }
 
-    /// Request cooperative cancellation. No later poll may start a cycle.
+    /// Clone a path-free cancellation token for an async host or executor.
+    #[must_use]
+    pub fn cancellation_token(&self) -> WorktreeCancellationToken {
+        self.cancellation.clone()
+    }
+
     pub fn request_cancel(&mut self) -> Result<(), WorktreeRuntimeLifecycleError> {
         match self.lifecycle {
             WorktreeRuntimeLifecycle::Created => Err(WorktreeRuntimeLifecycleError::NotStarted),
@@ -575,14 +561,17 @@ where
                 Err(WorktreeRuntimeLifecycleError::AlreadyShutdown)
             }
             WorktreeRuntimeLifecycle::Running | WorktreeRuntimeLifecycle::Cancelling => {
+                self.cancellation.cancel();
                 self.lifecycle = WorktreeRuntimeLifecycle::Cancelling;
                 Ok(())
             }
         }
     }
 
-    /// Poll watcher hints and run at most one authoritative cycle.
-    pub fn poll(&mut self) -> Result<WorktreeRuntimePoll, WorktreeRuntimeLifecycleError> {
+    /// Poll watcher hints and await at most one authoritative cycle.
+    pub async fn poll(
+        &mut self,
+    ) -> Result<WorktreeRuntimePoll, WorktreeRuntimeLifecycleError> {
         match self.lifecycle {
             WorktreeRuntimeLifecycle::Created => {
                 return Err(WorktreeRuntimeLifecycleError::NotStarted);
@@ -594,8 +583,14 @@ where
             WorktreeRuntimeLifecycle::Running => {}
         }
 
-        if !self.mode.is_enabled() {
-            return Ok(WorktreeRuntimePoll::Disabled);
+        if self.cancellation.is_cancelled() {
+            self.lifecycle = WorktreeRuntimeLifecycle::Cancelling;
+            return Ok(WorktreeRuntimePoll::Cancelled);
+        }
+        match self.mode {
+            WorktreeMode::Disabled => return Ok(WorktreeRuntimePoll::Disabled),
+            WorktreeMode::DryRun => return Ok(WorktreeRuntimePoll::DryRun),
+            _ => {}
         }
 
         let now = self.clock.now();
@@ -603,17 +598,23 @@ where
         let Some(cause) = self.due_cycle(now) else {
             return Ok(WorktreeRuntimePoll::Idle);
         };
-        Ok(self.run_one_cycle(cause, now))
+        Ok(self.run_one_cycle(cause, now).await)
     }
 
-    /// Stop watcher resources and permanently close the service.
     pub fn shutdown(
         &mut self,
     ) -> Result<WorktreeRuntimeShutdownSummary, WorktreeRuntimeLifecycleError> {
-        if self.lifecycle == WorktreeRuntimeLifecycle::Shutdown {
-            return Err(WorktreeRuntimeLifecycleError::AlreadyShutdown);
+        match self.lifecycle {
+            WorktreeRuntimeLifecycle::Created => {
+                return Err(WorktreeRuntimeLifecycleError::NotStarted);
+            }
+            WorktreeRuntimeLifecycle::Shutdown => {
+                return Err(WorktreeRuntimeLifecycleError::AlreadyShutdown);
+            }
+            WorktreeRuntimeLifecycle::Running | WorktreeRuntimeLifecycle::Cancelling => {}
         }
 
+        self.cancellation.cancel();
         let watcher = match self.watcher_state {
             WorktreeRuntimeWatcherState::Running
             | WorktreeRuntimeWatcherState::Closed
@@ -641,7 +642,6 @@ where
         })
     }
 
-    /// Safe count-only status snapshot.
     #[must_use]
     pub const fn status(&self) -> WorktreeRuntimeStatus {
         WorktreeRuntimeStatus {
@@ -659,19 +659,16 @@ where
         }
     }
 
-    /// Borrow the host-provided executor for integration tests or composition.
     #[must_use]
     pub const fn executor(&self) -> &X {
         &self.executor
     }
 
-    /// Mutably borrow the host-provided executor for explicit host/test setup.
     #[must_use]
     pub fn executor_mut(&mut self) -> &mut X {
         &mut self.executor
     }
 
-    /// Mutably borrow the host-provided watcher for explicit test/composition control.
     #[must_use]
     pub fn watcher_mut(&mut self) -> &mut W {
         &mut self.watcher
@@ -681,7 +678,6 @@ where
         if self.watcher_state != WorktreeRuntimeWatcherState::Running {
             return;
         }
-
         for _ in 0..self.policy.max_watcher_hints_per_poll {
             match self.watcher.poll_hint() {
                 Ok(WorktreeWatcherPoll::Hint(_)) => {
@@ -723,7 +719,7 @@ where
         None
     }
 
-    fn run_one_cycle(
+    async fn run_one_cycle(
         &mut self,
         cause: WorktreeRuntimeCycleCause,
         now: Duration,
@@ -740,9 +736,27 @@ where
             budget: self.policy.budget,
             coalesced_watcher_hints: self.pending_watcher_hints,
         };
-        let result = self.executor.run_cycle(request);
+        let result = self
+            .executor
+            .run_cycle(request, self.cancellation.clone())
+            .await;
         self.cycle_in_progress = false;
         self.finish_attempt(now);
+
+        if self.cancellation.is_cancelled()
+            || matches!(result, Err(WorktreeRuntimeCycleFailure::Cancelled))
+        {
+            self.cancellation.cancel();
+            self.lifecycle = WorktreeRuntimeLifecycle::Cancelling;
+            self.cycles_failed = self.cycles_failed.saturating_add(1);
+            self.last_cycle = Some(WorktreeRuntimeLastCycle::Failed(
+                WorktreeRuntimeCycleFailure::Cancelled,
+            ));
+            return WorktreeRuntimePoll::CycleFailed {
+                cause,
+                failure: WorktreeRuntimeCycleFailure::Cancelled,
+            };
+        }
 
         match result {
             Ok(summary) => match validate_cycle_summary(request, summary) {
@@ -769,7 +783,14 @@ where
         self.startup_cycle_pending = false;
         self.pending_watcher_hints = 0;
         self.debounce_deadline = None;
-        self.next_periodic_cycle = Some(add_saturating(now, self.policy.periodic_cycle_interval));
+        self.next_periodic_cycle = if self.cancellation.is_cancelled() {
+            None
+        } else {
+            Some(add_saturating(
+                now,
+                self.policy.periodic_cycle_interval,
+            ))
+        };
     }
 }
 
