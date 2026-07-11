@@ -34,7 +34,10 @@ async fn migration_0010_sql_guard_preserves_nonempty_legacy_state() {
         .unwrap();
 
     for migration in &STORAGE_TEST_MIGRATIONS[..9] {
-        (&mut *transaction).execute(migration.sql).await.unwrap();
+        (&mut *transaction)
+            .execute(migration.sql)
+            .await
+            .unwrap();
     }
     sqlx::query("insert into worktree_state (path) values ('Notes/legacy.md')")
         .execute(&mut *transaction)
@@ -52,7 +55,10 @@ async fn migration_0010_sql_guard_preserves_nonempty_legacy_state() {
     let guard_fired = error
         .as_database_error()
         .is_some_and(|database_error| database_error.message() == LEGACY_GUARD_MESSAGE);
-    assert!(guard_fired, "migration must fail through the explicit legacy-row guard");
+    assert!(
+        guard_fired,
+        "migration must fail through the explicit legacy-row guard"
+    );
 
     sqlx::query("rollback to savepoint stor_p10_migration_guard")
         .execute(&mut *transaction)
@@ -75,10 +81,8 @@ async fn migration_0010_sql_guard_preserves_nonempty_legacy_state() {
     .fetch_all(&mut *transaction)
     .await
     .unwrap();
-    assert_eq!(
-        columns.iter().map(String::as_str).collect::<Vec<_>>(),
-        LEGACY_WORKTREE_STATE_COLUMNS
-    );
+    let column_names = columns.iter().map(String::as_str).collect::<Vec<_>>();
+    assert_eq!(column_names.as_slice(), LEGACY_WORKTREE_STATE_COLUMNS);
 
     let instances_created = sqlx::query_scalar::<_, bool>(
         "select to_regclass(current_schema() || '.worktree_instances') is not null",
