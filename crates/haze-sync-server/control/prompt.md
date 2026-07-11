@@ -1,166 +1,89 @@
-# W1-SRV-P7A — Worktree snapshot fan-in and Server composition boundary
+# W1-SRV-P7A-REPORT-RECOVERY — Recover mandatory implementation report
 
 Before starting, name this worker chat exactly:
 
-`server — W1 SRV-P7A Worktree Snapshot Fan-In`
+`server — W1 SRV-P7A Report Recovery`
 
 Component: server
-Primary path: crates/haze-sync-server
-Fan-in source path: crates/haze-sync-worktree
 Branch: component/server
 PR: #45
 Role: implementation-worker
 
-Work only through the GitHub connector. Do not merge the PR, change its draft state, rebase, reset, rewrite history, force-push, modify `main`, or modify the `component/worktree` branch.
+Work only through the GitHub connector. Do not modify `main`, `component/worktree`, PR lifecycle state, product source, tests, Cargo manifests, documentation, workflows, or sibling components.
 
-## Context
+## Why this slot exists
 
-The Server component has completed SRV-P1 through SRV-P6 and the Storage `test-support` production-isolation correction. Its last accepted Server code-bearing evidence is:
+SRV-P7A product work was committed and the final branch head passed Component CI, but the mandatory active implementation report was never written:
 
-- server_baseline_sha: `dc53f8dbe08da56d129fc3898cec262149c69f38`
-- workflow: `Component CI`
-- workflow_run_id: `29127012776`
-- run_number: `1616`
-- conclusion: `success`
+- active report path: `crates/haze-sync-server/control/report.md`
+- current status: missing / 404 when assigned
+- previous SRV-P7A prompt archive: `crates/haze-sync-server/control/log/20260711-160500Z-W1-SRV-P7A-implementation-worker-prompt.md`
 
-The Worktree component has completed WT-P1 through WT-P9, WT-P9C clean-code correction, and its final artifact-based formatting fix. Its accepted product snapshot is:
+This is a report-recovery pass only. It does not authorize new implementation or cleanup.
 
-- source_branch: `component/worktree`
-- source_code_bearing_sha: `4f7bc748d9b901d7d5c3e43c845ba407c0c36e59`
-- workflow: `Component CI`
-- workflow_run_id: `29152965199`
-- run_number: `1665`
-- conclusion: `success`
+## Authoritative evidence
 
-Important branch fact: `component/server` still contains the Wave-0 placeholder Worktree crate. Do not implement SRV-P7 against that placeholder and do not claim Worktree hosting until the accepted product snapshot is explicitly fanned into this branch.
+- pre-phase Server control head: `e816be0608f8e56b29ced8a16d6b238a91f885b7`
+- final SRV-P7A source/docs head before control recovery: `71fd46ceb8b50f2523cacd70165dcca63881aa82`
+- Component CI workflow run: `29158883879`
+- run number: `1701`
+- workflow conclusion: `success`
+- accepted Worktree source branch: `component/worktree`
+- accepted Worktree source SHA: `4f7bc748d9b901d7d5c3e43c845ba407c0c36e59`
+- accepted Worktree CI run: `29152965199`, run number `1665`, conclusion `success`
 
-## Phase goal
+Observed SRV-P7A changed scope from `e816be0...` through `71fd46c...` includes:
 
-Perform the first bounded SRV-P7 mini-phase:
+- exact Worktree product fan-in under `crates/haze-sync-worktree/Cargo.toml`, `src/**`, and `docs/**`;
+- `crates/haze-sync-server/Cargo.toml` normal dependency wiring;
+- `crates/haze-sync-server/src/worktree_runtime.rs` Server-owned composition boundary;
+- `crates/haze-sync-server/docs/implementation-log.md` SRV-P7A entry.
 
-1. synchronize the accepted Worktree product snapshot into `component/server` without changing Worktree semantics;
-2. add an explicit Server-owned composition boundary for the Worktree runtime;
-3. prove disabled/inert behavior, mode mapping, lifecycle ownership, and safe status handling;
-4. do not fabricate a working import/export runtime where current public contracts are insufficient.
+The Server composition boundary explicitly keeps enabled modes unavailable until a real Core/API/Storage-backed cycle executor exists; it does not construct fake watcher/executor/background work.
 
-This is `SRV-P7A`, not the entire SRV-P7 runtime/E2E phase.
+## Required verification
 
-## Required reads
+Before writing the report:
 
-Before editing, read:
+1. Read the archived SRV-P7A prompt and the current SRV-P7A implementation files.
+2. Compare the full SRV-P7A commit range `e816be0608f8e56b29ced8a16d6b238a91f885b7...71fd46ceb8b50f2523cacd70165dcca63881aa82`.
+3. Enumerate every synchronized Worktree product file.
+4. For each synchronized file, compare the destination blob on `component/server` with the same path at exact source SHA `4f7bc748d9b901d7d5c3e43c845ba407c0c36e59`.
+5. List any non-identical destination file. Do not hide or normalize differences.
+6. Verify no Worktree `control/**`, workflow, prompt, state, or report file was copied.
+7. Verify the Server composition implementation, mode mapping, disabled inertness, explicit lifecycle behavior, redaction, and honest enabled-unavailable state.
+8. Verify workflow run `29158883879` is associated with head `71fd46ceb8b50f2523cacd70165dcca63881aa82` and concluded successfully.
 
-- project implementation manifest, report template, implementation-worker prompt, and GitHub connector guidance;
-- current Server control state/prompt;
-- Server component contract, implementation plan SRV-P7 section, implementation log, dependency map, decisions, Cargo manifest, startup, config, state, readiness, routes, and tests;
-- Worktree component contract, implementation plan WT-P8/WT-P9 sections, dependency map, runtime/doctor docs, Cargo manifest, and public source at exact SHA `4f7bc748d9b901d7d5c3e43c845ba407c0c36e59`;
-- PR #49 changed-file inventory or equivalent repository evidence sufficient to enumerate the accepted Worktree product files;
-- the current placeholder Worktree files on `component/server`.
+If any required product file is absent, any synchronized file differs semantically, forbidden files were copied, or CI evidence does not match, report an honest blocked status. Do not fix product code in this pass.
 
-## Part A — exact Worktree snapshot fan-in
+## Allowed file
 
-Bring the accepted Worktree product files from exact source SHA `4f7bc748d9b901d7d5c3e43c845ba407c0c36e59` into `component/server`.
-
-Required product scope:
-
-- `crates/haze-sync-worktree/Cargo.toml`
-- `crates/haze-sync-worktree/src/**`
-- `crates/haze-sync-worktree/docs/**`
-- `Cargo.lock` only when required by the synchronized crate/dependency graph
-
-Do not copy Worktree `control/**`, branch-specific reports/prompts/state, or unrelated root/component files.
-
-For synchronized files:
-
-- preserve exact accepted content unless a compile-required integration adjustment is explicitly justified;
-- record source and destination blob identity where the connector exposes it;
-- list any destination file that cannot be copied exactly and explain why;
-- do not introduce semantic Worktree changes inside this phase;
-- if a semantic Worktree correction is required, stop and report `BLOCKED_BY_CONTRACT` rather than silently editing accepted Worktree behavior.
-
-## Part B — Server composition boundary
-
-Within Server ownership:
-
-- add `haze-sync-worktree` as a normal Server dependency;
-- introduce a clearly named Server-owned composition/lifecycle module or equivalent boundary;
-- map the existing Server/Common adapter mode exhaustively to Worktree `WorktreeMode` without changing either component's mode semantics;
-- consume the existing Server worktree root/config explicitly and avoid hidden globals;
-- keep Worktree scanner, importer, materializer, trash, doctor, repair, watcher, and scheduler logic inside `haze-sync-worktree`;
-- keep startup/shutdown ownership inside Server;
-- ensure disabled mode is inert and performs no scan, watcher, import, export, filesystem mutation, or background work;
-- expose only safe count/category/status data, never local absolute paths, database URLs, tokens, raw filesystem errors, or internal payloads;
-- preserve dependency-free router/state construction and existing route semantics.
-
-The accepted Worktree runtime is host-driven and does not spawn tasks itself. Do not create hidden background work merely to claim integration. If a Server polling task is introduced, it must be explicit, configuration-gated, cancellation-aware, documented, bounded, and tested. Otherwise keep SRV-P7A at explicit construction/lifecycle/status composition and defer the concrete executor loop to a later SRV-P7 mini-phase.
-
-## Truthfulness rule
-
-Do not use no-op watcher/executor implementations that make an enabled runtime appear healthy or operational.
-
-If current public Worktree/API/Core/Storage contracts are insufficient to construct a real enabled cycle executor, implement the honest composition boundary that is possible, keep enabled runtime unavailable/not-started rather than falsely ready, and report the exact missing contract for SRV-P7B.
-
-Do not add a new public HTTP DTO or route shape unless an existing API-owned contract already supports it. Safe internal status or existing admin DTO integration is allowed only when semantically honest and backward-compatible.
-
-## Required tests
-
-Add focused tests for at least:
-
-- exact and exhaustive adapter-mode mapping;
-- disabled mode remaining inert;
-- explicit lifecycle ownership and no implicit start;
-- safe/redacted `Debug` or status output;
-- dependency-free Server state/router behavior remaining unchanged;
-- enabled-but-unavailable composition being reported honestly if no real executor is wired;
-- synchronized Worktree crate compiling and its existing tests remaining present.
-
-Do not delete or weaken existing Worktree or Server tests.
-
-## Allowed files
-
-- `crates/haze-sync-worktree/Cargo.toml`
-- `crates/haze-sync-worktree/src/**`
-- `crates/haze-sync-worktree/docs/**`
-- `crates/haze-sync-server/Cargo.toml`
-- `crates/haze-sync-server/src/**`
-- `crates/haze-sync-server/docs/**`
-- `Cargo.lock` only if required
 - `crates/haze-sync-server/control/report.md`
 
-## Forbidden scope
+No other file may be changed.
 
-- no writes to `component/worktree`;
-- no Worktree `control/**` fan-in;
-- no Core/API/Storage/GDrive/Obsidian/CLI/Deployment source changes;
-- no provider API calls;
-- no hard delete;
-- no automatic destructive repair;
-- no plan-carried durable authorization;
-- no watcher-only correctness;
-- no hidden globals or unbounded background loops;
-- no new database schema/migrations;
-- no workflow changes;
-- no PR merge/readiness/lifecycle changes;
-- no unrelated cleanup.
+## Report requirements
 
-## CI and reporting
-
-Product/source/test/docs/dependency commits must run CI normally. CI skip is permitted only for a final report-only commit.
-
-Write only `crates/haze-sync-server/control/report.md` using `report-template.md`.
+Write `crates/haze-sync-server/control/report.md` using `report-template.md`.
 
 Set:
 
 - `REPORT_TYPE: IMPLEMENTATION`
 - `phase_id: SRV-P7A`
+- `agent_execution_id: W1-SRV-P7A-report-recovery`
+- `chat_name: server — W1 SRV-P7A Report Recovery`
 
-Your report must include:
+The report must include:
 
-- exact Worktree source SHA used;
-- synchronized file inventory and any non-identical files;
-- Server composition design;
-- whether enabled execution is genuinely wired or honestly deferred;
-- tests and CI evidence;
-- cross-component boundary assessment;
-- exact next recommended gate.
+- why report recovery was required;
+- exact source and destination SHAs;
+- complete synchronized-file inventory;
+- blob identity results and every non-identical file;
+- exact Server-owned composition changes;
+- whether enabled execution is genuinely wired or deferred;
+- exact CI run and conclusion;
+- scope/contract/secrecy assessment;
+- an honest final status;
+- mandatory clean-code review as the next agent only if the phase is self-accepted and green.
 
-Use an honest implementation status. Do not claim `SELF_ACCEPT` if accepted Worktree files are missing, enabled runtime is falsely represented, required scope escaped, or authoritative CI is red/pending.
+A final report-only commit may use `[skip ci]`. Do not treat that control-only commit as product CI evidence.
