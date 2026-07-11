@@ -6,23 +6,22 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-worktree/control/prompt.md
 active_report: crates/haze-sync-worktree/control/report.md
-active_agent_role: fixer-worker
+active_agent_role: clean-code-reviewer
+assigned_chat_name: worktree — W1 WT-P9C Clean-Code Review
+prompt_revision: verified by Orchestrator after FIX-WT-P9-CI completion
 
 wave: W1
-phase: FIX-WT-P9-CI
+phase: WT-P9C
 
-implementation_status: BLOCKED_BY_TOOLING
-clean_review_status: NOT_STARTED
-ci_status: CI_RED
+implementation_status: SELF_ACCEPT
+clean_review_status: PENDING
+ci_status: CI_GREEN
 ci_workflow: Component CI
-ci_code_bearing_sha: a14c4e953523e14d73431ae54ac03ab42101362c
-ci_run_id: 29143968689
-ci_run_number: 1655
+ci_code_bearing_sha: ea24e15f45613886f9dfad0f331543daf45d93bc
+ci_run_id: 29145333765
+ci_run_number: 1660
 ci_run_attempt: 1
-ci_artifact_name: ci-diag__component-worktree__wf-component-ci__run-29143968689__attempt-1
-ci_artifact_id: 8246127652
-known_failed_checks:
-- Finalize CI diagnostics
+known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
-next_gate_after_fix: clean-code-review for WT-P9 after a verified green post-fix code-bearing CI run
-fan_in_note: this fixer pass is Worktree-owned only; concrete Server hosting remains a dedicated later fan-in
+next_gate_after_review: component-complete fan-in hold if clean review is accepted and any review code-bearing CI is green
+fan_in_note: concrete Server hosting and repair execution remain dedicated later fan-in work
