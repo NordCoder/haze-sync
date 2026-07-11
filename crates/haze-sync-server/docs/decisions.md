@@ -1,274 +1,316 @@
 # Decisions: server
 
-## 2026-07-05 — T0-P3 remains documentation plus tiny cleanup
+## Standing accepted decisions
 
-Decision:
-T0-P3 is treated as a component documentation and process-control test with at most one behavior-preserving server-local route cleanup. It is not a broad route refactor or runtime behavior phase.
+The following earlier Server decisions remain accepted:
 
-Rationale:
-The T0-P3 implementation prompt asked to replace generic scaffold docs with useful current-state server documentation and permitted only one tiny safe cleanup if obvious. Server route modules already contain W2/W3 wiring across file, changes, conflict, delete, and admin surfaces, so a broad cleanup would be higher risk and belongs in a separately scoped implementation or fan-in phase.
+- Server is runtime composition and transaction orchestration, not sync policy.
+- Runtime state is explicit; hidden globals are forbidden.
+- Server owns live mutation transaction choreography over Core and Storage contracts.
+- Dependency-free router behavior is a safe test surface, not production readiness.
+- Provider runtimes and Worktree filesystem logic do not belong in generic route modules.
+- Admin/status surfaces remain read-only until an explicit mutation contract exists.
+- Partial route behavior must remain explicit and safe.
+- Startup, config, listener and shutdown are explicit; migrations are governed by an explicit operational policy.
+- SRV-P7A remains accepted: the Worktree snapshot is exact, lifecycle composition is active, Disabled is inert, enabled execution remains unavailable until a real executor is supplied.
 
-Alternatives:
-- Refactor route registration or split oversized route modules now; rejected because the T0-P3 implementation prompt explicitly forbade rewriting `routes/mod.rs` or `routes/v1.rs` and framed the work as a process test.
-- Make no source cleanup; allowed, but a small route doc-comment clarification was safe and behavior-preserving.
+## 2026-07-11 — SRV-P7B target architecture
 
-Consequences:
-The component docs now describe the current runtime wiring, ownership boundaries, safety rules, and deferred work without changing public behavior. Any substantial route decomposition, startup wiring, observability, or provider-runtime integration remains deferred to future scoped phases.
+Status: accepted cross-component architecture decision. Owner-component implementation phases are still required.
 
-Affected contracts:
-Server component contract only. No cross-component contract changes requested.
+### Context
 
-## 2026-07-05 — Server is runtime composition, not sync policy
+SRV-P7B1 proved that a Server-only implementation cannot correctly connect the current synchronous Worktree cycle executor to asynchronous SQLx/Tokio authority. Correct PUT/DELETE/conflict/idempotency behavior is also embedded in private async routes, while durable Worktree state/cursor and runtime policy are incomplete.
 
-Decision:
+Forbidden workarounds remain forbidden: nested Tokio runtimes, `Handle::block_on`, ad hoc blocking, internal HTTP self-calls, detached tasks, fabricated synchronous summaries, duplicated route policy and in-memory production state.
 
-`haze-sync-server` owns runtime route composition, auth execution, transaction orchestration, readiness, app state, and safe internal-to-public error mapping. It does not own Core overwrite/conflict/delete/idempotency policy, API DTO vocabulary, Storage schema, or adapter/provider semantics.
-
-Rationale:
-
-Server is the component where real dependencies meet. If Server route code invents policy or public vocabulary, the system loses the separation that lets Core, API, and Storage remain testable and independently reviewable.
-
-Alternatives:
-
-- Put sync policy directly in route handlers.
-- Let API own runtime handlers.
-- Let Storage repositories decide route outcomes.
-
-Consequences:
-
-- Server fan-in phases must compose upstream contracts explicitly.
-- Server tests should focus on integration behavior and safe mapping.
-- Policy or DTO changes discovered during Server work require contract-change requests.
-
-Affected contracts:
-
-- component contract;
-- dependency map;
-- Core/API/Storage/Server fan-in phases;
-- route implementation phases.
-
-## 2026-07-05 — Runtime state is explicit; hidden globals are forbidden
+## Decision A — Awaitable Worktree scheduler/cycle boundary
 
 Decision:
 
-Server runtime dependencies are carried through explicit state such as `ServerAppState`, not hidden globals or implicit singleton initialization. Dependency-free router construction remains supported for safe route-shell tests.
+Worktree retains ownership of scheduling semantics and synchronous filesystem primitives, but its authoritative cycle boundary becomes natively awaitable.
 
-Rationale:
+Contract shape:
 
-Explicit state makes tests deterministic, keeps readiness honest, and prevents route construction from silently connecting to databases, object stores, or providers.
+```rust
+pub trait WorktreeRuntimeCancellation: Send + Sync {
+    fn is_cancelled(&self) -> bool;
+}
 
-Alternatives:
+pub trait WorktreeRuntimeCycle: Send {
+    fn run_cycle<'a>(
+        &'a mut self,
+        request: WorktreeRuntimeCycleRequest,
+        cancellation: &'a dyn WorktreeRuntimeCancellation,
+    ) -> Pin<Box<dyn Future<Output = Result<
+        WorktreeRuntimeCycleSummary,
+        WorktreeRuntimeCycleFailure,
+    >> + Send + 'a>>;
+}
+```
 
-- Global DB pool/object store initialization.
-- Environment-driven singleton state inside route modules.
-- Route construction that always requires production dependencies.
+`WorktreeRuntimeService::poll` becomes async and awaits at most one cycle. `start`, cancellation request, safe status and watcher shutdown may stay synchronous because they do not call asynchronous authority.
 
-Consequences:
+Ownership:
 
-- Startup code must explicitly construct state from config.
-- Dependency-free routes must fail safely rather than mutate state.
-- Tests can verify route surfaces without production dependencies.
+- Worktree owns the trait, request/summary/failure/cancellation vocabulary, scheduler validation, hint coalescing, periodic correctness and no-overlap state.
+- Server owns the concrete executor and hosted lifecycle.
+- Synchronous filesystem phases may run through an explicit awaited bounded blocking-pool call owned by Server composition. SQLx/application-service work is awaited normally.
 
-Affected contracts:
+Cancellation and overlap:
 
-- state;
-- routes;
-- readiness;
-- startup/config phases;
-- server tests.
+- one mutable runtime service/executor is owned by one host task;
+- no new cycle starts after cancellation;
+- cancellation is checked between bounded phases/items;
+- a current atomic filesystem operation may finish, but later work does not start;
+- the host waits for the bounded in-flight cycle, shuts down watcher resources and joins;
+- no detached work and no overlapping manual/periodic/watcher cycles.
 
-## 2026-07-05 — Server owns transaction orchestration for live mutations
+Correctness:
 
-Decision:
+- watcher events remain path-free latency hints;
+- startup, periodic and watcher-triggered local-observing cycles require a full scan;
+- watcher failure never removes periodic correctness;
+- failures/status remain safe categories and counts only.
 
-For live write/delete/conflict/idempotency flows, Server owns the transaction choreography across API inputs, Core decisions, Storage repositories, object store, path locks, operation log, and public response persistence.
+Compatibility:
 
-Rationale:
+- existing request, policy, summary and status types remain where practical;
+- existing synchronous fake executors migrate to immediately-ready async test executors;
+- existing scheduler tests become async tests and retain deterministic fake clock/watcher behavior;
+- scanner/planner/materializer public contracts remain unchanged until explicitly changed by a Worktree-owner phase.
 
-Neither Core nor Storage alone owns enough runtime context to make multi-step durability decisions. Server is the correct fan-in point for request-scoped transactions and dependency coordination.
+Rejected alternatives:
 
-Alternatives:
+1. Keep the scheduler/cycle fully synchronous.
+   Rejected because correct authoritative operations are async and any bridge would block or create a second runtime.
+2. Make only Server spawn hidden async work while returning synchronously.
+   Rejected because summaries would be fabricated, errors/cancellation would be detached and no-overlap could not be proved.
+3. Move scheduling entirely into Server.
+   Rejected because full-scan/hint/budget semantics are Worktree-owned and would be duplicated.
+4. Make every filesystem primitive async now.
+   Rejected as unnecessary scope; the incompatibility is the cycle boundary, not the correctness of synchronous filesystem primitives.
 
-- Let Core own SQL transactions.
-- Let Storage repository helpers hide full service flows.
-- Split one HTTP mutation across multiple independent transactions.
-
-Consequences:
-
-- Server mutation routes must be carefully tested.
-- Path locks and idempotency records must be coordinated consistently.
-- Failure injection around object-store-before-DB-commit and DB-after-object-write remains important.
-
-Affected contracts:
-
-- file PUT/GET/changes routes;
-- conflict/delete routes;
-- Storage repository usage;
-- Core decision mapping;
-- E2E/failure-injection tests.
-
-## 2026-07-05 — Dependency-free router behavior is not production readiness
-
-Decision:
-
-`routes::build_router()` may expose route surfaces without runtime dependencies for tests and scaffolding, but protected routes must fail safely and this mode must not be described as production-ready sync behavior.
-
-Rationale:
-
-Dependency-free construction is useful for verifying route registration and safe errors. It does not prove that DB/object-store/auth/idempotency/operation-log behavior is live.
-
-Alternatives:
-
-- Remove dependency-free router construction.
-- Treat route-shell success as production readiness.
-- Hide missing dependencies behind mock mutations.
-
-Consequences:
-
-- Tests and docs must distinguish route-shell coverage from runtime-backed integration tests.
-- `/ready` must report disabled/missing dependencies honestly.
-- Future production startup must construct explicit runtime state.
-
-Affected contracts:
-
-- routes;
-- readiness;
-- tests;
-- README/system docs;
-- deployment/runbook planning.
-
-## 2026-07-05 — Provider runtimes are not embedded in generic Server routes
+## Decision B — Reusable Server application services
 
 Decision:
 
-Server must not contain Google Drive provider calls, Obsidian plugin internals, or Worktree scanner/materializer logic in generic Core API routes. Worktree may be hosted by Server only through a dedicated composition fan-in that preserves Worktree ownership.
+Create Server-owned reusable async services used by both HTTP routes and Worktree execution.
 
-Rationale:
+Target modules/types:
 
-Server is the HTTP/runtime fan-in boundary, not the owner of provider-specific logic. Embedding provider behavior in route modules would couple unrelated components and make adapter safety harder to review.
+```text
+application/files.rs
+application/deletes.rs
+application/changes.rs
+application/idempotency.rs
+ServerApplicationServices
+ApplicationActor
+ApplyFileCommand / ApplyFileOutcome
+ApplyDeleteCommand / ApplyDeleteOutcome
+AuthoritativeChangesQuery / AuthoritativeChangeBatch
+RevisionContentQuery / AuthoritativeRevisionContent
+ApplicationError
+```
 
-Alternatives:
+Required operations:
 
-- Put all adapter runtimes inside Server immediately.
-- Let Server route modules call Google Drive directly.
-- Move Worktree scanner/materializer code into Server.
+- create/update from a normalized Worktree fact with known or explicit-null base;
+- guarded local delete/tombstone submission;
+- bounded ordered authoritative changes retrieval;
+- revision metadata plus verified content retrieval;
+- conflict-saved typed outcomes;
+- deterministic non-HTTP Worktree idempotency;
+- shared transaction/lock/object-store/operation-log/commit choreography.
 
-Consequences:
+Idempotency:
 
-- Adapter components need their own contracts and plans.
-- Server can expose provider-neutral status and compose accepted runtimes later.
-- Worktree hosting requires explicit startup/shutdown/status design.
+```text
+put:    wt:v1:<adapter_id>:put:<path_hash>:<base_or_null>:<content_hash>
+delete: wt:v1:<adapter_id>:delete:<path_hash>:<base_or_null>
+```
 
-Affected contracts:
+Keys are deterministic, retry-stable and never logged/exposed. The same durable idempotency repository and fingerprint comparison are used by route and Worktree flows. HTTP client-supplied keys remain API-owned inputs.
 
-- Worktree component;
-- GDrive adapter component;
-- Obsidian plugin component;
-- Server startup/runtime phases;
-- deployment topology.
+Transaction ownership:
 
-## 2026-07-05 — Admin/status surfaces are read-only until explicitly scoped
+The service performs idempotency read, transaction begin, path lock, authoritative read, Core planning, object-store coordination, Storage persistence, conflict/tombstone/operation-log writes, safe replay persistence and commit/rollback. Storage helpers remain passive. Core remains the only policy arbiter.
 
-Decision:
+Extraction:
 
-Current admin/status routes are read-only operational surfaces. Mutations such as pause/resume, adapter mode changes, delete unlocks, token rotation, repair, or cleanup require explicit future contracts.
+- extract planning from `routes/v1/planning.rs`;
+- extract persistence from `routes/v1/persistence.rs`;
+- extract PUT/DELETE replay/fingerprint/storage choreography;
+- extract DELETE guard/tombstone/operation-log transaction flow from `routes/delete.rs`;
+- retain parsing, auth, HTTP status, DTO mapping and response construction in routes;
+- remove obsolete route-private helpers only after parity tests pass.
 
-Rationale:
+Compatibility:
 
-Admin mutation routes can change propagation, auth, or data safety. They need clear Core/API/Storage/Server/CLI contracts and operational docs before implementation.
+Public HTTP shapes, statuses, headers and dependency-free route behavior remain unchanged. The application layer returns internal typed outcomes, not API DTOs.
 
-Alternatives:
+Rejected alternatives:
 
-- Add admin mutations opportunistically to status routes.
-- Let CLI mutate server state without API/server contracts.
-- Hide mutation behavior behind query parameters or status endpoints.
+1. Worktree calls Server HTTP handlers or localhost routes.
+   Rejected because it couples an in-process runtime to transport/auth and duplicates serialization/error behavior.
+2. Duplicate route logic in the Worktree executor.
+   Rejected because policy, idempotency and transaction behavior would drift.
+3. Put full application transactions into Storage.
+   Rejected because Storage persists facts and must not own Core policy/runtime choreography.
+4. Put SQLx/runtime concerns into Core.
+   Rejected because Core remains deterministic and persistence-neutral.
 
-Consequences:
-
-- Status/admin DTOs can be stabilized safely first.
-- Mutating operations are deferred to dedicated phases.
-- Public status output remains less risky and easier to audit.
-
-Affected contracts:
-
-- admin routes;
-- API admin/status DTOs;
-- CLI status/doctor/admin commands;
-- Core delete unlock/repair semantics;
-- operational runbook.
-
-## 2026-07-06 — SRV-P2 partial route surfaces remain explicit
-
-Decision:
-
-The current Server router continues to register the W2/W3 route surface, but partial behavior stays explicit and passive-safe:
-
-- `/health`, `/ready`, and `/v1/server-info` are dependency-free shell/status routes.
-- Authenticated file, changes, delete, conflict, and admin routes require explicit `ServerAppState` dependencies for runtime-backed behavior.
-- Dependency-free protected routes fail through safe authentication, validation, storage-unavailable, or not-implemented responses and must not perform mock mutations.
-- `POST /v1/conflicts/{id}/resolve` supports only metadata-only resolution persistence for `accept_current`, `keep_both`, and `mark_resolved` when storage is configured. `accept_conflict` intentionally remains `not_implemented` until a scoped conflict-apply phase wires the required revision mutation semantics.
-- Unsupported admin mutations such as pause/resume are not registered; admin/status routes remain read-only.
-
-Rationale:
-
-SRV-P2 is an audit and hardening phase, not a route expansion phase. Keeping partial surfaces explicit prevents route-shell tests from being mistaken for production readiness and avoids route-local Core policy decisions.
-
-Alternatives:
-
-- Implement `accept_conflict` in this audit phase; rejected because it requires current-revision mutation semantics outside SRV-P2.
-- Add placeholder admin mutation routes; rejected because admin mutation behavior requires future contracts.
-- Hide dependency-free behavior behind successful mock responses; rejected because that would overstate runtime readiness.
-
-Consequences:
-
-- Route-shell tests can safely exercise public error mapping without DB/object-store dependencies.
-- Runtime-backed integration behavior remains covered only where current Core/API/Storage contracts already support it.
-- Future phases must keep not-implemented or placeholder behavior documented until they wire real, policy-aligned behavior.
-
-Affected contracts:
-
-- routes;
-- state;
-- auth;
-- readiness;
-- conflict routes;
-- admin routes;
-- future SRV-P4/SRV-P5/SRV-P6 work.
-
-## 2026-07-07 — SRV-P3 startup is explicit and does not auto-run migrations
+## Decision C — Durable Worktree state and cursor
 
 Decision:
 
-The server binary may start a production-like Axum listener from environment configuration, but startup remains explicit and limited:
+Storage owns durable Worktree instance/path state and export-cursor repository primitives. Server owns transaction timing; Worktree owns the semantic state model consumed by planners/materializers.
 
-- load `ServerConfig` from the existing environment variable contract;
-- prepare the configured local object-store root;
-- connect a PostgreSQL pool through the existing DB helper;
-- build `ServerAppState` directly from the loaded config and pool;
-- serve the existing router with graceful Ctrl-C shutdown;
-- do not auto-run repository migrations during startup.
+Existing schema assessment:
 
-Rationale:
+- current `worktree_state(path primary key, last_applied_revision_id, last_seen_sha256, last_seen_mtime, dirty, last_scanned_at, last_written_by_adapter)` is insufficient;
+- it lacks adapter/root identity, explicit present/tombstoned kind, format version and accepted repository methods;
+- `adapter_cursors.last_core_seq` is suitable for the authoritative export checkpoint after Storage adds locked contiguous advancement.
 
-A real listener is required for local/prod-like operation, but hidden migration execution can change persistent state at process boot. Migration policy remains an operator/future-contract decision rather than implicit server startup behavior.
+Minimum Storage change:
 
-Alternatives:
+1. Add a versioned Worktree instance binding keyed by `adapter_id` with root fingerprint, state format version and safe timestamps.
+2. Replace/migrate path state to a key of `(adapter_id, path)` and add explicit state kind plus last-applied revision/hash and accepted reconciliation fields.
+3. Add typed repositories for bind/load/upsert/tombstone/snapshot operations.
+4. Add cursor methods that lock/read and advance only monotonically to the exact contiguous processed sequence.
 
-- Keep the binary as a scaffold-only router constructor; rejected because SRV-P3 requires production startup.
-- Auto-run migrations at startup; rejected because the current plan lists automatic migration behavior as a contract-change trigger unless accepted by policy.
-- Start adapter loops or provider runtimes with the listener; rejected as out of scope for SRV-P3.
+Identity:
 
-Consequences:
+- state is per Worktree adapter instance, not globally per path;
+- V1 default adapter id is `worktree`;
+- the instance is bound to a SHA-256 fingerprint of the normalized configured root;
+- a binding mismatch is fail-closed and requires explicit operator migration/rebind policy;
+- raw roots are not stored in public output.
 
-- Startup failures use sanitized `StartupError` messages.
-- Route semantics remain unchanged because the existing router is mounted with explicit state.
-- Operators must still run migrations through an explicit migration entry point until a later accepted policy changes that behavior.
+Serialization/versioning:
 
-Affected contracts:
+- relational typed columns for identity, path state and checkpoint-critical fields;
+- any reconciliation JSON extension must carry an explicit schema version and be bounded/validated;
+- unknown future versions are rejected safely rather than silently interpreted.
 
-- main binary startup;
-- config;
-- db;
-- state;
-- routes;
-- future deployment/runbook work.
+Atomicity and advancement:
+
+- accepted/same-content import then durable present state;
+- accepted delete then durable tombstoned state;
+- conflict/rejection/failure does not claim accepted local state;
+- export applies one authoritative change, then path state and cursor advance together in one DB transaction;
+- cursor never advances past an unprocessed sequence.
+
+Crash semantics:
+
+- before filesystem apply: cursor stays old, replay later;
+- after filesystem apply but before state/cursor commit: replay yields `AlreadyCurrent`, then commits state/cursor;
+- after accepted import but before state update: deterministic idempotency replays outcome, then state updates;
+- DB rollback never leaves a falsely advanced cursor/state;
+- object-store blobs may be orphaned by later DB rollback but never become current without metadata commit.
+
+Durable vs process-local status:
+
+- durable: instance binding/version, path state, cursor/checkpoint and last-success metadata;
+- process-local: cycles completed/failed, pending hints, in-progress state and last-cycle summary, all labelled `since_start`.
+
+Retention:
+
+- Worktree path state is retained while the adapter instance exists and while tombstone/revision references remain operationally relevant;
+- cleanup is a separate explicit Storage/Core/Deployment phase;
+- no automatic destructive cleanup is introduced.
+
+Required proof:
+
+- no skipped export under crash/restart;
+- replay of materialized-but-uncheckpointed changes;
+- no unsafe duplicate import after accepted mutation;
+- no false last-applied state on conflict/failure;
+- cursor regression and instance-binding mismatch rejection;
+- transaction rollback tests.
+
+Rejected alternatives:
+
+1. In-memory `WorktreeStateSnapshot` in production.
+   Rejected because restart loses bases/echo/reconciliation safety.
+2. Hidden files under the Worktree root as source-of-truth metadata.
+   Rejected because Worktree files are a materialized view and can be edited/copied.
+3. Use only `adapter_cursors.external_cursor_json` for all path state.
+   Rejected because path-level querying/locking/versioning would be opaque and unsafe.
+4. Advance cursor before materialization.
+   Rejected because a crash would skip unapplied authoritative changes.
+
+## Decision D — Runtime policy, config and invocation
+
+Decision:
+
+Server config owns explicit bounded policy values with documented deterministic defaults.
+
+Defaults:
+
+```text
+adapter_id = worktree
+max_import_actions = 100
+max_delete_candidates = 100
+max_export_actions = 100
+periodic_correctness_interval = 60s
+watcher_debounce = 500ms
+max_watcher_hints_per_poll = 256
+host_idle_wake_interval = 250ms
+graceful_cycle_shutdown_budget = 30s
+```
+
+All values are non-zero, validated and bounded. Existing Worktree/Core delete count/ratio guards remain authoritative in addition to the cycle candidate budget.
+
+Invocation:
+
+- startup binds durable identity before the first cycle;
+- one explicit joined Server host owns periodic/watcher/manual invocation;
+- manual one-cycle requests use the same host queue and cannot overlap;
+- a busy manual request is safely rejected or coalesced, never run concurrently;
+- cancellation stops new work and joins the task;
+- no hidden unbounded retries or detached background work.
+
+Mode semantics:
+
+- Disabled: no host task, watcher or state work.
+- ReadOnly: authoritative Core-to-Worktree export only.
+- ImportOnly: full-scan import and guarded local-delete submission only.
+- ExportOnly: authoritative Core-to-Worktree export only.
+- Bidirectional: both within budgets.
+- DryRun: explicit manual cycle only; may load/scan/query/plan and return count-only summaries, but performs no Core mutation, cursor advancement, materialization, trash move, echo write or durable Worktree state mutation.
+
+Readiness/status:
+
+- `/health` remains process health and is not failed by a cycle error;
+- Disabled does not make Server unready when required HTTP dependencies are ready;
+- enabled mode readiness requires valid config, durable identity binding, DB/object-store readiness and a running/non-terminal host;
+- host/cycle failure degrades Worktree readiness and safe admin status;
+- public status contains mode/lifecycle/category/count/cursor-presence only, never raw root/cursor/error/payload/secret.
+
+Rejected alternatives:
+
+1. Hard-code all policy invisibly.
+   Rejected because operator budgets/cadence must be explicit and auditable.
+2. Make every value mandatory with no defaults.
+   Rejected because deterministic conservative defaults improve deployability while remaining visible.
+3. Start enabled runtime without durable binding/readiness.
+   Rejected because it can import/export against the wrong root or lose cursor safety.
+4. Treat DryRun as normal hosted mode.
+   Rejected because continuous no-op work is misleading; V1 DryRun is explicit manual planning.
+
+## Consequences and implementation order
+
+Required order:
+
+1. `worktree — W1 WT-P10 Async Runtime Contract`
+2. `storage — W1 STOR-P10 Worktree Durable State`
+3. `server — W1 SRV-P7B2 Application Services`
+4. `server — W1 SRV-P7B3 Bounded Worktree Executor`
+5. `server — W1 SRV-P7B4 Hosted Worktree Runtime`
+6. `api — W1 API-P8 Worktree Runtime Status Contract`
+7. `server — W1 SRV-P7B5 Worktree Status and Readiness`
+8. `cli — W1 CLI-P6A Worktree Sync Once`
+9. `deployment — W1 DEP-P5A Worktree Runtime Fan-In`
+
+Worktree, Storage and Server application-service owner phases may be developed separately after this decision, but SRV-P7B3 cannot start until all three are clean-accepted and synchronized. Public status work waits for API ownership. CLI and Deployment remain blocked until Server runtime/status contracts are accepted.
