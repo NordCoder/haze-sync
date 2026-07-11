@@ -6,54 +6,55 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-storage/control/prompt.md
 active_report: crates/haze-sync-storage/control/report.md
-active_agent_role: implementation-worker
-assigned_chat_name: storage — W1 STOR-P10 Worktree Durable State
-prompt_revision: verified by Orchestrator after ARCH-SRV-P7B-CONTRACTS assigned durable Worktree state and cursor ownership to Storage
+active_agent_role: fixer-worker
+assigned_chat_name: storage — W1 STOR-P10 CI Fix
+prompt_revision: verified by Orchestrator after STOR-P10 completed implementation and exact diagnostics artifact metadata was retrieved
 
 wave: W1
-phase: STOR-P10
+phase: FIX-STOR-P10-CI
 
-implementation_status: NOT_STARTED
+implementation_status: BLOCKED_BY_TOOLING
+fix_status: NOT_STARTED
 clean_review_status: NOT_STARTED
-ci_status: NOT_RUN
 architect_status: ARCHITECT_CHANGED_CONTRACTS
+ci_status: CI_RED
+ci_workflow: Component CI
+ci_code_bearing_sha: 63d80764933cba5f23fb43bad44201a75e1dc16a
+ci_run_id: 29166287661
+ci_run_number: 1765
+ci_run_attempt: 1
+known_failed_checks:
+- Finalize CI diagnostics
 
-accepted_baseline_code_bearing_sha: aa59064d641f4850f7c70fa615e638b52613dd95
-accepted_baseline_ci_run: 29124956486
-accepted_baseline_ci_run_number: 1580
-accepted_baseline_ci_status: CI_GREEN
-external_server_feature_isolation_status: CLEAN_ACCEPT
+artifact_name: ci-diag__component-storage__wf-component-ci__run-29166287661__attempt-1
+artifact_id: 8252246409
+artifact_head_sha: 63d80764933cba5f23fb43bad44201a75e1dc16a
+artifact_digest: sha256:c2e86e52d1bd342fd577503042c4e4640591179a08fae678de1a27d22d4e0f2c
+artifact_size_bytes: 13317
+artifact_expires_at: 2026-07-12T20:03:15Z
+artifact_status: AVAILABLE_UNEXPIRED
 
-architecture_source_branch: component/server
-architecture_docs_sha: b98f5079ed90ccf7eaec79e617ae591e0c308ff4
-architecture_report_commit: 22b5e993431a1c0a858716ac835a3ece8ade6d5c
-architecture_ci_run: 29165123142
-architecture_ci_run_number: 1719
-architecture_status: ARCHITECT_CHANGED_CONTRACTS
+accepted_implementation:
+- versioned Worktree instance/root-fingerprint binding
+- per-adapter present/tombstoned durable path state
+- fail-safe legacy migration strategy
+- caller-transaction-owned path state and exact contiguous cursor repositories
+- safe redacted errors and deterministic schema/test-support coverage
 
-phase_scope:
-- versioned Worktree adapter-instance binding keyed by adapter_id
-- non-public normalized-root fingerprint verification
-- per-instance present/tombstoned path state and bounded versioned reconciliation fields
-- caller-transaction-owned path-state repositories
-- locked exact-contiguous monotonic adapter_cursors.last_core_seq operations
-- migration, legacy compatibility and crash/rollback tests
+separate_tooling_blocker:
+- mandatory strict PostgreSQL migration/state/cursor tests were not executed
+- ordinary cargo test success with ignored DB tests is not acceptance evidence
+- no clean-code review until dedicated DB-capable verification succeeds
 
-ownership_invariants:
-- Storage owns schema, models and passive repository primitives
-- Server will own transaction timing and runtime composition
-- Worktree owns filesystem and semantic planning/materialization behavior
-- Core/API policy and public DTO ownership remain unchanged
-
-parallel_owner_phases:
-- WT-P10 may run independently on component/worktree
-- SRV-P7B2 may run independently on component/server
+parallel_owner_status:
+- WT-P10 is independently in tooling correction
+- SRV-P7B2 is independently in tooling correction
 
 blocked_downstream:
-- SRV-P7B3 remains blocked until WT-P10, STOR-P10 and SRV-P7B2 are all CLEAN_ACCEPT with exact accepted SHAs synchronized
-- Deployment migration work remains blocked until STOR-P10 clean acceptance and later Server runtime phases
+- SRV-P7B3 remains blocked until WT-P10, STOR-P10 and SRV-P7B2 all reach CLEAN_ACCEPT and exact accepted SHAs are synchronized
+- Deployment migration work remains blocked
 
-next_gate_after_implementation:
-- SELF_ACCEPT plus green code-bearing Component CI and mandatory DB/migration evidence -> STOR-P10 clean-code review
-- red CI -> exact artifact-based fixer after Orchestrator metadata retrieval
-- blocked status -> route exact contract/scope/tooling decision; no clean review
+next_gate_after_fix:
+- artifact correction and independently verified green post-fix code-bearing CI -> dedicated STOR-P10 PostgreSQL verification prompt
+- only after required DB/migration/repository/cursor evidence succeeds -> mandatory STOR-P10 clean-code review
+- failed or blocked fix -> route exact artifact/scope/contract/tooling decision
