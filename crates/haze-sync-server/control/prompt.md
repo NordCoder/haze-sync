@@ -1,118 +1,129 @@
-# W1-SRV-P7A-FIX — Activate the Server-owned Worktree composition boundary
+# W1-FIX-SRV-P7A-CI — Server Worktree composition CI correction
 
 Before starting, name this worker chat exactly:
 
-`server — W1 SRV-P7A Wiring Fix`
+`server — W1 SRV-P7A CI Fix`
 
 Component: server
 Path: crates/haze-sync-server
 Branch: component/server
 PR: #45
-Role: implementation-worker
+Role: fixer-worker
 
-Work only through the GitHub connector. Do not merge the PR, change its draft state, rebase, reset, rewrite history, force-push, modify `main`, modify `component/worktree`, or change sibling components.
+Work only through the GitHub connector. Do not merge the PR, change its draft state, rebase, reset, rewrite history, force-push, modify `main`, modify `component/worktree`, or change sibling branches.
 
-## Why this correction is required
+## Context
 
-The accepted Worktree snapshot fan-in is complete and exact, but the Server-owned SRV-P7A composition file is not part of the active crate:
+SRV-P7A-FIX activated the Server-owned Worktree composition boundary and reached implementation self-acceptance, but the final code-bearing Component CI run is red.
 
-- accepted Worktree source SHA: `4f7bc748d9b901d7d5c3e43c845ba407c0c36e59`
-- synchronized Worktree files: `32/32` exact blob identity
-- SRV-P7A product/source/docs head: `71fd46ceb8b50f2523cacd70165dcca63881aa82`
-- Component CI run: `29158883879`
-- run number: `1701`
-- conclusion: `success`
+Authoritative implementation evidence:
 
-That green run is insufficient for acceptance because `crates/haze-sync-server/src/worktree_runtime.rs` is not declared by `main.rs`. Its implementation and six tests were therefore not compiled or executed. Production startup also does not construct the boundary from `ServerConfig.worktree`, call `start`, retain it for the server lifetime, or call `shutdown`.
+- code_bearing_sha: `fe9101871462fc271a320726f4ad18668d1a9a5b`
+- workflow: `Component CI`
+- workflow_run_id: `29160824666`
+- run_number: `1703`
+- workflow_run_attempt: `1`
+- conclusion: `failure`
+- failed check: `Finalize CI diagnostics`
 
-The authoritative recovery report is archived at:
+The implementation report states that cargo fmt, cargo check, cargo test, and cargo clippy passed, including the now-compiled Worktree composition tests. Do not infer the exact failure from that visible summary.
 
-`crates/haze-sync-server/control/log/20260711-163000Z-W1-SRV-P7A-REPORT-RECOVERY-implementation-worker-report.md`
+Archived phase evidence:
 
-It concluded `SELF_NEEDS_FIX`. This prompt corrects only that verified Server wiring defect.
+- implementation prompt: `crates/haze-sync-server/control/log/20260711-171000Z-W1-SRV-P7A-FIX-implementation-worker-prompt.md`
+- implementation report: `crates/haze-sync-server/control/log/20260711-171000Z-W1-SRV-P7A-FIX-implementation-worker-report.md`
+- earlier recovery report: `crates/haze-sync-server/control/log/20260711-163000Z-W1-SRV-P7A-REPORT-RECOVERY-implementation-worker-report.md`
+
+Use this exact diagnostics artifact:
+
+- artifact_name: `ci-diag__component-server__wf-component-ci__run-29160824666__attempt-1`
+- artifact_id: `8250773210`
+- artifact_head_sha: `fe9101871462fc271a320726f4ad18668d1a9a5b`
+- artifact_digest: `sha256:a02d9916569faa4457f8b3509b6b11908b8805f113b82c9aa96e58d10e1b7d6d`
+- artifact_size_bytes: `1993`
+- artifact_created_at: `2026-07-11T17:02:32Z`
+- artifact_expires_at: `2026-07-12T17:02:32Z`
+- artifact_status: available and unexpired when assigned
 
 ## Required reads
 
 Before editing, read:
 
-- project implementation manifest, report template, implementation-worker prompt, and GitHub connector guidance;
-- current Server control state/prompt;
-- the archived SRV-P7A implementation prompt;
-- the archived SRV-P7A report-recovery prompt and report;
-- Server contract, SRV-P7 plan section, dependency map, decisions, implementation log, Cargo manifest, `src/main.rs`, config types, state, readiness, routes, and `src/worktree_runtime.rs`;
-- accepted Worktree runtime contract/docs and public runtime types already synchronized into this branch.
+- project implementation manifest, report template, fixer-worker prompt, and GitHub connector guidance;
+- current Server control state and this prompt;
+- archived SRV-P7A-FIX prompt/report and earlier recovery report;
+- changed Server source/tests involved in SRV-P7A-FIX;
+- the exact diagnostics artifact specified above.
+
+## Diagnostics protocol
+
+Through the GitHub connector:
+
+1. fetch artifact `8250773210` from workflow run `29160824666`;
+2. read `summary.md` and `manifest.json` at the archive location where they actually exist;
+3. read every failure marker and log named by `failed_checks`;
+4. verify artifact head SHA exactly matches `fe9101871462fc271a320726f4ad18668d1a9a5b`;
+5. apply only the minimum artifact-proven correction.
+
+Raw GitHub job logs are not authorized as fallback. If the artifact is missing, expired, malformed, mismatched, or unreadable, report `FIX_BLOCKED_BY_LOGS` without guessing.
 
 ## Task
 
-Complete the already-scoped Server-owned composition boundary without implementing SRV-P7B execution.
+Fix only the artifact-proven cause of the SRV-P7A-FIX CI failure.
 
-Required behavior:
+Preserve the accepted implementation:
 
-1. Include `worktree_runtime.rs` in the active Server crate module graph so its implementation and tests compile.
-2. Construct `ServerWorktreeRuntime` from the existing `ServerConfig.worktree.mode` and `ServerConfig.worktree.root` before `ServerConfig` is moved into `ServerAppState`.
-3. Call `start` exactly once through the production startup path.
-4. Retain the composition boundary for the full HTTP server lifetime.
-5. Call `shutdown` exactly once after the serve future completes, including the serve-error path; do not skip lifecycle closure merely because serving failed.
-6. Preserve disabled mode as completely inert.
-7. Preserve enabled modes as honestly `Unavailable` with `CycleExecutorNotWired`; do not create a fake watcher, executor, polling loop, scan, import, export, mutation, or background task.
-8. Preserve `DryRun` as unsupported rather than silently remapping it.
-9. Map any lifecycle/startup error to a stable secret-safe `StartupError` without exposing the configured root, database URL, tokens, raw filesystem errors, or internal debug payloads.
-10. Keep dependency-free router/state behavior and all existing routes unchanged.
-11. Ensure the focused mode/lifecycle/inertness/redaction tests in `worktree_runtime.rs` are part of the compiled test target and actually run in Component CI.
-12. Correct the SRV-P7A implementation-log entry only if needed so it precisely matches active behavior after this fix.
-
-Prefer a small explicit composition helper if it makes start/serve/shutdown ordering testable without opening a real listener or requiring a live database. Do not broaden this into a runtime framework.
-
-## Acceptance checks
-
-The implementation is acceptable only if:
-
-- `worktree_runtime.rs` is in the crate graph;
-- its focused tests compile and execute;
-- production startup constructs the boundary from existing config;
-- start and shutdown ownership is explicit and deterministic;
-- shutdown is attempted after both successful and failed serving completion where testable;
-- disabled behavior remains inert;
-- enabled behavior remains honestly unavailable rather than fake-operational;
-- no accepted Worktree product file changes;
-- no route/API/storage/provider/deployment behavior changes;
-- a new code-bearing Component CI run is observed green.
+- `worktree_runtime.rs` remains part of the active Server crate graph;
+- production construction uses existing `ServerConfig.worktree.mode` and `.root`;
+- lifecycle order remains explicit: construct, start once, retain for serve lifetime, shutdown once after both successful and failed serve completion;
+- Disabled remains inert;
+- enabled modes remain honestly unavailable with `CycleExecutorNotWired`;
+- DryRun remains unsupported;
+- no fake watcher, executor, polling loop, scan, import/export mutation, repair execution, provider call, or background task;
+- no absolute worktree root, database URL, token, raw filesystem error, or internal debug payload is exposed;
+- dependency-free routes and existing HTTP behavior remain unchanged;
+- accepted Worktree product files remain unchanged.
 
 ## Allowed files
 
-- `crates/haze-sync-server/src/main.rs`
-- `crates/haze-sync-server/src/worktree_runtime.rs`
-- `crates/haze-sync-server/docs/implementation-log.md` only for factual correction/update
+- `crates/haze-sync-server/src/**` only when required by the exact artifact-proven correction
+- `crates/haze-sync-server/docs/implementation-log.md` only if the artifact-proven correction changes a documented fact
 - `crates/haze-sync-server/control/report.md`
 
-If a compile-proven correction requires another Server-local source file, stop and report the exact need as `BLOCKED_BY_CONTRACT` rather than silently expanding scope.
-
-## Forbidden scope
+## Forbidden changes
 
 - no changes under `crates/haze-sync-worktree/**`;
-- no Cargo dependency or feature changes;
-- no Core/API/Storage/Common/GDrive/Obsidian/CLI/Deployment changes;
-- no new HTTP routes or public DTOs;
-- no real Worktree cycle executor, watcher implementation, import/export loop, repair executor, or persistence wiring;
-- no hidden globals or unbounded/background tasks;
-- no provider calls;
-- no hard delete or automatic destructive repair;
+- no Cargo dependency/feature changes;
 - no workflow changes;
-- no test deletion or assertion weakening;
-- no unrelated cleanup.
+- no Core/API/Storage/Common/GDrive/Obsidian/CLI/Deployment changes;
+- no public route or DTO changes;
+- no SRV-P7B executor/runtime expansion;
+- no provider behavior, hard delete, destructive repair, hidden global, background task, test deletion, assertion weakening, or unrelated cleanup.
 
-## CI and report
+If the artifact proves a required correction outside the allowed scope, report `FIX_BLOCKED_BY_CONTRACT` rather than expanding scope.
 
-Source/test/docs commits must run CI normally. CI skip is permitted only for the final report-only commit.
+## Checks and CI
 
-Do not self-accept based on the old run `29158883879`. A new code-bearing Component CI run must compile and test the activated module and conclude successfully.
+Any source/test/docs fixer commit must run CI normally. CI skip is permitted only for a final report-only commit.
+
+Do not claim success until a post-fix code-bearing Component CI run is observed green. If the exact correction is applied but CI remains pending or red, use the corresponding honest fixer status.
+
+## Report
 
 Write only `crates/haze-sync-server/control/report.md` using `report-template.md`.
 
 Set:
 
-- `REPORT_TYPE: IMPLEMENTATION`
-- `phase_id: SRV-P7A-FIX`
-- `chat_name: server — W1 SRV-P7A Wiring Fix`
+- `REPORT_TYPE: FIX`
+- `phase_id: FIX-SRV-P7A-CI`
+- `chat_name: server — W1 SRV-P7A CI Fix`
 
-The report must include exact changed files, lifecycle ordering, tests proving module activation, final code-bearing SHA, authoritative CI run metadata, preserved non-goals, and an honest status. Recommend clean-code review only if the corrected implementation is `SELF_ACCEPT` with green CI.
+Use one of:
+
+- `FIX_COMPLETE`
+- `FIX_NEEDS_MORE`
+- `FIX_BLOCKED_BY_LOGS`
+- `FIX_BLOCKED_BY_CONTRACT`
+- `FIX_BLOCKED_BY_TOOLING`
+
+Fill `CI_DIAGNOSTICS` completely: exact artifact name/id/digest, run id/attempt, files read, head-SHA verification, raw-log usage, applied correction, final code-bearing SHA, and post-fix workflow evidence.
