@@ -1,77 +1,81 @@
-# W1-FIX-SRV-P7B2-DB-CI — PostgreSQL-capable Server application-services CI
+# W1-SRV-P7B2-BRANCH-SYNC — Synchronize with main and execute DB-capable CI
 
 Before starting, name this worker chat exactly:
 
-`server — W1 SRV-P7B2 PostgreSQL CI Fix`
+`server — W1 SRV-P7B2 Branch Sync and PostgreSQL Run`
 
 Component: server
 Path: crates/haze-sync-server
 Branch: component/server
 PR: #45
-Role: fixer-worker
-Phase: FIX-SRV-P7B2-DB-CI
+Role: implementation-worker
+Phase: SRV-P7B2-BRANCH-SYNC-DB-CI
 
-Work only through the GitHub connector. Do not merge the PR, change draft state, rebase, reset, rewrite history, force-push, modify `main`, or modify sibling branches.
+Work through the GitHub connector. Do not merge PR #45 into `main`, change its draft state, rebase, reset, rewrite history, force-push, modify sibling branches, or discard accepted Server changes.
 
 ## Trigger
 
-The first SRV-P7B2 fixer corrected all source-level rustfmt/clippy findings proven by artifact `8252253613`, but post-fix Component CI remains red because mandatory DB-backed parity tests have no PostgreSQL service or test URL.
+SRV-P7B2 application services and source-level artifact corrections are complete. PostgreSQL provisioning was added to Component CI, but GitHub did not create a pull-request run because PR #45 is currently non-mergeable.
 
-Current evidence:
+Accepted evidence:
 
-- accepted SRV-P7B2 application-services implementation SHA: `81e6f6ae69f4bda92d284991e4909457a6ef8e60`
-- post-source-fix code-bearing SHA: `9304263f4be8234e513bf335dc886f96c53d0cce`
-- post-fix Component CI run: `29167206582`
-- run number: `1798`
-- conclusion: `failure`
-- visible fmt/check/test/clippy wrappers: success
-- finalizer: failure
-- current Component CI workflow has no PostgreSQL service and no `HAZE_SYNC_TEST_DATABASE_URL`/`DATABASE_URL`
+- accepted SRV-P7B2 implementation SHA: `81e6f6ae69f4bda92d284991e4909457a6ef8e60`;
+- post-source-fix code-bearing SHA: `9304263f4be8234e513bf335dc886f96c53d0cce`;
+- PostgreSQL workflow tooling SHA before report-only commit: `d48bbd847c8b79511a7ac32cfcb14c671f3880c1`;
+- previous fixer status: `FIX_BLOCKED_BY_TOOLING`;
+- exact prior diagnostics artifact `8252500221` proved the remaining failures were the three mandatory DB-backed parity tests with no configured PostgreSQL URL;
+- PR #45 was observed open, draft, unmerged, and `mergeable: false`;
+- current observed `main` head: `c1e69a664388b0cba028170e8398b9088218957d`;
+- current merge base before synchronization: `9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2`.
 
-The prior authorized artifact proved mandatory DB failures in:
+The previous tooling phase already added `postgres:16-alpine` and a synthetic test-only `HAZE_SYNC_TEST_DATABASE_URL` to the ordinary Rust workspace job. Do not redesign application services or weaken tests.
 
-- `application::tests::application_services_preserve_atomic_file_delete_and_read_semantics`
-- `routes::delete::tests::delegated_delete_route_preserves_tombstone_replay_and_stale_base_behavior`
-- `routes::v1::tests::delegated_routes_preserve_put_get_and_changes_wire_behavior`
+## Goal
 
-No test may be deleted, weakened, ignored, or made optional.
+Create a real, non-force, two-parent merge of current `main` into `component/server`, resolve the CI-file conflict without losing either side, restore PR mergeability, and obtain an authoritative pull-request Component CI run that executes the mandatory SRV-P7B2 database-backed parity tests.
 
-## Exact post-fix diagnostics artifact
+A fabricated merge commit whose tree simply ignores `main` changes is forbidden.
 
-Use only this new artifact for the current failure:
+## Required synchronization protocol
 
-- artifact name: `ci-diag__component-server__wf-component-ci__run-29167206582__attempt-1`
-- artifact id: `8252500221`
-- artifact head SHA: `9304263f4be8234e513bf335dc886f96c53d0cce`
-- artifact digest: `sha256:89fdf6a62c826744abf49c5b462325b9e42ba797d5367a5ef2ff60e10ac240c8`
-- artifact size bytes: `8591`
-- created at: `2026-07-11T20:33:42Z`
-- expires at: `2026-07-12T20:33:41Z`
-- status when assigned: available and unexpired
+1. Re-read the current heads of `component/server` and `main` immediately before constructing the merge.
+2. Recompute the merge base and compare merge-base..main and merge-base..component/server.
+3. If `main` moved beyond the observed head, include every new main change and document it. Do not rely blindly on the observed file list.
+4. At the observed main head, main changed exactly these paths since the old merge base:
+   - `.github/docs/ci-diagnostics-artifacts.md`
+   - `.github/scripts/ci-finalize.sh`
+   - `.github/scripts/ci-run.sh`
+   - `.github/workflows/ci.yml`
+   - `.github/workflows/component-ci.yml`
+   - `.github/workflows/obsidian-plugin.yml`
+   - `.github/workflows/rust.yml`
+5. The final merge tree must contain exact current-main content for every main-changed path not intentionally extended by this Server phase.
+6. `.github/workflows/component-ci.yml` must be a semantic merge of current main plus the accepted ephemeral PostgreSQL service and `HAZE_SYNC_TEST_DATABASE_URL` required by the Server DB-backed tests. Preserve main's pull-request trigger, workflow dispatch, permissions, concurrency, component context resolution, diagnostics wrapper/finalizer, and artifact upload.
+7. Preserve every accepted Server application-service, route-delegation, test, documentation, and control change already present on the component branch.
+8. Construct a true merge commit with:
+   - first parent: the current component/server head at execution time;
+   - second parent: the current main head at execution time;
+   - a merged tree containing both sides' accepted changes.
+9. Move `component/server` to the new merge commit using a fast-forward ref update only. Never force-update.
+10. Verify PR #45 becomes mergeable and obtains a non-null merge commit SHA.
 
-## Diagnostics protocol
+GitHub git-data operations such as tree creation, multi-parent commit creation, and non-force ref update are authorized for this exact synchronization. Do not create an ours-only merge or omit non-conflicting main changes.
 
-1. Fetch artifact `8252500221` from run `29167206582`.
-2. Verify exact head SHA and digest.
-3. Read `summary.md`, `manifest.json`, every failure marker, and every log listed by `failed_checks`.
-4. Confirm whether the remaining failure is PostgreSQL provisioning/test-environment only.
-5. Apply the complete minimum artifact-proven tooling correction.
+## Required CI execution
 
-Raw GitHub job logs are not authorized as fallback. If the artifact is missing, expired, malformed, mismatched, or unreadable, report `FIX_BLOCKED_BY_LOGS`.
+After the merge commit updates the branch:
 
-## Authorized PostgreSQL CI scope
+- observe the new pull-request Component CI run associated with the synchronized branch head;
+- require PostgreSQL service health to succeed;
+- require `cargo fmt`, `cargo check`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, and diagnostics finalization to pass;
+- because the three tests are mandatory and fail immediately when no test database URL exists, a green workspace test step must include successful execution of:
+  - `application::tests::application_services_preserve_atomic_file_delete_and_read_semantics`;
+  - `routes::delete::tests::delegated_delete_route_preserves_tombstone_replay_and_stale_base_behavior`;
+  - `routes::v1::tests::delegated_routes_preserve_put_get_and_changes_wire_behavior`.
 
-If and only if the artifact confirms the mandatory DB tests fail because no PostgreSQL test database is provisioned, you are explicitly authorized to make the smallest branch-local CI tooling change necessary to:
+If CI is red, record the exact synchronized code-bearing/tooling SHA, run id, run number, failed check, and diagnostics artifact metadata. Do not read diagnostics artifacts in this implementation role and do not guess.
 
-- provision an ephemeral PostgreSQL service with test-only non-secret credentials;
-- wait for readiness deterministically;
-- expose a test-only database URL under the exact environment variable expected by Server test support;
-- run the existing mandatory DB-backed SRV-P7B2 tests as part of normal `cargo test --workspace` or an explicit mandatory step;
-- fail CI if connection/setup/tests fail;
-- preserve diagnostics finalization and artifact upload;
-- avoid repository secrets and external managed services.
-
-Prefer a conservative shared workflow shape. Do not perform unrelated workflow refactoring or change release/deployment workflows.
+If GitHub still does not schedule a run after a genuine merge commit and PR mergeability is restored, report `BLOCKED_BY_TOOLING` with exact evidence. Do not create meaningless commits repeatedly.
 
 ## Preservation requirements
 
@@ -82,37 +86,21 @@ Preserve:
 - Core policy ownership and passive caller-transaction-owned Storage;
 - transaction, advisory-lock, idempotency, object-store, conflict, tombstone, and operation-log semantics;
 - deterministic path-hashed Worktree idempotency contracts without exposing keys or raw paths;
-- existing public routes, DTOs, headers, statuses, and sanitized errors;
-- dependency-free router construction;
+- existing public routes, DTOs, headers, statuses, sanitized errors, and dependency-free router construction;
 - accepted SRV-P7A startup/composition behavior;
-- no Worktree executor, scheduler, watcher, host, runtime-status, provider, hard-delete, or repair behavior.
+- no Worktree executor, scheduler, host, runtime-status, provider, hard delete, or repair behavior;
+- no test deletion, ignore, conditional skip, assertion weakening, fake repository, or in-memory production substitute.
 
-Do not use nested runtimes, `block_on`, internal HTTP calls, fake repositories, in-memory production substitutes, silent DB skips, or fabricated test summaries.
+Do not modify Storage, Worktree, Core, API, Common, CLI, Deployment, migrations, schemas, public DTO contracts, or unrelated workflows.
 
-## Allowed files
+## Allowed files and operations
 
-- `.github/workflows/component-ci.yml` only when artifact-proven for PostgreSQL provisioning;
-- `.github/scripts/**` only if a small deterministic readiness helper is strictly necessary;
-- SRV-P7B2 Server source/tests only if the new artifact or live DB execution proves an additional genuine defect;
-- SRV-P7B2 docs/implementation log for factual tooling documentation;
+- the merge commit and exact conflict resolutions required to synchronize current main;
+- `.github/workflows/component-ci.yml` only for preserving accepted Server PostgreSQL provisioning over current main;
+- SRV-P7B2 tooling documentation only if synchronization changes a documented fact;
 - `crates/haze-sync-server/control/report.md`.
 
-Forbidden:
-
-- Worktree, Storage, Core, API, Common, CLI, Deployment, migration, schema, public DTO, or Server runtime-host changes;
-- real credentials or secrets;
-- weakening/ignoring mandatory tests;
-- unrelated CI cleanup;
-- archiving control files.
-
-## Acceptance
-
-`FIX_COMPLETE` requires:
-
-- every artifact-listed failure addressed;
-- mandatory DB-backed SRV-P7B2 parity tests actually executed against ephemeral PostgreSQL;
-- a green post-fix code-bearing Component CI run with fmt/check/test/clippy/finalizer success;
-- no semantic regression in application-service ownership or public route behavior.
+Do not archive control files.
 
 ## Report
 
@@ -120,17 +108,17 @@ Write `crates/haze-sync-server/control/report.md` using `report-template.md`.
 
 Set:
 
-- `REPORT_TYPE: FIX`
-- `phase_id: FIX-SRV-P7B2-DB-CI`
-- `chat_name: server — W1 SRV-P7B2 PostgreSQL CI Fix`
+- `REPORT_TYPE: IMPLEMENTATION`
+- `phase_id: SRV-P7B2-BRANCH-SYNC-DB-CI`
+- `chat_name: server — W1 SRV-P7B2 Branch Sync and PostgreSQL Run`
 
 Use one honest status:
 
-- `FIX_COMPLETE`
-- `FIX_NEEDS_MORE`
-- `FIX_BLOCKED_BY_LOGS`
-- `FIX_BLOCKED_BY_SCOPE`
-- `FIX_BLOCKED_BY_CONTRACT`
-- `FIX_BLOCKED_BY_TOOLING`
+- `SELF_ACCEPT`
+- `SELF_ACCEPT_PENDING_CI`
+- `SELF_NEEDS_FIX`
+- `BLOCKED_BY_TOOLING`
+- `BLOCKED_BY_SCOPE`
+- `BLOCKED_BY_CONTRACT`
 
-The report must include exact artifact verification, failed checks, PostgreSQL service/configuration changes, exact DB tests that ran, changed files, final code-bearing SHA, authoritative CI run, behavior/parity assessment, secrecy assessment, and whether SRV-P7B2 is ready for mandatory clean-code review.
+The report must include old/new branch head, exact main head and merge base, both merge parents, all main-changed paths incorporated, conflict resolutions, final workflow SHA, PR mergeability after sync, exact CI run, PostgreSQL service evidence, mandatory DB parity test evidence, final accepted code-bearing/tooling SHA, secrecy assessment, and whether SRV-P7B2 is ready for mandatory clean-code review.
