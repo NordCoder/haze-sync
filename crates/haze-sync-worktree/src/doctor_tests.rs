@@ -64,14 +64,24 @@ fn snapshot(entries: Vec<WorktreeReconciliationEntry>) -> WorktreeDoctorSnapshot
 
 #[test]
 fn healthy_snapshot_has_no_issues_or_repairs() {
-    let report = WorktreeDoctor::diagnose(&snapshot(vec![entry(
-        Some("clean.md"),
-        WorktreeReconciliationKind::Clean,
-        Some(hash(1)),
-        Some(hash(1)),
-        WorktreeEchoStatus::NoMarker,
-        None,
-    )]));
+    let report = WorktreeDoctor::diagnose(&snapshot(vec![
+        entry(
+            Some("clean.md"),
+            WorktreeReconciliationKind::Clean,
+            Some(hash(1)),
+            Some(hash(1)),
+            WorktreeEchoStatus::NoMarker,
+            None,
+        ),
+        entry(
+            None,
+            WorktreeReconciliationKind::Skipped,
+            None,
+            None,
+            WorktreeEchoStatus::NotChecked,
+            Some(WorktreeScanSkipReason::ReservedPath),
+        ),
+    ]));
 
     assert_eq!(report.health(), WorktreeDoctorHealth::Healthy);
     assert_eq!(report.summary().issue_count(), 0);
@@ -125,6 +135,14 @@ fn doctor_classifies_missing_dirty_and_hash_mismatch_separately() {
 fn reserved_symlink_special_and_partial_scan_facts_are_safe_and_counted() {
     let report = WorktreeDoctor::diagnose(&snapshot(vec![
         entry(
+            Some("reserved-collision"),
+            WorktreeReconciliationKind::Skipped,
+            None,
+            None,
+            WorktreeEchoStatus::NotChecked,
+            Some(WorktreeScanSkipReason::ReservedPath),
+        ),
+        entry(
             None,
             WorktreeReconciliationKind::Skipped,
             None,
@@ -168,7 +186,7 @@ fn reserved_symlink_special_and_partial_scan_facts_are_safe_and_counted() {
         issue
             .vault_path
             .as_ref()
-            .is_none_or(|vault_path| !vault_path.as_str().starts_with('/'))
+            .map_or(true, |vault_path| !vault_path.as_str().starts_with('/'))
     }));
 }
 
@@ -233,12 +251,18 @@ fn repair_plan_is_non_executing_and_requires_confirmation_for_risky_actions() {
             && action.risk == WorktreeRepairRisk::None
             && action.authorized
     }));
-    assert!(unconfirmed.actions().iter().filter(|action| {
-        matches!(
-            action.risk,
-            WorktreeRepairRisk::Overwrite | WorktreeRepairRisk::Move | WorktreeRepairRisk::Delete
-        )
-    }).all(|action| !action.authorized));
+    assert!(unconfirmed
+        .actions()
+        .iter()
+        .filter(|action| {
+            matches!(
+                action.risk,
+                WorktreeRepairRisk::Overwrite
+                    | WorktreeRepairRisk::Move
+                    | WorktreeRepairRisk::Delete
+            )
+        })
+        .all(|action| !action.authorized));
 
     let confirmed =
         WorktreeRepairPlanner::plan(&report, WorktreeRepairAuthorization::ConfirmedByHost);
