@@ -41,19 +41,20 @@ stale or expired echo state, partial scans, and degraded runtime state.
 
 ## Repair planning
 
-`WorktreeRepairPlanner` produces an explicit plan only. There is intentionally no
-repair executor in WT-P9.
+`WorktreeRepairPlanner` produces an explicit proposal only. There is intentionally
+no repair executor in WT-P9, and a plan contains no authorization token or
+`authorized` state.
 
-Non-destructive actions such as rescan, restoring a genuinely missing file, or
-leaving a skipped entry unchanged are authorized in an unconfirmed plan.
-Overwrite, move, trash, or delete risks require
-`WorktreeRepairAuthorization::ConfirmedByHost`. The authorization records that a
-higher-level accepted contract confirmed the proposal; it still does not execute
-it.
+Each action records its risk. Overwrite, move, trash, and delete risks are reported
+through `requires_confirmation`/`confirmation_required`, but cannot be approved by
+mutating or regenerating the plan. Aggregate facts without an addressable path,
+such as expired echo counts, produce a rescan proposal rather than an unscoped
+delete proposal.
 
-A future host must revalidate current facts immediately before execution. Plans
-must not be treated as durable authorization because filesystem and Core state can
-change after diagnosis.
+A future host must load fresh facts, rebuild or validate the proposal, request
+explicit confirmation, and execute within one accepted command boundary. A stored
+or previously returned plan is never durable execution authority because
+filesystem and Core state can change after diagnosis.
 
 ## Future Server fan-in
 
