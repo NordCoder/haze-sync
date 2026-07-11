@@ -2,148 +2,217 @@
 
 ## Responsibility
 
-The server component owns HTTP runtime wiring for Haze Sync. It composes Axum routers, executes adapter/admin authentication, carries explicit runtime state, bridges public API route helpers to Core/Storage services, and maps internal failures to safe public responses.
+`haze-sync-server` is the runtime composition and application-service boundary for Haze Sync.
 
-Server is an integration component, not the source of sync policy. Core remains the conflict/delete/revision arbiter. API remains the owner of DTO shape and route parsing contracts. Storage remains the owner of database repositories, migrations, locks, and object-store primitives.
+Server owns:
 
-## Public interfaces
+- Axum routing, listener startup, graceful shutdown, auth execution, readiness and safe status mapping;
+- explicit runtime dependency assembly;
+- reusable asynchronous application services that coordinate Core decisions with Storage repositories and the object store;
+- SQLx transaction and advisory-lock choreography for accepted mutations;
+- hosting the built-in Worktree runtime without taking ownership of Worktree filesystem semantics.
 
-The server currently exposes these HTTP route surfaces through Axum router composition:
+Server is not the source of sync policy. Core owns revision/conflict/delete/idempotency decisions. API owns public HTTP DTOs, parsers and public errors. Storage owns migrations, durable repository primitives and object-store primitives. Worktree owns scanning, planning, reconciliation, materialization, echo suppression, trash and runtime scheduling semantics.
 
-- `GET /health` — dependency-free process/router health.
-- `GET /ready` — sanitized database/object-store readiness.
-- `GET /v1/server-info` — static protocol and capability metadata.
-- `GET /v1/changes` — authenticated operation-log changes feed wiring.
-- `GET /v1/files/{path}` — authenticated file download wiring.
-- `PUT /v1/files/{path}` — authenticated normal upsert/conflict-saved wiring.
-- `DELETE /v1/files/{path}` — authenticated tombstone delete wiring.
-- `GET /v1/conflicts` — authenticated conflict listing wiring.
-- `POST /v1/conflicts/{id}/resolve` — authenticated conflict resolution wiring.
-- `GET /v1/admin/status` — admin-only read-only server status summary.
-- `GET /v1/admin/adapters` — admin-only sanitized adapter summary.
+## Public HTTP compatibility
 
-The server crate also exposes Rust construction points used by tests and future startup wiring:
+Existing HTTP behavior remains backward-compatible:
 
-- `routes::build_router()` for dependency-free route shell construction.
-- `routes::build_router_with_state(ServerAppState)` for caller-supplied runtime dependencies.
-- `routes::build_router_with_readiness(ReadinessState)` for readiness-shell tests.
-- `ServerAppState` for DB pool, object store, config, and auth state.
-- `ReadinessState` and readiness response types.
-- config parsing/redaction types under `config`.
-- database readiness/migration helpers under `db`.
+- `GET /health`, `GET /ready`, `GET /v1/server-info`;
+- `GET /v1/changes`, `GET|PUT|DELETE /v1/files/{path}`;
+- conflict list/resolve routes;
+- read-only admin/status routes.
 
-## Input contracts
+SRV-P7B changes internal composition only. Any new public Worktree status/manual-cycle DTO requires an API-owner phase before Server route implementation.
 
-Server accepts already-normalized runtime dependencies from startup/fan-in code:
+## Reusable asynchronous application services
 
-- optional PostgreSQL pool;
-- optional local content-addressed object store;
-- optional server configuration;
-- explicit auth state: disabled, static test principal, or database-backed token lookup.
+HTTP routes and Worktree execution must share Server-owned services. Routes become transport adapters and must not remain the only owners of correct mutation behavior.
 
-For HTTP requests, Server delegates canonical request validation to API route helpers wherever those helpers exist. It must preserve these API-owned contracts rather than reimplementing divergent validation:
+Target modules and types:
 
-- bearer authorization header shape;
-- idempotency key extraction;
-- content SHA-256 header extraction;
-- base revision header extraction;
-- vault path validation;
-- changes query validation;
-- delete request validation;
-- conflict/admin DTO response shape.
+```text
+src/application/mod.rs
+src/application/files.rs
+src/application/deletes.rs
+src/application/changes.rs
+src/application/idempotency.rs
 
-Database-backed runtime routes require configured storage dependencies. Dependency-free construction is allowed for route-shell tests and must return safe authentication/storage/readiness failures instead of mutating state.
+ServerApplicationServices
+ApplicationActor
+ApplyFileCommand / ApplyFileOutcome
+ApplyDeleteCommand / ApplyDeleteOutcome
+AuthoritativeChangesQuery / AuthoritativeChangeBatch
+RevisionContentQuery / AuthoritativeRevisionContent
+ApplicationError
+```
 
-## Output contracts
+Contract-level operations:
 
-Server responses must use API DTOs and stable public error payloads. Internal route wiring may call Core and Storage, but public responses must remain sanitized and deterministic.
+```rust
+async fn apply_file(
+    &self,
+    actor: ApplicationActor,
+    command: ApplyFileCommand,
+) -> Result<ApplyFileOutcome, ApplicationError>;
 
-For runtime-backed operations, Server is responsible for applying transaction boundaries around multi-step state changes:
+async fn apply_delete(
+    &self,
+    actor: ApplicationActor,
+    command: ApplyDeleteCommand,
+) -> Result<ApplyDeleteOutcome, ApplicationError>;
 
-- PUT file operations lock the vault path, inspect current revision state, execute Core upsert planning, persist content/revision/object/operation-log state, store successful idempotency responses, and commit atomically.
-- DELETE file operations lock the vault path, check current revision/base semantics, evaluate delete guard input, create tombstone state, clear the current revision, append delete operation-log state, store idempotency responses, and commit atomically.
-- Conflict-saved PUT outcomes materialize the incoming copy, insert conflict metadata, and append a conflict-created operation without overwriting the original current revision.
+async fn list_authoritative_changes(
+    &self,
+    query: AuthoritativeChangesQuery,
+) -> Result<AuthoritativeChangeBatch, ApplicationError>;
 
-Server must not silently overwrite files, bypass Core conflict/delete policy, or expose adapter/provider-specific implementation details in generic route responses.
+async fn load_revision_content(
+    &self,
+    query: RevisionContentQuery,
+) -> Result<AuthoritativeRevisionContent, ApplicationError>;
+```
 
-## Error contracts
+`ApplicationActor` contains validated adapter identity/role, never a bearer token. Typed outcomes must cover accepted revision, same-content replay/no-op, conflict saved, rejected request, tombstoned, not found, bounded ordered changes, and verified revision bytes.
 
-Public errors must be safe and must not expose secrets, raw provider payloads, database URLs, local absolute paths, stack traces, bearer tokens, OAuth tokens, token hashes, Idempotency-Key values, request bodies, object-store roots, SQL text with secrets, or raw SQLx/provider error strings.
+For mutations, the application service owns: durable idempotency lookup; SQLx transaction; path advisory lock; current-state read; Core planning; object-store coordination; Storage persistence; operation-log append; safe replay record; commit/rollback. Core policy is not duplicated. Storage remains passive and caller-transaction-owned.
 
-Server owns safe internal-to-public error mapping at the runtime boundary:
+Later extraction rules:
 
-- authentication failures map to missing/invalid token or forbidden-role responses;
-- unavailable runtime dependencies map to sanitized service-unavailable/internal responses;
-- repository/object-store/Core failures map to stable public errors without raw internals;
-- validation errors from API route helpers retain API-owned public error format.
+- extract Core planning from `routes/v1/planning.rs`;
+- extract persistence from `routes/v1/persistence.rs`;
+- extract PUT/DELETE idempotency choreography from route modules;
+- extract DELETE guard/tombstone/operation-log transaction flow from `routes/delete.rs`;
+- retain API parsing, auth, HTTP status selection, DTO mapping and response construction in routes;
+- delete obsolete private helpers only after both routes and Worktree executor use the services and compatibility tests pass.
 
-## Persistence/runtime ownership
+## Async Worktree runtime boundary
 
-Server may own runtime wiring and transaction orchestration. It may call:
+The accepted target is an awaitable Worktree scheduler/cycle contract while synchronous filesystem primitives remain Worktree-owned.
 
-- `haze-sync-api` for auth primitives, DTOs, route parsers, and public error shapes;
-- `haze-sync-core` for revision, conflict, delete guard, tombstone, and idempotency primitives;
-- `haze-sync-storage` for database repositories, path locks, migrations/readiness helpers, and local object store access;
-- `haze-sync-common` for shared domain/value types.
+Worktree must own an async-compatible cycle interface equivalent to:
 
-Server must not own database schema design, provider state models, adapter cursor semantics beyond safe read-only status summaries, or Core conflict/delete/revision policy decisions.
+```rust
+pub trait WorktreeRuntimeCancellation: Send + Sync {
+    fn is_cancelled(&self) -> bool;
+}
 
-## Security and secrecy rules
+pub trait WorktreeRuntimeCycle: Send {
+    fn run_cycle<'a>(
+        &'a mut self,
+        request: WorktreeRuntimeCycleRequest,
+        cancellation: &'a dyn WorktreeRuntimeCancellation,
+    ) -> Pin<Box<dyn Future<Output = Result<
+        WorktreeRuntimeCycleSummary,
+        WorktreeRuntimeCycleFailure,
+    >> + Send + 'a>>;
+}
+```
 
-- Do not commit secrets, production `.env` files, OAuth tokens, bearer tokens, token hashes, database URLs, generated dumps, or local logs.
-- Do not expose raw token hashes, bearer tokens, OAuth tokens, idempotency values, database URLs, object-store paths, local absolute paths, stack traces, raw SQLx errors, or provider payloads in public HTTP responses, debug output, docs reports, or tests.
-- Auth execution must treat configured token lookup failures as safe authentication/internal failures.
-- Debug implementations for runtime state must redact database pools, object-store roots, and config values.
-- Admin/status routes must remain read-only unless mutation is explicitly scoped.
+`WorktreeRuntimeService::poll` becomes async and awaits at most one cycle. `start`, cancellation request, status and watcher shutdown may remain synchronous because they do not perform authoritative async mutation. Scheduler validation, watcher-hint coalescing, periodic correctness, budgets, count-only summaries and no-overlap remain Worktree-owned.
 
-## Non-goals
+Server must not use nested Tokio runtimes, `Handle::block_on`, internal HTTP self-calls, detached tasks, fabricated synchronous summaries or duplicated route policy.
 
-- No Google Drive, Obsidian, or worktree provider runtime behavior.
-- No provider API calls.
-- No adapter sync loops, watchers, exporters, importers, webhook handlers, or background jobs unless explicitly scoped.
-- No production listener/bootstrap/deployment automation unless explicitly scoped.
-- No hard delete of database rows, content blobs, object-store blobs, worktree files, or provider files unless explicitly scoped by a later contract.
-- No route-wide refactor, public API redesign, or cross-component contract change without Orchestrator/Architect direction.
-- No token creation/rotation CLI behavior inside the server component unless explicitly scoped.
+Synchronous scanner/materializer/trash/echo work may execute through an explicit awaited bounded blocking-pool call. SQLx and application-service operations are awaited normally and never bridged through blocking.
 
-## Dependencies
+## Hosted runtime ownership
 
-See `dependency-map.md`.
+Server owns one `ServerWorktreeRuntimeHost` per configured Worktree adapter instance.
 
-## Dependents
+The host must:
 
-See `dependency-map.md`.
+- own and join one named task; never detach it;
+- serialize watcher hints, periodic ticks, manual requests and shutdown;
+- guarantee at most one cycle in progress;
+- reject or coalesce manual invocation while busy;
+- request cooperative cancellation, stop new scheduling, wait for the bounded in-flight cycle, shut down watcher resources and join;
+- expose only safe lifecycle/mode/count/category status.
 
-## Invariants
+Cancellation is checked before/after each phase and between bounded items. A current atomic filesystem operation may finish, but no later phase starts. Open SQLx transactions commit only on complete success and otherwise roll back.
 
-- Core is the only conflict/delete/revision policy arbiter.
-- Server wires and persists Core outcomes; it does not invent replacement policy.
-- Adapters never silently overwrite through Server routes.
-- Every write route must require `base_revision_id` semantics as defined by API/Core contracts.
-- Unknown/stale base revisions must not overwrite different current content.
-- Delete routes create tombstones and retention metadata; they must not hard-delete.
-- Conflict handling must preserve both sides by default where Core returns conflict-saved outcomes.
-- Dependency-free router construction must be safe and non-mutating.
-- Public outputs and debug output must remain sanitized.
-- Runtime dependencies must be explicit; hidden globals must not be introduced.
+Watcher events remain latency hints. Every startup, periodic or watcher-triggered cycle that observes local files performs a full scan before import/delete planning.
 
-## Test obligations
+## Durable Worktree state
 
-Server tests should cover:
+Storage owns durable Worktree state and cursor repositories. Production-only in-memory state is forbidden.
 
-- dependency-free router construction;
-- `/health`, `/ready`, and `/v1/server-info` safe responses;
-- auth-required route behavior without runtime dependencies;
-- role authorization for file, conflict, delete, and admin routes;
-- sanitized error bodies for internal/auth/storage failures;
-- transaction-backed PUT/GET/changes behavior when a real test database is available;
-- stale/unknown-base conflict-saved behavior at the server integration boundary;
-- tombstone DELETE behavior, idempotent delete replay, and mass-delete guard behavior;
-- admin/status sanitization and read-only behavior;
-- absence of raw secrets, database URLs, local paths, token hashes, bearer tokens, and stack traces in public/debug output.
+Durable identity is a stable Worktree `AdapterId`, bound to a non-public SHA-256 fingerprint of the normalized configured root. Raw roots are never rendered publicly.
 
-Connector-only workers must not claim shell checks passed unless those checks were actually run or CI metadata was observed.
+Required Storage contract:
+
+- versioned runtime-instance binding keyed by `adapter_id`;
+- versioned path state keyed by `(adapter_id, VaultPath)`;
+- explicit present/tombstoned kind;
+- last-applied revision and present-file content hash;
+- reconciliation observation fields required by accepted Worktree contracts;
+- monotonic authoritative export checkpoint through the adapter cursor contract;
+- typed load/upsert/bind/checkpoint methods over caller-owned executors/transactions.
+
+The existing path-only `worktree_state` table is insufficient because it has no adapter/root binding, explicit state kind, format version or repository interface. Existing `adapter_cursors.last_core_seq` remains the export checkpoint after Storage adds locked contiguous advancement support.
+
+State advancement rules:
+
+- accepted/same-content import: persist authoritative present state;
+- accepted delete: persist tombstoned state;
+- rejection/conflict/failure: do not claim accepted local state;
+- export: after one authoritative filesystem apply, update path state and advance the cursor to that exact contiguous sequence in one DB transaction;
+- never advance beyond an unprocessed sequence.
+
+Crash recovery is replay-based:
+
+- crash before materialization: cursor stays old and the change replays;
+- crash after materialization but before DB state/cursor commit: replay returns `AlreadyCurrent`, then persists state/checkpoint;
+- crash after accepted import but before path-state update: deterministic idempotency replays the authoritative outcome, then state is updated.
+
+Process counters are `since_start` only. Durable state includes instance binding/version, path state, cursor and last-success metadata.
+
+## Worktree idempotency
+
+For non-HTTP Worktree operations, Server derives deterministic keys from stable non-secret facts:
+
+```text
+put:    wt:v1:<adapter_id>:put:<path_hash>:<base_or_null>:<content_hash>
+delete: wt:v1:<adapter_id>:delete:<path_hash>:<base_or_null>
+```
+
+The raw key is never logged or exposed. The application service uses the same durable idempotency repository and request-fingerprint comparison as routes. Route-generated client keys remain API-owned inputs and are not replaced.
+
+## Runtime policy and modes
+
+Server config owns explicit runtime values with deterministic documented defaults:
+
+- adapter id: `worktree`;
+- max imports per cycle: `100`;
+- max delete candidates per cycle: `100` plus existing Worktree/Core ratio/count guards;
+- max exports per cycle: `100`;
+- periodic correctness interval: `60s`;
+- watcher debounce: `500ms`;
+- watcher hints consumed per poll: `256`;
+- host idle wake interval: `250ms`;
+- graceful cycle shutdown budget: `30s`.
+
+All values are validated as non-zero and bounded. No unbounded hidden work is allowed.
+
+Mode semantics:
+
+- `disabled`: no hosted task or work;
+- `read_only`: Core-to-Worktree export only;
+- `import_only`: full-scan import and guarded local-delete submission only;
+- `export_only`: Core-to-Worktree export only;
+- `bidirectional`: both directions within budgets;
+- `dry_run`: explicit manual cycle only; may scan/load/query/plan and return count-only summaries, but performs no Core mutation, cursor advance, materialization, trash move, echo write or durable Worktree state change.
+
+Hosted startup binds durable identity before first cycle. Binding mismatch is fail-closed and not ready. Disabled remains ready if HTTP dependencies are ready. Enabled runtime readiness requires valid config, durable binding, a running/non-failed host and DB/object-store readiness. A cycle failure degrades Worktree readiness/status without exposing raw errors; it does not make `/health` fail.
+
+## Security and invariants
+
+- Core remains the only conflict/delete/revision arbiter.
+- No hard delete or automatic destructive repair.
+- No provider behavior in generic Server routes.
+- Public/debug/status output contains no secrets, DB URLs, token values/hashes, absolute roots, raw SQLx/I/O errors or internal payloads.
+- Dependency-free router tests and existing route behavior remain supported.
+- Accepted SRV-P7A behavior remains unchanged until explicit owner phases implement this contract.
 
 ## Contract change protocol
 
-If implementation would require serious hacks, unsafe behavior, or cross-component changes, the worker must report `CONTRACT_CHANGE_REQUESTED` instead of silently broadening scope.
+Any implementation that requires blocking async bridges, hidden task spawning, direct Worktree DB writes, route-policy duplication, public DTO changes outside API ownership, schema changes outside Storage ownership, or Worktree scheduler changes outside Worktree ownership must stop and request the corresponding owner-component phase.
