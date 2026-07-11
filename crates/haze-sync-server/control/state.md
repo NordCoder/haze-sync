@@ -6,33 +6,31 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-server/control/prompt.md
 active_report: crates/haze-sync-server/control/report.md
-active_agent_role: fixer-worker
-assigned_chat_name: server — W1 SRV-P7B2 PostgreSQL CI Fix
-prompt_revision: verified by Orchestrator after first SRV-P7B2 fixer report, post-fix red CI, and exact new diagnostics artifact metadata retrieval
+active_agent_role: implementation-worker
+assigned_chat_name: server — W1 SRV-P7B2 Branch Sync and PostgreSQL Run
+prompt_revision: verified by Orchestrator after PostgreSQL CI tooling was committed but no PR workflow run was scheduled
 
 wave: W1
-phase: FIX-SRV-P7B2-DB-CI
+phase: SRV-P7B2-BRANCH-SYNC-DB-CI
 
 implementation_status: SELF_ACCEPT_PENDING_CI
 fix_status: FIX_BLOCKED_BY_TOOLING
 clean_review_status: NOT_STARTED
 architect_status: ARCHITECT_CHANGED_CONTRACTS
-ci_status: CI_RED
-ci_workflow: Component CI
-ci_code_bearing_sha: 9304263f4be8234e513bf335dc886f96c53d0cce
-ci_run_id: 29167206582
-ci_run_number: 1798
-ci_run_attempt: 1
-known_failed_checks:
-- Finalize CI diagnostics
+ci_status: NOT_RUN_FOR_DB_TOOLING_SHA
 
-artifact_name: ci-diag__component-server__wf-component-ci__run-29167206582__attempt-1
-artifact_id: 8252500221
-artifact_head_sha: 9304263f4be8234e513bf335dc886f96c53d0cce
-artifact_digest: sha256:89fdf6a62c826744abf49c5b462325b9e42ba797d5367a5ef2ff60e10ac240c8
-artifact_size_bytes: 8591
-artifact_expires_at: 2026-07-12T20:33:41Z
-artifact_status: AVAILABLE_UNEXPIRED
+accepted_srv_p7b2_implementation_sha: 81e6f6ae69f4bda92d284991e4909457a6ef8e60
+post_source_fix_sha: 9304263f4be8234e513bf335dc886f96c53d0cce
+postgres_tooling_sha: d48bbd847c8b79511a7ac32cfcb14c671f3880c1
+prior_artifact_id: 8252500221
+prior_artifact_status: READ_VERIFIED
+prior_failure: mandatory DB-backed parity tests had no configured PostgreSQL database
+
+observed_main_head: c1e69a664388b0cba028170e8398b9088218957d
+observed_merge_base: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
+pr_number: 45
+pr_status: OPEN_DRAFT_UNMERGED
+pr_mergeability: FALSE
 
 accepted_application_services:
 - reusable async file PUT, guarded DELETE, changes and revision-content services
@@ -41,28 +39,30 @@ accepted_application_services:
 - deterministic secret-safe future Worktree idempotency derivation
 - public route behavior and SRV-P7A lifecycle preserved
 
-first_fixer_result:
-- source rustfmt/clippy findings corrected
-- no mandatory tests weakened or skipped
-- final source-fix SHA 9304263f4be8234e513bf335dc886f96c53d0cce
-- remaining blocker is missing PostgreSQL provisioning for mandatory DB-backed parity tests
+required_branch_sync:
+- true two-parent merge with current component/server head first and current main head second
+- include every current-main change; no ours-only or fake merge
+- preserve exact main versions of non-conflicting CI docs/scripts/workflows
+- semantically merge component-ci.yml with accepted Server PostgreSQL provisioning
+- update branch ref by fast-forward only
+- verify PR becomes mergeable and receives a new pull-request CI run
 
-current_fix_scope:
-- read exact post-fix artifact 8252500221
-- if confirmed, provision ephemeral secret-free PostgreSQL in Component CI
-- bind exact test database environment expected by Server test support
-- execute mandatory DB-backed parity tests and require green finalizer
-- no product workaround, fake repository, silent skip or public behavior change
+required_db_evidence:
+- PostgreSQL service healthy
+- fmt, check, workspace test, clippy and finalizer green
+- all three mandatory SRV-P7B2 DB-backed parity tests execute successfully
+- no silent skips, ignored tests, fake repositories, or assertion weakening
 
 parallel_owner_status:
-- WT-P10 is ready for clean-code review
-- STOR-P10 is in dedicated PostgreSQL verification
+- WT-P10 is CLEAN_ACCEPT at 1942946331e8362f19907ab6ad4eb779da70fd57
+- STOR-P10 independently requires branch synchronization and strict PostgreSQL verification
 
 blocked_downstream:
-- SRV-P7B2 clean-code review remains blocked until FIX_COMPLETE and green DB-capable code-bearing CI
-- SRV-P7B3 remains blocked until WT-P10, STOR-P10 and SRV-P7B2 all reach CLEAN_ACCEPT with exact accepted SHAs synchronized
+- SRV-P7B2 clean-code review remains blocked until synchronized DB-capable CI is green
+- SRV-P7B3 remains blocked until WT-P10, STOR-P10 and SRV-P7B2 are all CLEAN_ACCEPT with exact accepted SHAs synchronized
 - SRV-P7B4, API-P8, SRV-P7B5, CLI-P6A and DEP-P5A remain blocked
 
-next_gate_after_fix:
-- FIX_COMPLETE plus independently verified green DB-capable Component CI -> mandatory SRV-P7B2 clean-code review
-- failed or blocked fix -> route exact artifact/scope/contract/tooling decision
+next_gate_after_sync:
+- SELF_ACCEPT plus mergeable PR and green DB-capable Component CI -> mandatory SRV-P7B2 clean-code review
+- red CI -> exact artifact-based fixer after Orchestrator metadata retrieval
+- no scheduled run or impossible merge -> exact tooling/scope decision; no clean review
