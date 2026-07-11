@@ -127,9 +127,7 @@ impl AdapterCursorRepository {
     where
         E: Executor<'executor, Database = Postgres>,
     {
-        let sql = format!(
-            "select {CURSOR_COLUMNS} from adapter_cursors where adapter_id = $1"
-        );
+        let sql = format!("select {CURSOR_COLUMNS} from adapter_cursors where adapter_id = $1");
         let row = sqlx::query(&sql)
             .bind(adapter_id.as_str())
             .fetch_optional(executor)
