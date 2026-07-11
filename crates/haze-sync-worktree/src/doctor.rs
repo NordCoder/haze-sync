@@ -378,9 +378,7 @@ fn runtime_is_degraded(status: WorktreeRuntimeStatus) -> bool {
 }
 
 fn health_for(summary: WorktreeDoctorSummary) -> WorktreeDoctorHealth {
-    if summary.missing_files > 0
-        || summary.dirty_files > 0
-        || summary.reserved_path_violations > 0
+    if summary.missing_files > 0 || summary.dirty_files > 0 || summary.reserved_path_violations > 0
     {
         WorktreeDoctorHealth::Unhealthy
     } else if summary.issue_count() > 0 {
@@ -399,8 +397,7 @@ fn repair_for_issue(
             WorktreeRepairActionKind::RestoreMissingFromCore,
             WorktreeRepairRisk::None,
         ),
-        WorktreeDoctorIssueKind::DirtyFile
-        | WorktreeDoctorIssueKind::ContentHashMismatch => (
+        WorktreeDoctorIssueKind::DirtyFile | WorktreeDoctorIssueKind::ContentHashMismatch => (
             WorktreeRepairActionKind::RestoreAuthoritativeContent,
             WorktreeRepairRisk::Overwrite,
         ),
