@@ -1,4 +1,4 @@
-# W1-DEP-P7-BLOCKED — GDrive runtime and deployment-topology gate
+# W1-DEP-P7-BLOCKED-BY-RUNTIME-TOPOLOGY — Deployment fan-in gate
 
 Component: deployment
 Path: deploy
@@ -10,28 +10,29 @@ This is a hold notice, not an executable worker prompt.
 
 ## Accepted state
 
-DEP-P6 implementation and clean-code review are accepted with green CI. Storage STOR-P8 persistence repositories and GDrive GDA-P7 lifecycle are accepted.
+DEP-P6 implementation and clean-code review are accepted with green CI.
 
-GDA-P8 implementation and artifact-based CI correction are now green:
+The following dependencies are now accepted:
 
-- GDA-P8 code-bearing SHA: 0120134b3c1a7b446b6c1c96953ce9abe4971d55
-- Component CI run: 29127127665
-- conclusion: success
+- GDrive Adapter component-local lifecycle through GDA-P8C and post-fix CI;
+- Storage component-local lifecycle;
+- Server-owned Storage production feature isolation and its clean review.
 
-GDA-P8C clean-code review is queued. Storage STOR-P9C is locally green, while the Server-owned feature-isolation correction is green and awaiting clean-code review. None of these phases defines the missing deployment topology.
+The missing work is no longer a GDA-P8C review gate. It is the explicit cross-component runtime and deployment topology.
 
 ## Blocked next phase
 
-DEP-P7 requires an explicit accepted topology for:
+DEP-P7 requires accepted ownership and configuration contracts for:
 
-- GDrive service process ownership and lifecycle;
+- GDrive service process ownership, startup ordering, retry/backoff, and shutdown;
 - durable mapping, cursor, and delete-candidate repository wiring;
-- OAuth/token secret loading, rotation, and redaction;
-- Server/API transport, health, and readiness exposure;
-- retry/backoff and safe shutdown behavior.
+- OAuth/token secret loading, rotation, persistence, and redaction;
+- Server/API transport, authentication, health, readiness, and operator surfaces;
+- Worktree/GDrive runtime composition and bootstrap rollout order;
+- backup/restore and rollback boundaries for metadata and object storage.
 
-Deployment must not invent direct database ownership, an adapter daemon contract, or secret-handling policy.
+Deployment must not invent direct database ownership, adapter daemon semantics, OAuth policy, or Server runtime contracts.
 
 ## Unblock condition
 
-Green GDA-P8C acceptance plus an explicit GDrive/Storage/Server runtime-config fan-in contract defining deployment ownership and topology. Until then, do not launch a worker from this hold notice.
+An explicit accepted GDrive/Storage/Server/API runtime-config and lifecycle fan-in contract defining deployment ownership and topology. Until then, do not launch a worker from this hold notice.
