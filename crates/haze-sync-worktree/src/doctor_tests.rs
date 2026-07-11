@@ -86,11 +86,7 @@ fn healthy_snapshot_has_no_issues_or_repairs() {
     assert_eq!(report.health(), WorktreeDoctorHealth::Healthy);
     assert_eq!(report.summary().issue_count(), 0);
     assert!(report.issues().is_empty());
-    assert!(
-        WorktreeRepairPlanner::plan(&report, WorktreeRepairAuthorization::Unconfirmed)
-            .actions()
-            .is_empty()
-    );
+    assert!(WorktreeRepairPlanner::plan(&report).actions().is_empty());
 }
 
 #[test]
@@ -216,8 +212,8 @@ fn stale_and_expired_echoes_and_degraded_runtime_are_reported() {
 }
 
 #[test]
-fn repair_plan_is_non_executing_and_requires_confirmation_for_risky_actions() {
-    let report = WorktreeDoctor::diagnose(&snapshot(vec![
+fn repair_plan_never_carries_execution_authority() {
+    let mut doctor_snapshot = snapshot(vec![
         entry(
             Some("missing.md"),
             WorktreeReconciliationKind::Missing,
@@ -242,34 +238,31 @@ fn repair_plan_is_non_executing_and_requires_confirmation_for_risky_actions() {
             WorktreeEchoStatus::NotChecked,
             Some(WorktreeScanSkipReason::ReservedPath),
         ),
-    ]));
+    ]);
+    doctor_snapshot.reconciliation_summary.echo_expired = 1;
+    let report = WorktreeDoctor::diagnose(&doctor_snapshot);
 
-    let unconfirmed =
-        WorktreeRepairPlanner::plan(&report, WorktreeRepairAuthorization::Unconfirmed);
-    assert_eq!(unconfirmed.confirmation_required(), 3);
-    assert!(!unconfirmed.is_fully_authorized());
-    assert!(unconfirmed.actions().iter().any(|action| {
+    let plan = WorktreeRepairPlanner::plan(&report);
+
+    assert_eq!(plan.confirmation_required(), 3);
+    assert!(plan.requires_confirmation());
+    assert!(plan.actions().iter().any(|action| {
         action.kind == WorktreeRepairActionKind::RestoreMissingFromCore
             && action.risk == WorktreeRepairRisk::None
-            && action.authorized
     }));
-    assert!(unconfirmed
-        .actions()
-        .iter()
-        .filter(|action| {
-            matches!(
-                action.risk,
-                WorktreeRepairRisk::Overwrite
-                    | WorktreeRepairRisk::Move
-                    | WorktreeRepairRisk::Delete
-            )
-        })
-        .all(|action| !action.authorized));
-
-    let confirmed =
-        WorktreeRepairPlanner::plan(&report, WorktreeRepairAuthorization::ConfirmedByHost);
-    assert!(confirmed.is_fully_authorized());
-    assert!(confirmed.actions().iter().all(|action| action.authorized));
+    assert!(plan.actions().iter().any(|action| {
+        action.issue_kind == WorktreeDoctorIssueKind::ExpiredEcho
+            && action.kind == WorktreeRepairActionKind::Rescan
+            && action.risk == WorktreeRepairRisk::None
+            && action.vault_path.is_none()
+    }));
+    assert_eq!(
+        plan.actions()
+            .iter()
+            .filter(|action| action.risk.requires_confirmation())
+            .count(),
+        plan.confirmation_required()
+    );
 }
 
 #[test]
