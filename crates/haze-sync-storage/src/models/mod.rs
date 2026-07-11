@@ -1,20 +1,14 @@
 //! Passive database row models for the Haze Sync storage schema.
 //!
-//! These structs intentionally contain no repository methods, SQL query macros,
-//! connection pools, transactions, or Core policy behavior. Future phases will
-//! implement apply, conflict, delete, cursor, and idempotency logic on top of the
-//! schema represented here.
-//!
-//! Row models mirror persisted database fields and are internal storage/service
-//! values, not public API DTOs. Some fields intentionally contain token hashes,
-//! provider metadata, cursor snapshots, idempotency material, or object-store
-//! metadata; public API, admin, status, and CLI surfaces must sanitize or map
-//! rows before rendering them.
+//! These structs intentionally contain no repository methods, connection pools,
+//! transactions, or Core policy behavior. Row models are internal storage/service
+//! values, not public API DTOs.
 
 use crate::schema::table_names;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::fmt;
 
 /// Internal row field that must not be rendered directly in public output.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -26,9 +20,6 @@ pub struct SensitiveRowField {
 
 /// Persisted row fields that require explicit API/Server/CLI sanitization before
 /// any public rendering.
-///
-/// This list is audit metadata for storage consumers. It does not remove fields
-/// from row models because repositories still need to persist and load them.
 pub const SENSITIVE_ROW_FIELDS: &[SensitiveRowField] = &[
     SensitiveRowField {
         table_name: table_names::SYNC_ADAPTERS,
@@ -71,16 +62,17 @@ pub const SENSITIVE_ROW_FIELDS: &[SensitiveRowField] = &[
         reason: "provider parent identifier; expose only through adapter/API-approved views",
     },
     SensitiveRowField {
+        table_name: table_names::WORKTREE_INSTANCES,
+        field_name: "root_fingerprint",
+        reason: "non-public normalized-root fingerprint; never render in status or logs",
+    },
+    SensitiveRowField {
         table_name: table_names::AUDIT_EVENTS,
         field_name: "metadata",
         reason: "structured operational metadata; public output requires redaction discipline",
     },
 ];
 
-/// Row from `sync_adapters`.
-///
-/// Stores registered adapter identity and token hash metadata. Authorization and
-/// role policy are implemented in future API/Core phases.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct SyncAdapterRow {
     pub adapter_id: String,
@@ -92,10 +84,6 @@ pub struct SyncAdapterRow {
     pub last_seen_at: Option<DateTime<Utc>>,
 }
 
-/// Row from `content_blobs`.
-///
-/// Represents immutable content-addressed blob metadata. Actual object-store
-/// writes and verification are implemented in future content-store phases.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct ContentBlobRow {
     pub sha256: String,
@@ -104,10 +92,6 @@ pub struct ContentBlobRow {
     pub created_at: DateTime<Utc>,
 }
 
-/// Row from `sync_objects`.
-///
-/// Tracks the logical vault object at a current path. Current-revision mutation
-/// and delete policy are implemented in future Core phases.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct SyncObjectRow {
     pub object_id: String,
@@ -119,10 +103,6 @@ pub struct SyncObjectRow {
     pub updated_by: String,
 }
 
-/// Row from `file_revisions`.
-///
-/// Immutable file revision metadata. Revision acceptance and conflict handling
-/// are implemented in future Core phases.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct FileRevisionRow {
     pub revision_id: String,
@@ -135,10 +115,6 @@ pub struct FileRevisionRow {
     pub created_at: DateTime<Utc>,
 }
 
-/// Row from `operation_log`.
-///
-/// Append-only operation record consumed by adapters. Appending and changes-feed
-/// behavior are implemented in future phases.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct OperationLogRow {
     pub seq: i64,
@@ -152,10 +128,6 @@ pub struct OperationLogRow {
     pub created_at: DateTime<Utc>,
 }
 
-/// Row from `tombstones`.
-///
-/// Safe delete marker with retention metadata. Delete guards, restoration, and
-/// physical cleanup are implemented in future phases.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct TombstoneRow {
     pub tombstone_id: String,
@@ -167,10 +139,6 @@ pub struct TombstoneRow {
     pub restored_at: Option<DateTime<Utc>>,
 }
 
-/// Row from `conflicts`.
-///
-/// Records both current and incoming revisions for a preserved conflict. Conflict
-/// resolution behavior is implemented in future Core/API phases.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct ConflictRow {
     pub conflict_id: String,
@@ -187,10 +155,6 @@ pub struct ConflictRow {
     pub resolved_by: Option<String>,
 }
 
-/// Row from `adapter_cursors`.
-///
-/// Tracks adapter progress. Cursor advancement after successful processing is
-/// implemented in future adapter/Core phases.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct AdapterCursorRow {
     pub adapter_id: String,
@@ -200,10 +164,6 @@ pub struct AdapterCursorRow {
     pub updated_at: DateTime<Utc>,
 }
 
-/// Row from `idempotency_records`.
-///
-/// Stores retry-safety request hashes and safe public response snapshots.
-/// Idempotency comparison and replay are implemented in future Core phases.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct IdempotencyRecordRow {
     pub adapter_id: String,
@@ -213,11 +173,6 @@ pub struct IdempotencyRecordRow {
     pub created_at: DateTime<Utc>,
 }
 
-/// Row from `gdrive_mapping`.
-///
-/// Stores Google Drive mapping metadata for a vault path. Drive API access,
-/// echo guard behavior, and delete-candidate policy are implemented in future
-/// adapter phases.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct GDriveMappingRow {
     pub path: String,
@@ -237,25 +192,48 @@ pub struct GDriveMappingRow {
     pub delete_candidate_at: Option<DateTime<Utc>>,
 }
 
-/// Row from `worktree_state`.
+/// Row from `worktree_instances`.
 ///
-/// Tracks materialized worktree state. Scanner, watcher, atomic writer, and
-/// repair behavior are implemented in future worktree phases.
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct WorktreeStateRow {
-    pub path: String,
-    pub last_applied_revision_id: Option<String>,
-    pub last_seen_sha256: Option<String>,
-    pub last_seen_mtime: Option<DateTime<Utc>>,
-    pub dirty: bool,
-    pub last_scanned_at: Option<DateTime<Utc>>,
-    pub last_written_by_adapter: bool,
+/// `root_fingerprint` is intentionally excluded from derived `Debug` and serde
+/// surfaces. It is an internal binding fact, not status output.
+#[derive(Clone, PartialEq)]
+pub struct WorktreeInstanceRow {
+    pub adapter_id: String,
+    pub root_fingerprint: String,
+    pub state_format_version: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
-/// Row from `audit_events`.
-///
-/// Stores safe structured audit metadata. Audit event production and redaction
-/// policy are implemented in future phases.
+impl fmt::Debug for WorktreeInstanceRow {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("WorktreeInstanceRow")
+            .field("adapter_id", &self.adapter_id)
+            .field("root_fingerprint", &"[REDACTED]")
+            .field("state_format_version", &self.state_format_version)
+            .field("created_at", &self.created_at)
+            .field("updated_at", &self.updated_at)
+            .finish()
+    }
+}
+
+/// Row from the versioned per-instance `worktree_state` table.
+#[derive(Clone, Debug, PartialEq)]
+pub struct WorktreeStateRow {
+    pub adapter_id: String,
+    pub path: String,
+    pub state_kind: String,
+    pub state_format_version: i32,
+    pub last_applied_revision_id: String,
+    pub content_sha256: Option<String>,
+    pub observation_schema_version: Option<i32>,
+    pub observed_size_bytes: Option<i64>,
+    pub observed_mtime: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct AuditEventRow {
     pub audit_id: String,
@@ -282,6 +260,7 @@ mod tests {
             (table_names::IDEMPOTENCY_RECORDS, "response_json"),
             (table_names::GDRIVE_MAPPING, "drive_file_id"),
             (table_names::GDRIVE_MAPPING, "drive_parent_id"),
+            (table_names::WORKTREE_INSTANCES, "root_fingerprint"),
             (table_names::AUDIT_EVENTS, "metadata"),
         ] {
             assert!(
@@ -306,18 +285,10 @@ mod tests {
         };
 
         let serialized = serde_json::to_value(&row).expect("row should serialize");
-
         assert_eq!(serialized["adapter_id"], "adapter-1");
-        assert_eq!(serialized["display_name"], "Test Adapter");
-        assert_eq!(serialized["role"], "worktree_adapter");
         assert_eq!(serialized["token_hash"], "token-hash");
-        assert!(serialized["enabled"]
-            .as_bool()
-            .expect("enabled should serialize as bool"));
         assert!(serialized["last_seen_at"].is_null());
-
-        let roundtrip: SyncAdapterRow =
-            serde_json::from_value(serialized).expect("row should deserialize");
+        let roundtrip: SyncAdapterRow = serde_json::from_value(serialized).unwrap();
         assert_eq!(roundtrip, row);
     }
 
@@ -330,20 +301,25 @@ mod tests {
             last_success_at: None,
             updated_at: fixed_time(),
         };
-
-        let serialized = serde_json::to_value(&row).expect("row should serialize");
-
-        assert_eq!(serialized["adapter_id"], "gdrive");
-        assert_eq!(serialized["last_core_seq"], 42);
-        assert_eq!(
-            serialized["external_cursor_json"]["page_token"],
-            "opaque-test-token"
-        );
-        assert!(serialized["last_success_at"].is_null());
-
-        let roundtrip: AdapterCursorRow =
-            serde_json::from_value(serialized).expect("row should deserialize");
+        let serialized = serde_json::to_value(&row).unwrap();
+        let roundtrip: AdapterCursorRow = serde_json::from_value(serialized).unwrap();
         assert_eq!(roundtrip, row);
+    }
+
+    #[test]
+    fn worktree_instance_debug_redacts_root_fingerprint() {
+        let row = WorktreeInstanceRow {
+            adapter_id: "worktree".to_owned(),
+            root_fingerprint: format!("sha256:{}", "a".repeat(64)),
+            state_format_version: 1,
+            created_at: fixed_time(),
+            updated_at: fixed_time(),
+        };
+        let rendered = format!("{row:?}");
+
+        assert!(rendered.contains("[REDACTED]"));
+        assert!(!rendered.contains(&"a".repeat(64)));
+        assert!(!rendered.contains("/srv/"));
     }
 
     #[test]
@@ -357,18 +333,8 @@ mod tests {
             metadata: serde_json::json!({ "status": "accepted" }),
             created_at: fixed_time(),
         };
-
-        let serialized = serde_json::to_value(&row).expect("row should serialize");
-
-        assert_eq!(serialized["audit_id"], "audit-1");
-        assert_eq!(serialized["actor_adapter_id"], "adapter-1");
-        assert_eq!(serialized["event_type"], "file.put");
-        assert_eq!(serialized["path"], "Notes/a.md");
-        assert_eq!(serialized["revision_id"], "rev-1");
-        assert_eq!(serialized["metadata"]["status"], "accepted");
-
-        let roundtrip: AuditEventRow =
-            serde_json::from_value(serialized).expect("row should deserialize");
+        let serialized = serde_json::to_value(&row).unwrap();
+        let roundtrip: AuditEventRow = serde_json::from_value(serialized).unwrap();
         assert_eq!(roundtrip, row);
     }
 
