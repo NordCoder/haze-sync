@@ -19,12 +19,15 @@ pub use model::{
     CoreDeleteGuardDecision, CoreDeleteRejectedReason, DeleteBlockReason, DeleteExecution,
     DeleteModelError, DeleteReconciliationInput, DeleteReconciliationOutcome, DeleteRejection,
     DeleteSafetyNotice, DeleteScanIssue, DeleteScanObservation, ManualDeleteUnlockAvailability,
-    MovedProviderIdentity, GDRIVE_ADAPTER_ID,
+    MovedProviderIdentity, RecoveredDeleteCandidate, GDRIVE_ADAPTER_ID,
 };
 pub use runner::{run_delete_reconciliation, DeleteReconciliationError};
 pub use state_store::{
-    DeleteCandidateStateStore, DeleteStateError, InMemoryDeleteCandidateStateStore,
+    DeleteCandidateStateStore, DeleteMappingState, DeleteStateError,
+    InMemoryDeleteCandidateStateStore,
 };
 
+#[cfg(test)]
+mod clean_code_tests;
 #[cfg(test)]
 mod tests;
