@@ -35,11 +35,11 @@ pub use delete_guard::{
     CoreDeleteErrorCategory, CoreDeleteGateway, CoreDeleteGuardBlockReason,
     CoreDeleteGuardDecision, CoreDeleteGuardRequest, CoreDeleteRejectedReason, CoreDeleteRequest,
     CoreDeleteResponse, DeleteBlockReason, DeleteCandidateStateStore, DeleteExecution,
-    DeleteModelError, DeleteReconciliationError, DeleteReconciliationInput,
+    DeleteMappingState, DeleteModelError, DeleteReconciliationError, DeleteReconciliationInput,
     DeleteReconciliationOutcome, DeleteRejection, DeleteSafetyNotice, DeleteScanIssue,
     DeleteScanObservation, DeleteStateError, FakeCoreDeleteGateway,
     InMemoryDeleteCandidateStateStore, ManualDeleteUnlockAvailability, MovedProviderIdentity,
-    GDRIVE_ADAPTER_ID,
+    RecoveredDeleteCandidate, GDRIVE_ADAPTER_ID,
 };
 pub use drive::{
     classify_drive_metadata, normalize_drive_metadata, DriveEntryClassification, DriveEntryKind,
