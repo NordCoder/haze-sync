@@ -1,116 +1,124 @@
 # Dependency Map: storage
 
-## Component role in dependency graph
+## Component role
 
-`haze-sync-storage` is the durable persistence implementation component.
+`haze-sync-storage` is the durable persistence implementation component. It owns
+schema/migrations, SQLx repositories, object-store primitives, storage-safe
+errors, advisory locks, versioned Worktree durable state and adapter checkpoints.
+It does not own Core policy, API DTOs, Server execution, adapter/filesystem
+semantics, Deployment automation or CI policy.
 
-Storage owns PostgreSQL schema access patterns, repository implementations, object-store persistence helpers, transactional boundaries, and durable metadata behavior needed by Core/Server runtime code.
+## Independent development
 
-Storage does not own Core sync policy, API DTOs, Server route execution, provider behavior, Deployment automation, CI workflow policy, or client UI behavior.
+Storage may independently implement:
 
-## Independent development model
+- migrations and passive row models;
+- caller-executor repository APIs;
+- object-store and advisory-lock primitives;
+- persistence validation and redaction;
+- storage-focused unit and PostgreSQL tests.
 
-`haze-sync-storage` can be developed independently inside the `component/storage` branch.
-
-The dependency map records repository contracts, durability boundaries, and fan-in points. It does not impose a serial implementation order on Core, Server, API, adapters, Deployment, or CI.
-
-Allowed independent work includes:
-
-- repository interfaces and implementations;
-- migration planning and schema access code;
-- object-store path/content helpers;
-- transaction helpers;
-- persistence-focused tests;
-- safe storage error classification.
-
-If Storage needs Core policy, API DTOs, Server routes, provider semantics, deployment secrets, or CI workflow behavior, it reports a contract-change request instead of absorbing that responsibility.
+If implementation requires Core decisions, Server orchestration, Worktree
+filesystem behavior, public DTOs, provider calls, deployment secrets or workflow
+changes, Storage reports the owner-component gate instead of absorbing it.
 
 ## Upstream contracts consumed
 
-Storage may consume:
+Storage consumes:
 
-- `haze-sync-common` shared IDs/value types;
-- accepted persistence requirements from Core contracts;
-- database/object-store libraries approved for the storage layer;
-- migration/tooling contracts when explicitly scoped.
+- Common validated `AdapterId`, `VaultPath`, revision IDs and SHA-256 values;
+- accepted Core persistence outcomes, not Core implementation;
+- accepted Server architecture requirements for caller-owned transaction
+  composition;
+- accepted Worktree state vocabulary only as persisted facts:
+  present/tombstoned, authoritative revision/hash and bounded observation fields;
+- PostgreSQL/SQLx contracts approved for the storage layer.
 
-Storage must not consume:
-
-- Core decision implementation as persistence logic;
-- API DTOs as database schema authority;
-- Server handler internals;
-- provider/client code;
-- deployment runtime paths as hard-coded assumptions;
-- CI workflow behavior.
+Storage does not consume API DTOs, route-private behavior, provider clients,
+filesystem implementations or deployment paths as schema authority.
 
 ## Downstream contracts exposed
 
-Expected downstream consumers:
+### General consumers
 
-- Core, for durable metadata, revision, tombstone, conflict, and object-store operations;
-- Server, for runtime construction and health/doctor integration when scoped;
-- CLI/doctor indirectly through Core/Server contracts;
-- Deployment, through documented migration/object-store requirements;
-- tests and future integration harnesses.
+- Core/Server: revisions, objects, conflicts, tombstones, idempotency, operation
+  log and object-store primitives;
+- adapters through Server integration: durable progress and mapping facts;
+- Deployment: migration, backup and object-store requirements;
+- test harnesses: gated safe database/filesystem helpers.
 
-Downstream consumers must not bypass Storage contracts by embedding SQL/persistence assumptions in other components.
+### STOR-P10 consumers
+
+Future Server Worktree executor/host phases consume:
+
+- create-or-verify Worktree instance binding keyed by stable adapter identity;
+- per-instance present/tombstoned path-state load/upsert and bounded snapshots;
+- revision/hash-guarded reconciliation observation updates;
+- transaction-only cursor lock/initialize/exact-contiguous advance;
+- safe mismatch/version/gap/stale/missing/overflow errors.
+
+Downstream code must not issue ad hoc SQL for these tables or expose internal rows
+directly.
 
 ## Forbidden dependency directions
 
 Storage must not:
 
-- decide conflict/delete/base-revision policy;
-- expose raw database errors publicly;
-- call provider APIs;
-- own HTTP API shapes;
-- own deployment secret layout;
-- assume local-only paths in product contracts;
-- treat schema internals as public API.
+- decide import/export, conflict/delete/base-revision or repair policy;
+- normalize or persist raw Worktree roots;
+- scan/watch/materialize/trash filesystem content;
+- host runtime tasks or choose checkpoint timing;
+- call providers;
+- own HTTP/public status shapes;
+- expose raw DB, cursor, fingerprint, token or path details;
+- run production migrations implicitly.
 
-## Cross-component contracts
+## Cross-component invariants
 
-Important Storage contracts:
+- Server controls the transaction that combines filesystem outcome, path-state
+  persistence and exact cursor advancement.
+- Worktree controls filesystem and reconciliation semantics.
+- Core remains the authoritative revision/conflict/delete arbiter.
+- Storage validates persisted shape and exact checkpoint mechanics only.
+- API/CLI/status layers receive sanitized summaries, never raw cursor JSON or root
+  fingerprints.
+- Migration 0010 does not invent an adapter/root binding for legacy rows.
 
-- persistence errors are classified safely before public exposure;
-- repository methods preserve Core invariants and transaction boundaries;
-- schema/migration changes are explicit and auditable;
-- object storage remains content-addressed and safe for durable use;
-- hard-delete/retention behavior follows Core policy and accepted migration contracts.
+## Fan-in gates
 
-## Integration/fan-in ownership
+1. **Server bounded Worktree executor**
+   - requires STOR-P10 clean acceptance and synchronization;
+   - must use one transaction for path state plus exact cursor checkpoint;
+   - must not bypass repositories with direct SQL.
 
-Fan-in is required when:
+2. **Deployment migration runbook**
+   - requires accepted migration 0010;
+   - must stop on non-empty legacy path-only state and use an explicit operator
+     migration/clearance decision;
+   - owns backup, invocation and rollback procedure.
 
-- Core needs a new durable operation;
-- Server needs to wire Storage into runtime state;
-- Deployment needs migration/backup/restore/runbook details;
-- API/CLI/doctor needs public-safe storage health representation;
-- migrations affect existing runtime assumptions.
+3. **Public status/API**
+   - requires API-owned DTOs;
+   - may expose only safe lifecycle/count/cursor-presence summaries.
 
-These are integration gates. They do not block independent Storage work inside its component boundary.
+4. **PostgreSQL acceptance infrastructure**
+   - ordinary Component CI proves compile/pure checks only;
+   - STOR-P10 acceptance additionally requires the explicit ignored DB test
+     command against a dedicated database.
 
 ## Dependency rules
 
-- Storage owns persistence mechanics, not sync decisions.
-- Storage should provide narrow repository contracts consumed by Core/Server.
-- Storage must not leak raw database internals into public API responses.
-- Migration changes must be documented and reversible/operationally understandable where possible.
-- Storage tests should prove repository behavior without requiring live providers or clients.
+- Storage persists facts, not semantics.
+- Repository helpers remain narrow and caller-transaction-owned.
+- Migration changes are explicit and operationally documented.
+- No live provider/client dependency is required for Storage tests.
+- Consumer phases start only from an accepted synchronized Storage SHA.
 
-## Contract-change notes
+## Current contract notes
 
-Current known contract questions:
-
-1. Repository surface for future Core phases
-   - Core may request new persistence methods.
-   - Storage should add them as explicit contracts, not ad hoc SQL in Core.
-
-2. Migration ownership
-   - Storage owns schema/migration content.
-   - Deployment owns operational execution/runbooks.
-
-3. Object-store retention/cleanup
-   - Storage may implement durable mechanics.
-   - Core owns policy and safety semantics.
-
-No serial implementation dependency is implied by this map.
+- Storage owns migration content; Server/Deployment own production execution.
+- Storage owns durable Worktree state; Worktree does not gain direct DB ownership.
+- The broad monotonic cursor API remains for compatibility; Worktree export uses
+  the exact-contiguous transaction API.
+- Physical retention cleanup and object-store garbage collection remain deferred
+  owner-scoped work.
