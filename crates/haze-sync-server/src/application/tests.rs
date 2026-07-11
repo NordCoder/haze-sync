@@ -8,7 +8,6 @@ use haze_sync_storage::{
         revisions::get_current_revision_by_path,
         tombstones::TombstoneRepository,
     },
-    test_support::connect_test_database_from_env,
     LocalObjectStore,
 };
 use std::{
@@ -101,20 +100,8 @@ fn delete_command(
 
 #[tokio::test]
 async fn application_services_preserve_atomic_file_delete_and_read_semantics() {
-    let context = connect_test_database_from_env()
-        .await
-        .expect("test database lookup should stay safe")
-        .expect("Component CI must provide a strict test database");
-    context
-        .apply_migrations()
-        .await
-        .expect("migrations should apply");
-    context
-        .clean_storage_tables()
-        .await
-        .expect("tables should clean");
-
-    let pool = context.pool().clone();
+    let database = super::test_db::acquire_required().await;
+    let pool = database.pool().clone();
     let adapter_id = AdapterId::parse("worktree").unwrap();
     seed_adapter(&pool, &adapter_id).await;
     let actor = ApplicationActor::new(adapter_id);
