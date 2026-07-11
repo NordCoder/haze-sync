@@ -1,92 +1,167 @@
-name: Storage Branch Sync Bootstrap
+name: Component CI
 
 on:
-  push:
+  pull_request:
     branches:
-      - component/storage
+      - main
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: storage-branch-sync-${{ github.ref }}
-  cancel-in-progress: false
+  group: component-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  branch-sync:
-    name: Merge main into storage branch
-    if: ${{ github.ref_name == 'component/storage' && github.actor != 'github-actions[bot]' }}
+  rust:
+    name: Rust workspace
+    if: ${{ github.event_name != 'pull_request' || startsWith(github.head_ref, 'component/') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    env:
+      HAZE_WORKFLOW_SLUG: component-ci
     steps:
-      - name: Checkout storage branch
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Create verified two-parent merge
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Resolve component context
         shell: bash
         run: |
-          set -euo pipefail
+          branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          component="unknown"
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch --no-tags origin main component/storage
-
-          first_parent="$(git rev-parse HEAD)"
-          second_parent="$(git rev-parse origin/main)"
-          canonical_parent="$(git rev-parse HEAD^)"
-
-          if git merge-base --is-ancestor "$second_parent" "$first_parent"; then
-            echo "component/storage already contains current main"
-            exit 0
+          if [[ "$branch" == component/* ]]; then
+            component="${branch#component/}"
           fi
 
-          set +e
-          git merge --no-ff --no-commit "$second_parent"
-          merge_status=$?
-          set -e
+          echo "HAZE_COMPONENT=${component}" >> "$GITHUB_ENV"
+          echo "HAZE_COMPONENT_BRANCH=${branch}" >> "$GITHUB_ENV"
+          echo "HAZE_HEAD_SHA=${{ github.event.pull_request.head.sha || github.sha }}" >> "$GITHUB_ENV"
 
-          unmerged="$(git diff --name-only --diff-filter=U)"
-          if [[ -n "$unmerged" && "$unmerged" != ".github/workflows/component-ci.yml" ]]; then
-            echo "Unexpected merge conflicts:" >&2
-            printf '%s\n' "$unmerged" >&2
+      - name: cargo fmt
+        shell: bash
+        run: bash .github/scripts/ci-run.sh rust-fmt cargo fmt --all --check
+
+      - name: cargo check
+        shell: bash
+        run: bash .github/scripts/ci-run.sh cargo-check cargo check --workspace
+
+      - name: cargo test
+        shell: bash
+        run: bash .github/scripts/ci-run.sh cargo-test cargo test --workspace
+
+      - name: cargo clippy
+        shell: bash
+        run: bash .github/scripts/ci-run.sh cargo-clippy cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Finalize CI diagnostics
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: bash .github/scripts/ci-finalize.sh
+
+      - name: Upload CI diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-diag__component-${{ env.HAZE_COMPONENT }}__wf-${{ env.HAZE_WORKFLOW_SLUG }}__run-${{ github.run_id }}__attempt-${{ github.run_attempt }}
+          path: ci-diagnostics/
+          retention-days: 1
+          compression-level: 9
+          if-no-files-found: ignore
+          include-hidden-files: false
+
+  storage-postgres:
+    name: Storage PostgreSQL verification
+    if: ${{ (github.event_name == 'pull_request' && github.head_ref == 'component/storage') || (github.event_name == 'workflow_dispatch' && github.ref_name == 'component/storage') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      HAZE_COMPONENT: storage
+      HAZE_COMPONENT_BRANCH: component/storage
+      HAZE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      HAZE_WORKFLOW_SLUG: component-ci-storage-postgres
+      HAZE_SYNC_TEST_DATABASE_URL: postgresql://haze_sync_test:haze_sync_test_password@localhost:5432/haze_sync_stor_p10_test
+      RUST_TEST_THREADS: "1"
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: haze_sync_test
+          POSTGRES_PASSWORD: haze_sync_test_password
+          POSTGRES_DB: haze_sync_stor_p10_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --username=haze_sync_test --dbname=haze_sync_stor_p10_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Wait for PostgreSQL readiness
+        shell: bash
+        env:
+          POSTGRES_SERVICE_ID: ${{ job.services.postgres.id }}
+        run: |
+          bash .github/scripts/ci-run.sh storage-postgres-readiness bash -ceu '
+            for attempt in $(seq 1 30); do
+              if docker exec "$POSTGRES_SERVICE_ID" pg_isready \
+                --username=haze_sync_test \
+                --dbname=haze_sync_stor_p10_test; then
+                exit 0
+              fi
+              sleep 1
+            done
+            echo "PostgreSQL service did not become ready after 30 attempts." >&2
             exit 1
-          fi
-          if [[ "$merge_status" -ne 0 && "$unmerged" != ".github/workflows/component-ci.yml" ]]; then
-            echo "Merge failed without the expected workflow-only conflict." >&2
-            exit 1
-          fi
+          '
 
-          git show "$canonical_parent:.github/workflows/component-ci.yml" > .github/workflows/component-ci.yml
-          git add .github/workflows/component-ci.yml
+      - name: Run strict Storage PostgreSQL tests
+        shell: bash
+        run: bash .github/scripts/ci-run.sh storage-postgres-strict cargo test -p haze-sync-storage --features test-support -- --ignored
 
-          if git diff --name-only --diff-filter=U | grep -q .; then
-            echo "Unresolved merge conflicts remain." >&2
-            git diff --name-only --diff-filter=U >&2
-            exit 1
-          fi
+      - name: Verify mandatory STOR-P10 tests executed
+        shell: bash
+        run: |
+          bash .github/scripts/ci-run.sh storage-postgres-evidence bash -ceu '
+            log="${RUNNER_TEMP}/haze-ci-logs/storage-postgres-strict.log"
+            test -f "$log"
 
-          main_exact_paths=(
-            ".github/docs/ci-diagnostics-artifacts.md"
-            ".github/scripts/ci-finalize.sh"
-            ".github/scripts/ci-run.sh"
-            ".github/workflows/ci.yml"
-            ".github/workflows/obsidian-plugin.yml"
-            ".github/workflows/rust.yml"
-          )
-          for path in "${main_exact_paths[@]}"; do
-            git show "$second_parent:$path" | cmp - "$path"
-          done
+            expected_tests=(
+              "test repositories::adapter_cursors::postgres_tests::exact_cursor_progression_is_locked_contiguous_and_rollback_safe ... ok"
+              "test repositories::worktree_state::postgres_tests::durable_instances_and_path_state_are_isolated_and_transactional ... ok"
+              "test test_support::postgres::tests::fresh_and_current_schema_preparation_is_idempotent ... ok"
+              "test test_support::postgres::tests::migrates_empty_pre_p10_schema_and_rejects_nonempty_legacy_state ... ok"
+            )
 
-          git diff --exit-code "$first_parent" -- crates/haze-sync-storage migrations/0010_worktree_durable_state.sql
+            for expected_test in "${expected_tests[@]}"; do
+              if ! grep -F -- "$expected_test" "$log" >/dev/null; then
+                echo "Missing successful strict PostgreSQL test evidence: $expected_test" >&2
+                exit 1
+              fi
+            done
+          '
 
-          git commit -m "Merge main into component/storage for STOR-P10 verification"
-          merge_commit="$(git rev-parse HEAD)"
-          test "$(git rev-parse HEAD^1)" = "$first_parent"
-          test "$(git rev-parse HEAD^2)" = "$second_parent"
+      - name: Finalize CI diagnostics
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: bash .github/scripts/ci-finalize.sh
 
-          echo "Created merge commit $merge_commit"
-          echo "First parent: $first_parent"
-          echo "Second parent: $second_parent"
-          git push origin HEAD:component/storage
+      - name: Upload CI diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-diag__component-${{ env.HAZE_COMPONENT }}__wf-${{ env.HAZE_WORKFLOW_SLUG }}__run-${{ github.run_id }}__attempt-${{ github.run_attempt }}
+          path: ci-diagnostics/
+          retention-days: 1
+          compression-level: 9
+          if-no-files-found: ignore
+          include-hidden-files: false
