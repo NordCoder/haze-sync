@@ -4,16 +4,14 @@ use super::{
     ApplicationActor, ApplicationError, ApplicationIdempotency,
 };
 use chrono::Utc;
-use haze_sync_common::{
-    AdapterId, ConflictId, ContentHash, OperationId, RevisionId, VaultPath,
-};
+use haze_sync_common::{AdapterId, ConflictId, ContentHash, OperationId, RevisionId, VaultPath};
 use haze_sync_core::{
     conflict_saved_planner::{require_upsert_conflict_saved_plan, ConflictSavedPreservationPlan},
     conflict_service::ConflictPolicy,
     revision_service::{
         AppendOperationRequest, ContentStore, InsertRevisionRequest, OperationKind, OperationLog,
-        OperationLogEntry, RevisionRepository, RevisionService, RevisionServiceError, StoredContent,
-        StoredRevision, UpsertFileRequest, UpsertOutcome,
+        OperationLogEntry, RevisionRepository, RevisionService, RevisionServiceError,
+        StoredContent, StoredRevision, UpsertFileRequest, UpsertOutcome,
     },
 };
 use haze_sync_storage::{
@@ -146,13 +144,8 @@ pub(super) async fn apply_file(
         .map(stored_revision_from_row)
         .transpose()?;
     let planned = run_core_upsert(&command, current_revision, object_store)?;
-    let outcome = persist_upsert_outcome(
-        &mut transaction,
-        &command.actor,
-        object_store,
-        planned,
-    )
-    .await?;
+    let outcome =
+        persist_upsert_outcome(&mut transaction, &command.actor, object_store, planned).await?;
 
     if let Some(replay) = store_file_outcome(
         &mut transaction,
@@ -552,7 +545,11 @@ async fn insert_conflict_row(
     )
     .bind(conflict_id.as_str())
     .bind(plan.original_path.as_str())
-    .bind(plan.provided_base_revision_id.as_ref().map(RevisionId::as_str))
+    .bind(
+        plan.provided_base_revision_id
+            .as_ref()
+            .map(RevisionId::as_str),
+    )
     .bind(plan.current_revision_id.as_str())
     .bind(incoming_revision_id.as_str())
     .bind(plan.incoming_adapter_id.as_str())
