@@ -1,13 +1,13 @@
 REPORT_TYPE:
-IMPLEMENTATION
+CLEAN_CODE_REVIEW
 
 STATUS:
-SELF_ACCEPT
+CLEAN_ACCEPT
 
 AGENT:
-role: implementation-worker
-agent_execution_id: W1-SRV-STOR-TEST-SUPPORT-FAN-IN-server-implementation
-chat_name: server — W1 SRV-STOR-TEST-SUPPORT-FAN-IN Implementation
+role: clean-code-reviewer
+agent_execution_id: W1-SRV-STOR-TEST-SUPPORT-FAN-IN-C-server-clean-code-review
+chat_name: server — W1 SRV-STOR-TEST-SUPPORT-FAN-IN-C Clean-Code Review
 
 COMPONENT:
 name: server
@@ -21,34 +21,36 @@ control_report_path: crates/haze-sync-server/control/report.md
 
 WAVE:
 id: W1
-phase_id: SRV-STOR-TEST-SUPPORT-FAN-IN
-dependency_status: active state was PROMPT_READY for implementation-worker; Storage STOR-P9C reported a Server-owned production dependency violation; SRV-P7 remains explicitly blocked and was not started
+phase_id: SRV-STOR-TEST-SUPPORT-FAN-IN-C
+dependency_status: active state was PROMPT_READY for clean-code-reviewer; implementation status was SELF_ACCEPT; Component CI run 29127012776 on code-bearing SHA dc53f8dbe08da56d129fc3898cec262149c69f38 was recorded and independently observed green; SRV-P7 remains explicitly blocked by the Worktree fan-in gate
 
 SUMMARY:
-Restored Storage test-support production isolation in the Server manifest. The normal `haze-sync-storage` dependency no longer enables `test-support`; the same feature is enabled only through Server's dev-dependency so unit/integration test targets retain access. Workspace Cargo resolver v2 keeps the dev-only feature out of normal Server compilation while enabling it for test targets. No Server source, tests, Storage source, workflows, schemas, endpoints, runtime composition, or provider behavior changed. Code-bearing commit `dc53f8dbe08da56d129fc3898cec262149c69f38` passed Component CI run `29127012776`, run number `1616`.
+Reviewed the Server-owned Storage test-support feature-isolation correction. The normal `haze-sync-storage` dependency now uses default features only, while the duplicate dev-dependency enables `test-support` for Server unit/integration test targets. Workspace Cargo resolver v2 provides the intended boundary: dev-dependency features are available when building test targets but are not activated for normal production Server targets. No source adjustment, test cfg workaround, documentation change, dependency upgrade, or broader feature expansion was necessary. Green workspace CI proves both sides of the boundary: `cargo check --workspace` compiled production targets without Storage test-support, while `cargo test --workspace` and clippy all-targets compiled the test targets with the dev-only feature. Clean review found no remaining defect.
 
 CHANGED_FILES:
-- crates/haze-sync-server/Cargo.toml
 - crates/haze-sync-server/control/report.md
+
+REVIEWED_CODE_BEARING_FILE:
+- crates/haze-sync-server/Cargo.toml
 
 BRANCH_AND_CONTROL:
 current_branch: component/server
 base_branch: main
 base_sha: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
-head_sha: dc53f8dbe08da56d129fc3898cec262149c69f38 before writing this report; report write creates an additional report-only commit on component/server
+head_sha: dd6d5884a06c3bbe4cd3aae6197c489f4ffaa7f1 before writing this report; code-bearing verification SHA is dc53f8dbe08da56d129fc3898cec262149c69f38; report write creates an additional report-only commit on component/server
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes
 control_report_written: yes
 control_files_archived_by_worker: no
 ci_skip_used: yes
-ci_skip_reason: final report-only control commit; Cargo correction commit dc53f8dbe08da56d129fc3898cec262149c69f38 ran normal CI and is the verification head
+ci_skip_reason: this clean-code pass made no Cargo/source/test/docs/workflow changes; the commit is strictly the final control report and is not CI evidence. Component CI run 29127012776 on dc53f8dbe08da56d129fc3898cec262149c69f38 is the evidence
 
 SCOPE:
 allowed_files_only: yes
 scope_expansion_used: no
 scope_expansion_rationale: none
-cross_component_changes: no; the change is Server-owned and resolves a Storage contract boundary without editing Storage
+cross_component_changes: no
 forbidden_files_touched: no
 
 CONTRACT:
@@ -56,46 +58,43 @@ contract_read: yes
 contract_satisfied: yes
 contract_changes_requested: no
 contract_change_rationale: none
-affected_components: server dependency graph and storage production-isolation boundary
+affected_components: server dependency graph and Storage production-isolation boundary
 
 IMPLEMENTATION_OR_REVIEW:
 completed:
-- Read project process guidance, active Server control files, Server contract/dependency map, current Server Cargo manifest, workspace resolver configuration, Storage STOR-P9C report, Storage test-support documentation, Storage feature declaration/module gate, PR diff, PR metadata, and CI metadata.
-- Confirmed workspace `resolver = "2"` and Storage exports `test_support` only under `cfg(test)` or feature `test-support`.
-- Removed `features = ["test-support"]` from Server's normal `haze-sync-storage` dependency.
-- Added `haze-sync-storage` with `test-support` under Server dev-dependencies.
-- Verified the final PR patch contains only the intended dependency-placement correction for this phase.
-- Observed Component CI success on the code-bearing SHA.
+- Read project process guidance, report template, clean-code reviewer guidance, connector guidance, active Server control state/prompt, prior implementation report, Server contract/plan/log/dependency map, current Server Cargo manifest, workspace Cargo resolver configuration, Storage STOR-P9C report, Storage test-support documentation, Storage feature declaration/module gate, implementation phase comparison, PR diff/metadata, and CI metadata.
+- Confirmed workspace `resolver = "2"`.
+- Confirmed Storage declares `default = []`, exposes `test_support` only under `cfg(test)` or feature `test-support`, and documents downstream dev-dependency placement as the accepted contract.
+- Confirmed Server's normal dependency is exactly `haze-sync-storage = { path = "../haze-sync-storage" }` with no feature expansion.
+- Confirmed Server's dev-dependency enables only `features = ["test-support"]` and does not change the Storage version/path or unrelated dependencies.
+- Confirmed the phase's only code-bearing change is the minimal three-line Cargo dependency-placement correction; remaining phase-comparison files are Orchestrator-owned control-slot/archive changes.
+- Confirmed Component CI run 29127012776 (#1616) completed successfully on the exact code-bearing SHA.
+- Used CI outcomes as compile evidence: normal workspace check succeeds without production test-support imports, and workspace tests/clippy all-targets succeed with dev/test access.
 main_changes:
-- Production Server dependency graph uses default Storage features only.
-- Server dev/test targets retain Storage test-support access.
-behavior_changes: no runtime or public behavior change; dependency feature availability is now target-appropriate
-bugs_found:
-- Server enabled Storage test-support under normal dependencies, compiling test-only APIs into the production dependency graph.
-bugs_fixed:
-- Isolated Storage test-support to Server dev/test targets.
-cleanups_made:
-- Removed the production feature leak without introducing a harness or source cfg workaround.
+- No clean-code source/Cargo/test/docs changes were needed.
+behavior_changes: none
+bugs_found: none remaining in the dependency correction
+bugs_fixed: none during review; implementation correction is accepted as-is
+cleanups_made: none
 non_goals_preserved:
 - No SRV-P7 runtime composition or Worktree hosting.
-- No new endpoints, provider behavior, schema/migration changes, workflow changes, dependency upgrades, test deletion, or assertion weakening.
-- No Storage or other sibling source changes.
+- No new endpoints, Storage source edits, schema/migration changes, provider behavior, workflow changes, dependency upgrades, feature expansion beyond dev-only test-support, test deletion, or assertion weakening.
 deferred_work:
-- SRV-P7 remains blocked until the Worktree acceptance/fan-in conditions recorded in active state are satisfied.
+- SRV-P7 remains blocked until WT-P9 or a dedicated accepted Worktree/Server fan-in contract satisfies the active hold.
 
 TESTS_AND_CHECKS:
 checks_run:
-- GitHub connector verification of Cargo manifests, Storage feature gate/docs/report, PR patch, final code-bearing PR head, workflow run, job, and step conclusions.
-- Component CI `29127012776`, run number `1616`, on SHA `dc53f8dbe08da56d129fc3898cec262149c69f38` completed successfully.
-- CI steps passed: `cargo fmt`, `cargo check`, `cargo test`, `cargo clippy`, and diagnostics finalization.
+- GitHub connector static review of current manifests, Storage feature gate/docs/report, phase comparison, PR patch/metadata, and exact code-bearing workflow metadata.
+- Component CI run 29127012776, run number 1616, attempt 1, on SHA dc53f8dbe08da56d129fc3898cec262149c69f38 completed with conclusion `success`.
+- CI job `Rust workspace` passed `cargo fmt`, `cargo check`, `cargo test`, `cargo clippy`, and diagnostics finalization.
 checks_not_run:
-- No local shell Cargo commands were run because repository work is GitHub-connector-only.
-ci_status: CI_GREEN for Component CI run 29127012776 on the final code-bearing SHA
-workflow_urls: Component CI run 29127012776 was observed through GitHub Actions metadata
+- No local shell Cargo commands were run because repository work is restricted to the GitHub connector.
+ci_status: CI_GREEN for the exact code-bearing SHA
+workflow_urls: Component CI run 29127012776 observed through GitHub Actions metadata
 known_failures: none
 
 CI_DIAGNOSTICS:
-artifact_based_logs: not read; active prompt did not instruct diagnostics access and the final run was green
+artifact_based_logs: not read; active clean-code prompt prohibits diagnostics reading and the relevant run is green
 artifact_name: none
 artifact_id: none
 workflow_run_id: 29127012776
@@ -116,18 +115,18 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- The final report-only commit uses `[skip ci]` and must not be treated as CI evidence; run 29127012776 on dc53f8dbe08da56d129fc3898cec262149c69f38 is the evidence.
-- The PR title/body still describes an older scope; PR metadata was not edited because this worker is not authorized to manage PR lifecycle/content.
+- The PR title/body still describes an older scope; this worker did not edit PR metadata because PR lifecycle/content management is not authorized.
+- The final report-only commit uses `[skip ci]` and must not be treated as CI evidence.
 
 BLOCKERS:
-- No blocker for this fan-in correction.
-- SRV-P7 remains on the explicit post-phase hold recorded in control state.
+- No blocker for this clean-code phase.
+- SRV-P7 remains subject to the explicit post-phase Worktree fan-in hold.
 
 NEXT_RECOMMENDED_AGENT:
-clean-code-reviewer
+orchestrator
 
 FINAL_VERDICT:
-SELF_ACCEPT. Server now consumes Storage test-support only in dev/test targets, normal production compilation is feature-isolated, existing tests remain enabled, and the final code-bearing SHA passed Component CI run 29127012776 (#1616). Proceed to clean-code review for this dependency-only fan-in; do not start SRV-P7 while its recorded Worktree gate remains unsatisfied.
+CLEAN_ACCEPT. The Server production dependency graph no longer enables Storage test-support, resolver-v2 dev-dependency behavior preserves test access without production leakage, no production imports or accidental feature/dependency expansion remain, and the exact code-bearing SHA passed Component CI run 29127012776 (#1616). Do not begin SRV-P7 until its recorded Worktree fan-in gate is accepted.
 
 PUSHED:
 yes
