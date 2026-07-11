@@ -6,55 +6,54 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-storage/control/prompt.md
 active_report: crates/haze-sync-storage/control/report.md
-active_agent_role: fixer-worker
-assigned_chat_name: storage — W1 STOR-P10 CI Fix
-prompt_revision: verified by Orchestrator after STOR-P10 completed implementation and exact diagnostics artifact metadata was retrieved
+active_agent_role: implementation-worker
+assigned_chat_name: storage — W1 STOR-P10 PostgreSQL Verification
+prompt_revision: verified by Orchestrator after FIX-STOR-P10-CI completed and ordinary post-fix CI was independently confirmed green
 
 wave: W1
-phase: FIX-STOR-P10-CI
+phase: STOR-P10-DB-VERIFY
 
-implementation_status: BLOCKED_BY_TOOLING
-fix_status: NOT_STARTED
+implementation_status: SELF_ACCEPT_PENDING_DB_VERIFICATION
+fix_status: FIX_COMPLETE
 clean_review_status: NOT_STARTED
 architect_status: ARCHITECT_CHANGED_CONTRACTS
-ci_status: CI_RED
+ci_status: CI_GREEN_DB_EVIDENCE_MISSING
 ci_workflow: Component CI
-ci_code_bearing_sha: 63d80764933cba5f23fb43bad44201a75e1dc16a
-ci_run_id: 29166287661
-ci_run_number: 1765
+ci_code_bearing_sha: abca69058390983894465cef9d66c38960fae4c7
+ci_run_id: 29167108216
+ci_run_number: 1792
 ci_run_attempt: 1
-known_failed_checks:
-- Finalize CI diagnostics
+known_failed_checks: []
 
-artifact_name: ci-diag__component-storage__wf-component-ci__run-29166287661__attempt-1
-artifact_id: 8252246409
-artifact_head_sha: 63d80764933cba5f23fb43bad44201a75e1dc16a
-artifact_digest: sha256:c2e86e52d1bd342fd577503042c4e4640591179a08fae678de1a27d22d4e0f2c
-artifact_size_bytes: 13317
-artifact_expires_at: 2026-07-12T20:03:15Z
-artifact_status: AVAILABLE_UNEXPIRED
+accepted_implementation_sha: 63d80764933cba5f23fb43bad44201a75e1dc16a
+fixer_artifact_id: 8252246409
+fixer_artifact_status: READ_VERIFIED
+fixer_correction:
+- rustfmt corrections in five Storage source files
+- migration-count smoke test updated from nine to ten and asserts migration 0010
 
-accepted_implementation:
-- versioned Worktree instance/root-fingerprint binding
-- per-adapter present/tombstoned durable path state
-- fail-safe legacy migration strategy
-- caller-transaction-owned path state and exact contiguous cursor repositories
-- safe redacted errors and deterministic schema/test-support coverage
+missing_acceptance_evidence:
+- mandatory ignored PostgreSQL tests have not executed against a dedicated reachable database
+- ordinary cargo test success is not sufficient because strict DB tests remain ignored
+- required command: cargo test -p haze-sync-storage --features test-support -- --ignored
 
-separate_tooling_blocker:
-- mandatory strict PostgreSQL migration/state/cursor tests were not executed
-- ordinary cargo test success with ignored DB tests is not acceptance evidence
-- no clean-code review until dedicated DB-capable verification succeeds
+verification_scope:
+- ephemeral secret-free PostgreSQL service in Component CI
+- deterministic readiness and HAZE_SYNC_TEST_DATABASE_URL binding
+- strict migration/instance/path-state/transaction/cursor tests must actually run and pass
+- no silent skipping or weakening
+- live-test-proven Storage defects may receive only minimum Storage-owned corrections
 
 parallel_owner_status:
-- WT-P10 is independently in tooling correction
-- SRV-P7B2 is independently in tooling correction
+- WT-P10 is ready for clean-code review
+- SRV-P7B2 requires PostgreSQL CI tooling correction
 
 blocked_downstream:
+- STOR-P10 clean-code review remains blocked until DB-capable verification succeeds
 - SRV-P7B3 remains blocked until WT-P10, STOR-P10 and SRV-P7B2 all reach CLEAN_ACCEPT and exact accepted SHAs are synchronized
 - Deployment migration work remains blocked
 
-next_gate_after_fix:
-- artifact correction and independently verified green post-fix code-bearing CI -> dedicated STOR-P10 PostgreSQL verification prompt
-- only after required DB/migration/repository/cursor evidence succeeds -> mandatory STOR-P10 clean-code review
-- failed or blocked fix -> route exact artifact/scope/contract/tooling decision
+next_gate_after_verification:
+- SELF_ACCEPT plus green code-bearing CI containing successful strict ignored PostgreSQL execution -> mandatory STOR-P10 clean-code review
+- red CI -> exact artifact-based fixer after Orchestrator metadata retrieval
+- blocked status -> route exact tooling/scope/contract decision
