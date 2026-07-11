@@ -171,7 +171,9 @@ async fn apply_delete_in_transaction(
     })
 }
 
-fn active_current_revision_id(object: &SyncObjectRow) -> Result<Option<RevisionId>, ApplicationError> {
+fn active_current_revision_id(
+    object: &SyncObjectRow,
+) -> Result<Option<RevisionId>, ApplicationError> {
     if object.deleted_at.is_some() {
         return Ok(None);
     }
