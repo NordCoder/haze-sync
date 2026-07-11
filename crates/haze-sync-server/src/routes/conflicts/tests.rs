@@ -132,8 +132,12 @@ async fn seed_conflict_fixture(
     .expect("revisions should seed");
 
     sqlx::query(
-        "update sync_objects set current_revision_id = $1 where object_id = $2; \
-         update sync_objects set current_revision_id = $3 where object_id = $4",
+        "update sync_objects \
+         set current_revision_id = case object_id \
+             when $2 then $1 \
+             when $4 then $3 \
+         end \
+         where object_id in ($2, $4)",
     )
     .bind(current_revision_id)
     .bind(current_object_id)
