@@ -1,69 +1,95 @@
-# W1-WT-P9C — Worktree doctor and repair-planning clean-code review
+# W1-FIX-WT-P9C-CI — Worktree clean-review CI correction
 
 Before starting, name this worker chat exactly:
 
-`worktree — W1 WT-P9C Clean-Code Review`
+`worktree — W1 WT-P9C CI Fix`
 
 Component: worktree
 Path: crates/haze-sync-worktree
 Branch: component/worktree
 PR: #49
-Role: clean-code-reviewer
+Role: fixer-worker
 
 Work only through the GitHub connector. Do not merge the PR, change its draft state, rebase, reset, rewrite history, or modify `main` or sibling branches.
 
 ## Context
 
-WT-P9 implementation and its artifact-based CI correction are complete. The final code-bearing Worktree source/test/docs head is green.
+WT-P9C clean-code review made Worktree-owned source/test/docs corrections and then reported `CLEAN_BLOCKED_BY_TOOLING`. The final review code-bearing head is:
 
-- code_bearing_sha: `ea24e15f45613886f9dfad0f331543daf45d93bc`
+- code_bearing_sha: `b9520336c97ccf0e1b1905c7c9ad1d3a4a2d061e`
 - workflow: `Component CI`
-- workflow_run_id: `29145333765`
-- run_number: `1660`
+- workflow_run_id: `29148826285`
+- run_number: `1664`
 - workflow_run_attempt: `1`
-- conclusion: `success`
+- conclusion: `failure`
 
-Archived lifecycle evidence:
+Visible `cargo fmt`, `cargo check`, `cargo test`, and `cargo clippy` steps passed; the workflow failed during diagnostics finalization. Do not infer the exact cause from visible metadata.
 
-- implementation report: `crates/haze-sync-worktree/control/log/20260711-071300Z-W1-WT-P9-implementation-worker-report.md`
-- fixer prompt: `crates/haze-sync-worktree/control/log/20260711-082000Z-W1-FIX-WT-P9-CI-fixer-worker-prompt.md`
-- fixer report: `crates/haze-sync-worktree/control/log/20260711-082000Z-W1-FIX-WT-P9-CI-fixer-worker-report.md`
+Archived WT-P9C evidence:
 
-The fixer changed formatting only. Review the complete WT-P9 implementation, not merely the formatting diff.
+- clean-review prompt: `crates/haze-sync-worktree/control/log/20260711-101500Z-W1-WT-P9C-clean-code-reviewer-prompt.md`
+- clean-review report: `crates/haze-sync-worktree/control/log/20260711-101500Z-W1-WT-P9C-clean-code-reviewer-report.md`
+
+Use this exact diagnostics artifact:
+
+- artifact_name: `ci-diag__component-worktree__wf-component-ci__run-29148826285__attempt-1`
+- artifact_id: `8247562500`
+- artifact_head_sha: `b9520336c97ccf0e1b1905c7c9ad1d3a4a2d061e`
+- artifact_digest: `sha256:49ceff07739604143f67fcac37606d86181dcb60f2a19f531ec9d1e498177533`
+- artifact_expires_at: `2026-07-12T10:08:37Z`
+- artifact_status: available and unexpired when assigned
 
 ## Read
 
-Read the project process files, current Worktree control files, Worktree component contract, implementation plan, implementation log, dependency map, decisions, the archived WT-P9 implementation and fixer reports referenced above, current doctor/repair-planning source and tests, relevant scanner/reconciliation/runtime boundaries, accepted Core doctor/repair semantics, and the PR/phase diff.
+Before editing, read:
 
-Do not read CI diagnostics artifacts. The final code-bearing run is green and diagnostics inspection is not part of this role.
+- project `implementation-manifest.md` and `report-template.md` sources;
+- the Fixer Worker process prompt and GitHub connector guidance;
+- Worktree component contract, implementation plan, implementation log, dependency map, and decisions;
+- this active prompt;
+- the archived WT-P9C prompt/report referenced above;
+- current WT-P9C doctor/repair-planning source, tests, docs, and the review diff;
+- the exact diagnostics artifact specified above.
+
+## Diagnostics protocol
+
+Through the GitHub connector:
+
+1. fetch artifact `8247562500` from workflow run `29148826285`;
+2. read `summary.md` and `manifest.json` at the archive location where they actually exist;
+3. read every failure marker and log listed in `failed_checks`;
+4. verify the artifact head SHA matches `b9520336c97ccf0e1b1905c7c9ad1d3a4a2d061e`;
+5. apply only the artifact-proven correction.
+
+Raw GitHub job logs are not authorized as fallback. If the artifact is missing, expired, malformed, mismatched, or unreadable, report `FIX_BLOCKED_BY_LOGS` without guessing.
 
 ## Task
 
-Review WT-P9 Worktree-owned diagnostics and non-destructive repair planning.
+Fix only the minimum artifact-proven cause of the WT-P9C CI failure.
 
-Focus on:
+Preserve the accepted clean-review corrections:
 
-- doctor facts being derived from authoritative scan/reconciliation/runtime state rather than watcher hints;
-- correct classification of missing, dirty, content-hash mismatch, reserved-path, skipped symlink/special/unsafe/filesystem, stale/expired echo, partial-scan, and degraded-runtime conditions;
-- the managed unscoped `_haze_runtime` reserved skip not producing a false operator-visible violation;
-- safe count/category summaries and only validated vault-relative optional paths;
-- injected persistence/fact-source boundaries without direct Storage/DB ownership;
-- repair plans remaining non-executing and requiring explicit host confirmation for overwrite, move, trash, or delete risk;
-- no durable execution authority being inferred from a previously generated plan;
-- deterministic APIs, clear module shape, focused tests, and suitability for later Server hosting;
-- preservation of Worktree/Core/Server ownership boundaries and all WT-P9 non-goals.
+- repair plans are descriptive and non-executing;
+- plans cannot carry or imply durable host authorization;
+- risky execution must be confirmed only after fresh-fact revalidation inside a future execution boundary;
+- aggregate expired-echo facts propose safe rescan rather than an unaddressable destructive action;
+- authoritative facts, managed-runtime skip behavior, validated vault-relative paths, and injected fact-source boundaries remain unchanged.
 
 ## Allowed files
 
 - `crates/haze-sync-worktree/src/**`
-- `crates/haze-sync-worktree/docs/**`
+- `crates/haze-sync-worktree/docs/**` only if required by the artifact-proven correction
 - `crates/haze-sync-worktree/control/report.md`
 
-## Boundaries
+## Forbidden changes
 
-No concrete Server composition or routes, repair executor, automatic destructive mutation, provider sync, direct database access, public absolute paths, CLI repair command, workflow/dependency changes, sibling changes, test deletion, or assertion weakening.
+No Server wiring, repair executor, automatic mutation, provider behavior, direct database access, public absolute paths, CLI command, workflow/dependency changes, sibling changes, test deletion, assertion weakening, reintroduction of authorization state, or unrelated cleanup.
 
-Source/test/docs review commits must run CI normally. A final report-only commit may skip CI.
+## Checks and CI
+
+Any source/test/docs fixer commit must run CI normally. CI skip is permitted only for a final report-only commit.
+
+Do not claim success until a post-fix code-bearing `Component CI` run is observed green. If the artifact-proven fix is applied but CI remains pending or red, use the corresponding honest fixer status.
 
 ## Report
 
@@ -71,7 +97,15 @@ Write only `crates/haze-sync-worktree/control/report.md` using `report-template.
 
 Set:
 
-- `REPORT_TYPE: CLEAN_CODE_REVIEW`
-- `phase_id: WT-P9C`
+- `REPORT_TYPE: FIX`
+- `phase_id: FIX-WT-P9C-CI`
 
-Use an honest clean-review status and include the exact code-bearing SHA and authoritative CI evidence.
+Use one of:
+
+- `FIX_COMPLETE`
+- `FIX_NEEDS_MORE`
+- `FIX_BLOCKED_BY_LOGS`
+- `FIX_BLOCKED_BY_CONTRACT`
+- `FIX_BLOCKED_BY_TOOLING`
+
+Fill `CI_DIAGNOSTICS` completely, including artifact name/id, run id/attempt, files read, head-SHA verification, and whether raw logs were used.
