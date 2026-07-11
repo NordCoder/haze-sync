@@ -72,3 +72,96 @@ jobs:
           compression-level: 9
           if-no-files-found: ignore
           include-hidden-files: false
+
+  storage-postgres:
+    name: Storage PostgreSQL verification
+    if: ${{ (github.event_name == 'pull_request' && github.head_ref == 'component/storage') || (github.event_name == 'workflow_dispatch' && github.ref_name == 'component/storage') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      HAZE_COMPONENT: storage
+      HAZE_COMPONENT_BRANCH: component/storage
+      HAZE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      HAZE_WORKFLOW_SLUG: component-ci-storage-postgres
+      HAZE_SYNC_TEST_DATABASE_URL: postgresql://haze_sync_test:haze_sync_test_password@localhost:5432/haze_sync_stor_p10_test
+      RUST_TEST_THREADS: "1"
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: haze_sync_test
+          POSTGRES_PASSWORD: haze_sync_test_password
+          POSTGRES_DB: haze_sync_stor_p10_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --username=haze_sync_test --dbname=haze_sync_stor_p10_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Wait for PostgreSQL readiness
+        shell: bash
+        env:
+          POSTGRES_SERVICE_ID: ${{ job.services.postgres.id }}
+        run: |
+          bash .github/scripts/ci-run.sh storage-postgres-readiness bash -ceu '
+            for attempt in $(seq 1 30); do
+              if docker exec "$POSTGRES_SERVICE_ID" pg_isready \
+                --username=haze_sync_test \
+                --dbname=haze_sync_stor_p10_test; then
+                exit 0
+              fi
+              sleep 1
+            done
+            echo "PostgreSQL service did not become ready after 30 attempts." >&2
+            exit 1
+          '
+
+      - name: Run strict Storage PostgreSQL tests
+        shell: bash
+        run: bash .github/scripts/ci-run.sh storage-postgres-strict cargo test -p haze-sync-storage --features test-support -- --ignored
+
+      - name: Verify mandatory STOR-P10 tests executed
+        shell: bash
+        run: |
+          bash .github/scripts/ci-run.sh storage-postgres-evidence bash -ceu '
+            log="${RUNNER_TEMP}/haze-ci-logs/storage-postgres-strict.log"
+            test -f "$log"
+
+            expected_tests=(
+              "test repositories::adapter_cursors::postgres_tests::exact_cursor_progression_is_locked_contiguous_and_rollback_safe ... ok"
+              "test repositories::worktree_state::postgres_tests::durable_instances_and_path_state_are_isolated_and_transactional ... ok"
+              "test test_support::postgres::tests::fresh_and_current_schema_preparation_is_idempotent ... ok"
+              "test test_support::postgres::tests::migrates_empty_pre_p10_schema_and_rejects_nonempty_legacy_state ... ok"
+            )
+
+            for expected_test in "${expected_tests[@]}"; do
+              if ! grep -F -- "$expected_test" "$log" >/dev/null; then
+                echo "Missing successful strict PostgreSQL test evidence: $expected_test" >&2
+                exit 1
+              fi
+            done
+          '
+
+      - name: Finalize CI diagnostics
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: bash .github/scripts/ci-finalize.sh
+
+      - name: Upload CI diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-diag__component-${{ env.HAZE_COMPONENT }}__wf-${{ env.HAZE_WORKFLOW_SLUG }}__run-${{ github.run_id }}__attempt-${{ github.run_attempt }}
+          path: ci-diagnostics/
+          retention-days: 1
+          compression-level: 9
+          if-no-files-found: ignore
+          include-hidden-files: false
