@@ -148,9 +148,7 @@ pub struct WorktreeRuntimeCycleRequest {
 impl WorktreeRuntimeCycleRequest {
     /// Build an explicit future manual dry-run request with no mutation rights.
     #[must_use]
-    pub const fn manual_dry_run(
-        budget: WorktreeRuntimeCycleBudget,
-    ) -> WorktreeRuntimeCycleRequest {
+    pub const fn manual_dry_run(budget: WorktreeRuntimeCycleBudget) -> WorktreeRuntimeCycleRequest {
         Self {
             cause: WorktreeRuntimeCycleCause::Periodic,
             mode: WorktreeMode::DryRun,
@@ -233,9 +231,8 @@ impl fmt::Debug for WorktreeCancellationToken {
 /// Awaitable, `Send` cycle result without an async-trait dependency.
 pub type WorktreeRuntimeCycleFuture<'a> = Pin<
     Box<
-        dyn Future<
-                Output = Result<WorktreeRuntimeCycleSummary, WorktreeRuntimeCycleFailure>,
-            > + Send
+        dyn Future<Output = Result<WorktreeRuntimeCycleSummary, WorktreeRuntimeCycleFailure>>
+            + Send
             + 'a,
     >,
 >;
@@ -569,9 +566,7 @@ where
     }
 
     /// Poll watcher hints and await at most one authoritative cycle.
-    pub async fn poll(
-        &mut self,
-    ) -> Result<WorktreeRuntimePoll, WorktreeRuntimeLifecycleError> {
+    pub async fn poll(&mut self) -> Result<WorktreeRuntimePoll, WorktreeRuntimeLifecycleError> {
         match self.lifecycle {
             WorktreeRuntimeLifecycle::Created => {
                 return Err(WorktreeRuntimeLifecycleError::NotStarted);
@@ -786,10 +781,7 @@ where
         self.next_periodic_cycle = if self.cancellation.is_cancelled() {
             None
         } else {
-            Some(add_saturating(
-                now,
-                self.policy.periodic_cycle_interval,
-            ))
+            Some(add_saturating(now, self.policy.periodic_cycle_interval))
         };
     }
 }
