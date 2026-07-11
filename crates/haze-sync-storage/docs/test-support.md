@@ -33,7 +33,8 @@ Run mandatory STOR-P10 migration, durable-state and exact-cursor evidence:
 
 ```bash
 export HAZE_SYNC_TEST_DATABASE_URL='<dedicated postgres/postgresql test database URL>'
-cargo test -p haze-sync-storage --features test-support -- --ignored
+RUST_TEST_THREADS=1 \
+  cargo test -p haze-sync-storage --features test-support -- --ignored
 ```
 
 The STOR-P10 tests are explicitly ignored in ordinary workspace CI because they
@@ -48,9 +49,39 @@ cargo check -p haze-sync-storage
 cargo check -p haze-sync-storage --features test-support
 ```
 
-The default Component CI workflow runs workspace fmt/check/test/clippy without a
-CI-owned PostgreSQL service. Its green result proves compilation and pure tests,
-not the ignored mandatory PostgreSQL evidence.
+## Component CI PostgreSQL gate
+
+The `component/storage` branch has a dedicated `Storage PostgreSQL verification`
+job in Component CI. It does not run on unrelated component branches.
+
+The job:
+
+1. starts `postgres:16-alpine` with synthetic test-only user, password and database
+   values committed in the workflow;
+2. uses the service-container health check and an additional bounded
+   `docker exec ... pg_isready` loop before testing;
+3. binds a test-only localhost URL through `HAZE_SYNC_TEST_DATABASE_URL`;
+4. sets `RUST_TEST_THREADS=1` because the strict harness performs exclusive table
+   cleanup in one dedicated database;
+5. executes exactly:
+
+   ```bash
+   cargo test -p haze-sync-storage --features test-support -- --ignored
+   ```
+
+6. verifies the command log contains successful execution of all four mandatory
+   tests:
+   - pre-P10 migration plus non-empty legacy rejection;
+   - fresh/current schema idempotence;
+   - durable instance/path-state isolation and rollback;
+   - exact cursor progression, rollback and concurrent loser rejection;
+7. runs the standard diagnostics finalizer and uploads a job-specific diagnostics
+   artifact on readiness, test or evidence failure.
+
+The credentials are intentionally non-secret, ephemeral and reachable only on the
+GitHub Actions runner. The job does not use repository secrets or an external
+managed database. A green ordinary Rust workspace job without a green Storage
+PostgreSQL verification job is not STOR-P10 acceptance evidence.
 
 ## Configuration contract
 
