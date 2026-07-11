@@ -91,7 +91,7 @@ impl ServerAppState {
     /// File PUT/GET services validate object-store availability per operation;
     /// DELETE and changes preserve their existing database-only dependency shape.
     #[must_use]
-    pub fn application_services(&self) -> Option<ServerApplicationServices> {
+    pub(crate) fn application_services(&self) -> Option<ServerApplicationServices> {
         Some(ServerApplicationServices::new(
             self.db_pool.as_ref()?.clone(),
             self.object_store.clone(),
