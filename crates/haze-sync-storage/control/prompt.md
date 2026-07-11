@@ -1,4 +1,4 @@
-# W1-STOR-P9C-BLOCKED-BY-SERVER-REVIEW — External clean-review gate
+# W1-STOR-COMPLETE-FAN-IN — Storage component plan complete
 
 Component: storage
 Path: crates/haze-sync-storage
@@ -10,28 +10,30 @@ This is a hold notice, not an executable worker prompt.
 
 ## Accepted Storage state
 
-STOR-P9 implementation, artifact-based CI correction, and all Storage-local clean-code fixes are complete. Final Storage source/docs CI is green.
+STOR-P9 implementation, artifact-based CI correction, Storage-local clean-code fixes, and the external Server production feature-isolation correction are complete.
 
-- code_bearing_sha: aa59064d641f4850f7c70fa615e638b52613dd95
-- workflow: Component CI
-- workflow_run_id: 29124956486
-- run_number: 1580
-- conclusion: success
+Storage final source/docs evidence:
 
-## External correction evidence
+- code_bearing_sha: `aa59064d641f4850f7c70fa615e638b52613dd95`
+- workflow: `Component CI`
+- workflow_run_id: `29124956486`
+- run_number: `1580`
+- workflow_run_attempt: `1`
+- conclusion: `success`
 
-Server implemented the required production feature-isolation correction:
+External Server boundary evidence:
 
-- Server code-bearing SHA: dc53f8dbe08da56d129fc3898cec262149c69f38
-- Server Component CI run: 29127012776
-- conclusion: success
-- normal Server dependency uses `haze-sync-storage` without `test-support`;
-- Server dev-dependency enables Storage `test-support` for test targets.
+- Server code-bearing SHA: `dc53f8dbe08da56d129fc3898cec262149c69f38`
+- Server workflow run: `29127012776`
+- Server clean-review phase: `SRV-STOR-TEST-SUPPORT-FAN-IN-C`
+- clean-review status: `CLEAN_ACCEPT`
 
-## Remaining gate
+The normal Server dependency no longer enables Storage `test-support`; the feature is enabled only through the Server dev-dependency for test targets. The previously reported cross-component contract blocker is therefore resolved.
 
-The Server correction is currently assigned to clean-code review phase `SRV-STOR-TEST-SUPPORT-FAN-IN-C`. Storage does not need another local worker pass.
+## Hold reason
+
+The component-local Storage plan is complete. Remaining work is explicitly scoped fan-in or integration: durable adapter state implementations, runtime transaction/locking composition, production E2E, release hardening, or compatibility maintenance.
 
 ## Unblock condition
 
-When the Server dependency correction is clean-code accepted with green CI or accepted as a no-change review of the green source head, close STOR-P9C as `CLEAN_ACCEPT` and move Storage to its component-complete fan-in hold. Until then, do not launch a Storage worker from this notice.
+Only an explicit Orchestrator fan-in/integration prompt within Storage ownership may reactivate this component. Do not launch a worker from this hold notice.
