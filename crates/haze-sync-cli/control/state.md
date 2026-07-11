@@ -9,7 +9,7 @@ active_report: crates/haze-sync-cli/control/report.md
 active_agent_role: none
 
 wave: W1
-phase: CLI-P6-BLOCKED
+phase: CLI-P6-BLOCKED-BY-RUNTIME-FAN-IN
 
 implementation_status: NOT_STARTED
 clean_review_status: CLEAN_ACCEPT
@@ -20,5 +20,10 @@ ci_run_number: 1047
 ci_run_attempt: 1
 known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
-blocker: WT-P9 and GDA-P8C plus Server/API bootstrap/sync operator contracts and runtime fan-in are unavailable
-unblock_condition: green WT-P9 and GDA-P8C acceptance plus accepted Server/API operator and runtime fan-in contracts, or a dedicated CLI fan-in contract
+resolved_dependencies:
+- GDA-P8C lifecycle accepted with green post-fix CI
+- Storage component-local lifecycle accepted
+- Server Storage feature-isolation fan-in clean accepted
+- WT-P9 implementation and post-fix CI accepted
+blocker: WT-P9C clean review plus accepted Server/API bootstrap, sync operator, progress/result, and runtime composition contracts are unavailable
+unblock_condition: WT-P9C CLEAN_ACCEPT with green final code-bearing CI plus explicit Server/API runtime fan-in or a dedicated CLI fan-in contract
