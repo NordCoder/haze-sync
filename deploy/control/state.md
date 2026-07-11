@@ -9,7 +9,7 @@ active_report: deploy/control/report.md
 active_agent_role: none
 
 wave: W1
-phase: DEP-P7-BLOCKED
+phase: DEP-P7-BLOCKED-BY-RUNTIME-TOPOLOGY
 
 implementation_status: NOT_STARTED
 clean_review_status: CLEAN_ACCEPT
@@ -20,5 +20,9 @@ ci_run_number: 979
 ci_run_attempt: 1
 known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
-blocker: GDA-P8 fixer is green but GDA-P8C and concrete GDrive service lifecycle, persistence/delete-candidate wiring, OAuth secrets, Server/API transport, and shutdown topology are not accepted
-unblock_condition: green GDA-P8C acceptance plus explicit accepted GDrive/Storage/Server runtime-config deployment fan-in contract
+resolved_dependencies:
+- GDA-P8C lifecycle accepted with green post-fix CI
+- Storage component-local lifecycle accepted
+- Server Storage feature-isolation fan-in clean accepted
+blocker: explicit GDrive/Storage/Server/API runtime configuration, lifecycle, OAuth, transport, health/readiness, shutdown, and bootstrap topology is unavailable
+unblock_condition: accepted cross-component runtime-config and lifecycle fan-in contract defining Deployment ownership
