@@ -69,9 +69,11 @@ The job:
    cargo test -p haze-sync-storage --features test-support -- --ignored
    ```
 
-6. verifies the command log contains successful execution of all four mandatory
+6. verifies the command log contains successful execution of all five mandatory
    tests:
-   - pre-P10 migration plus non-empty legacy rejection;
+   - direct execution of migration 0010 against non-empty legacy state, including
+     the explicit guard error and preserved legacy row/table shape;
+   - pre-P10 harness migration plus non-empty legacy rejection;
    - fresh/current schema idempotence;
    - durable instance/path-state isolation and rollback;
    - exact cursor progression, rollback and concurrent loser rejection;
