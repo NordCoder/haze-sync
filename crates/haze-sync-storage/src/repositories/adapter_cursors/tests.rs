@@ -13,7 +13,7 @@ fn cursor_row(external_cursor_json: Value) -> AdapterCursorRow {
 }
 
 #[test]
-fn update_outcome_reports_updated_status() {
+fn compatibility_update_outcome_reports_updated_status() {
     let row = cursor_row(json!({}));
 
     assert!(AdapterCursorUpdateOutcome::Updated(row.clone()).is_updated());
@@ -25,7 +25,7 @@ fn update_outcome_reports_updated_status() {
 }
 
 #[test]
-fn update_request_accepts_internal_json_cursor_metadata() {
+fn compatibility_update_accepts_internal_json_cursor_metadata() {
     let update = AdapterCursorUpdate {
         adapter_id: AdapterId::parse("gdrive-adapter").unwrap(),
         last_core_seq: 42,
@@ -60,7 +60,50 @@ fn empty_or_null_cursor_metadata_is_summarized_as_absent() {
 }
 
 #[test]
-fn cursor_sql_uses_single_atomic_upserts() {
+fn exact_cursor_transition_accepts_only_contiguous_successor() {
+    assert_eq!(validate_exact_transition(0, 1), Ok(()));
+    assert_eq!(validate_exact_transition(41, 42), Ok(()));
+    assert_eq!(
+        validate_exact_transition(7, 7),
+        Err(RepositoryError::CursorRegression)
+    );
+    assert_eq!(
+        validate_exact_transition(7, 6),
+        Err(RepositoryError::CursorRegression)
+    );
+    assert_eq!(
+        validate_exact_transition(7, 9),
+        Err(RepositoryError::CursorGap)
+    );
+    assert_eq!(
+        validate_exact_transition(i64::MAX, i64::MAX),
+        Err(RepositoryError::CursorRegression)
+    );
+    assert_eq!(
+        validate_exact_transition(i64::MAX, 0),
+        Err(RepositoryError::CursorRegression)
+    );
+    assert_eq!(
+        validate_exact_transition(-1, 0),
+        Err(RepositoryError::InvalidSequence)
+    );
+}
+
+#[test]
+fn exact_cursor_sql_locks_and_uses_compare_and_set() {
+    let lock = LOCK_CURSOR_SQL.to_ascii_lowercase();
+    let advance = ADVANCE_EXACT_CURSOR_SQL.to_ascii_lowercase();
+
+    assert!(lock.contains("for update"));
+    assert!(lock.contains("where adapter_id = $1"));
+    assert!(advance.contains("where adapter_id = $1 and last_core_seq = $2"));
+    assert!(advance.contains("set last_core_seq = $3"));
+    assert!(advance.contains("returning adapter_id"));
+    assert!(!advance.contains("external_cursor_json ="));
+}
+
+#[test]
+fn compatibility_cursor_sql_uses_single_atomic_upserts() {
     let initialize = INITIALIZE_CURSOR_SQL.to_ascii_lowercase();
     let update = UPDATE_CURSOR_SQL.to_ascii_lowercase();
 
