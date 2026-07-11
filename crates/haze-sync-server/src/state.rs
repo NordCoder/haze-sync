@@ -86,12 +86,15 @@ impl ServerAppState {
         self.object_store.as_ref()
     }
 
-    /// Build reusable application services only when all authoritative dependencies exist.
+    /// Build reusable application services when the database authority exists.
+    ///
+    /// File PUT/GET services validate object-store availability per operation;
+    /// DELETE and changes preserve their existing database-only dependency shape.
     #[must_use]
     pub fn application_services(&self) -> Option<ServerApplicationServices> {
         Some(ServerApplicationServices::new(
             self.db_pool.as_ref()?.clone(),
-            self.object_store.as_ref()?.clone(),
+            self.object_store.clone(),
         ))
     }
 
