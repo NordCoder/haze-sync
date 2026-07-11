@@ -1,135 +1,124 @@
-# W1-FIX-STOR-P10-CI — Durable Worktree state CI correction
+# W1-STOR-P10-DB-VERIFY — Live PostgreSQL verification for durable Worktree state
 
 Before starting, name this worker chat exactly:
 
-`storage — W1 STOR-P10 CI Fix`
+`storage — W1 STOR-P10 PostgreSQL Verification`
 
 Component: storage
 Path: crates/haze-sync-storage
 Branch: component/storage
 PR: #47
-Role: fixer-worker
+Role: implementation-worker
+Phase: STOR-P10-DB-VERIFY
 
-Work only through the GitHub connector. Do not merge the PR, change its draft state, rebase, reset, rewrite history, force-push, modify `main`, or modify sibling branches.
+Work only through the GitHub connector. Do not merge the PR, change draft state, rebase, reset, rewrite history, force-push, modify `main`, or modify sibling branches.
 
-## Trigger and implementation evidence
+## Trigger
 
-STOR-P10 completed its scoped migration, model, repository, cursor and test-support implementation, but its authoritative Component CI is red at diagnostics finalization.
+STOR-P10 implementation and artifact correction are complete, and ordinary Component CI is green, but lifecycle acceptance remains blocked because mandatory strict PostgreSQL tests were explicitly ignored and never executed.
 
-Evidence:
+Accepted evidence:
 
-- implementation phase: `STOR-P10`
-- implementation status: `BLOCKED_BY_TOOLING`
-- final source/schema/test/docs SHA: `63d80764933cba5f23fb43bad44201a75e1dc16a`
-- workflow: `Component CI`
-- workflow run id: `29166287661`
-- run number: `1765`
-- attempt: `1`
-- conclusion: `failure`
-- visible passing steps: cargo fmt, cargo check, cargo test, cargo clippy
-- visible failing stage: Finalize CI diagnostics
+- STOR-P10 implementation SHA before fixer: `63d80764933cba5f23fb43bad44201a75e1dc16a`
+- final post-fix code-bearing SHA: `abca69058390983894465cef9d66c38960fae4c7`
+- fixer status: `FIX_COMPLETE`
+- authoritative green Component CI: run `29167108216`, run number `1792`, conclusion `success`
+- missing command/evidence: `cargo test -p haze-sync-storage --features test-support -- --ignored` against a dedicated reachable `HAZE_SYNC_TEST_DATABASE_URL`
 
-Archived phase evidence:
+Archived fixer evidence is under `crates/haze-sync-storage/control/log/20260711-204500Z-W1-FIX-STOR-P10-CI-*` and is pinned by immutable original blob SHAs.
 
-- prompt snapshot: `crates/haze-sync-storage/control/log/20260711-201500Z-W1-STOR-P10-implementation-worker-prompt.md`
-- report snapshot: `crates/haze-sync-storage/control/log/20260711-201500Z-W1-STOR-P10-implementation-worker-report.md`
-- exact implementation report blob: `d51b6039fced1a0c7b245d1d5d863eeb2d215724`
+## Goal
 
-The accepted implementation includes:
+Provide real, repeatable, secret-free PostgreSQL acceptance evidence for STOR-P10 migration, instance binding, path-state, transaction, rollback, and exact cursor behavior. Ordinary workspace tests with ignored DB tests are not sufficient.
 
-- root migration `migrations/0010_worktree_durable_state.sql` with fail-before-destructive handling for non-empty legacy path-only state;
-- versioned Worktree instance binding keyed by adapter id and root fingerprint;
-- per-instance present/tombstoned path state;
-- bounded deterministic snapshots and guarded observations;
-- caller-transaction-owned cursor lock/initialize/exact contiguous advance;
-- safe redacted repository errors;
-- migration-aware test support and explicit strict ignored PostgreSQL acceptance tests.
+## Required approach
 
-Do not redesign this contract or silently reinterpret legacy rows.
+Inspect the current shared Component CI workflow and Storage strict test-support contract. Implement the smallest safe branch-local CI/test-harness change that:
 
-## Exact diagnostics artifact
+1. provisions an ephemeral PostgreSQL service in GitHub Actions with non-secret test-only credentials;
+2. waits for database readiness deterministically;
+3. exposes a test-only `HAZE_SYNC_TEST_DATABASE_URL` to the strict Storage verification command;
+4. executes exactly the mandatory ignored PostgreSQL tests with `--features test-support -- --ignored`;
+5. fails the workflow when any strict DB test is skipped, cannot connect, times out, or fails;
+6. preserves ordinary fmt/check/test/clippy/finalizer gates;
+7. uploads normal diagnostics on failure;
+8. does not commit real credentials or depend on repository secrets;
+9. does not silently make DB verification optional.
 
-Use only:
+Prefer an explicit Storage-only verification step/job conditioned on `component/storage` rather than imposing unnecessary database work on unrelated component branches. Keep any shared workflow change conservative and documented.
 
-- artifact name: `ci-diag__component-storage__wf-component-ci__run-29166287661__attempt-1`
-- artifact id: `8252246409`
-- artifact head SHA: `63d80764933cba5f23fb43bad44201a75e1dc16a`
-- artifact digest: `sha256:c2e86e52d1bd342fd577503042c4e4640591179a08fae678de1a27d22d4e0f2c`
-- artifact size bytes: `13317`
-- created at: `2026-07-11T20:03:15Z`
-- expires at: `2026-07-12T20:03:15Z`
-- status when assigned: available and unexpired
+## Mandatory verification coverage
 
-## Required reads and diagnostics protocol
+The live PostgreSQL run must prove the existing STOR-P10 tests for:
 
-Read the implementation manifest, report template, fixer-worker prompt, GitHub connector guidance, current Storage state/prompt, archived STOR-P10 evidence, changed Storage source/schema/tests/docs, and the exact artifact.
+- migration from supported pre-P10 schemas;
+- fail-closed handling of incompatible or non-empty legacy Worktree state;
+- first bind and identical rebind;
+- root fingerprint and version mismatch rejection;
+- adapter-instance isolation;
+- present/tombstoned invariants;
+- deterministic bounded snapshot ordering;
+- caller-owned transaction rollback;
+- cursor initialization and exact N-to-N+1 advancement;
+- regression, gap, stale expected value, overflow and concurrent race rejection;
+- no false path-state or cursor claims after rollback;
+- safe redacted errors.
 
-Then:
-
-1. fetch artifact `8252246409` from run `29166287661`;
-2. verify the artifact head SHA exactly matches `63d80764933cba5f23fb43bad44201a75e1dc16a`;
-3. read `summary.md`, `manifest.json`, every failure marker and every log listed by `failed_checks`;
-4. apply only the complete minimum artifact-proven correction.
-
-Raw GitHub job logs are not authorized as fallback. If the artifact is missing, expired, malformed, mismatched or unreadable, report `FIX_BLOCKED_BY_LOGS` without guessing.
-
-## Separate PostgreSQL evidence blocker
-
-STOR-P10 also requires strict live-PostgreSQL acceptance evidence. The implementation report states that the mandatory ignored tests were not run because the current Component CI had no dedicated `HAZE_SYNC_TEST_DATABASE_URL`.
-
-This fixer phase is primarily artifact-driven. Do not falsely treat ordinary `cargo test` success with ignored PostgreSQL tests as phase acceptance.
-
-- If the artifact-proven failure is independent of the missing DB evidence, fix it minimally and obtain a green post-fix code-bearing Component CI run; the next gate remains a dedicated DB-capable STOR-P10 verification phase before clean-code review.
-- If the artifact itself proves that the failing workflow is specifically caused by the missing required DB execution, report the exact tooling requirement and only make workflow/test-harness changes if they are both artifact-proven and explicitly within Storage ownership. Do not invent credentials, commit secrets or silently downgrade mandatory tests to optional.
-- Do not claim `CLEAN_ACCEPT` or full STOR-P10 acceptance in this fixer report.
+Do not weaken, unignore, delete, or rewrite tests merely to obtain green CI. If a live test reveals a genuine Storage defect, apply the smallest Storage-owned correction and document it precisely.
 
 ## Preservation requirements
 
-Preserve unless the exact artifact proves a correction is required:
+Preserve:
 
-- fail-closed instance fingerprint/version binding;
-- no raw root persistence or rendering;
-- per-adapter path isolation;
-- present/tombstoned revision/hash invariants;
-- bounded deterministic snapshot ordering;
-- caller-owned SQLx transaction semantics;
+- migration `0010_worktree_durable_state.sql` fail-before-destructive semantics;
+- versioned adapter/root-fingerprint binding with no raw-root persistence;
+- per-instance present/tombstoned state;
+- bounded deterministic snapshots;
+- caller-transaction-owned repositories;
+- exact contiguous cursor advancement;
 - no hard delete or implicit cleanup;
-- exact expected N to N+1 cursor advancement;
-- rejection of cursor regression, gap, stale expected value and overflow;
-- rollback without false state/cursor claims;
-- deterministic fail-safe legacy migration behavior;
-- safe redacted errors and Debug output;
-- Storage-passive ownership with no Server runtime, Worktree filesystem, Core policy or API DTO behavior.
+- passive Storage ownership;
+- no Server runtime, Worktree filesystem, Core policy, API DTO, provider or deployment behavior.
 
 ## Allowed files
 
-Only artifact-proven changes within:
-
-- `migrations/0010_worktree_durable_state.sql` or directly related Storage migration validation;
-- STOR-P10 Storage models/repositories/schema exports and tests;
-- Storage test-support schema/strict PostgreSQL harness used by STOR-P10;
-- STOR-P10 Storage docs if a corrected fact changes;
+- `.github/workflows/component-ci.yml` only for the minimum DB-capable verification wiring;
+- `.github/scripts/**` only if a small reusable readiness/verification helper is strictly necessary;
+- STOR-P10 Storage tests/test-support files only when live execution proves a defect or harness issue;
+- STOR-P10 docs/implementation log for factual verification instructions;
 - `crates/haze-sync-storage/control/report.md`.
 
-Do not modify Server, Worktree, Core, API, CLI, Deployment, provider behavior, production migration execution policy, unrelated migrations, or sibling control files. Do not archive control files. Do not commit secrets or a real database URL.
+Forbidden:
 
-## CI and report
+- Server, Worktree, Core, API, CLI or Deployment source changes;
+- production database URLs, secrets or external managed database dependencies;
+- migration redesign without a live-test-proven defect;
+- optional/silent DB test skipping;
+- destructive cleanup, hard delete or production migration execution policy;
+- unrelated workflow refactoring;
+- archiving control files.
 
-All source/schema/test/docs changes must run normal Component CI. CI skip is allowed only for the final report-only commit.
+## CI acceptance
 
-Write `crates/haze-sync-storage/control/report.md` using `report-template.md` with:
+The final code-bearing/tooling SHA must have a green Component CI run that visibly includes successful execution of the strict ignored PostgreSQL command. A green ordinary workspace run without that command is not acceptance evidence.
 
-- `REPORT_TYPE: FIX`
-- `phase_id: FIX-STOR-P10-CI`
-- `chat_name: storage — W1 STOR-P10 CI Fix`
+## Report
 
-Use an honest status:
+Write `crates/haze-sync-storage/control/report.md` using `report-template.md`.
 
-- `FIX_COMPLETE`
-- `FIX_NEEDS_MORE`
-- `FIX_BLOCKED_BY_LOGS`
-- `FIX_BLOCKED_BY_SCOPE`
-- `FIX_BLOCKED_BY_CONTRACT`
-- `FIX_BLOCKED_BY_TOOLING`
+Set:
 
-The report must include artifact verification, exact failure cause, changed files, behavior/migration impact, post-fix code-bearing SHA and CI run, whether strict PostgreSQL tests actually ran, and the exact remaining gate. Even after `FIX_COMPLETE`, STOR-P10 must not advance to clean-code review until a dedicated DB-capable verification has produced the required migration/repository/cursor evidence.
+- `REPORT_TYPE: IMPLEMENTATION`
+- `phase_id: STOR-P10-DB-VERIFY`
+- `chat_name: storage — W1 STOR-P10 PostgreSQL Verification`
+
+Use one honest status:
+
+- `SELF_ACCEPT`
+- `SELF_ACCEPT_PENDING_CI`
+- `SELF_NEEDS_FIX`
+- `BLOCKED_BY_TOOLING`
+- `BLOCKED_BY_SCOPE`
+- `BLOCKED_BY_CONTRACT`
+
+The report must include exact workflow/test-harness changes, PostgreSQL image/version and readiness method, the exact strict command executed, which ignored tests actually ran, failures/corrections, final code-bearing SHA, authoritative CI run, secrecy assessment, and whether STOR-P10 is ready for mandatory clean-code review.
