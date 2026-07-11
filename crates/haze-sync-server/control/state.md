@@ -7,27 +7,29 @@ status: PROMPT_READY
 active_prompt: crates/haze-sync-server/control/prompt.md
 active_report: crates/haze-sync-server/control/report.md
 active_agent_role: implementation-worker
-assigned_chat_name: server — W1 SRV-P7A Worktree Snapshot Fan-In
-prompt_revision: verified by Orchestrator after Worktree WT-P9C final green acceptance
+assigned_chat_name: server — W1 SRV-P7A Report Recovery
+prompt_revision: verified by Orchestrator after detecting missing mandatory SRV-P7A report
 
 wave: W1
-phase: SRV-P7A
+phase: SRV-P7A-REPORT-RECOVERY
 
-implementation_status: NOT_STARTED
+implementation_status: SELF_ACCEPT_PENDING_REPORT_VERIFICATION
 clean_review_status: NOT_STARTED
-ci_status: NOT_RUN
+ci_status: CI_GREEN
+ci_workflow: Component CI
+ci_code_bearing_sha: 71fd46ceb8b50f2523cacd70165dcca63881aa82
+ci_run_id: 29158883879
+ci_run_number: 1701
+ci_run_attempt: 1
+known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
 
-server_baseline_sha: dc53f8dbe08da56d129fc3898cec262149c69f38
-server_baseline_ci_run: 29127012776
-server_baseline_ci_run_number: 1616
-
+server_pre_phase_head: e816be0608f8e56b29ced8a16d6b238a91f885b7
 fan_in_source_branch: component/worktree
 fan_in_source_sha: 4f7bc748d9b901d7d5c3e43c845ba407c0c36e59
 fan_in_source_ci_run: 29152965199
-fan_in_source_ci_run_number: 1665
 fan_in_source_status: CLEAN_ACCEPT_AND_CI_GREEN
 
-branch_gap: component/server currently contains the placeholder Worktree crate and requires explicit accepted-snapshot synchronization
-phase_scope: exact Worktree product snapshot fan-in plus Server-owned composition/lifecycle/status boundary; concrete executor loop may be deferred honestly to SRV-P7B
-next_gate_after_implementation: mandatory clean-code review, then authoritative Component CI and fixer loop if needed
+protocol_blocker: mandatory crates/haze-sync-server/control/report.md was not written by the SRV-P7A implementation execution
+recovery_scope: report-only verification of commit range, exact Worktree blob identity, Server composition truthfulness, and green CI evidence
+next_gate_after_recovery: mandatory SRV-P7A clean-code review only after a complete SELF_ACCEPT implementation report is present and verified
