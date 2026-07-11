@@ -13,9 +13,7 @@ use haze_sync_api::{
 };
 use haze_sync_common::{AdapterId, VaultPath};
 use haze_sync_core::revision_service::compute_content_hash;
-use haze_sync_storage::{
-    test_support::connect_test_database_from_env, LocalObjectStore,
-};
+use haze_sync_storage::{test_support::connect_test_database_from_env, LocalObjectStore};
 use http_body_util::BodyExt as _;
 use std::{
     fs,
@@ -178,7 +176,8 @@ async fn delegated_delete_route_preserves_tombstone_replay_and_stale_base_behavi
     assert_eq!(replay_body["seq"], first_seq);
 
     let stale_path = VaultPath::parse("Notes/stale-delete.md").unwrap();
-    let stale_revision = seed_current_file(&services, &actor, &stale_path, "seed-stale-route").await;
+    let stale_revision =
+        seed_current_file(&services, &actor, &stale_path, "seed-stale-route").await;
     let (stale_status, stale_body) = request_json(
         state,
         "/files/Notes/stale-delete.md",
@@ -202,13 +201,7 @@ async fn missing_database_maps_to_safe_service_unavailable_instead_of_panicking(
             principal: principal(),
         },
     );
-    let (status, body) = request_json(
-        state,
-        "/files/Notes/a.md",
-        "safe-delete-key",
-        "null",
-    )
-    .await;
+    let (status, body) = request_json(state, "/files/Notes/a.md", "safe-delete-key", "null").await;
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
     let rendered = body.to_string();
     assert!(!rendered.contains("safe-delete-key"));
