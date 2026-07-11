@@ -296,9 +296,7 @@ async fn validate_current_schema(
     Ok(())
 }
 
-async fn acquire_setup_lock(
-    transaction: &mut Transaction<'_, Postgres>,
-) -> PostgresTestResult<()> {
+async fn acquire_setup_lock(transaction: &mut Transaction<'_, Postgres>) -> PostgresTestResult<()> {
     sqlx::query("select pg_advisory_xact_lock($1)")
         .bind(TEST_SETUP_ADVISORY_LOCK_KEY)
         .execute(&mut **transaction)
@@ -332,7 +330,11 @@ async fn validate_table_columns(
     .await
     .map_err(|_| TestSupportError::DatabaseOperationFailed)?;
 
-    if actual.iter().map(String::as_str).eq(expected.iter().copied()) {
+    if actual
+        .iter()
+        .map(String::as_str)
+        .eq(expected.iter().copied())
+    {
         Ok(())
     } else {
         Err(TestSupportError::IncompleteStorageSchema)
@@ -422,7 +424,8 @@ mod tests {
         assert_eq!(actual_names.as_slice(), INITIAL_MIGRATIONS);
         assert!(STORAGE_TEST_MIGRATIONS
             .iter()
-            .all(|migration| migration.sql.contains("create table") || migration.sql.contains("alter table")));
+            .all(|migration| migration.sql.contains("create table")
+                || migration.sql.contains("alter table")));
     }
 
     #[test]
@@ -453,8 +456,14 @@ mod tests {
 
     #[test]
     fn stor_p10_migration_guards_legacy_rows_before_drop() {
-        let migration = STORAGE_TEST_MIGRATIONS.last().unwrap().sql.to_ascii_lowercase();
-        let guard = migration.find("if exists (select 1 from worktree_state limit 1)").unwrap();
+        let migration = STORAGE_TEST_MIGRATIONS
+            .last()
+            .unwrap()
+            .sql
+            .to_ascii_lowercase();
+        let guard = migration
+            .find("if exists (select 1 from worktree_state limit 1)")
+            .unwrap();
         let drop_table = migration.find("drop table worktree_state").unwrap();
 
         assert!(guard < drop_table);
@@ -490,7 +499,10 @@ mod tests {
             prepare_storage_schema(&mut transaction).await,
             Err(TestSupportError::LegacyWorktreeStateNotEmpty)
         );
-        assert_eq!(legacy_worktree_state_count(&mut transaction).await.unwrap(), 1);
+        assert_eq!(
+            legacy_worktree_state_count(&mut transaction).await.unwrap(),
+            1
+        );
 
         transaction.rollback().await.unwrap();
     }
@@ -510,10 +522,7 @@ mod tests {
         transaction.rollback().await.unwrap();
     }
 
-    async fn create_and_select_schema(
-        transaction: &mut Transaction<'_, Postgres>,
-        schema: &str,
-    ) {
+    async fn create_and_select_schema(transaction: &mut Transaction<'_, Postgres>, schema: &str) {
         let create = format!("create schema {schema}");
         sqlx::query(&create)
             .execute(&mut **transaction)
