@@ -13,7 +13,7 @@ use haze_sync_api::{
 };
 use haze_sync_common::{AdapterId, VaultPath};
 use haze_sync_core::revision_service::compute_content_hash;
-use haze_sync_storage::{test_support::connect_test_database_from_env, LocalObjectStore};
+use haze_sync_storage::LocalObjectStore;
 use http_body_util::BodyExt as _;
 use std::{
     fs,
@@ -122,19 +122,8 @@ async fn request_json(
 
 #[tokio::test]
 async fn delegated_delete_route_preserves_tombstone_replay_and_stale_base_behavior() {
-    let context = connect_test_database_from_env()
-        .await
-        .expect("test database lookup should stay safe")
-        .expect("Component CI must provide a strict test database");
-    context
-        .apply_migrations()
-        .await
-        .expect("migrations should apply");
-    context
-        .clean_storage_tables()
-        .await
-        .expect("tables should clean");
-    let pool = context.pool().clone();
+    let database = crate::application::test_db::acquire_required().await;
+    let pool = database.pool().clone();
     seed_adapter(&pool).await;
 
     let root = TestStoreRoot::new();
