@@ -12,18 +12,13 @@ use crate::{
 };
 use haze_sync_common::VaultPath;
 
-/// Overall Worktree health derived from accepted facts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WorktreeDoctorHealth {
-    /// No drift or degraded observation facts were reported.
     Healthy,
-    /// Correctness is preserved, but some facts require operator attention.
     Degraded,
-    /// Authoritative/local drift or a reserved-path violation was reported.
     Unhealthy,
 }
 
-/// Stable doctor issue categories suitable for later Server DTO mapping.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum WorktreeDoctorIssueKind {
     MissingFile,
@@ -60,15 +55,12 @@ impl WorktreeDoctorIssueKind {
     }
 }
 
-/// One path-safe doctor issue. `vault_path` is absent when the source fact was
-/// intentionally unscoped.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorktreeDoctorIssue {
     pub kind: WorktreeDoctorIssueKind,
     pub vault_path: Option<VaultPath>,
 }
 
-/// Count-only summary safe for status/admin surfaces.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct WorktreeDoctorSummary {
     pub missing_files: usize,
@@ -103,7 +95,6 @@ impl WorktreeDoctorSummary {
     }
 }
 
-/// Safe doctor output derived from accepted facts.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorktreeDoctorReport {
     health: WorktreeDoctorHealth,
@@ -128,7 +119,6 @@ impl WorktreeDoctorReport {
     }
 }
 
-/// Persisted/runtime facts supplied by an accepted integration boundary.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorktreeDoctorSnapshot {
     pub reconciliation_entries: Vec<WorktreeReconciliationEntry>,
@@ -136,14 +126,12 @@ pub struct WorktreeDoctorSnapshot {
     pub runtime_status: WorktreeRuntimeStatus,
 }
 
-/// Integration-owned fact source. Worktree does not own Storage or Server access.
 pub trait WorktreeDoctorFactSource {
     type Error;
 
     fn load_snapshot(&mut self) -> Result<WorktreeDoctorSnapshot, Self::Error>;
 }
 
-/// Pure doctor classifier.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct WorktreeDoctor;
 
@@ -160,25 +148,21 @@ impl WorktreeDoctor {
         for entry in &snapshot.reconciliation_entries {
             classify_entry(entry, &mut summary, &mut issues);
         }
-
-        if summary.expired_echoes > 0 {
-            issues.push(WorktreeDoctorIssue {
-                kind: WorktreeDoctorIssueKind::ExpiredEcho,
-                vault_path: None,
-            });
-        }
-        if summary.partial_scan {
-            issues.push(WorktreeDoctorIssue {
-                kind: WorktreeDoctorIssueKind::PartialScan,
-                vault_path: None,
-            });
-        }
-        if summary.runtime_degraded {
-            issues.push(WorktreeDoctorIssue {
-                kind: WorktreeDoctorIssueKind::RuntimeDegraded,
-                vault_path: None,
-            });
-        }
+        push_aggregate_issue(
+            summary.expired_echoes > 0,
+            WorktreeDoctorIssueKind::ExpiredEcho,
+            &mut issues,
+        );
+        push_aggregate_issue(
+            summary.partial_scan,
+            WorktreeDoctorIssueKind::PartialScan,
+            &mut issues,
+        );
+        push_aggregate_issue(
+            summary.runtime_degraded,
+            WorktreeDoctorIssueKind::RuntimeDegraded,
+            &mut issues,
+        );
 
         issues.sort_by(|left, right| {
             left.vault_path
@@ -187,7 +171,6 @@ impl WorktreeDoctor {
                 .cmp(&right.vault_path.as_ref().map(VaultPath::as_str))
                 .then_with(|| left.kind.cmp(&right.kind))
         });
-
         WorktreeDoctorReport {
             health: health_for(summary),
             summary,
@@ -196,7 +179,6 @@ impl WorktreeDoctor {
     }
 }
 
-/// Load-and-diagnose boundary for later Server hosting.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct WorktreeDoctorRunner;
 
@@ -211,7 +193,6 @@ impl WorktreeDoctorRunner {
     }
 }
 
-/// Repair action category. This type describes intent only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WorktreeRepairActionKind {
     Rescan,
@@ -222,7 +203,6 @@ pub enum WorktreeRepairActionKind {
     ClearStaleEchoMetadata,
 }
 
-/// Destructive risk carried by a proposed action.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WorktreeRepairRisk {
     None,
@@ -239,7 +219,6 @@ impl WorktreeRepairRisk {
     }
 }
 
-/// Confirmation supplied by a future host or accepted higher-level contract.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub enum WorktreeRepairAuthorization {
     #[default]
@@ -247,7 +226,6 @@ pub enum WorktreeRepairAuthorization {
     ConfirmedByHost,
 }
 
-/// One proposed repair action. No executor is provided by this component-local phase.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorktreeRepairAction {
     pub kind: WorktreeRepairActionKind,
@@ -257,7 +235,6 @@ pub struct WorktreeRepairAction {
     pub authorized: bool,
 }
 
-/// Explicit, non-executing repair plan.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WorktreeRepairPlan {
     actions: Vec<WorktreeRepairAction>,
@@ -283,7 +260,6 @@ impl WorktreeRepairPlan {
     }
 }
 
-/// Non-executing repair planner.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct WorktreeRepairPlanner;
 
@@ -293,12 +269,13 @@ impl WorktreeRepairPlanner {
         report: &WorktreeDoctorReport,
         authorization: WorktreeRepairAuthorization,
     ) -> WorktreeRepairPlan {
-        let actions = report
-            .issues
-            .iter()
-            .filter_map(|issue| repair_for_issue(issue, authorization))
-            .collect();
-        WorktreeRepairPlan { actions }
+        WorktreeRepairPlan {
+            actions: report
+                .issues
+                .iter()
+                .map(|issue| repair_for_issue(issue, authorization))
+                .collect(),
+        }
     }
 }
 
@@ -307,7 +284,7 @@ fn classify_entry(
     summary: &mut WorktreeDoctorSummary,
     issues: &mut Vec<WorktreeDoctorIssue>,
 ) {
-    let kind = match entry.kind {
+    let issue_kind = match entry.kind {
         WorktreeReconciliationKind::Clean
         | WorktreeReconciliationKind::Extra
         | WorktreeReconciliationKind::ConflictMaterialized => None,
@@ -329,14 +306,12 @@ fn classify_entry(
         }
         WorktreeReconciliationKind::Skipped => classify_skip(entry, summary),
     };
-
-    if let Some(kind) = kind {
+    if let Some(kind) = issue_kind {
         issues.push(WorktreeDoctorIssue {
             kind,
             vault_path: entry.vault_path.clone(),
         });
     }
-
     if entry.echo_status == WorktreeEchoStatus::Stale {
         summary.stale_echoes += 1;
         issues.push(WorktreeDoctorIssue {
@@ -352,6 +327,10 @@ fn classify_skip(
 ) -> Option<WorktreeDoctorIssueKind> {
     match entry.skip_reason? {
         WorktreeScanSkipReason::ReservedPath => {
+            // The scanner intentionally emits the managed `_haze_runtime` root as
+            // an unscoped reserved skip. Only a path-scoped reserved fact is an
+            // operator-visible collision/violation.
+            entry.vault_path.as_ref()?;
             summary.reserved_path_violations += 1;
             Some(WorktreeDoctorIssueKind::ReservedPathViolation)
         }
@@ -378,17 +357,29 @@ fn classify_skip(
     }
 }
 
+fn push_aggregate_issue(
+    present: bool,
+    kind: WorktreeDoctorIssueKind,
+    issues: &mut Vec<WorktreeDoctorIssue>,
+) {
+    if present {
+        issues.push(WorktreeDoctorIssue {
+            kind,
+            vault_path: None,
+        });
+    }
+}
+
 fn runtime_is_degraded(status: WorktreeRuntimeStatus) -> bool {
     matches!(
         status.watcher,
         WorktreeRuntimeWatcherState::Closed | WorktreeRuntimeWatcherState::Failed(_)
-    ) || matches!(status.lifecycle, WorktreeRuntimeLifecycle::Cancelling)
+    ) || status.lifecycle == WorktreeRuntimeLifecycle::Cancelling
 }
 
 fn health_for(summary: WorktreeDoctorSummary) -> WorktreeDoctorHealth {
     if summary.missing_files > 0
         || summary.dirty_files > 0
-        || summary.content_hash_mismatches > 0
         || summary.reserved_path_violations > 0
     {
         WorktreeDoctorHealth::Unhealthy
@@ -402,19 +393,21 @@ fn health_for(summary: WorktreeDoctorSummary) -> WorktreeDoctorHealth {
 fn repair_for_issue(
     issue: &WorktreeDoctorIssue,
     authorization: WorktreeRepairAuthorization,
-) -> Option<WorktreeRepairAction> {
+) -> WorktreeRepairAction {
     let (kind, risk) = match issue.kind {
-        WorktreeDoctorIssueKind::MissingFile => {
-            (WorktreeRepairActionKind::RestoreMissingFromCore, WorktreeRepairRisk::None)
-        }
+        WorktreeDoctorIssueKind::MissingFile => (
+            WorktreeRepairActionKind::RestoreMissingFromCore,
+            WorktreeRepairRisk::None,
+        ),
         WorktreeDoctorIssueKind::DirtyFile
         | WorktreeDoctorIssueKind::ContentHashMismatch => (
             WorktreeRepairActionKind::RestoreAuthoritativeContent,
             WorktreeRepairRisk::Overwrite,
         ),
-        WorktreeDoctorIssueKind::ReservedPathViolation => {
-            (WorktreeRepairActionKind::MoveReservedEntry, WorktreeRepairRisk::Move)
-        }
+        WorktreeDoctorIssueKind::ReservedPathViolation => (
+            WorktreeRepairActionKind::MoveReservedEntry,
+            WorktreeRepairRisk::Move,
+        ),
         WorktreeDoctorIssueKind::SkippedSymlink
         | WorktreeDoctorIssueKind::SkippedSpecialFile
         | WorktreeDoctorIssueKind::SkippedUnsafePath
@@ -430,12 +423,12 @@ fn repair_for_issue(
             (WorktreeRepairActionKind::Rescan, WorktreeRepairRisk::None)
         }
     };
-    Some(WorktreeRepairAction {
+    WorktreeRepairAction {
         kind,
         issue_kind: issue.kind,
         vault_path: issue.vault_path.clone(),
         risk,
         authorized: !risk.requires_confirmation()
             || authorization == WorktreeRepairAuthorization::ConfirmedByHost,
-    })
+    }
 }
