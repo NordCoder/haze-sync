@@ -1,102 +1,30 @@
-# W1-FIX-GDA-P8C-CI — GDrive diagnostics CI correction
-
-Before starting, name this worker chat exactly:
-
-`gdrive-adapter — W1 GDA-P8C CI Fix`
+# W1-GDA-COMPLETE-FAN-IN — GDrive Adapter component plan complete
 
 Component: gdrive-adapter
 Path: crates/haze-gdrive-adapter
 Branch: component/gdrive-adapter
 PR: #50
-Role: fixer-worker
+Role: none
 
-Work only through the GitHub connector. Do not merge the PR, change its draft state, rebase, reset, rewrite history, or modify `main` or sibling branches.
+This is a hold notice, not an executable worker prompt.
 
-## Context
+## Accepted state
 
-GDA-P8C clean-code review completed inside GDrive Adapter scope. The final code-bearing source/test commit is:
+GDA-P8 implementation, GDA-P8C clean-code review, and the artifact-based formatting correction are complete. The final code-bearing source/test head is green.
 
-- code_bearing_sha: `cfaf931bfa3ec58b19924b535475859300216272`
+- code_bearing_sha: `06a7051a7e14c1da45de8cf96a78658b59cb823e`
 - workflow: `Component CI`
-- workflow_run_id: `29143925456`
-- run_number: `1653`
+- workflow_run_id: `29145248883`
+- run_number: `1658`
 - workflow_run_attempt: `1`
-- conclusion: `failure`
+- conclusion: `success`
 
-Visible Rust validation steps passed, but the workflow failed during diagnostics finalization. The clean-code review report is archived at:
+Accepted delete-candidate behavior remains conservative: authoritative scan evidence, distinct later confirmation, current-state revalidation, Core delete arbitration, dry-run immutability, identity-aware recovery/retirement, stable operation identifiers, and mass-delete safety are preserved.
 
-- `crates/haze-gdrive-adapter/control/log/20260711-071400Z-W1-GDA-P8C-clean-code-reviewer-report.md`
+## Hold reason
 
-Use this exact diagnostics artifact:
+The component-local implementation plan is complete. Remaining work is cross-component fan-in: durable candidate/mapping persistence with transactional consistency, concrete Core/API transport, audited operator controls, live provider/OAuth lifecycle, scheduling, shutdown, status/doctor hosting, deployment configuration, and E2E validation.
 
-- artifact_name: `ci-diag__component-gdrive-adapter__wf-component-ci__run-29143925456__attempt-1`
-- artifact_id: `8246115447`
-- artifact_head_sha: `cfaf931bfa3ec58b19924b535475859300216272`
-- artifact_status: available and unexpired when assigned
+## Unblock condition
 
-## Read
-
-Before editing, read:
-
-- project `implementation-manifest.md` and `report-template.md` sources;
-- the Fixer Worker process prompt;
-- GDrive Adapter component contract, implementation plan, implementation log, dependency map, and decisions;
-- this active prompt;
-- the archived GDA-P8C clean-code report referenced above;
-- the GDA-P8/GDA-P8C source and tests relevant to the failure;
-- the exact diagnostics artifact specified above.
-
-Do not infer the failure from workflow metadata alone.
-
-## Diagnostics protocol
-
-Through the GitHub connector:
-
-1. fetch artifact `8246115447` from workflow run `29143925456`;
-2. read `ci-diagnostics/summary.md`;
-3. read `ci-diagnostics/manifest.json`;
-4. read every failure marker and log listed in `failed_checks`;
-5. verify the artifact head SHA matches the code-bearing SHA above.
-
-Raw GitHub job logs are not authorized as fallback in this prompt. If the artifact is missing, expired, malformed, mismatched, or unreadable, report `FIX_BLOCKED_BY_LOGS` without guessing.
-
-## Task
-
-Fix only the minimum artifact-proven cause of the failed Component CI run.
-
-- Stay within GDrive Adapter component ownership.
-- Preserve conservative delete-candidate semantics, current-state revalidation, Core arbitration, dry-run immutability, identity-aware recovery/retirement, and mass-delete safety.
-- Do not weaken tests or assertions merely to obtain green CI.
-- Do not add Drive trash/hard delete, live credentials/provider calls, direct Storage/DB ownership, concrete Server/API transport, unaudited manual unlock, background scheduling, or unrelated product behavior.
-- If the artifact proves that the correction belongs to a workflow, shared CI infrastructure, Storage, Server, Core, API, Deployment, or another component, do not cross the boundary; report `FIX_BLOCKED_BY_CONTRACT` with the exact required owner and evidence.
-
-## Allowed files
-
-- `crates/haze-gdrive-adapter/src/**`
-- `crates/haze-gdrive-adapter/docs/**` only when required to keep documentation accurate after an artifact-proven code correction
-- `crates/haze-gdrive-adapter/control/report.md`
-
-## Checks and CI
-
-Re-run the artifact-proven failing check when possible. Any source/test/docs fix commit must run CI normally. CI skip is permitted only for a final report-only commit.
-
-Do not claim success until a post-fix code-bearing `Component CI` run is observed green. If code is corrected but CI remains pending or red, report the corresponding honest fixer status.
-
-## Report
-
-Write only `crates/haze-gdrive-adapter/control/report.md` using `report-template.md`.
-
-Set:
-
-- `REPORT_TYPE: FIX`
-- `phase_id: FIX-GDA-P8C-CI`
-
-Use one of:
-
-- `FIX_COMPLETE`
-- `FIX_NEEDS_MORE`
-- `FIX_BLOCKED_BY_LOGS`
-- `FIX_BLOCKED_BY_CONTRACT`
-- `FIX_BLOCKED_BY_TOOLING`
-
-Fill `CI_DIAGNOSTICS` completely, including artifact name/id, run id/attempt, files read, and whether raw logs were used.
+Only an explicit Orchestrator fan-in/integration prompt within GDrive Adapter ownership may reactivate this component. Do not launch a worker from this hold notice.
