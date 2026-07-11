@@ -120,7 +120,10 @@ impl ServerWorktreeStatus {
 
 impl fmt::Display for ServerWorktreeStatus {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mapped_mode = self.mapped_mode.map(worktree_mode_name).unwrap_or("unsupported");
+        let mapped_mode = self
+            .mapped_mode
+            .map(worktree_mode_name)
+            .unwrap_or("unsupported");
         let unavailable_reason = self
             .unavailable_reason
             .map(ServerWorktreeUnavailableReason::as_str)
@@ -185,9 +188,7 @@ impl ServerWorktreeRuntime {
     }
 
     /// Explicitly start the boundary without fabricating missing runtime services.
-    pub(crate) fn start(
-        &mut self,
-    ) -> Result<ServerWorktreeStatus, ServerWorktreeLifecycleError> {
+    pub(crate) fn start(&mut self) -> Result<ServerWorktreeStatus, ServerWorktreeLifecycleError> {
         match self.lifecycle {
             ServerWorktreeLifecycle::Created => {}
             ServerWorktreeLifecycle::Shutdown => {
@@ -320,7 +321,10 @@ mod tests {
         let root = unique_missing_root("created");
         let runtime = ServerWorktreeRuntime::new(AdapterMode::Bidirectional, root.clone());
 
-        assert_eq!(runtime.status().lifecycle(), ServerWorktreeLifecycle::Created);
+        assert_eq!(
+            runtime.status().lifecycle(),
+            ServerWorktreeLifecycle::Created
+        );
         assert!(runtime.status().root_configured());
         assert!(!root.exists());
         let _ = crate::routes::build_router();
