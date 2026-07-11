@@ -146,9 +146,21 @@ impl WorktreeDoctor {
         for entry in &snapshot.reconciliation_entries {
             classify_entry(entry, &mut summary, &mut issues);
         }
-        push_aggregate_issue(summary.expired_echoes > 0, WorktreeDoctorIssueKind::ExpiredEcho, &mut issues);
-        push_aggregate_issue(summary.partial_scan, WorktreeDoctorIssueKind::PartialScan, &mut issues);
-        push_aggregate_issue(summary.runtime_degraded, WorktreeDoctorIssueKind::RuntimeDegraded, &mut issues);
+        push_aggregate_issue(
+            summary.expired_echoes > 0,
+            WorktreeDoctorIssueKind::ExpiredEcho,
+            &mut issues,
+        );
+        push_aggregate_issue(
+            summary.partial_scan,
+            WorktreeDoctorIssueKind::PartialScan,
+            &mut issues,
+        );
+        push_aggregate_issue(
+            summary.runtime_degraded,
+            WorktreeDoctorIssueKind::RuntimeDegraded,
+            &mut issues,
+        );
         issues.sort_by(|left, right| {
             left.vault_path
                 .as_ref()
@@ -345,7 +357,8 @@ fn runtime_is_degraded(status: WorktreeRuntimeStatus) -> bool {
 }
 
 fn health_for(summary: WorktreeDoctorSummary) -> WorktreeDoctorHealth {
-    if summary.missing_files > 0 || summary.dirty_files > 0 || summary.reserved_path_violations > 0 {
+    if summary.missing_files > 0 || summary.dirty_files > 0 || summary.reserved_path_violations > 0
+    {
         WorktreeDoctorHealth::Unhealthy
     } else if summary.issue_count() > 0 {
         WorktreeDoctorHealth::Degraded
