@@ -47,6 +47,17 @@ pub(crate) enum ServerWorktreeLifecycle {
     Shutdown,
 }
 
+impl ServerWorktreeLifecycle {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Created => "created",
+            Self::Disabled => "disabled",
+            Self::Unavailable => "unavailable",
+            Self::Shutdown => "shutdown",
+        }
+    }
+}
+
 /// Safe reason an enabled Worktree runtime is unavailable in SRV-P7A.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum ServerWorktreeUnavailableReason {
@@ -54,6 +65,15 @@ pub(crate) enum ServerWorktreeUnavailableReason {
     UnsupportedDryRun,
     /// A real Core/API/Storage-backed cycle executor is not wired yet.
     CycleExecutorNotWired,
+}
+
+impl ServerWorktreeUnavailableReason {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::UnsupportedDryRun => "unsupported_dry_run",
+            Self::CycleExecutorNotWired => "cycle_executor_not_wired",
+        }
+    }
 }
 
 /// Safe status snapshot with no configured root or internal error details.
@@ -67,29 +87,52 @@ pub(crate) struct ServerWorktreeStatus {
 }
 
 impl ServerWorktreeStatus {
+    #[cfg(test)]
     #[must_use]
     pub(crate) const fn configured_mode(self) -> AdapterMode {
         self.configured_mode
     }
 
+    #[cfg(test)]
     #[must_use]
     pub(crate) const fn mapped_mode(self) -> Option<WorktreeMode> {
         self.mapped_mode
     }
 
+    #[cfg(test)]
     #[must_use]
     pub(crate) const fn lifecycle(self) -> ServerWorktreeLifecycle {
         self.lifecycle
     }
 
+    #[cfg(test)]
     #[must_use]
     pub(crate) const fn unavailable_reason(self) -> Option<ServerWorktreeUnavailableReason> {
         self.unavailable_reason
     }
 
+    #[cfg(test)]
     #[must_use]
     pub(crate) const fn root_configured(self) -> bool {
         self.root_configured
+    }
+}
+
+impl fmt::Display for ServerWorktreeStatus {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mapped_mode = self.mapped_mode.map(worktree_mode_name).unwrap_or("unsupported");
+        let unavailable_reason = self
+            .unavailable_reason
+            .map(ServerWorktreeUnavailableReason::as_str)
+            .unwrap_or("none");
+
+        write!(
+            formatter,
+            "configured_mode={}, mapped_mode={mapped_mode}, lifecycle={}, unavailable_reason={unavailable_reason}, root_configured={}",
+            self.configured_mode,
+            self.lifecycle.as_str(),
+            self.root_configured,
+        )
     }
 }
 
@@ -167,14 +210,12 @@ impl ServerWorktreeRuntime {
                 | WorktreeMode::Bidirectional,
             ) => {
                 self.lifecycle = ServerWorktreeLifecycle::Unavailable;
-                self.unavailable_reason = Some(
-                    ServerWorktreeUnavailableReason::CycleExecutorNotWired,
-                );
+                self.unavailable_reason =
+                    Some(ServerWorktreeUnavailableReason::CycleExecutorNotWired);
             }
             ServerWorktreeModeMapping::UnsupportedDryRun => {
                 self.lifecycle = ServerWorktreeLifecycle::Unavailable;
-                self.unavailable_reason =
-                    Some(ServerWorktreeUnavailableReason::UnsupportedDryRun);
+                self.unavailable_reason = Some(ServerWorktreeUnavailableReason::UnsupportedDryRun);
             }
         }
 
@@ -221,6 +262,16 @@ impl fmt::Debug for ServerWorktreeRuntime {
             .debug_struct("ServerWorktreeRuntime")
             .field("status", &self.status())
             .finish()
+    }
+}
+
+const fn worktree_mode_name(mode: WorktreeMode) -> &'static str {
+    match mode {
+        WorktreeMode::Disabled => "disabled",
+        WorktreeMode::ReadOnly => "read_only",
+        WorktreeMode::ImportOnly => "import_only",
+        WorktreeMode::ExportOnly => "export_only",
+        WorktreeMode::Bidirectional => "bidirectional",
     }
 }
 
@@ -333,8 +384,9 @@ mod tests {
 
         let debug = format!("{runtime:?}");
         let status_debug = format!("{:?}", runtime.status());
+        let status_display = runtime.status().to_string();
 
-        for output in [debug, status_debug] {
+        for output in [debug, status_debug, status_display] {
             assert!(!output.contains(secret_root.to_string_lossy().as_ref()));
             assert!(!output.contains("/srv/private"));
             assert!(!output.contains("token-like"));
