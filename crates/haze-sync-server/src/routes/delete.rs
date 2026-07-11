@@ -72,10 +72,7 @@ pub(super) async fn delete_file_route(
         path: request.path().clone(),
         base_revision_id: request.base_revision_id().cloned(),
         requested_delete_count,
-        idempotency: ApplicationIdempotency::new(
-            request.idempotency_key().as_str(),
-            fingerprint,
-        ),
+        idempotency: ApplicationIdempotency::new(request.idempotency_key().as_str(), fingerprint),
     };
     let outcome = application_services(&state)?
         .apply_delete(command)
