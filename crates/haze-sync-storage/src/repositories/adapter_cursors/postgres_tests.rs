@@ -1,127 +1,137 @@
 use super::*;
-use crate::test_support::connect_test_database_from_env;
+use crate::test_support::prepare_test_database_from_env;
 use serde_json::json;
 
 #[tokio::test]
-async fn cursor_updates_roundtrip_and_reject_regression_in_caller_transaction() {
-    let Some(context) = connect_test_database_from_env().await.unwrap() else {
-        return;
-    };
-    context.apply_migrations().await.unwrap();
+#[ignore = "requires explicit HAZE_SYNC_TEST_DATABASE_URL for mandatory STOR-P10 evidence"]
+async fn exact_cursor_progression_is_locked_contiguous_and_rollback_safe() {
+    let context = prepare_test_database_from_env().await.unwrap();
     context.clean_storage_tables().await.unwrap();
 
-    let adapter_id = AdapterId::parse("gdrive-adapter").unwrap();
-    let second_adapter_id = AdapterId::parse("worktree-adapter").unwrap();
-    let repository = AdapterCursorRepository::new();
-    let mut tx = context.pool().begin().await.unwrap();
-
-    for adapter in [&adapter_id, &second_adapter_id] {
+    let adapter_id = AdapterId::parse(&context.namespace().adapter_id("worktree-cursor")).unwrap();
+    let missing_id = AdapterId::parse(&context.namespace().adapter_id("missing-cursor")).unwrap();
+    for adapter in [&adapter_id, &missing_id] {
         sqlx::query(
             "insert into sync_adapters (adapter_id, display_name, role, token_hash) \
-             values ($1, $2, $3, $4)",
+             values ($1, $2, 'worktree', 'sha256:test-token-hash')",
         )
         .bind(adapter.as_str())
         .bind(format!("{} test adapter", adapter.as_str()))
-        .bind("test")
-        .bind("sha256:test-token-hash")
-        .execute(&mut *tx)
+        .execute(context.pool())
         .await
         .unwrap();
     }
 
-    let first_update = AdapterCursorUpdate {
-        adapter_id: adapter_id.clone(),
-        last_core_seq: 7,
-        external_cursor_json: Some(json!({ "page_token": "opaque-test-token" })),
-        mark_success: true,
-    };
-    let advanced = match repository
-        .update_monotonic(&mut *tx, &first_update)
-        .await
-        .unwrap()
-    {
-        AdapterCursorUpdateOutcome::Updated(row) => row,
-        AdapterCursorUpdateOutcome::RejectedRegression { .. } => {
-            panic!("first cursor update must initialize and advance the row")
-        }
-    };
-    assert_eq!(advanced.last_core_seq, 7);
-    assert_eq!(
-        advanced.external_cursor_json,
-        json!({ "page_token": "opaque-test-token" })
-    );
-    assert!(advanced.last_success_at.is_some());
-
-    let loaded = repository
-        .get_by_adapter_id(&mut *tx, &adapter_id)
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(loaded, advanced);
-
-    let regression = repository
-        .update_monotonic(
-            &mut *tx,
-            &AdapterCursorUpdate {
-                adapter_id: adapter_id.clone(),
-                last_core_seq: 6,
-                external_cursor_json: Some(json!({ "page_token": "must-not-win" })),
-                mark_success: false,
-            },
-        )
-        .await
-        .unwrap();
-    assert_eq!(
-        regression,
-        AdapterCursorUpdateOutcome::RejectedRegression {
-            current: advanced.clone(),
-            requested_seq: 6,
-        }
-    );
-
-    let after_regression = repository
-        .get_by_adapter_id(&mut *tx, &adapter_id)
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(after_regression, advanced);
-    let summary = AdapterCursorSummary::from(&after_regression);
-    let summary_json = serde_json::to_string(&summary).unwrap();
-    assert!(summary.has_external_cursor);
-    assert!(!summary_json.contains("opaque-test-token"));
-    assert!(!summary_json.contains("page_token"));
-
+    let repository = AdapterCursorRepository::new();
+    let mut transaction = context.pool().begin().await.unwrap();
     let initialized = repository
-        .initialize_if_missing(&mut *tx, &second_adapter_id)
+        .initialize_and_lock(&mut transaction, &adapter_id)
         .await
         .unwrap();
     assert_eq!(initialized.last_core_seq, 0);
-    assert_eq!(initialized.external_cursor_json, json!({}));
-    assert!(initialized.last_success_at.is_none());
+    assert!(!initialized.has_external_cursor);
     assert_eq!(
         repository
-            .initialize_if_missing(&mut *tx, &second_adapter_id)
+            .lock_current(&mut transaction, &adapter_id)
             .await
             .unwrap(),
-        initialized
+        Some(initialized)
     );
-
     assert_eq!(
         repository
-            .update_monotonic(
-                &mut *tx,
-                &AdapterCursorUpdate {
-                    adapter_id: second_adapter_id,
-                    last_core_seq: -1,
-                    external_cursor_json: None,
-                    mark_success: false,
-                },
-            )
+            .advance_exact_contiguous(&mut transaction, &missing_id, 0, 1)
+            .await,
+        Err(RepositoryError::CursorMissing)
+    );
+    assert_eq!(
+        repository
+            .advance_exact_contiguous(&mut transaction, &adapter_id, 0, 2)
+            .await,
+        Err(RepositoryError::CursorGap)
+    );
+    assert_eq!(
+        repository
+            .advance_exact_contiguous(&mut transaction, &adapter_id, 0, 0)
+            .await,
+        Err(RepositoryError::CursorRegression)
+    );
+    let advanced = repository
+        .advance_exact_contiguous(&mut transaction, &adapter_id, 0, 1)
+        .await
+        .unwrap();
+    assert_eq!(advanced.last_core_seq, 1);
+    assert!(advanced.last_success_at.is_some());
+    transaction.commit().await.unwrap();
+
+    let mut stale = context.pool().begin().await.unwrap();
+    assert_eq!(
+        repository
+            .advance_exact_contiguous(&mut stale, &adapter_id, 0, 1)
+            .await,
+        Err(RepositoryError::CursorStaleExpected)
+    );
+    stale.rollback().await.unwrap();
+
+    let mut rollback = context.pool().begin().await.unwrap();
+    assert_eq!(
+        repository
+            .advance_exact_contiguous(&mut rollback, &adapter_id, 1, 2)
             .await
-            .unwrap_err(),
-        RepositoryError::InvalidSequence
+            .unwrap()
+            .last_core_seq,
+        2
+    );
+    rollback.rollback().await.unwrap();
+    assert_eq!(
+        repository
+            .get_by_adapter_id(context.pool(), &adapter_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .last_core_seq,
+        1
     );
 
-    tx.commit().await.unwrap();
+    let mut winner = context.pool().begin().await.unwrap();
+    repository
+        .lock_current(&mut winner, &adapter_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let pool = context.pool().clone();
+    let racing_adapter = adapter_id.clone();
+    let loser = tokio::spawn(async move {
+        let repository = AdapterCursorRepository::new();
+        let mut transaction = pool.begin().await.unwrap();
+        let result = repository
+            .advance_exact_contiguous(&mut transaction, &racing_adapter, 1, 2)
+            .await;
+        transaction.rollback().await.unwrap();
+        result
+    });
+
+    let winner_result = repository
+        .advance_exact_contiguous(&mut winner, &adapter_id, 1, 2)
+        .await
+        .unwrap();
+    assert_eq!(winner_result.last_core_seq, 2);
+    winner.commit().await.unwrap();
+    assert_eq!(
+        loser.await.unwrap(),
+        Err(RepositoryError::CursorStaleExpected)
+    );
+
+    let internal = repository
+        .get_by_adapter_id(context.pool(), &adapter_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(internal.last_core_seq, 2);
+    assert_eq!(internal.external_cursor_json, json!({}));
+    let summary = AdapterCursorSummary::from(&internal);
+    let rendered = serde_json::to_string(&summary).unwrap();
+    assert!(!rendered.contains("external_cursor_json"));
+    assert!(!rendered.contains("page_token"));
+
     context.clean_storage_tables().await.unwrap();
 }
