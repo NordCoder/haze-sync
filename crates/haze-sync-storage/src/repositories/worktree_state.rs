@@ -89,6 +89,7 @@ pub struct WorktreeInstanceBinding {
 }
 
 impl WorktreeInstanceBinding {
+    #[must_use]
     pub fn new(adapter_id: AdapterId, root_fingerprint: Sha256) -> Self {
         Self {
             adapter_id,
@@ -506,7 +507,7 @@ fn validate_worktree_state_row(row: WorktreeStateRow) -> RepositoryResult<Worktr
     match (
         row.observation_schema_version,
         row.observed_size_bytes,
-        row.observed_mtime,
+        row.observed_mtime.as_ref(),
     ) {
         (None, None, None) => {}
         (Some(version), Some(size), _) if kind == WorktreeStateKind::Present && size >= 0 => {
