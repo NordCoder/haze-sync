@@ -2,27 +2,25 @@
 
 ## Responsibility
 
-`haze-sync-storage` owns durable storage implementation boundaries for Haze Sync.
+`haze-sync-storage` owns durable storage implementation boundaries for Haze Sync:
 
-The component is responsible for:
+- schema and migration content/metadata;
+- passive internal row models;
+- SQLx repositories over caller-owned executors and transactions;
+- safe repository error classification;
+- verified content-addressed local object storage;
+- transaction-scoped PostgreSQL advisory locks;
+- versioned Worktree instance/path state and exact export checkpoints;
+- gated test support.
 
-- storage schema metadata and migration filename ordering;
-- passive database row models matching the Haze Sync metadata schema;
-- SQLx repository helpers over caller-owned executors/transactions;
-- safe repository error classification that hides raw SQLx/database details;
-- content-addressed local object-store primitives;
-- transaction-scoped PostgreSQL advisory locks for normalized vault paths;
-- gated test support for storage/integration harnesses.
-
-Storage persists and retrieves facts. It does not decide sync policy.
-
-Core owns overwrite/conflict/delete/idempotency semantics. Server owns runtime composition and transaction orchestration. API owns public HTTP DTOs/errors. Adapters own provider/filesystem/plugin behavior.
+Storage persists and retrieves caller-decided facts. Core owns
+revision/conflict/delete/idempotency policy. Server owns runtime composition,
+transactions and operation timing. API owns public DTOs/errors. Adapters own
+provider/filesystem/plugin semantics.
 
 ## Public interfaces
 
-The public crate surface is exported from `src/lib.rs`.
-
-Current public modules:
+Public modules:
 
 ```text
 locks
@@ -34,192 +32,174 @@ schema
 test_support   cfg(test) or feature = "test-support"
 ```
 
-Current public re-exports:
+Public re-exports include the object-store surface plus `RepositoryError` and
+`RepositoryResult`. Current owned repository modules cover cursors, conflicts,
+content blobs, GDrive mapping, idempotency, objects, operation log, revisions,
+tombstones and Worktree durable state.
 
-```text
-LocalObjectStore
-ObjectMetadata
-ObjectStore
-ObjectStoreError
-ObjectStoreResult
-RepositoryError
-RepositoryResult
-```
-
-Current owned surfaces:
-
-- `schema::table_names` constants for metadata tables;
-- `schema::INITIAL_MIGRATIONS` ordered migration filenames;
-- passive row structs for all initial storage tables;
-- repository helper modules for adapters/cursors, conflicts, content blobs, idempotency, objects, operation log, revisions, and tombstones;
-- repository error codes/messages that do not expose raw DB internals;
-- object-store trait and local filesystem-backed object store;
-- deterministic `PathLockKey` derivation and `lock_vault_path` helper.
+`schema::INITIAL_MIGRATIONS` is the ordered current migration list. The historical
+name remains source-compatible even though migration 0010 extends the initial
+schema.
 
 ## Input contracts
 
-Storage inputs must already be validated, scoped, and policy-decided by upstream components unless a storage helper explicitly validates a narrow storage-level constraint.
+- Public path boundaries use `VaultPath` where practical.
+- Content/root fingerprints use Common SHA-256 types.
+- Adapter/revision/operation/conflict identities use Common validated types.
+- Callers supply Core/adapter decisions; Storage does not infer accepted,
+  conflicted, tombstoned, replayed, imported, exported, dirty or repaired states.
+- Callers own pools, transaction boundaries, retries, authorization,
+  idempotency-key selection and runtime orchestration.
+- Object-store writes include expected hash and bytes.
+- Advisory-lock helpers require caller-owned transaction scope.
+- Worktree root fingerprints are supplied for already-normalized roots. Storage
+  never receives or derives the raw root.
+- Worktree path-state writes are already-decided present/tombstoned facts.
+- Exact Worktree cursor advancement is requested only after one authoritative
+  operation is safely materialized inside the same caller-owned transaction.
 
-Required input rules:
-
-- vault paths should use `haze-sync-common::VaultPath` at public helper boundaries wherever practical;
-- content hashes should use `haze-sync-common::ContentHash` wherever practical;
-- Core semantic decisions must be supplied by callers; Storage must not infer whether a write should be accepted, conflicted, tombstoned, or rejected;
-- SQLx repository helpers execute against caller-owned executors or transactions;
-- callers own database pool lifecycle, transaction boundaries, retries, request auth, idempotency request selection, and per-route orchestration;
-- object-store writes must include expected content hash and raw bytes;
-- local object-store roots are caller-configured and must not be exposed in public errors;
-- advisory lock helpers require a caller-owned transaction-scoped PostgreSQL executor.
-
-Storage may validate storage-level constraints such as non-negative sequences, page-limit bounds, representable `size_bytes`, known operation-kind/status strings, and cursor monotonicity.
+Storage may validate narrow persistence constraints: canonical values, nonnegative
+sequences/sizes, bounded limits, known vocabularies, supported state versions,
+instance-binding equality, path-state consistency and cursor transition shape.
 
 ## Output contracts
 
-Storage outputs are internal/service-layer Rust values, not direct public API responses.
+Storage outputs are internal/service-layer values, not direct API/status DTOs.
 
-Required output rules:
+- Database and object-store failures cross the boundary only as safe errors.
+- Raw SQLx errors, local paths and database URLs are never rendered.
+- Raw external cursors, idempotency keys, token hashes, provider identifiers,
+  Worktree root fingerprints and operational metadata require higher-layer
+  sanitization.
+- `AdapterCursorSummary` excludes raw external cursor JSON.
+- Worktree instance rows/bindings use redacted `Debug`; root fingerprints are not
+  serde/public-status surfaces.
+- Repository outputs preserve caller decisions transactionally when composed by
+  Server.
 
-- repository helpers return row/value models or safe `RepositoryError` values;
-- object-store helpers return verified `ObjectMetadata` or safe `ObjectStoreError` values;
-- object-store paths and local absolute paths must not appear in public error formatting;
-- database errors are mapped to safe storage error variants before leaving repository helpers;
-- repository outputs must preserve Core decisions transactionally when used by Server fan-in;
-- cursor, idempotency, conflict, tombstone, and operation-log rows must not expose raw provider cursor JSON, idempotency keys, token hashes, or unsafe runtime details to public callers without a sanitizing API/Server layer.
-
-Storage row models may contain raw persisted values because they represent database rows. Those row models must not be returned directly as public API/admin/status output unless sanitized by API/Server.
-
-## Error contracts
-
-Storage errors must be safe across component boundaries.
-
-`RepositoryError` must not expose:
-
-- raw SQL;
-- SQLx error messages;
-- database URLs;
-- credentials;
-- bearer tokens;
-- OAuth tokens;
-- token hashes;
-- Idempotency-Key values;
-- provider payloads;
-- raw external cursors;
-- local absolute paths;
-- stack traces;
-- file bytes.
-
-`ObjectStoreError` formatting must not expose local absolute paths or temporary file paths.
-
-Higher-level mapping into HTTP status codes or CLI output belongs to Server/API/CLI, not Storage.
-
-## Persistence/runtime ownership
-
-Storage owns persistence implementation primitives, but not application runtime orchestration.
+## Worktree durable-state contract
 
 Storage owns:
 
-- SQLx query helper code inside repository modules;
-- table/row model shapes;
-- object-store filesystem implementation;
-- transaction-scoped advisory-lock helper;
-- storage test support behind `test-support` or `cfg(test)`.
+- `worktree_instances`, keyed by stable Worktree `adapter_id`;
+- canonical non-public root fingerprint and `state_format_version = 1`;
+- create-or-verify binding with fail-closed root/version mismatch;
+- `worktree_state`, keyed by `(adapter_id, path)`;
+- explicit `present` or `tombstoned` kind;
+- required authoritative revision;
+- required content hash only for present state;
+- optional versioned, bounded reconciliation observation fields;
+- deterministic adapter-scoped path-ordered snapshot pagination;
+- guarded observation updates bound to expected revision and content hash;
+- no hard-delete repository operation;
+- transaction-only lock/read and exact-contiguous cursor advancement.
 
-Storage does not own:
+The strict cursor transition is `persisted == expected` and
+`next == expected + 1`. Missing cursors, negative values, equality/regression,
+gaps, stale expected values and overflow fail safely. The compatibility broad
+monotonic cursor API remains for other adapters; Worktree export uses the strict
+API.
 
-- Axum route handlers or route registration;
-- server startup, runtime state, config loading, or background jobs;
-- Core decision policy;
-- adapter/provider calls;
-- Google Drive OAuth or Drive API calls;
-- Obsidian plugin behavior;
-- Worktree scanner/watcher/materializer loops;
-- CLI command parsing or UX;
-- migration runner/execution unless explicitly scoped later;
-- hard-delete cleanup jobs unless explicitly scoped later.
+Server must persist Worktree path state and strict cursor advancement in one
+transaction. Rollback leaves both unchanged. Storage does not materialize files or
+claim that filesystem work succeeded.
 
-## Security and secrecy rules
+See `worktree-durable-state.md`.
 
-- Do not commit secrets.
-- Do not expose tokens or token hashes in public outputs.
-- Do not expose local absolute paths or database URLs.
-- Do not serialize raw provider payloads into public outputs unless explicitly allowed by a higher-level API/Server contract.
-- Map raw SQLx errors to safe storage errors before returning them.
-- Object-store errors must not include filesystem paths in `Display` output.
-- Stored row models may contain sensitive persisted fields, but public surfaces must sanitize before rendering.
-- Test fixtures must not use real tokens, real OAuth credentials, production DB URLs, or real provider payloads.
+## Migration contract
 
-## Non-goals
+Migration 0010 replaces the legacy path-only Worktree table only when it is
+empty. Non-empty legacy rows fail before destructive SQL because Storage cannot
+invent adapter/root identity. PostgreSQL migration atomicity preserves the old
+schema/data on failure.
 
-Storage must not implement:
+Production migration execution belongs to Server/Deployment. Storage owns the
+migration content and test-support validation for fresh, exact pre-P10 and exact
+current schemas.
 
-- Core overwrite/conflict/delete/idempotency policy;
-- API HTTP DTO ownership or public error envelopes;
-- Axum runtime wiring;
-- server app state or dependency injection;
-- adapter loops or provider calls;
-- Google Drive mapping semantics beyond persisted row/repository support;
-- Worktree scanner/materializer behavior beyond persisted state support;
-- Obsidian plugin local behavior;
-- CLI commands;
-- physical retention cleanup or hard delete unless explicitly scoped;
-- migration execution/runtime orchestration unless explicitly scoped;
-- public status/doctor rendering without API/Server sanitization.
+## Error contract
 
-## Dependencies
+`RepositoryError`, `ObjectStoreError` and `TestSupportError` must not expose:
 
-See `dependency-map.md`.
+- SQL or SQLx/driver details;
+- database URLs or credentials;
+- bearer/OAuth/token hashes or idempotency keys;
+- provider payloads or raw cursors;
+- raw Worktree roots or root fingerprints;
+- local absolute/temporary paths;
+- stack traces or file bytes.
 
-## Dependents
+Higher-level HTTP/CLI mapping belongs outside Storage.
 
-See `dependency-map.md`.
+## Persistence/runtime ownership
+
+Storage owns query helpers, migrations, row shapes, object-store implementation,
+advisory-lock primitives and gated test support. It does not own:
+
+- Axum routes, startup, config loading, background jobs or hosted loops;
+- Core policy;
+- provider/OAuth calls;
+- Worktree root normalization, scanning, watching, reconciliation semantics,
+  materialization, echo/trash/repair behavior or scheduling;
+- public status/doctor rendering;
+- production migration invocation;
+- retention cleanup or physical hard delete.
+
+## Security and secrecy
+
+- Never commit secrets or real production configuration.
+- Store only the Worktree root fingerprint, never the raw root.
+- Keep Storage rows internal and sanitize before public rendering.
+- Map raw database/filesystem errors before returning.
+- Object-store errors remain path-free.
+- Test fixtures use dedicated test databases and synthetic credentials/data.
+- Production crates must not enable `test-support` in normal dependencies.
 
 ## Invariants
 
-Storage component invariants:
-
-- Storage persists facts; Core decides safety policy.
-- Repository helpers execute only caller-requested operations against caller-owned executors/transactions.
-- Storage does not create database pools or own runtime lifecycle.
-- Storage does not expose raw SQLx/database details outside safe error boundaries.
-- Object-store paths derive from validated content hashes, not vault paths or provider payloads.
-- Object-store reads verify content hash before returning bytes.
-- Object-store writes verify expected hash before committing blobs.
-- Advisory locks are transaction-scoped PostgreSQL locks; callers must provide transaction scope.
-- Test support remains gated and must not be required by production code.
+- Storage persists facts; Core/Worktree decide semantics.
+- Repositories use caller-owned executors/transactions and create no pools.
+- Object-store layout derives only from content hashes and verifies reads/writes.
+- Advisory path locks are transaction-scoped.
+- Worktree binding is stable per adapter and fails closed on mismatch/version.
+- Worktree path state is adapter-scoped and versioned.
+- A tombstoned path has no content hash or reconciliation observation.
+- A present path has a canonical content hash.
+- Observation updates cannot overwrite a newer revision/hash.
+- Worktree export checkpoint never advances by more than one or beyond a stale
+  expected value.
+- Test support remains gated and production-independent.
 
 ## Test obligations
 
-Storage tests should cover:
+Storage tests cover:
 
-- schema table-name and migration-order metadata;
-- row model serialization/deserialization where used as contract/test fixtures;
-- repository validation helpers for sequences, limits, sizes, statuses, cursor regression, and safe error mapping;
-- repository SQL helpers using test database support where scoped;
-- object-store put/get/stat/exists behavior;
-- object-store hash mismatch, stored blob mismatch, missing blob, duplicate write, and path-free error formatting;
-- deterministic advisory-lock key generation for normalized paths;
-- lock helper behavior with PostgreSQL transactions where integration DB support is available;
-- test-support utilities behind the correct feature/cfg gates.
+- migration ordering and current/pre-P10 schema metadata;
+- migration refusal for non-empty legacy Worktree rows;
+- row validation and redaction;
+- instance bind replay/mismatch and per-adapter isolation;
+- present/tombstoned state, observations, pagination and rollback;
+- exact cursor regression/gap/stale/missing/overflow and race behavior;
+- existing repository validation, object store and advisory locks;
+- test-support configuration/schema/cleanup safety.
 
-Checks expected for Storage changes when shell or CI is available:
+Expected checks:
 
 ```bash
 cargo fmt --check
 cargo check -p haze-sync-storage
 cargo test -p haze-sync-storage
 cargo test -p haze-sync-storage --features test-support
+HAZE_SYNC_TEST_DATABASE_URL='<dedicated test DB>' \
+  cargo test -p haze-sync-storage --features test-support -- --ignored
 ```
 
-## Contract change protocol
+The last command is mandatory STOR-P10 PostgreSQL evidence; ordinary Component CI
+without PostgreSQL cannot substitute for it.
 
-Request a contract change instead of silently broadening scope when implementation requires:
+## Contract-change protocol
 
-- adding Core policy decisions to Storage;
-- adding Axum/Server route behavior;
-- adding provider SDK calls;
-- changing schema/table ownership or migration order after consumers depend on it;
-- exposing raw SQLx errors or local filesystem paths;
-- changing object-store path layout;
-- adding direct GDrive adapter DB ownership beyond persisted row/repository support;
-- adding migration runner/runtime lifecycle behavior;
-- adding physical hard-delete/retention cleanup jobs.
+Stop and request the owner phase rather than silently broadening scope when work
+requires Core policy, Server/application/runtime behavior, provider SDKs,
+Worktree filesystem semantics, API DTOs, raw-secret/path exposure, object-store
+layout changes, production migration execution or physical cleanup jobs.
