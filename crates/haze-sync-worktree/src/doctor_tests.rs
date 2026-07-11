@@ -86,9 +86,11 @@ fn healthy_snapshot_has_no_issues_or_repairs() {
     assert_eq!(report.health(), WorktreeDoctorHealth::Healthy);
     assert_eq!(report.summary().issue_count(), 0);
     assert!(report.issues().is_empty());
-    assert!(WorktreeRepairPlanner::plan(&report, WorktreeRepairAuthorization::Unconfirmed)
-        .actions()
-        .is_empty());
+    assert!(
+        WorktreeRepairPlanner::plan(&report, WorktreeRepairAuthorization::Unconfirmed)
+            .actions()
+            .is_empty()
+    );
 }
 
 #[test]
