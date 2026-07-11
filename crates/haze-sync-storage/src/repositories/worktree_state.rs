@@ -4,9 +4,7 @@
 //! materialize files, classify drift, choose import/export behavior, or own
 //! transaction timing.
 
-use super::{
-    map_sqlx_error, size_bytes_to_i64, validate_limit, RepositoryError, RepositoryResult,
-};
+use super::{map_sqlx_error, size_bytes_to_i64, validate_limit, RepositoryError, RepositoryResult};
 use crate::models::{WorktreeInstanceRow, WorktreeStateRow};
 use chrono::{DateTime, Utc};
 use haze_sync_common::{AdapterId, ContentHash, RevisionId, Sha256, VaultPath};
@@ -230,9 +228,7 @@ pub async fn load_worktree_instance<'executor, E>(
 where
     E: Executor<'executor, Database = Postgres>,
 {
-    let sql = format!(
-        "select {INSTANCE_COLUMNS} from worktree_instances where adapter_id = $1"
-    );
+    let sql = format!("select {INSTANCE_COLUMNS} from worktree_instances where adapter_id = $1");
     let row = sqlx::query(&sql)
         .bind(adapter_id.as_str())
         .fetch_optional(executor)
@@ -250,9 +246,8 @@ pub async fn load_path_state<'executor, E>(
 where
     E: Executor<'executor, Database = Postgres>,
 {
-    let sql = format!(
-        "select {STATE_COLUMNS} from worktree_state where adapter_id = $1 and path = $2"
-    );
+    let sql =
+        format!("select {STATE_COLUMNS} from worktree_state where adapter_id = $1 and path = $2");
     let row = sqlx::query(&sql)
         .bind(adapter_id.as_str())
         .bind(path.as_str())
@@ -443,9 +438,7 @@ fn observation_columns(
 fn worktree_instance_from_pg(row: &PgRow) -> RepositoryResult<WorktreeInstanceRow> {
     let adapter_id: String = row.try_get("adapter_id").map_err(map_sqlx_error)?;
     AdapterId::parse(&adapter_id).map_err(|_| RepositoryError::InvalidIdentifier)?;
-    let root_fingerprint: String = row
-        .try_get("root_fingerprint")
-        .map_err(map_sqlx_error)?;
+    let root_fingerprint: String = row.try_get("root_fingerprint").map_err(map_sqlx_error)?;
     validate_canonical_sha256(&root_fingerprint)?;
     let state_format_version = row
         .try_get("state_format_version")
@@ -476,9 +469,7 @@ fn worktree_state_from_pg(row: &PgRow) -> RepositoryResult<WorktreeStateRow> {
         observation_schema_version: row
             .try_get("observation_schema_version")
             .map_err(map_sqlx_error)?,
-        observed_size_bytes: row
-            .try_get("observed_size_bytes")
-            .map_err(map_sqlx_error)?,
+        observed_size_bytes: row.try_get("observed_size_bytes").map_err(map_sqlx_error)?,
         observed_mtime: row.try_get("observed_mtime").map_err(map_sqlx_error)?,
         created_at: row.try_get("created_at").map_err(map_sqlx_error)?,
         updated_at: row.try_get("updated_at").map_err(map_sqlx_error)?,
