@@ -12,9 +12,13 @@ This is a hold notice, not an executable worker prompt.
 
 DEP-P6 implementation and clean-code review are accepted with green CI. Storage STOR-P8 persistence repositories and GDrive GDA-P7 lifecycle are accepted.
 
-GDA-P8 delete-guard implementation is complete, but its final source/test run is formally red and routed to `FIX-GDA-P8-CI` using artifact `8240045016`. Storage STOR-P9C is locally green but waiting for a Server-owned production feature-isolation correction.
+GDA-P8 implementation and artifact-based CI correction are now green:
 
-Neither correction defines the missing service process, OAuth-secret, or Server/API composition topology.
+- GDA-P8 code-bearing SHA: 0120134b3c1a7b446b6c1c96953ce9abe4971d55
+- Component CI run: 29127127665
+- conclusion: success
+
+GDA-P8C clean-code review is queued. Storage STOR-P9C is locally green, while the Server-owned feature-isolation correction is green and awaiting clean-code review. None of these phases defines the missing deployment topology.
 
 ## Blocked next phase
 
@@ -30,4 +34,4 @@ Deployment must not invent direct database ownership, an adapter daemon contract
 
 ## Unblock condition
 
-Green GDA-P8 lifecycle plus an explicit GDrive/Storage/Server runtime-config fan-in contract defining deployment ownership and topology. Until then, do not launch a worker from this hold notice.
+Green GDA-P8C acceptance plus an explicit GDrive/Storage/Server runtime-config fan-in contract defining deployment ownership and topology. Until then, do not launch a worker from this hold notice.
