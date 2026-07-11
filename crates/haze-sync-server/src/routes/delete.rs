@@ -77,7 +77,7 @@ pub(super) async fn delete_file_route(
             fingerprint,
         ),
     };
-    let outcome = application_services(&state)
+    let outcome = application_services(&state)?
         .apply_delete(command)
         .await
         .map_err(map_application_error)?;
@@ -86,10 +86,10 @@ pub(super) async fn delete_file_route(
     Ok((status, Json(response)).into_response())
 }
 
-fn application_services(state: &ServerAppState) -> ServerApplicationServices {
+fn application_services(state: &ServerAppState) -> Result<ServerApplicationServices, ApiError> {
     state
         .application_services()
-        .expect("authenticated runtime-backed delete state should have a database pool")
+        .ok_or_else(ApiError::storage_unavailable)
 }
 
 fn delete_response(outcome: ApplyDeleteOutcome) -> DeleteFileResponse {
