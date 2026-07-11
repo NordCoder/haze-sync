@@ -6,37 +6,46 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-server/control/prompt.md
 active_report: crates/haze-sync-server/control/report.md
-active_agent_role: fixer-worker
-assigned_chat_name: server — W1 SRV-P7A CI Fix
-prompt_revision: verified by Orchestrator after SRV-P7A-FIX implementation report and exact diagnostics artifact metadata retrieval
+active_agent_role: clean-code-reviewer
+assigned_chat_name: server — W1 SRV-P7A Clean-Code Review
+prompt_revision: verified by Orchestrator after FIX_COMPLETE and independent green post-fix Component CI verification
 
 wave: W1
-phase: FIX-SRV-P7A-CI
+phase: SRV-P7A-CLEAN
 
 implementation_status: SELF_ACCEPT
+fix_status: FIX_COMPLETE
 clean_review_status: NOT_STARTED
-ci_status: CI_RED
+ci_status: CI_GREEN
 ci_workflow: Component CI
-ci_code_bearing_sha: fe9101871462fc271a320726f4ad18668d1a9a5b
-ci_run_id: 29160824666
-ci_run_number: 1703
+ci_code_bearing_sha: 37706634fd8dd2d9b299a1c453718f2de63981d0
+ci_run_id: 29161721748
+ci_run_number: 1704
 ci_run_attempt: 1
-known_failed_checks:
-- Finalize CI diagnostics
+known_failed_checks: []
 architect_status: ARCHITECT_ACCEPT
 
-artifact_name: ci-diag__component-server__wf-component-ci__run-29160824666__attempt-1
-artifact_id: 8250773210
-artifact_head_sha: fe9101871462fc271a320726f4ad18668d1a9a5b
-artifact_digest: sha256:a02d9916569faa4457f8b3509b6b11908b8805f113b82c9aa96e58d10e1b7d6d
-artifact_size_bytes: 1993
-artifact_expires_at: 2026-07-12T17:02:32Z
-artifact_status: AVAILABLE_UNEXPIRED
+fan_in_source_branch: component/worktree
+fan_in_source_sha: 4f7bc748d9b901d7d5c3e43c845ba407c0c36e59
+fan_in_source_ci_run: 29152965199
+fan_in_source_status: 32_OF_32_PRODUCT_BLOBS_IDENTICAL_CLEAN_ACCEPT_CI_GREEN
 
-accepted_implementation:
-- Worktree snapshot remains 32/32 exact at source SHA 4f7bc748d9b901d7d5c3e43c845ba407c0c36e59
-- Server worktree_runtime module is active and compiled
-- production lifecycle constructs, starts, retains, and shuts down the boundary explicitly
-- disabled is inert; enabled execution remains honestly unavailable until SRV-P7B
+accepted_server_behavior:
+- worktree_runtime module is active and compiled
+- production constructs the boundary from ServerConfig.worktree mode and root
+- lifecycle order is construct, start once, retain across serve, shutdown once after success or failure
+- disabled mode is inert
+- enabled modes are honestly unavailable with CycleExecutorNotWired
+- DryRun is unsupported
+- no fake executor, watcher, runtime loop, provider call, mutation, or background task
+- status, Debug, and startup errors remain secret-safe and root-redacted
 
-next_gate_after_fix: mandatory SRV-P7A clean-code review only after FIX_COMPLETE and independently verified green post-fix code-bearing Component CI
+fix_evidence:
+- diagnostics artifact 8250773210 matched pre-fix SHA fe9101871462fc271a320726f4ad18668d1a9a5b
+- artifact proved rustfmt-only differences in worktree_runtime.rs
+- post-fix behavior change: none
+- post-fix code-bearing SHA: 37706634fd8dd2d9b299a1c453718f2de63981d0
+- post-fix CI run 29161721748 completed successfully
+
+review_scope: complete SRV-P7A Worktree snapshot fan-in and Server-owned composition/lifecycle boundary; real cycle execution remains deferred to SRV-P7B
+next_gate_after_review: Orchestrator may progress Server only after CLEAN_ACCEPT and green CI for the final reviewed code-bearing SHA; otherwise route to the exact required fixer, implementation correction, scope decision, or contract decision
