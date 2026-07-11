@@ -1,5 +1,9 @@
 # W1-FIX-WT-P9-CI — Worktree diagnostics CI correction
 
+Before starting, name this worker chat exactly:
+
+`worktree — W1 WT-P9 CI Fix`
+
 Component: worktree
 Path: crates/haze-sync-worktree
 Branch: component/worktree
