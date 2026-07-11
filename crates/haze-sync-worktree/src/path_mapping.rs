@@ -65,7 +65,7 @@ impl WorktreeConfig {
         let segments: Vec<&str> = vault_path.segments().collect();
         let mut local_path = self.root.clone();
         for segment in &segments {
-            if segment.contains('\') {
+            if segment.contains('\\') {
                 return Err(WorktreePathError::BackslashEscape);
             }
             local_path.push(segment);
@@ -308,7 +308,7 @@ fn relative_segments(relative: &Path) -> Result<Vec<String>, WorktreePathError> 
                 let segment = segment
                     .to_str()
                     .ok_or(WorktreePathError::NonUtf8LocalPath)?;
-                if segment.contains('\') {
+                if segment.contains('\\') {
                     return Err(WorktreePathError::BackslashEscape);
                 }
                 segments.push(segment.to_owned());
