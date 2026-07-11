@@ -190,9 +190,6 @@ impl AdapterCursorRepository {
     }
 
     /// Lock and read the current cursor in the caller-owned transaction.
-    ///
-    /// The returned summary never exposes raw external cursor payloads. The row
-    /// lock remains held until the caller commits or rolls back the transaction.
     pub async fn lock_current(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
@@ -226,13 +223,8 @@ impl AdapterCursorRepository {
         Ok(AdapterCursorSummary::from(&cursor))
     }
 
-    /// Advance a locked cursor only from the exact expected value to its exact
-    /// contiguous successor.
-    ///
-    /// Validation rejects regression/equality, gaps, stale expected values and
-    /// overflow. The caller must materialize one authoritative operation and
-    /// update Worktree path state in the same transaction before invoking this
-    /// method, then commit both facts together.
+    /// Advance only from the exact expected value to its exact contiguous
+    /// successor inside the caller-owned transaction.
     pub async fn advance_exact_contiguous(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
@@ -268,12 +260,12 @@ fn validate_exact_transition(expected_current: i64, next_sequence: i64) -> Repos
     validate_sequence(expected_current)?;
     validate_sequence(next_sequence)?;
 
-    if next_sequence <= expected_current {
-        return Err(RepositoryError::CursorRegression);
-    }
     let contiguous = expected_current
         .checked_add(1)
         .ok_or(RepositoryError::CursorOverflow)?;
+    if next_sequence <= expected_current {
+        return Err(RepositoryError::CursorRegression);
+    }
     if next_sequence != contiguous {
         return Err(RepositoryError::CursorGap);
     }
