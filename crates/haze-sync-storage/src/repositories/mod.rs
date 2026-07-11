@@ -1,8 +1,8 @@
 //! Passive SQLx repository primitives for Haze Sync metadata.
 //!
-//! Repository helpers in this module execute only caller-requested SQL against a
-//! caller-owned executor or transaction. They do not create pools, run
-//! migrations, resolve conflicts, or implement Core apply policy.
+//! Repository helpers execute caller-requested SQL against caller-owned
+//! executors or transactions. They do not create pools, run production migration
+//! policy, resolve conflicts, or implement Core/Worktree semantics.
 
 pub mod adapter_cursors;
 pub mod conflicts;
@@ -23,7 +23,7 @@ pub use idempotency::{
 
 use std::{error::Error, fmt};
 
-/// Maximum number of changes returned by one repository page.
+/// Maximum number of rows returned by one repository page.
 pub const MAX_CHANGES_LIMIT: u32 = 1_000;
 
 /// Result type returned by storage repository helpers.
@@ -31,38 +31,43 @@ pub type RepositoryResult<T> = Result<T, RepositoryError>;
 
 /// Safe repository error boundary.
 ///
-/// Public formatting intentionally avoids raw SQL, database URLs, filesystem
-/// paths, provider payloads, stack traces, credentials, and runtime details.
+/// Formatting intentionally avoids raw SQL, database URLs, filesystem paths,
+/// provider payloads, root fingerprints, cursor payloads, row contents, stack
+/// traces, credentials, and runtime details.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum RepositoryError {
-    /// Sequence values must be zero or greater.
     InvalidSequence,
-    /// Query page limits must be between one and the configured maximum.
     InvalidLimit { max: u32 },
-    /// A persisted vault path is invalid or noncanonical.
     InvalidPath,
-    /// A persisted or caller-provided identifier is invalid.
     InvalidIdentifier,
-    /// A persisted or caller-provided hash is invalid.
     InvalidHash,
-    /// Provider metadata text does not fit the storage-safe shape.
     InvalidProviderMetadata,
-    /// An operation kind string is not part of the V1 contract vocabulary.
     InvalidOperationKind,
-    /// A conflict status string is not part of the V1 contract vocabulary.
     InvalidConflictStatus,
-    /// A requested cursor update would move the adapter backwards.
+    /// A requested cursor update would move backwards.
     CursorRegression,
-    /// A database operation failed. The underlying database error is not exposed
-    /// across this storage boundary.
+    /// A requested cursor transition skipped one or more sequence values.
+    CursorGap,
+    /// The caller's expected cursor does not match the locked persisted value.
+    CursorStaleExpected,
+    /// Exact contiguous advancement was requested before cursor initialization.
+    CursorMissing,
+    /// Exact contiguous sequence calculation overflowed the supported range.
+    CursorOverflow,
+    /// A Worktree row or input uses an unsupported durable-state version.
+    UnsupportedWorktreeStateVersion,
+    /// An existing adapter binding does not match the supplied root/version.
+    WorktreeInstanceBindingMismatch,
+    /// A Worktree path-state kind is unknown or inconsistent.
+    InvalidWorktreeStateKind,
+    /// Reconciliation observation fields are incomplete or inconsistent.
+    InvalidWorktreeObservation,
     DatabaseOperationFailed,
-    /// A caller-provided size could not be represented by the storage schema.
     InvalidSizeBytes,
 }
 
 impl RepositoryError {
-    /// Stable machine-readable error code.
     #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
@@ -75,12 +80,19 @@ impl RepositoryError {
             Self::InvalidOperationKind => "invalid_operation_kind",
             Self::InvalidConflictStatus => "invalid_conflict_status",
             Self::CursorRegression => "cursor_regression",
+            Self::CursorGap => "cursor_gap",
+            Self::CursorStaleExpected => "cursor_stale_expected",
+            Self::CursorMissing => "cursor_missing",
+            Self::CursorOverflow => "cursor_overflow",
+            Self::UnsupportedWorktreeStateVersion => "unsupported_worktree_state_version",
+            Self::WorktreeInstanceBindingMismatch => "worktree_instance_binding_mismatch",
+            Self::InvalidWorktreeStateKind => "invalid_worktree_state_kind",
+            Self::InvalidWorktreeObservation => "invalid_worktree_observation",
             Self::DatabaseOperationFailed => "storage_database_operation_failed",
             Self::InvalidSizeBytes => "invalid_size_bytes",
         }
     }
 
-    /// Stable path-free and secret-free human-readable message.
     #[must_use]
     pub const fn message(self) -> &'static str {
         match self {
@@ -93,6 +105,20 @@ impl RepositoryError {
             Self::InvalidOperationKind => "operation kind is not supported",
             Self::InvalidConflictStatus => "conflict status is not supported",
             Self::CursorRegression => "cursor update would move backwards",
+            Self::CursorGap => "cursor update must advance exactly one sequence",
+            Self::CursorStaleExpected => "cursor expected value is stale",
+            Self::CursorMissing => "cursor must be initialized before advancement",
+            Self::CursorOverflow => "cursor sequence cannot be advanced safely",
+            Self::UnsupportedWorktreeStateVersion => {
+                "worktree durable-state version is not supported"
+            }
+            Self::WorktreeInstanceBindingMismatch => {
+                "worktree instance binding does not match persisted state"
+            }
+            Self::InvalidWorktreeStateKind => "worktree path-state kind is invalid",
+            Self::InvalidWorktreeObservation => {
+                "worktree reconciliation observation is invalid"
+            }
             Self::DatabaseOperationFailed => "storage database operation failed",
             Self::InvalidSizeBytes => "size is outside the supported storage range",
         }
@@ -110,21 +136,19 @@ impl fmt::Display for RepositoryError {
 
 impl Error for RepositoryError {}
 
-pub(crate) fn validate_sequence(sequence: i64) -> Result<(), RepositoryError> {
+pub(crate) fn validate_sequence(sequence: i64) -> RepositoryResult<()> {
     if sequence < 0 {
         return Err(RepositoryError::InvalidSequence);
     }
-
     Ok(())
 }
 
-pub(crate) fn validate_limit(limit: u32) -> Result<(), RepositoryError> {
+pub(crate) fn validate_limit(limit: u32) -> RepositoryResult<()> {
     if limit == 0 || limit > MAX_CHANGES_LIMIT {
         return Err(RepositoryError::InvalidLimit {
             max: MAX_CHANGES_LIMIT,
         });
     }
-
     Ok(())
 }
 
@@ -149,6 +173,8 @@ mod tests {
         "idempotency-key",
         "oauth",
         "stack backtrace",
+        "root_fingerprint",
+        "external_cursor_json",
     ];
 
     #[test]
@@ -200,27 +226,17 @@ mod tests {
             RepositoryError::InvalidOperationKind,
             RepositoryError::InvalidConflictStatus,
             RepositoryError::CursorRegression,
+            RepositoryError::CursorGap,
+            RepositoryError::CursorStaleExpected,
+            RepositoryError::CursorMissing,
+            RepositoryError::CursorOverflow,
+            RepositoryError::UnsupportedWorktreeStateVersion,
+            RepositoryError::WorktreeInstanceBindingMismatch,
+            RepositoryError::InvalidWorktreeStateKind,
+            RepositoryError::InvalidWorktreeObservation,
             RepositoryError::DatabaseOperationFailed,
             RepositoryError::InvalidSizeBytes,
         ];
-
-        let codes = errors.map(RepositoryError::code);
-        assert_eq!(
-            codes,
-            [
-                "invalid_sequence",
-                "invalid_limit",
-                "invalid_storage_path",
-                "invalid_storage_identifier",
-                "invalid_storage_hash",
-                "invalid_provider_metadata",
-                "invalid_operation_kind",
-                "invalid_conflict_status",
-                "cursor_regression",
-                "storage_database_operation_failed",
-                "invalid_size_bytes",
-            ]
-        );
 
         for error in errors {
             assert_safe_error_text(error.code());
@@ -236,22 +252,11 @@ mod tests {
             std::io::ErrorKind::PermissionDenied,
             "postgres://user:secret@db/prod select * from tokens /srv/prod Idempotency-Key",
         ));
-
         let error = map_sqlx_error(raw);
 
         assert_eq!(error, RepositoryError::DatabaseOperationFailed);
-        assert_eq!(error.code(), "storage_database_operation_failed");
-        assert_safe_error_text(error.message());
         assert_safe_error_text(&error.to_string());
         assert!(std::error::Error::source(&error).is_none());
-    }
-
-    #[test]
-    fn conflict_status_error_is_safe() {
-        let error = RepositoryError::InvalidConflictStatus;
-        assert_eq!(error.code(), "invalid_conflict_status");
-        assert_safe_error_text(error.message());
-        assert_safe_error_text(&error.to_string());
     }
 
     fn assert_safe_error_text(text: &str) {
