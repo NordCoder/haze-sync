@@ -22,6 +22,13 @@ impl TestDatabaseLease {
     pub(crate) fn pool(&self) -> &PgPool {
         self.context.pool()
     }
+
+    pub(crate) async fn reset(&self) {
+        self.context
+            .clean_storage_tables()
+            .await
+            .expect("tables should clean");
+    }
 }
 
 pub(crate) async fn acquire_required() -> TestDatabaseLease {
@@ -40,24 +47,20 @@ pub(crate) async fn acquire_optional() -> Option<TestDatabaseLease> {
         .expect("test database lookup should stay safe")?;
 
     ensure_schema(&context).await;
-    context
-        .clean_storage_tables()
-        .await
-        .expect("tables should clean");
-
-    Some(TestDatabaseLease {
+    let lease = TestDatabaseLease {
         context,
         _guard: guard,
-    })
+    };
+    lease.reset().await;
+    Some(lease)
 }
 
 async fn ensure_schema(context: &PostgresTestContext) {
-    let schema_ready: bool = sqlx::query_scalar(
-        "select to_regclass('public.audit_events') is not null",
-    )
-    .fetch_one(context.pool())
-    .await
-    .expect("test schema probe should succeed");
+    let schema_ready: bool =
+        sqlx::query_scalar("select to_regclass('public.audit_events') is not null")
+            .fetch_one(context.pool())
+            .await
+            .expect("test schema probe should succeed");
 
     if !schema_ready {
         context
