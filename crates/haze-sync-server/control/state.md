@@ -6,17 +6,17 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-server/control/prompt.md
 active_report: crates/haze-sync-server/control/report.md
-active_agent_role: architect
-assigned_chat_name: server — W1 SRV-P7B Architecture Decision
-prompt_revision: verified by Orchestrator after SRV-P7B1 returned BLOCKED_BY_CONTRACT
+active_agent_role: implementation-worker
+assigned_chat_name: server — W1 SRV-P7B2 Application Services
+prompt_revision: verified by Orchestrator after ARCH-SRV-P7B-CONTRACTS accepted reusable async Server application services
 
 wave: W1
-phase: ARCH-SRV-P7B-CONTRACTS
+phase: SRV-P7B2
 
-implementation_status: BLOCKED_BY_CONTRACT
+implementation_status: NOT_STARTED
 fix_status: NOT_REQUIRED
-clean_review_status: NOT_APPLICABLE_FOR_BLOCKED_PHASE
-architect_status: NOT_STARTED
+clean_review_status: NOT_STARTED
+architect_status: ARCHITECT_CHANGED_CONTRACTS
 ci_status: NOT_RUN
 
 accepted_srv_p7a_code_bearing_sha: 37706634fd8dd2d9b299a1c453718f2de63981d0
@@ -25,39 +25,38 @@ accepted_srv_p7a_ci_run_number: 1704
 accepted_srv_p7a_ci_status: CI_GREEN
 accepted_srv_p7a_clean_review_status: CLEAN_ACCEPT
 
-blocked_phase: SRV-P7B1
-blocked_report_status: BLOCKED_BY_CONTRACT
-blocked_report_archive: crates/haze-sync-server/control/log/20260711-184500Z-W1-SRV-P7B1-implementation-worker-report.md
+architecture_docs_sha: b98f5079ed90ccf7eaec79e617ae591e0c308ff4
+architecture_report_commit: 22b5e993431a1c0a858716ac835a3ece8ade6d5c
+architecture_ci_run: 29165123142
+architecture_ci_run_number: 1719
+architecture_status: ARCHITECT_CHANGED_CONTRACTS
+architecture_report_archive: crates/haze-sync-server/control/log/20260711-191500Z-W1-ARCH-SRV-P7B-CONTRACTS-architect-report.md
 
-verified_contract_gaps:
-- synchronous WorktreeRuntimeCycle and WorktreeRuntimeService poll cannot safely await asynchronous SQLx/Tokio authoritative operations
-- correct PUT and DELETE transaction semantics are private async route orchestration rather than reusable Server application services
-- durable Worktree applied/reconciliation state and export cursor ownership/contracts are absent
-- runtime budgets, invocation policy, and adapter-state binding are absent from accepted config
+phase_scope:
+- reusable async Server application services shared by HTTP routes and future Worktree execution
+- file create/update transaction service
+- guarded delete/tombstone transaction service
+- bounded authoritative changes service
+- revision metadata/content retrieval service
+- internal actor and deterministic future Worktree idempotency derivation
+- route delegation with exact public behavior parity
 
-forbidden_workarounds:
-- nested Tokio runtime or Handle::block_on
-- ad hoc blocking around async database operations
-- internal HTTP self-calls
-- detached tasks returning fabricated synchronous summaries
-- duplicated Core/route policy
-- production fake or in-memory-only state
+ownership_invariants:
+- routes own transport parsing/auth/API DTO/status mapping only
+- Server application services own transaction/lock/idempotency/object-store/repository choreography
+- Core remains policy owner
+- Storage remains passive and caller-transaction-owned
+- no Worktree executor, host, scheduler, schema or public DTO work in SRV-P7B2
 
-architect_scope:
-- choose one async-compatible Worktree/Server execution architecture
-- define reusable Server application-service boundaries
-- define durable Storage state and cursor ownership
-- define bounded runtime policy/config and host lifecycle
-- produce owner-aligned phased prompts and dependency order
-- update Server-owned architecture documentation only
+parallel_owner_phases:
+- WT-P10 may run independently on component/worktree
+- STOR-P10 may run independently on component/storage
 
 blocked_downstream:
-- SRV-P7B1 implementation retry remains blocked until architecture and owner contracts are accepted
-- SRV-P7B2 hosted scheduling remains blocked
-- CLI remains blocked until accepted Server operator/runtime fan-in exists
-- Deployment remains blocked until explicit runtime/config/deployment fan-in exists
+- SRV-P7B3 remains blocked until WT-P10, STOR-P10 and SRV-P7B2 are all CLEAN_ACCEPT and exact accepted SHAs are synchronized
+- SRV-P7B4, API-P8, SRV-P7B5, CLI-P6A and DEP-P5A remain blocked by the architect-defined order
 
-next_gate_after_architect:
-- ARCHITECT_CHANGED_CONTRACTS or ARCHITECT_ACCEPT: Orchestrator activates the first contract-owner implementation phase in the architect-defined order
-- ARCHITECT_NEEDS_CHANGES: route an exact architecture revision prompt
-- ARCHITECT_BLOCKED: resolve the exact missing evidence before implementation
+next_gate_after_implementation:
+- SELF_ACCEPT plus green code-bearing Component CI including mandatory DB-backed parity tests -> mandatory SRV-P7B2 clean-code review
+- red CI -> exact artifact-based fixer after Orchestrator metadata retrieval
+- blocked status -> route exact contract/scope/tooling decision; no clean review
