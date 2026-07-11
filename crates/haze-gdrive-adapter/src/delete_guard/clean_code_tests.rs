@@ -14,8 +14,8 @@ fn path(value: &str) -> VaultPath {
 
 fn mapping(provider_id: &str, path_value: &str, candidate_since: Option<&str>) -> GDriveMapping {
     let name = path_value.rsplit('/').next().expect("name");
-    let mut mapping = GDriveMapping::new(path(path_value), provider_id, "root", name)
-        .expect("mapping");
+    let mut mapping =
+        GDriveMapping::new(path(path_value), provider_id, "root", name).expect("mapping");
     mapping.checksum = Some(format!("checksum-{provider_id}"));
     mapping.core_revision = Some(format!("core-revision-{provider_id}"));
     mapping.delete_candidate_since = candidate_since.map(timestamp);
@@ -89,7 +89,10 @@ fn stale_candidate_timestamp_blocks_before_core_delete() {
     )
     .expect("reconciliation");
 
-    assert_eq!(outcome.blocked, Some(DeleteBlockReason::StateChangedSinceScan));
+    assert_eq!(
+        outcome.blocked,
+        Some(DeleteBlockReason::StateChangedSinceScan)
+    );
     assert_eq!(core.guard_evaluation_count(), 0);
     assert_eq!(core.delete_call_count(), 0);
     assert_eq!(state.mapping_count(), 1);
@@ -102,11 +105,7 @@ fn older_observation_cannot_confirm_candidate() {
         "Notes/missing.md",
         Some("2026-07-11T09:00:00Z"),
     )];
-    let scan = observation(
-        &FakeDriveProvider::new(),
-        &mappings,
-        "2026-07-11T08:00:00Z",
-    );
+    let scan = observation(&FakeDriveProvider::new(), &mappings, "2026-07-11T08:00:00Z");
     let mut state = InMemoryDeleteCandidateStateStore::new(mappings).expect("state");
     let mut core = FakeCoreDeleteGateway::new();
 
@@ -155,18 +154,17 @@ fn mapping_count_change_blocks_ratio_before_core_guard() {
     )
     .expect("reconciliation");
 
-    assert_eq!(outcome.blocked, Some(DeleteBlockReason::StateChangedSinceScan));
+    assert_eq!(
+        outcome.blocked,
+        Some(DeleteBlockReason::StateChangedSinceScan)
+    );
     assert_eq!(core.guard_evaluation_count(), 0);
     assert_eq!(core.delete_call_count(), 0);
 }
 
 #[test]
 fn recovery_does_not_clear_replaced_mapping_identity() {
-    let scan_mapping = mapping(
-        "file-1",
-        "Notes/recovered.md",
-        Some("2026-07-11T08:00:00Z"),
-    );
+    let scan_mapping = mapping("file-1", "Notes/recovered.md", Some("2026-07-11T08:00:00Z"));
     let metadata = DriveMetadata::new_file("file-1", "recovered.md", MIME_TEXT_MARKDOWN)
         .with_parent("root")
         .with_md5_checksum("checksum-file-1");
@@ -176,11 +174,7 @@ fn recovery_does_not_clear_replaced_mapping_identity() {
         std::slice::from_ref(&scan_mapping),
         "2026-07-11T09:00:00Z",
     );
-    let replacement = mapping(
-        "file-2",
-        "Notes/recovered.md",
-        Some("2026-07-11T08:30:00Z"),
-    );
+    let replacement = mapping("file-2", "Notes/recovered.md", Some("2026-07-11T08:30:00Z"));
     let mut state = InMemoryDeleteCandidateStateStore::new(vec![replacement]).expect("state");
     let mut core = FakeCoreDeleteGateway::new();
 
@@ -192,7 +186,10 @@ fn recovery_does_not_clear_replaced_mapping_identity() {
     )
     .expect("reconciliation");
 
-    assert_eq!(outcome.blocked, Some(DeleteBlockReason::StateChangedSinceScan));
+    assert_eq!(
+        outcome.blocked,
+        Some(DeleteBlockReason::StateChangedSinceScan)
+    );
     assert_eq!(state.clear_count(), 0);
     assert_eq!(
         state
@@ -206,11 +203,7 @@ fn recovery_does_not_clear_replaced_mapping_identity() {
 #[test]
 fn dry_run_first_absence_is_preview_not_mutation() {
     let mappings = vec![mapping("file-1", "Notes/missing.md", None)];
-    let scan = observation(
-        &FakeDriveProvider::new(),
-        &mappings,
-        "2026-07-11T09:00:00Z",
-    );
+    let scan = observation(&FakeDriveProvider::new(), &mappings, "2026-07-11T09:00:00Z");
     let mut state = InMemoryDeleteCandidateStateStore::new(mappings).expect("state");
     let mut core = FakeCoreDeleteGateway::new();
 
@@ -235,11 +228,7 @@ fn dry_run_first_absence_is_preview_not_mutation() {
 
 #[test]
 fn dry_run_recovery_is_preview_not_mutation() {
-    let existing = mapping(
-        "file-1",
-        "Notes/recovered.md",
-        Some("2026-07-11T08:00:00Z"),
-    );
+    let existing = mapping("file-1", "Notes/recovered.md", Some("2026-07-11T08:00:00Z"));
     let metadata = DriveMetadata::new_file("file-1", "recovered.md", MIME_TEXT_MARKDOWN)
         .with_parent("root")
         .with_md5_checksum("checksum-file-1");
@@ -273,11 +262,7 @@ fn dry_run_recovery_is_preview_not_mutation() {
 
 #[test]
 fn scan_snapshot_mismatch_is_rejected_before_reconciliation() {
-    let mapping = mapping(
-        "file-1",
-        "Notes/missing.md",
-        Some("2026-07-11T08:00:00Z"),
-    );
+    let mapping = mapping("file-1", "Notes/missing.md", Some("2026-07-11T08:00:00Z"));
     let plan = FullScanPlan {
         delete_candidates: vec![DeleteCandidatePlan {
             provider_id: "file-1".to_owned(),
@@ -297,11 +282,7 @@ fn scan_snapshot_mismatch_is_rejected_before_reconciliation() {
 
 #[test]
 fn retirement_requires_same_identity_candidate_and_core_revision() {
-    let mapping = mapping(
-        "file-1",
-        "Notes/missing.md",
-        Some("2026-07-11T08:00:00Z"),
-    );
+    let mapping = mapping("file-1", "Notes/missing.md", Some("2026-07-11T08:00:00Z"));
     let mut state = InMemoryDeleteCandidateStateStore::new(vec![mapping]).expect("state");
 
     assert_eq!(
