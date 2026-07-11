@@ -6,46 +6,51 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-server/control/prompt.md
 active_report: crates/haze-sync-server/control/report.md
-active_agent_role: clean-code-reviewer
-assigned_chat_name: server — W1 SRV-P7A Clean-Code Review
-prompt_revision: verified by Orchestrator after FIX_COMPLETE and independent green post-fix Component CI verification
+active_agent_role: implementation-worker
+assigned_chat_name: server — W1 SRV-P7B1 Worktree Cycle Executor
+prompt_revision: verified by Orchestrator after SRV-P7A CLEAN_ACCEPT and independent green CI confirmation
 
 wave: W1
-phase: SRV-P7A-CLEAN
+phase: SRV-P7B1
 
-implementation_status: SELF_ACCEPT
-fix_status: FIX_COMPLETE
+implementation_status: NOT_STARTED
+fix_status: NOT_REQUIRED
 clean_review_status: NOT_STARTED
-ci_status: CI_GREEN
-ci_workflow: Component CI
-ci_code_bearing_sha: 37706634fd8dd2d9b299a1c453718f2de63981d0
-ci_run_id: 29161721748
-ci_run_number: 1704
-ci_run_attempt: 1
-known_failed_checks: []
+ci_status: NOT_RUN
 architect_status: ARCHITECT_ACCEPT
+
+accepted_srv_p7a_code_bearing_sha: 37706634fd8dd2d9b299a1c453718f2de63981d0
+accepted_srv_p7a_ci_run: 29161721748
+accepted_srv_p7a_ci_run_number: 1704
+accepted_srv_p7a_ci_status: CI_GREEN
+accepted_srv_p7a_clean_review_status: CLEAN_ACCEPT
 
 fan_in_source_branch: component/worktree
 fan_in_source_sha: 4f7bc748d9b901d7d5c3e43c845ba407c0c36e59
 fan_in_source_ci_run: 29152965199
 fan_in_source_status: 32_OF_32_PRODUCT_BLOBS_IDENTICAL_CLEAN_ACCEPT_CI_GREEN
 
-accepted_server_behavior:
-- worktree_runtime module is active and compiled
-- production constructs the boundary from ServerConfig.worktree mode and root
-- lifecycle order is construct, start once, retain across serve, shutdown once after success or failure
-- disabled mode is inert
-- enabled modes are honestly unavailable with CycleExecutorNotWired
+current_runtime_status:
+- Server composition boundary is active, lifecycle-safe, and root-redacted
+- Disabled mode is inert
 - DryRun is unsupported
-- no fake executor, watcher, runtime loop, provider call, mutation, or background task
-- status, Debug, and startup errors remain secret-safe and root-redacted
+- enabled modes are honestly unavailable with CycleExecutorNotWired
+- no real Core/API/Storage-backed Worktree cycle executor exists yet
 
-fix_evidence:
-- diagnostics artifact 8250773210 matched pre-fix SHA fe9101871462fc271a320726f4ad18668d1a9a5b
-- artifact proved rustfmt-only differences in worktree_runtime.rs
-- post-fix behavior change: none
-- post-fix code-bearing SHA: 37706634fd8dd2d9b299a1c453718f2de63981d0
-- post-fix CI run 29161721748 completed successfully
+phase_scope:
+- mandatory contract-feasibility audit for a real Server-owned WorktreeRuntimeCycle adapter
+- implement the smallest real bounded cycle bridge only if current public contracts support it safely
+- no nested runtime, block_on, internal HTTP self-calls, fake client, duplicated policy, or in-memory production substitute
+- periodic/background hosting may remain honestly deferred to SRV-P7B2
 
-review_scope: complete SRV-P7A Worktree snapshot fan-in and Server-owned composition/lifecycle boundary; real cycle execution remains deferred to SRV-P7B
-next_gate_after_review: Orchestrator may progress Server only after CLEAN_ACCEPT and green CI for the final reviewed code-bearing SHA; otherwise route to the exact required fixer, implementation correction, scope decision, or contract decision
+contract_blocker_is_valid_outcome: true
+accepted_blocker_status: BLOCKED_BY_CONTRACT with exact incompatible or missing contract and minimum owner change
+
+blocked_downstream:
+- CLI remains blocked until accepted Server operator/runtime fan-in exists
+- Deployment remains blocked until explicit runtime/deployment fan-in exists
+
+next_gate_after_implementation:
+- if SELF_ACCEPT and new code-bearing CI is green: mandatory SRV-P7B1 clean-code review
+- if CI is red: artifact-based fixer after Orchestrator retrieves exact diagnostics metadata
+- if BLOCKED_BY_CONTRACT or BLOCKED_BY_SCOPE: Orchestrator routes the exact owner/contract decision; no clean review
