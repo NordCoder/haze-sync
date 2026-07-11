@@ -32,9 +32,7 @@ impl fmt::Display for DeleteStateError {
         formatter.write_str(match self {
             Self::MappingNotFound => "delete candidate mapping was not found",
             Self::MappingIdentityMismatch => "delete candidate mapping identity does not match",
-            Self::CandidateTimestampMismatch => {
-                "delete candidate timestamp changed since scan"
-            }
+            Self::CandidateTimestampMismatch => "delete candidate timestamp changed since scan",
             Self::CoreRevisionMismatch => "delete candidate Core revision changed since scan",
             Self::DuplicateMappingPath => "delete candidate state has duplicate mapping path",
             Self::DuplicateMappingProviderId => {
