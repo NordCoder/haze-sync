@@ -9,7 +9,7 @@ use haze_sync_storage::{
         tombstones::TombstoneRepository,
     },
     test_support::connect_test_database_from_env,
-    LocalObjectStore, ObjectStore,
+    LocalObjectStore,
 };
 use std::{
     fs,
@@ -143,7 +143,7 @@ async fn application_services_preserve_atomic_file_delete_and_read_semantics() {
     assert!(matches!(
         replay,
         ApplyFileOutcome::Accepted {
-            ref revision_id: replay_revision,
+            revision_id: ref replay_revision,
             content_hash: Some(replay_hash),
             seq,
             ..
@@ -306,7 +306,11 @@ fn application_errors_and_commands_are_secret_safe() {
     let actor = ApplicationActor::new(AdapterId::parse("worktree").unwrap());
     let path = VaultPath::parse("Notes/private.md").unwrap();
     let command = file_command(&actor, &path, None, b"request-body-secret", "secret-key");
-    let rendered = format!("{command:?} {:?} {}", ApplicationError::Internal, ApplicationError::Internal);
+    let rendered = format!(
+        "{command:?} {:?} {}",
+        ApplicationError::Internal,
+        ApplicationError::Internal
+    );
     assert!(!rendered.contains("request-body-secret"));
     assert!(!rendered.contains("secret-key"));
     assert!(!rendered.contains("postgres://"));
