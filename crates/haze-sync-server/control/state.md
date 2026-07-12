@@ -7,18 +7,26 @@ status: PROMPT_READY
 active_prompt: crates/haze-sync-server/control/prompt.md
 active_report: crates/haze-sync-server/control/report.md
 active_agent_role: implementation-worker
-assigned_chat_name: server — W1 SRV-P7B3 Exact-SHA Fan-In
-prompt_revision: verified by Orchestrator after full component/dependency audit and exact-SHA divergence checks
+assigned_chat_name: server — W1 SRV-P7B3 Exact-SHA Fan-In Retry
+prompt_revision: verified by Orchestrator after prior slot produced no report, no branch advance and no CI evidence
 
 wave: W1
-phase: SRV-P7B3-EXACT-SHA-FAN-IN
+phase: SRV-P7B3-EXACT-SHA-FAN-IN-RETRY
 
-implementation_status: NOT_STARTED
+implementation_status: RETRY_REQUIRED_NO_RESULT
 fix_status: NOT_STARTED
 clean_review_status: NOT_STARTED
 architect_status: ARCHITECT_CHANGED_CONTRACTS
 ci_status: NOT_RUN
 known_failed_checks: []
+
+previous_attempt_evidence:
+- checked branch head dbb50d98da88fd01cca5a88e0e0de30bfc6be131
+- branch head was still the Orchestrator control-state commit
+- crates/haze-sync-server/control/report.md returned 404
+- no new code-bearing fan-in SHA existed
+- no new Component CI run existed
+- previous slot therefore not accepted as complete
 
 accepted_owner_shas:
 - worktree: 1942946331e8362f19907ab6ad4eb779da70fd57
@@ -47,7 +55,7 @@ required_preservation:
 
 allowed_integration_scope:
 - exact Worktree non-control product/test/docs snapshot
-- exact Storage migrations and non-control product/test/docs snapshot
+- exact Storage migration and non-control product/test/docs snapshot
 - Cargo.lock when required
 - minimal Server-local compile/test compatibility corrections directly caused by accepted contracts
 - Server control report
@@ -59,6 +67,13 @@ forbidden_scope:
 - API-P8 status DTOs
 - CLI or Deployment changes
 - Core policy or schema redesign
+
+completion_requirements:
+- branch advances with a real code-bearing fan-in commit
+- committed crates/haze-sync-server/control/report.md exists
+- report phase SRV-P7B3-EXACT-SHA-FAN-IN-RETRY
+- report chat name server — W1 SRV-P7B3 Exact-SHA Fan-In Retry
+- DB-capable Component CI is green on exact final code-bearing SHA
 
 next_gate_after_implementation:
 - SELF_ACCEPT plus green DB-capable Component CI -> mandatory fan-in clean-code review
