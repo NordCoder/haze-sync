@@ -5,8 +5,7 @@ use haze_sync_storage::test_support::{
 };
 use sqlx::Executor;
 
-const LEGACY_GUARD_MESSAGE: &str =
-    "legacy worktree_state rows require explicit operator migration";
+const LEGACY_GUARD_MESSAGE: &str = "legacy worktree_state rows require explicit operator migration";
 const LEGACY_WORKTREE_STATE_COLUMNS: &[&str] = &[
     "path",
     "last_applied_revision_id",
@@ -34,10 +33,7 @@ async fn migration_0010_sql_guard_preserves_nonempty_legacy_state() {
         .unwrap();
 
     for migration in &STORAGE_TEST_MIGRATIONS[..9] {
-        (&mut *transaction)
-            .execute(migration.sql)
-            .await
-            .unwrap();
+        (&mut *transaction).execute(migration.sql).await.unwrap();
     }
     sqlx::query("insert into worktree_state (path) values ('Notes/legacy.md')")
         .execute(&mut *transaction)
