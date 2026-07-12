@@ -174,11 +174,30 @@ async fn application_services_preserve_atomic_file_delete_and_read_semantics() {
         } if current == &revision_id && hash == content_hash
     ));
 
+    let updated = services
+        .apply_file(file_command(
+            &actor,
+            &path,
+            Some(&revision_id),
+            b"second",
+            "put-second",
+        ))
+        .await
+        .expect("current-base update should be accepted");
+    let (current_revision_id, current_content_hash) = match updated {
+        ApplyFileOutcome::Accepted {
+            revision_id,
+            content_hash: Some(content_hash),
+            ..
+        } => (revision_id, content_hash),
+        other => panic!("unexpected update outcome: {other:?}"),
+    };
+
     let conflict = services
         .apply_file(file_command(
             &actor,
             &path,
-            Some(&RevisionId::parse("rev_stale").unwrap()),
+            Some(&revision_id),
             b"incoming",
             "put-conflict",
         ))
@@ -201,9 +220,9 @@ async fn application_services_preserve_atomic_file_delete_and_read_semantics() {
         })
         .await
         .expect("current content should load");
-    assert_eq!(content.revision_id, revision_id);
-    assert_eq!(content.content_hash, content_hash);
-    assert_eq!(content.into_bytes(), b"first".to_vec());
+    assert_eq!(content.revision_id, current_revision_id);
+    assert_eq!(content.content_hash, current_content_hash);
+    assert_eq!(content.into_bytes(), b"second".to_vec());
 
     let changes = services
         .authoritative_changes(AuthoritativeChangesQuery::new(0, 1).unwrap())
@@ -218,7 +237,7 @@ async fn application_services_preserve_atomic_file_delete_and_read_semantics() {
         .apply_delete(delete_command(
             &actor,
             &path,
-            Some(&RevisionId::parse("rev_stale").unwrap()),
+            Some(&revision_id),
             1,
             "delete-stale",
         ))
@@ -235,7 +254,7 @@ async fn application_services_preserve_atomic_file_delete_and_read_semantics() {
         .apply_delete(delete_command(
             &actor,
             &path,
-            Some(&revision_id),
+            Some(&current_revision_id),
             10_000,
             "delete-guarded",
         ))
@@ -250,7 +269,7 @@ async fn application_services_preserve_atomic_file_delete_and_read_semantics() {
         .apply_delete(delete_command(
             &actor,
             &path,
-            Some(&revision_id),
+            Some(&current_revision_id),
             1,
             "delete-accepted",
         ))
@@ -264,7 +283,7 @@ async fn application_services_preserve_atomic_file_delete_and_read_semantics() {
         .apply_delete(delete_command(
             &actor,
             &path,
-            Some(&revision_id),
+            Some(&current_revision_id),
             1,
             "delete-accepted",
         ))
