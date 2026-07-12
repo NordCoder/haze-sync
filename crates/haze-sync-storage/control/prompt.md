@@ -1,23 +1,53 @@
-# W1-STOR-P10-SRV-CONTRACT-HOLD — Await Server clean acceptance
+# W1-STOR-P10-CROSS-BRANCH-CONFIRM — Final accepted-SHA confirmation
+
+Before starting, name this worker chat exactly:
+
+`storage — W1 STOR-P10 Cross-Branch Acceptance Confirmation`
 
 Component: storage
 Path: crates/haze-sync-storage
 Branch: component/storage
 PR: #47
-Role: none
-Phase: STOR-P10-SRV-CONTRACT-HOLD
+Role: clean-code-reviewer
+Phase: STOR-P10-CROSS-BRANCH-CONFIRM
 
-This is a hold notice, not an executable worker prompt.
+Work through the GitHub connector. Do not merge PR #47 into main, change its draft state, rebase, reset, rewrite history, force-push, modify sibling branches, or make speculative code changes.
 
-## Storage status
+## Purpose
 
-The complete STOR-P10 Storage-local implementation is clean and fully evidenced at code-bearing SHA:
+This is a narrow final cross-branch confirmation, not a new broad implementation review.
+
+The prior final Storage review already established that STOR-P10 is locally clean and fully green at code-bearing SHA:
 
 `66b6a1f554aae1d1b774cc88560d46dd140c7a54`
 
-Authoritative Component CI:
+Its only blocker was the stale Server copy carried by `component/storage`, where Server normal dependencies enabled `haze-sync-storage/test-support`.
 
-- run id: `29185466870`;
+That blocker is now resolved and clean-accepted by the Server owner.
+
+## Authoritative Server evidence
+
+- Server clean report commit: `053eea1496bf9b541b462a82989b4cd956ed7276`;
+- report type: `CLEAN_CODE_REVIEW`;
+- report phase: `SRV-P7B2-CLEAN-RETRY`;
+- report status: `CLEAN_ACCEPT`;
+- accepted Server code-bearing/tooling SHA: `647dce7b624d67663632808906896cb6745ea7e7`;
+- authoritative Server Component CI run: `29186058268`;
+- run number: `1835`;
+- conclusion: `success`.
+
+The accepted Server report explicitly confirms:
+
+- normal `[dependencies]` uses `haze-sync-storage` without `test-support`;
+- `[dev-dependencies]` enables `haze-sync-storage/test-support` only for tests;
+- production Server builds therefore do not activate Storage test-support;
+- this satisfies the Storage contract gate and unblocks STOR-P10.
+
+## Authoritative Storage evidence
+
+- accepted pre-phase SHA: `aa59064d641f4850f7c70fa615e638b52613dd95`;
+- final Storage code-bearing SHA: `66b6a1f554aae1d1b774cc88560d46dd140c7a54`;
+- authoritative Storage Component CI run: `29185466870`;
 - run number: `1833`;
 - conclusion: `success`;
 - Rust workspace: success;
@@ -26,43 +56,50 @@ Authoritative Component CI:
 - all five mandatory STOR-P10 evidence checks: success;
 - both diagnostics finalizers: success.
 
-The final Storage review confirmed migration 0010 safety, the direct savepoint-backed migration guard test, repository and cursor transaction semantics, secrecy, bounded snapshots, and formatter-only nature of the last correction.
+The prior Storage review accepted migration 0010 safety, direct savepoint-backed migration guard evidence, repository/cursor/transaction semantics, bounded snapshots, secrecy and formatter-only final correction.
 
-## Why acceptance is held
+## Mandatory confirmation
 
-The final reviewer inspected the stale Server copy carried by `component/storage` and found:
+Verify and explicitly report:
 
-`haze-sync-storage = { path = "../haze-sync-storage", features = ["test-support"] }`
+1. commit `053eea1496bf9b541b462a82989b4cd956ed7276` contains `CLEAN_ACCEPT` for `SRV-P7B2-CLEAN-RETRY`;
+2. its accepted Server SHA is exactly `647dce7b624d67663632808906896cb6745ea7e7`;
+3. at that exact SHA, Server normal dependency on Storage has no `test-support` feature;
+4. at that exact SHA, Server dev-dependency enables `test-support` only for tests;
+5. Server CI run `29186058268` is green and covers isolated Server/Storage DB suites plus remaining workspace tests;
+6. no later product/tooling commit invalidates the accepted Server evidence;
+7. Storage code-bearing SHA remains exactly `66b6a1f554aae1d1b774cc88560d46dd140c7a54` with green run `29185466870`;
+8. no later Storage product/tooling commit invalidates the prior clean assessment;
+9. the prior cross-component contract blocker is fully resolved;
+10. STOR-P10 may now be marked `CLEAN_ACCEPT` for exact-SHA synchronization with WT-P10 and SRV-P7B2.
 
-inside Server normal dependencies. Storage contract explicitly states that production crates must not enable `test-support` in normal dependencies.
+Do not reject acceptance merely because the stale Server copy remains present on the long-lived `component/storage` branch. The authoritative owner evidence is the accepted Server SHA and committed Server clean report. The purpose of this phase is to confirm cross-branch ownership evidence, not to require sibling source duplication to be current before fan-in.
 
-This is a Server-owned cross-component contract issue and cannot be corrected from the Storage component branch.
+## Corrections
 
-## Current Server-owner evidence
+No code correction is expected. If exact evidence does not match, report the precise mismatch without guessing. Do not modify Server or product code.
 
-The current Server candidate already contains the correct dependency split at exact code-bearing SHA:
+Allowed file:
 
-`647dce7b624d67663632808906896cb6745ea7e7`
+- `crates/haze-sync-storage/control/report.md` only.
 
-At that SHA:
+Do not archive control files.
 
-- normal `[dependencies]` uses `haze-sync-storage = { path = "../haze-sync-storage" }` with no `test-support` feature;
-- `[dev-dependencies]` enables `haze-sync-storage` with `features = ["test-support"]`;
-- Component CI run `29186058268`, run number `1835`, completed successfully;
-- PostgreSQL services, fmt, check, isolated Server tests, isolated Storage tests, remaining workspace tests, clippy and diagnostics finalizer all passed.
+## Report
 
-The correction is therefore implemented and green in the Server owner branch, but it has not yet received mandatory SRV-P7B2 clean-code acceptance.
+Write `crates/haze-sync-storage/control/report.md` using `report-template.md`.
 
-## Hold condition
+Set:
 
-Do not launch a Storage worker from this notice.
+- `REPORT_TYPE: CLEAN_CODE_REVIEW`
+- `phase_id: STOR-P10-CROSS-BRANCH-CONFIRM`
+- `chat_name: storage — W1 STOR-P10 Cross-Branch Acceptance Confirmation`
 
-STOR-P10 remains `CLEAN_BLOCKED_BY_CONTRACT` until:
+Use one honest status:
 
-1. `SRV-P7B2` receives `CLEAN_ACCEPT` on an exact Server code-bearing SHA that preserves the correct Storage dependency gating;
-2. the accepted Server report explicitly confirms that `test-support` is absent from the normal production dependency graph and present only in dev/test scope;
-3. the Orchestrator reactivates Storage for final cross-branch accepted-SHA confirmation.
+- `CLEAN_ACCEPT`
+- `CLEAN_BLOCKED_BY_CONTRACT`
+- `CLEAN_BLOCKED_BY_SCOPE`
+- `CLEAN_BLOCKED_BY_TOOLING`
 
-## Downstream block
-
-`SRV-P7B3` must not begin until WT-P10, STOR-P10 and SRV-P7B2 are all `CLEAN_ACCEPT` and their exact accepted SHAs are synchronized into the Server integration scope.
+A `CLEAN_ACCEPT` report must state exact accepted Storage and Server SHAs, both green CI runs, the committed Server report evidence, explicit normal-versus-dev dependency gating confirmation, absence of invalidating later code/tooling commits, and readiness for Orchestrator exact-SHA fan-in before SRV-P7B3.
