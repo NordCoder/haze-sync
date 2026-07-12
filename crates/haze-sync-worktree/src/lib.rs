@@ -61,8 +61,9 @@ pub use reconciliation::{
     WorktreeReconciliationSummary,
 };
 pub use runtime::{
-    WorktreeMode, WorktreeRuntimeClock, WorktreeRuntimeContractViolation, WorktreeRuntimeCycle,
-    WorktreeRuntimeCycleBudget, WorktreeRuntimeCycleCause, WorktreeRuntimeCycleFailure,
+    WorktreeCancellationToken, WorktreeMode, WorktreeRuntimeClock,
+    WorktreeRuntimeContractViolation, WorktreeRuntimeCycle, WorktreeRuntimeCycleBudget,
+    WorktreeRuntimeCycleCause, WorktreeRuntimeCycleFailure, WorktreeRuntimeCycleFuture,
     WorktreeRuntimeCycleRequest, WorktreeRuntimeCycleSummary, WorktreeRuntimeLastCycle,
     WorktreeRuntimeLifecycle, WorktreeRuntimeLifecycleError, WorktreeRuntimePolicy,
     WorktreeRuntimePolicyError, WorktreeRuntimePoll, WorktreeRuntimeService,
