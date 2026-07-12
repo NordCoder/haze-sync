@@ -1,6 +1,6 @@
 //! Repository helpers for immutable `file_revisions` rows.
 
-use super::{map_sqlx_error, size_bytes_to_i64, RepositoryResult};
+use super::{map_sqlx_error, size_bytes_to_i64, validate_limit, RepositoryResult};
 use crate::models::FileRevisionRow;
 use haze_sync_common::{AdapterId, ContentHash, RevisionId, VaultPath};
 use sqlx::{postgres::PgRow, Executor, Postgres, Row};
@@ -123,7 +123,7 @@ pub async fn list_file_revisions_by_object_id<'executor, ExecutorType>(
 where
     ExecutorType: Executor<'executor, Database = Postgres>,
 {
-    let limit = i64::from(limit);
+    let limit = validated_revision_list_limit(limit)?;
     let rows = sqlx::query(
         "select revision_id, object_id, path, parent_revision_id, content_sha256, size_bytes, created_by, created_at\n         from file_revisions\n         where object_id = $1\n         order by created_at desc, revision_id desc\n         limit $2",
     )
@@ -145,7 +145,7 @@ pub async fn list_file_revisions_by_path<'executor, ExecutorType>(
 where
     ExecutorType: Executor<'executor, Database = Postgres>,
 {
-    let limit = i64::from(limit);
+    let limit = validated_revision_list_limit(limit)?;
     let rows = sqlx::query(
         "select revision_id, object_id, path, parent_revision_id, content_sha256, size_bytes, created_by, created_at\n         from file_revisions\n         where path = $1\n         order by created_at desc, revision_id desc\n         limit $2",
     )
@@ -195,4 +195,36 @@ fn file_revision_from_row(row: &PgRow) -> RepositoryResult<FileRevisionRow> {
         created_by: row.try_get("created_by").map_err(map_sqlx_error)?,
         created_at: row.try_get("created_at").map_err(map_sqlx_error)?,
     })
+}
+
+fn validated_revision_list_limit(limit: u32) -> RepositoryResult<i64> {
+    validate_limit(limit)?;
+    Ok(i64::from(limit))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repositories::{RepositoryError, MAX_CHANGES_LIMIT};
+
+    #[test]
+    fn revision_list_limit_uses_shared_repository_bounds() {
+        assert_eq!(validated_revision_list_limit(1), Ok(1));
+        assert_eq!(
+            validated_revision_list_limit(MAX_CHANGES_LIMIT),
+            Ok(i64::from(MAX_CHANGES_LIMIT))
+        );
+        assert_eq!(
+            validated_revision_list_limit(0),
+            Err(RepositoryError::InvalidLimit {
+                max: MAX_CHANGES_LIMIT
+            })
+        );
+        assert_eq!(
+            validated_revision_list_limit(MAX_CHANGES_LIMIT + 1),
+            Err(RepositoryError::InvalidLimit {
+                max: MAX_CHANGES_LIMIT
+            })
+        );
+    }
 }
