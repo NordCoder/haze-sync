@@ -1,0 +1,8 @@
+component: storage
+branch: component/storage
+phase: STOR-P10-SRV-CONTRACT-HOLD
+original_prompt_blob: e9bf45aa5cc22d4d906f2363dc97736d45f50080
+status: UNBLOCKED
+storage_sha: 66b6a1f554aae1d1b774cc88560d46dd140c7a54
+server_report_commit: 053eea1496bf9b541b462a82989b4cd956ed7276
+server_accepted_sha: 647dce7b624d67663632808906896cb6745ea7e7
