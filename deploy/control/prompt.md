@@ -1,38 +1,31 @@
-# W1-DEP-P7-BLOCKED-BY-RUNTIME-TOPOLOGY — Deployment fan-in gate
+# W1-DEP-P5A-BLOCKED-BY-SRV-P7B5 — Await accepted Worktree runtime topology
 
 Component: deployment
 Path: deploy
 Branch: component/deployment
 PR: #52
 Role: none
+Phase: DEP-P5A-BLOCKED-BY-SRV-P7B5
 
 This is a hold notice, not an executable worker prompt.
 
-## Accepted state
+The existing Deployment component-local lifecycle through DEP-P6C is accepted with green Component CI run `29082102227`, run number `979`.
 
-DEP-P6 implementation and clean-code review are accepted with green CI.
+The next architecture-planned Deployment phase is `DEP-P5A — Worktree runtime/config fan-in`.
 
-The following dependencies are now accepted:
+DEP-P5A must not begin until:
 
-- GDrive Adapter component-local lifecycle through GDA-P8C and post-fix CI;
-- Storage component-local lifecycle;
-- Server-owned Storage production feature isolation and its clean review.
+1. STOR-P10 remains clean-accepted and its migration/runtime-state contract is synchronized into the Server integration line;
+2. Server exact-SHA Worktree/Storage fan-in is clean-accepted;
+3. `SRV-P7B3` bounded Worktree executor is clean-accepted;
+4. `SRV-P7B4` hosted runtime/config/startup/shutdown contract is clean-accepted;
+5. `API-P8` and `SRV-P7B5` safe status/readiness/operator surfaces are clean-accepted;
+6. migration execution policy and operational ownership are explicit.
 
-The missing work is no longer a GDA-P8C review gate. It is the explicit cross-component runtime and deployment topology.
+When unblocked, Deployment may change only `deploy/**` and safe placeholder alignment such as `.env.example`. It will own paths, permissions, service lifecycle, migration/backup/rollback procedure and staged rollout documentation. It must not invent product runtime behavior, OAuth policy, direct database ownership, hidden migrations, real credentials or automatic bidirectional enablement.
 
-## Blocked next phase
+GDrive and Obsidian component-local implementations are already accepted, but their future real runtime/release integration does not unblock Worktree Deployment topology ahead of Server contracts.
 
-DEP-P7 requires accepted ownership and configuration contracts for:
+Before future DEP-P5A work, synchronize `component/deployment` with current `main` through an explicit Orchestrator sync.
 
-- GDrive service process ownership, startup ordering, retry/backoff, and shutdown;
-- durable mapping, cursor, and delete-candidate repository wiring;
-- OAuth/token secret loading, rotation, persistence, and redaction;
-- Server/API transport, authentication, health, readiness, and operator surfaces;
-- Worktree/GDrive runtime composition and bootstrap rollout order;
-- backup/restore and rollback boundaries for metadata and object storage.
-
-Deployment must not invent direct database ownership, adapter daemon semantics, OAuth policy, or Server runtime contracts.
-
-## Unblock condition
-
-An explicit accepted GDrive/Storage/Server/API runtime-config and lifecycle fan-in contract defining deployment ownership and topology. Until then, do not launch a worker from this hold notice.
+Do not launch a Deployment worker from this notice.
