@@ -1,38 +1,30 @@
-# W1-CLI-P6-BLOCKED-BY-RUNTIME-FAN-IN — Operator/runtime acceptance gate
+# W1-CLI-P6A-BLOCKED-BY-API-SERVER — Await accepted status and sync-once contracts
 
 Component: cli
 Path: crates/haze-sync-cli
 Branch: component/cli
 PR: #48
 Role: none
+Phase: CLI-P6A-BLOCKED-BY-API-SERVER
 
 This is a hold notice, not an executable worker prompt.
 
-## Accepted state
+The existing CLI component-local lifecycle through CLI-P5 is accepted with green Component CI run `29084418994`, run number `1047`.
 
-CLI-P5 implementation, CI correction, and clean-code review are accepted with green CI.
+The next planned CLI phase is `CLI-P6A — Worktree status and explicit sync-once operator commands`.
 
-The following dependencies are now accepted:
+CLI-P6A must not begin until all of the following are clean-accepted and synchronized:
 
-- GDrive Adapter component-local lifecycle through GDA-P8C and its CI correction;
-- Storage component-local lifecycle and Server-owned production feature isolation;
-- Worktree WT-P9 implementation and post-fix code-bearing CI.
+1. Server exact-SHA Worktree/Storage fan-in;
+2. `SRV-P7B3` bounded Worktree executor;
+3. `SRV-P7B4` hosted Worktree runtime;
+4. `API-P8` passive Worktree runtime status/operator contract;
+5. `SRV-P7B5` safe status/readiness and optional manual one-cycle endpoint.
 
-WT-P9C clean-code review remains active. Server/API do not yet expose accepted bootstrap/import/export/sync-once operator contracts or concrete Worktree/GDrive runtime composition.
+WT-P10, STOR-P10 and SRV-P7B2 are already accepted; the current blocker is the downstream runtime and public operator surface, not Worktree clean review.
 
-## Blocked next phase
+When unblocked, CLI may consume only accepted Server/API contracts. It must not implement local runtime hosting, direct database/filesystem mutation, provider calls, hidden daemon ownership or destructive repair.
 
-CLI-P6 owns bootstrap and sync operation commands. It may call only accepted Server/API operator endpoints or an explicitly accepted orchestration contract.
+Before future CLI-P6A work, synchronize `component/cli` with current `main` through an explicit Orchestrator sync.
 
-The remaining blockers are:
-
-- WT-P9C clean acceptance and final Worktree hosting boundary;
-- accepted Server composition of Worktree and GDrive runtime operations;
-- accepted API/Server bootstrap, import/export, sync-once, progress, result, and safe failure contracts;
-- an explicit ownership decision for any local orchestration that is not Server-hosted.
-
-CLI must not invent direct database access, provider calls, hidden daemon ownership, or destructive repair execution.
-
-## Unblock condition
-
-WT-P9C `CLEAN_ACCEPT` with green final code-bearing CI plus an accepted Server/API operator and runtime fan-in contract, or a dedicated explicit CLI fan-in contract. Until then, do not launch a worker from this hold notice.
+Do not launch a CLI worker from this notice.
