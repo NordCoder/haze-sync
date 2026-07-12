@@ -6,62 +6,55 @@
 
 The worktree is a materialized filesystem replica of Core state for local tools and agents. It is not the source of truth.
 
-The component is responsible for future Worktree behavior such as:
+The component owns:
 
 - mapping between normalized `VaultPath` values and local filesystem paths under one configured worktree root;
-- safe filesystem scanning;
-- stable-file detection before importing local edits;
+- safe filesystem scanning and stable-file detection;
 - ignore/reserved-path handling;
-- atomic materialization of Core revisions into the worktree;
-- echo suppression for files just written by the adapter;
-- dirty-state tracking and reconciliation support;
-- local trash/backup behavior for safe deletes when scoped;
-- repair/doctor facts related to worktree drift;
-- runtime service abstractions that Server may host in V1.
+- import/delete fact planning with explicit base semantics;
+- atomic materialization of authoritative Core revisions;
+- echo suppression, reconciliation, retained trash, and doctor/repair facts;
+- the hostable scheduler state machine, awaitable cycle contract, cancellation vocabulary, mode permissions, bounded-work validation, and count-only runtime status.
 
-Current code state is placeholder-only. The component contract therefore defines the intended V1 ownership boundary and implementation plan before runtime behavior is added.
+Server may host the runtime and implement the concrete async executor, but Worktree remains the owner of scheduler and filesystem semantics.
 
-## Public interfaces
+## Public runtime boundary
 
-Current public Rust interface:
+The authoritative runtime cycle boundary is awaitable and dependency-free:
 
-```text
-CRATE_ROLE
-package_name()
+```rust
+fn run_cycle<'a>(
+    &'a mut self,
+    request: WorktreeRuntimeCycleRequest,
+    cancellation: WorktreeCancellationToken,
+) -> WorktreeRuntimeCycleFuture<'a>;
 ```
 
-Target public interfaces should be introduced in phases and may include:
+`WorktreeRuntimeCycleFuture<'a>` is a pinned boxed `Send` future returning the existing safe summary/failure result. Worktree does not create a Tokio runtime, call `block_on`, spawn or detach tasks, or implement Server/Storage authority.
 
-```text
-WorktreeConfig
-WorktreeMode
-WorktreeScanner
-WorktreeScanResult
-WorktreeFileSnapshot
-StableFileDetector
-WorktreeMaterializer
-AtomicWorktreeWriter
-WorktreeImporter
-WorktreeApplyPlan
-WorktreeEchoGuard
-WorktreeTrash
-WorktreeRepairPlan
-WorktreeDoctorSummary
-```
+`WorktreeRuntimeService::poll` awaits at most one cycle. The mutable service borrow and `cycle_in_progress` invariant prohibit overlap. Watcher hints remain latency-only; authoritative scans remain the correctness source.
 
-Names are indicative. Implementation workers should choose final names consistent with crate style and current upstream contracts.
+## Mode contract
 
-The public interface must separate:
+- `Disabled` is completely inert.
+- `ReadOnly` and `ExportOnly` may apply authoritative Core exports but may not submit local facts.
+- `ImportOnly` may submit local facts but may not apply exports.
+- `Bidirectional` permits both directions.
+- `DryRun` is explicit planning-only vocabulary. It does not start automatic cycles and does not grant Core mutation, cursor advancement, materialization, trash movement, echo writes, or durable Worktree-state mutation.
 
-- filesystem observation;
-- conversion to Core/API facts;
-- materialization of Core revisions;
-- local safety/echo/trash state;
-- runtime lifecycle composition owned by Server.
+A future Server-owned manual dry-run command may construct a planning request, but WT-P10 does not add that endpoint or executor.
+
+## Cooperative cancellation
+
+`WorktreeCancellationToken` contains only a shared atomic cancellation bit and exposes `cancel` plus `is_cancelled`.
+
+- A future executor may observe cancellation before and after phases and between bounded items.
+- One already-running atomic filesystem operation may complete.
+- No new cycle begins after cancellation.
+- The scheduler rechecks cancellation after awaiting the executor and normalizes the result to the safe `Cancelled` category.
+- Shutdown and restart prevention remain explicit.
 
 ## Input contracts
-
-Worktree inputs come from two directions.
 
 ### Filesystem inputs
 
@@ -71,7 +64,7 @@ Required behavior:
 
 - never follow paths outside the configured worktree root;
 - normalize candidate paths into `VaultPath` before sending facts to Core/API;
-- reject traversal, absolute paths, symlinks or special files unless explicitly accepted by a future contract;
+- reject traversal, absolute paths, symlinks, and special files unless explicitly accepted by a future contract;
 - ignore reserved runtime directories and temporary files;
 - detect stable files before importing local edits;
 - compute content hashes from observed bytes before submitting changes;
@@ -92,153 +85,77 @@ Required behavior:
 
 ## Output contracts
 
-Worktree outputs should be facts, plans, or local side effects within the configured worktree root.
+Worktree outputs are facts, plans, safe summaries, or local side effects within the configured worktree root.
 
-Expected outputs:
+Public/operator output must:
 
-- scan facts representing local files or delete candidates;
-- import requests to Core/API with explicit base revision or explicit null base;
-- materialized local files for accepted Core revisions;
-- dirty-state summaries;
-- local trash/backup records when delete behavior is scoped;
-- doctor/repair facts indicating drift, missing files, unexpected hashes, reserved path violations, or skipped unsafe entries.
-
-Public or operator-facing outputs must be sanitized:
-
-- avoid local absolute paths where possible;
-- represent paths as vault-relative `VaultPath` values;
-- do not expose bearer tokens, OAuth tokens, token hashes, idempotency keys, provider payloads, database URLs, stack traces, or raw filesystem errors.
-
-## Error contracts
-
-Worktree errors must be safe across component boundaries.
-
-Errors must not expose:
-
-- local absolute paths outside explicit safe operator-only diagnostics;
-- bearer tokens;
-- OAuth tokens;
-- token hashes;
-- Idempotency-Key values;
-- database URLs;
-- raw provider payloads;
-- raw API response bodies containing secrets;
-- stack traces;
-- raw filesystem errors with sensitive paths.
-
-When filesystem failures need operator action, errors should provide safe categories and vault-relative path context where possible.
+- use vault-relative `VaultPath` values where path context is necessary;
+- remain count/category based for runtime status;
+- avoid bearer/OAuth tokens, token hashes, idempotency keys, provider payloads, database URLs, raw internal errors, stack traces, local absolute paths, bytes, cursors, or runtime handles.
 
 ## Persistence/runtime ownership
 
-Worktree owns local filesystem adapter logic, but not the authoritative sync database.
+Worktree owns local filesystem adapter logic and the runtime contract, but not the authoritative sync database or hosted async authority.
 
 Worktree owns:
 
-- path mapping under the configured worktree root;
-- local scanner/watcher abstractions when implemented;
+- path mapping, scanner and watcher abstractions;
 - stable-file detection;
+- import/delete planning;
 - atomic writer/materializer behavior;
-- echo guard behavior;
-- local trash/backup behavior when scoped;
-- worktree-specific doctor/repair facts;
-- local runtime service code if the crate defines it.
+- echo, reconciliation, trash, and doctor behavior;
+- runtime scheduling, watcher-hint coalescing, periodic full-scan rules, budgets, summary validation, cancellation vocabulary, DryRun semantics, and safe status.
 
 Worktree does not own:
 
 - Core conflict/delete/revision policy;
-- API DTO/header/public error vocabulary;
-- Storage schema or repository ownership, except through accepted integration boundaries;
-- Server runtime startup or hosting lifecycle;
-- Google Drive API calls;
-- Obsidian plugin behavior;
-- production deployment files;
-- hard delete of Core blobs/database rows/provider files.
-
-In V1, Server may host the Worktree runtime, but Server owns composition/lifecycle while Worktree owns scanner/materializer/importer semantics.
+- Storage schema/repository or SQLx operations;
+- Server listener, startup, hosted loop, concrete executor, joined task lifecycle, HTTP routes, or DTO ownership;
+- provider/GDrive behavior;
+- deployment files;
+- hard delete of Core/object-store/provider data.
 
 ## Security and secrecy rules
 
 - Do not commit secrets.
-- Do not expose tokens or token hashes in public outputs.
-- Do not expose database URLs, provider payloads, or local absolute paths in public API/debug output.
-- Do not follow filesystem paths outside the configured worktree root.
+- Do not expose tokens, token hashes, database URLs, provider payloads, local absolute paths, generic executor/watcher internals, or raw I/O errors.
+- Do not follow filesystem paths outside the configured root.
 - Do not let user-controlled paths choose temp/runtime paths outside the root.
 - Do not silently overwrite locally dirty files.
-- Do not hard-delete local files without trash/backup/retention behavior explicitly scoped.
-- Do not import files from reserved runtime directories.
-- Do not trust filesystem watcher events as sufficient for correctness; scans are required for correctness.
-
-## Non-goals
-
-Worktree must not implement:
-
-- Core sync policy decisions;
-- API route handlers or DTO ownership;
-- PostgreSQL schema/repository logic;
-- Server startup/listener behavior;
-- Google Drive provider integration;
-- Obsidian plugin local state/UI;
-- global background runtime without Server composition contract;
-- semantic markdown merge;
-- CRDT/block-level merge;
-- rename tracking beyond V1 delete+create semantics unless a future contract changes this;
-- hard delete of Core/object-store/provider data.
-
-## Dependencies
-
-See `dependency-map.md`.
-
-## Dependents
-
-See `dependency-map.md`.
+- Do not hard-delete local files without the accepted trash/retention contract.
+- Do not trust watcher events as correctness evidence.
+- Do not use nested runtimes, blocking async bridges, hidden tasks, or fabricated summaries.
 
 ## Invariants
 
-- Core metadata and object store are authoritative.
-- Worktree is a materialized filesystem replica, not source of truth.
-- Local filesystem changes are facts submitted to Core/API; they are not overwrite decisions.
+- Core metadata and object storage are authoritative.
+- Worktree is a materialized replica, not source of truth.
+- Local changes are facts submitted to Core/API, not overwrite decisions.
 - Watchers are for latency; scans are for correctness.
-- Every imported write must carry base revision semantics or explicit null base.
-- Dirty local files must not be silently overwritten by materialization.
-- Adapter-written files must not be re-imported as new local edits without echo suppression.
-- Delete behavior must be tombstone/trash/retention-oriented and must not become immediate hard delete.
-- All local paths must stay under the configured worktree root.
+- Every imported write carries a known base revision or explicit null base.
+- Dirty local files are not silently overwritten.
+- Adapter-written files are protected by echo suppression.
+- Delete behavior remains tombstone/trash/retention-oriented.
+- All local paths remain under the configured worktree root.
+- Runtime cycles are awaitable, `Send`, bounded, validated, non-overlapping, and cancellation-aware.
+- DryRun is explicit and mutation-free.
 
 ## Test obligations
 
-Worktree tests should eventually cover:
+Worktree tests cover path safety, scanning, stable files, hashes, atomic materialization, echo suppression, reconciliation, guarded deletes, retained trash, doctor/repair summaries, and runtime scheduling.
 
-- path mapping from `VaultPath` to local paths and back;
-- rejection of traversal, absolute paths, symlinks/special files, and reserved runtime paths;
-- ignore rules and temp-file exclusion;
-- stable-file detection under concurrent write simulation;
-- content hash computation and mismatch handling;
-- atomic writer behavior and crash-safe temp cleanup where practical;
-- materialization avoiding dirty-file overwrite;
-- echo guard suppression for adapter-written files;
-- scan correctness independent of watcher events;
-- local delete/trash behavior when scoped;
-- doctor/repair summaries with safe path-redacted output;
-- Server-hosted lifecycle behavior in fan-in/E2E tests when Worktree runtime is integrated.
+Runtime contract tests must prove:
 
-Checks expected for Worktree changes when shell or CI is available:
-
-```bash
-cargo fmt --check
-cargo check -p haze-sync-worktree
-cargo test -p haze-sync-worktree
-```
+- real async executor summaries/failures are awaited;
+- no overlapping cycles;
+- cancellation before and during a cycle is safe;
+- startup/watcher/periodic causes and full-scan rules remain correct;
+- watcher degradation preserves periodic correctness;
+- budgets and summary validation remain exact;
+- DryRun is explicit and non-mutating;
+- lifecycle misuse is rejected;
+- status and Debug output remain path/secret/payload-free.
 
 ## Contract change protocol
 
-Request a contract change instead of silently broadening scope when implementation requires:
-
-- treating Worktree as source of truth;
-- bypassing Core/API write semantics;
-- adding direct DB writes from Worktree;
-- adding provider/GDrive behavior;
-- adding Server startup/lifecycle code inside Worktree beyond library service abstractions;
-- following symlinks or paths outside root;
-- hard-deleting local files without trash/retention contract;
-- changing V1 rename semantics;
-- exposing local absolute paths or secrets in public outputs.
+Request another contract change instead of silently adding direct DB writes, provider behavior, Server hosting, nested runtimes, hidden tasks, blocking bridges, paths outside the root, hard delete, or public secret/absolute-path output.
