@@ -19,22 +19,36 @@ jobs:
     if: ${{ github.event_name != 'pull_request' || startsWith(github.head_ref, 'component/') }}
     runs-on: ubuntu-latest
     services:
-      postgres:
+      postgres_server:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: haze_sync_test
-          POSTGRES_PASSWORD: haze_sync_test
-          POSTGRES_DB: haze_sync_test
+          POSTGRES_USER: haze_sync_server_test
+          POSTGRES_PASSWORD: haze_sync_server_test
+          POSTGRES_DB: haze_sync_server_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U haze_sync_test -d haze_sync_test"
+          --health-cmd "pg_isready -U haze_sync_server_test -d haze_sync_server_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      postgres_storage:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: haze_sync_storage_test
+          POSTGRES_PASSWORD: haze_sync_storage_test
+          POSTGRES_DB: haze_sync_storage_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U haze_sync_storage_test -d haze_sync_storage_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
     env:
       HAZE_WORKFLOW_SLUG: component-ci
-      HAZE_SYNC_TEST_DATABASE_URL: postgres://haze_sync_test:haze_sync_test@localhost:5432/haze_sync_test?sslmode=disable
+      HAZE_SYNC_SERVER_TEST_DATABASE_URL: postgres://haze_sync_server_test:haze_sync_server_test@localhost:5432/haze_sync_server_test?sslmode=disable
+      HAZE_SYNC_STORAGE_TEST_DATABASE_URL: postgres://haze_sync_storage_test:haze_sync_storage_test@localhost:5433/haze_sync_storage_test?sslmode=disable
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -66,7 +80,17 @@ jobs:
 
       - name: cargo test
         shell: bash
-        run: bash .github/scripts/ci-run.sh cargo-test cargo test --workspace -- --test-threads=1
+        run: |
+          bash .github/scripts/ci-run.sh cargo-test bash -euo pipefail -c '
+            export HAZE_SYNC_TEST_DATABASE_URL="$HAZE_SYNC_SERVER_TEST_DATABASE_URL"
+            cargo test -p haze-sync-server -- --test-threads=1
+
+            export HAZE_SYNC_TEST_DATABASE_URL="$HAZE_SYNC_STORAGE_TEST_DATABASE_URL"
+            cargo test -p haze-sync-storage -- --test-threads=1
+
+            unset HAZE_SYNC_TEST_DATABASE_URL
+            cargo test --workspace --exclude haze-sync-server --exclude haze-sync-storage -- --test-threads=1
+          '
 
       - name: cargo clippy
         shell: bash
