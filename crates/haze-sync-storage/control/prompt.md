@@ -1,112 +1,120 @@
-# W1-CLEAN-STOR-P10 — Durable Worktree state clean-code review
+# W1-FIX-STOR-P10-CLEAN-CI — Resolve clean-review correction CI failure
 
 Before starting, name this worker chat exactly:
 
-`storage — W1 STOR-P10 Clean-Code Review`
+`storage — W1 STOR-P10 Clean Correction CI Fix`
 
 Component: storage
 Path: crates/haze-sync-storage
 Branch: component/storage
 PR: #47
-Role: clean-code-reviewer
-Phase: STOR-P10-CLEAN
+Role: fixer-worker
+Phase: FIX-STOR-P10-CLEAN-CI
 
-Work through the GitHub connector. Do not merge PR #47 into main, change its draft state, rebase, reset, rewrite history, force-push, or modify sibling branches.
+Work through the GitHub connector. Do not merge PR #47 into main, change its draft state, rebase, reset, rewrite history, force-push, modify sibling branches, or read raw GitHub job logs.
 
-## Accepted review baseline
+## Trigger and accepted baseline
 
-STOR-P10 implementation, its artifact-based correction, main synchronization, and strict PostgreSQL verification are complete.
+The mandatory STOR-P10 clean-code review found one genuine evidence gap and corrected it without changing production behavior:
 
-Evidence:
+- added `crates/haze-sync-storage/tests/stor_p10_migration_guard.rs`;
+- directly executes migration 0010 against non-empty legacy state inside a savepoint;
+- proves the explicit guard error, intact legacy row/table shape, and absence of `worktree_instances`;
+- extended the Storage PostgreSQL CI evidence check from four to five mandatory tests;
+- updated Storage test-support documentation.
 
-- accepted pre-STOR-P10 Storage source/docs SHA: `aa59064d641f4850f7c70fa615e638b52613dd95`;
-- initial STOR-P10 implementation SHA: `63d80764933cba5f23fb43bad44201a75e1dc16a`;
-- post-fix Storage product/schema/test/docs SHA: `abca69058390983894465cef9d66c38960fae4c7`;
-- helper synchronization PR: `#64`;
-- helper merge commit into component/storage: `c62112375793002392851403299b09988e27212f`;
-- final reviewed code/tooling candidate SHA: `2d2ffe03a0331f5e1f3b5cf3508fb9459c84daf2`;
-- PR #47 is open, draft, unmerged and mergeable;
-- authoritative Component CI run: `29171728288`;
-- run number: `1818`;
-- conclusion: `success`.
+Clean-review correction code/tooling SHA:
 
-The run contains two successful jobs:
+`a6f1edf48d23c767f0f9b34ab28aacd8bd586000`
 
-1. `Rust workspace`: fmt, check, workspace tests, clippy and diagnostics finalizer all passed.
-2. `Storage PostgreSQL verification`: PostgreSQL readiness, exact strict ignored-test command, four-test evidence validation and diagnostics finalizer all passed.
+Authoritative Component CI:
 
-The strict command was:
+- run id: `29172303439`;
+- run number: `1825`;
+- attempt: `1`;
+- conclusion: `failure`.
 
-`cargo test -p haze-sync-storage --features test-support -- --ignored`
+Visible job evidence:
 
-The evidence job verified successful execution of:
+- `Storage PostgreSQL verification`: success;
+- PostgreSQL readiness: success;
+- exact strict command succeeded: `cargo test -p haze-sync-storage --features test-support -- --ignored`;
+- all five mandatory evidence checks succeeded;
+- Storage PostgreSQL diagnostics finalizer: success;
+- ordinary Rust `cargo fmt`: success wrapper;
+- ordinary Rust `cargo check`: success wrapper;
+- ordinary Rust `cargo test`: success wrapper;
+- ordinary Rust `cargo clippy`: success wrapper;
+- ordinary Rust `Finalize CI diagnostics`: failure;
+- diagnostics upload: success.
 
-- `repositories::adapter_cursors::postgres_tests::exact_cursor_progression_is_locked_contiguous_and_rollback_safe`;
-- `repositories::worktree_state::postgres_tests::durable_instances_and_path_state_are_isolated_and_transactional`;
-- `test_support::postgres::tests::fresh_and_current_schema_preparation_is_idempotent`;
-- `test_support::postgres::tests::migrates_empty_pre_p10_schema_and_rejects_nonempty_legacy_state`.
+Do not infer the underlying failed marker from wrapper summaries. Read only the exact authorized artifact.
 
-Do not read diagnostics artifacts: the authoritative final CI is green.
+## Exact diagnostics artifact
 
-## Review scope
+Use only:
 
-Review the complete STOR-P10 change from the accepted pre-phase baseline through the final synchronized candidate, especially:
+- artifact name: `ci-diag__component-storage__wf-component-ci__run-29172303439__attempt-1`;
+- artifact id: `8253874582`;
+- artifact head SHA: `a6f1edf48d23c767f0f9b34ab28aacd8bd586000`;
+- artifact digest: `sha256:41c87f30baa40ab384db02ff7884895d2727a94dcb50ea4e5b9b410fd467bf34`;
+- artifact size bytes: `1824`;
+- created at: `2026-07-11T23:35:00Z`;
+- expires at: `2026-07-12T23:34:59Z`;
+- status when assigned: available and unexpired.
 
-- `migrations/0010_worktree_durable_state.sql`;
-- Worktree durable-state models and repository exports;
-- `src/repositories/worktree_state.rs` and its unit/PostgreSQL tests;
-- `src/repositories/adapter_cursors.rs` and its unit/PostgreSQL tests;
-- schema and test-support changes required by migration 0010;
-- Storage documentation for durable Worktree state, implementation plan/log and test support;
-- the Storage-only PostgreSQL verification job in `.github/workflows/component-ci.yml`;
-- main-synchronization correctness and absence of temporary write-enabled workflows.
+## Diagnostics protocol
 
-Review correctness, clean code, SQL safety, transaction ownership, migration determinism, error secrecy, test strength, workflow correctness, compatibility and downstream usability. Green CI is necessary but not sufficient.
+1. Fetch artifact `8253874582` from run `29172303439`.
+2. Verify exact artifact head SHA and digest.
+3. Read `summary.md`, `manifest.json`, every failure marker, and every log named in `failed_checks`.
+4. Identify the exact failed underlying command or stale marker.
+5. Apply the complete minimum artifact-proven correction.
 
-## Mandatory review questions
+Raw GitHub job logs are forbidden as fallback. If the artifact is missing, expired, malformed, mismatched, or unreadable, report `FIX_BLOCKED_BY_LOGS` without guessing.
 
-1. Does migration 0010 fail before destructive behavior for incompatible non-empty legacy state?
-2. Are adapter identity and root fingerprint versioned, fail-closed and free of raw-root persistence or rendering?
-3. Is path state isolated per adapter instance with explicit present/tombstoned invariants?
-4. Are bounded snapshots deterministic and correctly ordered?
-5. Do repository methods remain passive and caller-transaction-owned?
-6. Is cursor initialization and exact expected N to N+1 advancement lock-safe, monotonic and rollback-correct?
-7. Are regression, gap, stale expected value, overflow and concurrency races rejected?
-8. Can any failed transaction falsely advance cursor or durable path-state claims?
-9. Are migration and repository errors redacted and safe in Display/Debug output?
-10. Do unit and live PostgreSQL tests prove behavior rather than merely execute happy paths?
-11. Does test support prevent accidental use of a non-test or unsafe database?
-12. Does the Storage PostgreSQL CI job fail on missing DB, skipped tests, absent test evidence, timeout or diagnostics failure?
-13. Are synthetic credentials confined to the ephemeral CI service and free of repository secrets?
-14. Does the final branch contain current main CI infrastructure plus the accepted Storage-only DB job, with no temporary `contents: write` workflow?
-15. Are Storage, Worktree, Server, Core and API ownership boundaries preserved?
-16. Did STOR-P10 introduce avoidable duplication, broad visibility, weak types, ambiguous names, dead code, unbounded queries or weak assertions?
+## Preservation requirements
 
-## Corrections
+Preserve unless the artifact proves a defect:
 
-You may make focused Storage-local clean-code or correctness corrections when necessary. Any source, migration, test, documentation or workflow correction must preserve the accepted architecture and receive a new normal Component CI run with both required jobs.
+- migration `0010_worktree_durable_state.sql` and its fail-before-destructive behavior;
+- direct savepoint-backed non-empty legacy SQL-guard test;
+- all five mandatory strict PostgreSQL evidence checks;
+- versioned adapter/root-fingerprint binding without raw-root persistence or rendering;
+- per-instance present/tombstoned path-state invariants;
+- deterministic bounded snapshots;
+- passive caller-transaction-owned repository behavior;
+- exact-contiguous cursor locking, checked progression, rollback and race semantics;
+- dedicated test-only database URL validation and redaction;
+- current-main synchronization and `contents: read` workflow permissions;
+- synthetic ephemeral PostgreSQL credentials only;
+- no production behavior, schema, repository API, hard-delete, implicit cleanup, repair, or sibling-component changes;
+- no test deletion, ignoring, conditional skip, assertion weakening, or removal of the fifth evidence test.
 
-Allowed files:
+## Allowed files
 
-- STOR-P10 migration, Storage models/repositories/schema/test-support and tests;
-- STOR-P10 Storage-owned docs;
-- `.github/workflows/component-ci.yml` only for a demonstrable Storage PostgreSQL verification defect;
+Only artifact-proven changes within:
+
+- STOR-P10 test files and test-support code if the artifact proves a test defect;
+- `.github/scripts/ci-run.sh` or `.github/scripts/ci-finalize.sh` if the artifact proves diagnostics-state behavior;
+- `.github/workflows/component-ci.yml` if the artifact proves a narrowly scoped wrapper/finalizer integration defect;
+- Storage test-support documentation if a corrected fact changes;
 - `crates/haze-sync-storage/control/report.md`.
 
-Forbidden:
+Do not modify Server, Worktree, Core, API, Common, provider, CLI, Deployment, migration SQL unless the artifact proves a migration defect, public contracts, or unrelated workflows. Do not archive control files.
 
-- Server, Worktree, Core, API, Common, provider, CLI or Deployment source changes;
-- migration redesign without a proven defect;
-- raw-root persistence or logging;
-- production credentials, external managed DB dependency or repository secrets;
-- test deletion, ignoring, optional DB verification or assertion weakening;
-- hard delete, implicit destructive cleanup or automatic repair;
-- unrelated workflow refactoring;
-- archiving control files.
+## Acceptance
 
-## CI policy
+`FIX_COMPLETE` requires:
 
-If product, migration, test, docs or workflow content changes, require a new code-bearing Component CI run in which both `Rust workspace` and `Storage PostgreSQL verification` finish green. A report-only commit may skip CI but is not code-bearing evidence.
+- every artifact-listed failed check addressed;
+- no stale/false diagnostics marker remains;
+- the ordinary Rust workspace job is fully green;
+- the Storage PostgreSQL job remains fully green;
+- the exact strict ignored-test command executes;
+- all five mandatory test evidence checks remain successful;
+- both diagnostics finalizers succeed;
+- no regression in STOR-P10 semantics or clean-review correction.
 
 ## Report
 
@@ -114,16 +122,17 @@ Write `crates/haze-sync-storage/control/report.md` using `report-template.md`.
 
 Set:
 
-- `REPORT_TYPE: CLEAN_CODE_REVIEW`
-- `phase_id: STOR-P10-CLEAN`
-- `chat_name: storage — W1 STOR-P10 Clean-Code Review`
+- `REPORT_TYPE: FIX`
+- `phase_id: FIX-STOR-P10-CLEAN-CI`
+- `chat_name: storage — W1 STOR-P10 Clean Correction CI Fix`
 
 Use one honest status:
 
-- `CLEAN_ACCEPT`
-- `CLEAN_NEEDS_FIX`
-- `CLEAN_BLOCKED_BY_CONTRACT`
-- `CLEAN_BLOCKED_BY_SCOPE`
-- `CLEAN_BLOCKED_BY_TOOLING`
+- `FIX_COMPLETE`
+- `FIX_NEEDS_MORE`
+- `FIX_BLOCKED_BY_LOGS`
+- `FIX_BLOCKED_BY_SCOPE`
+- `FIX_BLOCKED_BY_CONTRACT`
+- `FIX_BLOCKED_BY_TOOLING`
 
-The report must state the exact reviewed code-bearing/tooling SHA, complete range/files, migration and repository findings, transaction/cursor assessment, live-DB test assessment, workflow/secrecy assessment, corrections, final CI evidence if corrections were made, and whether STOR-P10 is clean-accepted for SRV-P7B3 accepted-SHA synchronization.
+The report must include artifact verification, exact failed checks and root cause, changed files, preservation assessment, final code-bearing/tooling SHA, post-fix Component CI run and both job conclusions, five-test evidence, secrecy assessment, and whether STOR-P10 can return for final clean acceptance.
