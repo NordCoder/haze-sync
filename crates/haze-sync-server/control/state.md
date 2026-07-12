@@ -2,58 +2,65 @@
 
 component: server
 branch: component/server
-status: ACCEPTED_HOLD
+status: PROMPT_READY
 
 active_prompt: crates/haze-sync-server/control/prompt.md
 active_report: crates/haze-sync-server/control/report.md
-active_agent_role: none
-assigned_chat_name: none
-prompt_revision: corrected by Orchestrator after authoritative report commit 053eea1496bf9b541b462a82989b4cd956ed7276 became visible
+active_agent_role: implementation-worker
+assigned_chat_name: server — W1 SRV-P7B3 Exact-SHA Fan-In
+prompt_revision: verified by Orchestrator after full component/dependency audit and exact-SHA divergence checks
 
 wave: W1
-phase: SRV-P7B2-ACCEPTED-HOLD
+phase: SRV-P7B3-EXACT-SHA-FAN-IN
 
-implementation_status: SELF_ACCEPT
-fix_status: FIX_COMPLETE
-clean_review_status: CLEAN_ACCEPT
+implementation_status: NOT_STARTED
+fix_status: NOT_STARTED
+clean_review_status: NOT_STARTED
 architect_status: ARCHITECT_CHANGED_CONTRACTS
-ci_status: CI_GREEN_DB_VERIFIED
-ci_workflow: Component CI
-accepted_code_bearing_tooling_sha: 647dce7b624d67663632808906896cb6745ea7e7
-ci_run_id: 29186058268
-ci_run_number: 1835
-ci_run_attempt: 1
+ci_status: NOT_RUN
 known_failed_checks: []
 
-accepted_report:
-- commit 053eea1496bf9b541b462a82989b4cd956ed7276
-- type CLEAN_CODE_REVIEW
-- phase SRV-P7B2-CLEAN-RETRY
-- status CLEAN_ACCEPT
-- next recommended agent orchestrator
+accepted_owner_shas:
+- worktree: 1942946331e8362f19907ab6ad4eb779da70fd57
+- storage: 66b6a1f554aae1d1b774cc88560d46dd140c7a54
+- server: 647dce7b624d67663632808906896cb6745ea7e7
 
-accepted_contracts:
-- reusable async ServerApplicationServices authority
-- routes remain transport/auth/DTO/status adapters
-- transaction, advisory-lock, idempotency, Core, object-store, revision, conflict, tombstone and operation-log choreography accepted
-- strict DB parity and test-only harness accepted
-- isolated Server and Storage PostgreSQL CI with complete workspace coverage accepted
-- error secrecy and Worktree idempotency secrecy accepted
-- SRV-P7A lifecycle and dependency-free router construction preserved
+accepted_owner_evidence:
+- WT-P10 CLEAN_ACCEPT; CI 29167289593 run 1799 success
+- STOR-P10 CLEAN_ACCEPT; CI 29185466870 run 1833 success; cross-branch report commit 13a0c80123061848235676b2a7dc7c3a3c644dee
+- SRV-P7B2 CLEAN_ACCEPT; CI 29186058268 run 1835 success; clean report commit 053eea1496bf9b541b462a82989b4cd956ed7276
 
-storage_dependency_gating:
-- normal Server dependency on haze-sync-storage has no test-support feature
-- Server dev-dependency enables haze-sync-storage/test-support only for tests
-- accepted clean report explicitly confirms Storage contract is unblocked
+fan_in_validation:
+- component/server diverges from accepted Storage SHA
+- component/server diverges from accepted Worktree SHA
+- accepted owner product snapshots are not yet synchronized in one integration line
+- whole component-branch merges are forbidden
+- exact non-control owner product path transfer is required
 
-parallel_owner_status:
-- WT-P10 is CLEAN_ACCEPT at 1942946331e8362f19907ab6ad4eb779da70fd57
-- STOR-P10 is ready for final cross-branch confirmation at 66b6a1f554aae1d1b774cc88560d46dd140c7a54
+required_preservation:
+- current accepted Server application-service behavior
+- transport-only routes
+- Server Storage test-support normal/dev dependency separation
+- isolated Server and Storage PostgreSQL CI services
+- complete workspace test coverage
+- no executor, host, scheduler or public DTO implementation in this phase
 
-blocked_downstream:
-- SRV-P7B3 remains blocked until Storage final confirmation returns CLEAN_ACCEPT and exact accepted WT-P10, STOR-P10 and SRV-P7B2 SHAs are synchronized
-- SRV-P7B4, API-P8, SRV-P7B5, CLI-P6A and DEP-P5A remain blocked
+allowed_integration_scope:
+- exact Worktree non-control product/test/docs snapshot
+- exact Storage migrations and non-control product/test/docs snapshot
+- Cargo.lock when required
+- minimal Server-local compile/test compatibility corrections directly caused by accepted contracts
+- Server control report
 
-next_gate:
-- Storage final cross-branch accepted-SHA confirmation
-- then Orchestrator exact-SHA fan-in validation before SRV-P7B3
+forbidden_scope:
+- sibling control files or stale workflows
+- SRV-P7B3 executor behavior
+- SRV-P7B4 hosted runtime
+- API-P8 status DTOs
+- CLI or Deployment changes
+- Core policy or schema redesign
+
+next_gate_after_implementation:
+- SELF_ACCEPT plus green DB-capable Component CI -> mandatory fan-in clean-code review
+- fan-in CLEAN_ACCEPT -> activate SRV-P7B3 Bounded Worktree Executor
+- blocked or red -> route exact contract/scope/tooling/CI evidence
