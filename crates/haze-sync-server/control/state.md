@@ -2,79 +2,58 @@
 
 component: server
 branch: component/server
-status: PROMPT_READY
+status: ACCEPTED_HOLD
 
 active_prompt: crates/haze-sync-server/control/prompt.md
 active_report: crates/haze-sync-server/control/report.md
-active_agent_role: clean-code-reviewer
-assigned_chat_name: server — W1 SRV-P7B2 Clean-Code Review Retry
-prompt_revision: reissued by Orchestrator after prior clean-review slot produced no report and no branch advance
+active_agent_role: none
+assigned_chat_name: none
+prompt_revision: corrected by Orchestrator after authoritative report commit 053eea1496bf9b541b462a82989b4cd956ed7276 became visible
 
 wave: W1
-phase: SRV-P7B2-CLEAN-RETRY
+phase: SRV-P7B2-ACCEPTED-HOLD
 
 implementation_status: SELF_ACCEPT
 fix_status: FIX_COMPLETE
-clean_review_status: RETRY_REQUIRED_NO_REPORT
+clean_review_status: CLEAN_ACCEPT
 architect_status: ARCHITECT_CHANGED_CONTRACTS
 ci_status: CI_GREEN_DB_VERIFIED
 ci_workflow: Component CI
-ci_code_bearing_tooling_sha: 647dce7b624d67663632808906896cb6745ea7e7
+accepted_code_bearing_tooling_sha: 647dce7b624d67663632808906896cb6745ea7e7
 ci_run_id: 29186058268
 ci_run_number: 1835
 ci_run_attempt: 1
 known_failed_checks: []
 
-prior_clean_slot_evidence:
-- prior phase SRV-P7B2-CLEAN
-- expected chat server — W1 SRV-P7B2 Clean-Code Review
-- active report path returned 404
-- branch head remained d374b624cf68481a3e82ec615de97bca4655ed22
-- no review verdict commit existed
-- prior state remained clean_review_status NOT_STARTED
+accepted_report:
+- commit 053eea1496bf9b541b462a82989b4cd956ed7276
+- type CLEAN_CODE_REVIEW
+- phase SRV-P7B2-CLEAN-RETRY
+- status CLEAN_ACCEPT
+- next recommended agent orchestrator
 
-accepted_srv_p7a_sha: 37706634fd8dd2d9b299a1c453718f2de63981d0
-initial_srv_p7b2_sha: 81e6f6ae69f4bda92d284991e4909457a6ef8e60
-post_source_fix_sha: 9304263f4be8234e513bf335dc886f96c53d0cce
-helper_sync_merge_commit: 716bd357f52831d796c7e1ea57c83a2849e6ce03
-final_candidate_sha: 647dce7b624d67663632808906896cb6745ea7e7
-pr_number: 45
-pr_status: OPEN_DRAFT_UNMERGED_MERGEABLE
-
-final_ci_evidence:
-- PostgreSQL Server service succeeded
-- PostgreSQL Storage service succeeded
-- cargo fmt succeeded
-- cargo check succeeded
-- isolated Server tests succeeded
-- isolated Storage tests succeeded
-- remaining workspace package tests succeeded
-- cargo clippy succeeded
-- diagnostics finalizer succeeded
+accepted_contracts:
+- reusable async ServerApplicationServices authority
+- routes remain transport/auth/DTO/status adapters
+- transaction, advisory-lock, idempotency, Core, object-store, revision, conflict, tombstone and operation-log choreography accepted
+- strict DB parity and test-only harness accepted
+- isolated Server and Storage PostgreSQL CI with complete workspace coverage accepted
+- error secrecy and Worktree idempotency secrecy accepted
+- SRV-P7A lifecycle and dependency-free router construction preserved
 
 storage_dependency_gating:
 - normal Server dependency on haze-sync-storage has no test-support feature
-- Server dev-dependency enables haze-sync-storage/test-support
-- exact Cargo evidence is present at final candidate SHA 647dce7b624d67663632808906896cb6745ea7e7
-- retry reviewer must explicitly verify this to unblock Storage
+- Server dev-dependency enables haze-sync-storage/test-support only for tests
+- accepted clean report explicitly confirms Storage contract is unblocked
 
 parallel_owner_status:
 - WT-P10 is CLEAN_ACCEPT at 1942946331e8362f19907ab6ad4eb779da70fd57
-- STOR-P10 remains CLEAN_BLOCKED_BY_CONTRACT pending a committed Server CLEAN_ACCEPT report
+- STOR-P10 is ready for final cross-branch confirmation at 66b6a1f554aae1d1b774cc88560d46dd140c7a54
 
 blocked_downstream:
-- STOR-P10 final cross-branch confirmation waits for committed SRV-P7B2 CLEAN_ACCEPT
-- SRV-P7B3 remains blocked until WT-P10, STOR-P10 and SRV-P7B2 all reach CLEAN_ACCEPT with exact accepted SHAs synchronized
+- SRV-P7B3 remains blocked until Storage final confirmation returns CLEAN_ACCEPT and exact accepted WT-P10, STOR-P10 and SRV-P7B2 SHAs are synchronized
 - SRV-P7B4, API-P8, SRV-P7B5, CLI-P6A and DEP-P5A remain blocked
 
-completion_requirement:
-- committed crates/haze-sync-server/control/report.md
-- exact REPORT_TYPE CLEAN_CODE_REVIEW
-- phase_id SRV-P7B2-CLEAN-RETRY
-- exact chat name server — W1 SRV-P7B2 Clean-Code Review Retry
-- one honest clean-review status
-
-next_gate_after_review:
-- CLEAN_ACCEPT -> unblock final Storage cross-branch confirmation and hold accepted Server SHA
-- CLEAN_NEEDS_FIX -> focused correction plus green isolated DB-capable CI
-- blocked status -> route exact contract/scope/tooling decision
+next_gate:
+- Storage final cross-branch accepted-SHA confirmation
+- then Orchestrator exact-SHA fan-in validation before SRV-P7B3
