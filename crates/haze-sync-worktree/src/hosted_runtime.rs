@@ -40,10 +40,7 @@ impl HostedInFlightGuard {
         }
     }
 
-    fn manual(
-        gate: Arc<Gate>,
-        response: SyncSender<WorktreeRuntimeManualOutcome>,
-    ) -> Self {
+    fn manual(gate: Arc<Gate>, response: SyncSender<WorktreeRuntimeManualOutcome>) -> Self {
         Self {
             gate,
             response: Some(response),
