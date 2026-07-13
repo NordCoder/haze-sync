@@ -8,6 +8,7 @@ mod changes;
 mod deletes;
 mod files;
 mod idempotency;
+mod worktree;
 #[cfg(test)]
 pub(crate) mod test_db;
 #[cfg(test)]
@@ -21,10 +22,11 @@ pub(crate) use files::{
     ApplyFileCommand, ApplyFileOutcome, AuthoritativeRevisionContent, RevisionContentQuery,
 };
 pub(crate) use idempotency::{
-    delete_request_fingerprint, file_request_fingerprint, ApplicationIdempotency,
+    delete_request_fingerprint, derive_worktree_delete_idempotency,
+    derive_worktree_put_idempotency, file_request_fingerprint, ApplicationIdempotency,
 };
 
-use haze_sync_common::AdapterId;
+use haze_sync_common::{AdapterId, RevisionId};
 use haze_sync_storage::LocalObjectStore;
 use sqlx::PgPool;
 use std::fmt;
@@ -141,6 +143,17 @@ impl ServerApplicationServices {
             .as_ref()
             .ok_or(ApplicationError::DependenciesUnavailable)?;
         files::revision_content(&self.pool, object_store, query).await
+    }
+
+    pub(crate) async fn worktree_revision_content(
+        &self,
+        revision_id: RevisionId,
+    ) -> Result<AuthoritativeRevisionContent, ApplicationError> {
+        let object_store = self
+            .object_store
+            .as_ref()
+            .ok_or(ApplicationError::DependenciesUnavailable)?;
+        worktree::revision_content_by_id(&self.pool, object_store, revision_id).await
     }
 }
 
