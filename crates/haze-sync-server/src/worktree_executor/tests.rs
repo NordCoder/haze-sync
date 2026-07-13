@@ -482,7 +482,11 @@ async fn tombstone_export_moves_content_to_retained_trash_and_checkpoints() {
 
     assert_eq!(summary.applied_exports, 2);
     assert!(!harness.worktree.root.join(path.as_str()).exists());
-    assert!(harness.worktree.root.join("_haze_runtime/trash/records").exists());
+    assert!(harness
+        .worktree
+        .root
+        .join("_haze_runtime/trash/records")
+        .exists());
     assert_eq!(
         load_path_state(&harness.pool, &harness.worktree_id, &path)
             .await
