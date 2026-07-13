@@ -91,7 +91,9 @@ impl WorktreeWatcher for FakeWatcher {
             return Err(WorktreeWatcherFailure::Poll);
         }
         if self.hint.swap(false, Ordering::AcqRel) {
-            Ok(WorktreeWatcherPoll::Hint(WorktreeWatcherHint { sequence: 1 }))
+            Ok(WorktreeWatcherPoll::Hint(WorktreeWatcherHint {
+                sequence: 1,
+            }))
         } else {
             Ok(WorktreeWatcherPoll::Idle)
         }
@@ -321,7 +323,10 @@ async fn startup_failure_is_propagated_and_task_is_cleaned_up() {
         ExecutorState::new(),
     )
     .await;
-    assert!(matches!(result, Err(ServerWorktreeHostError::RuntimeFailed)));
+    assert!(matches!(
+        result,
+        Err(ServerWorktreeHostError::RuntimeFailed)
+    ));
     assert!(dropped.load(Ordering::Acquire));
 }
 
@@ -329,9 +334,14 @@ async fn startup_failure_is_propagated_and_task_is_cleaned_up() {
 async fn idle_dry_run_polling_remains_available_and_passive() {
     let (watcher, _, _) = FakeWatcher::healthy();
     let state = ExecutorState::new();
-    let host = test_host(WorktreeMode::DryRun, watcher, FakeClock::new(), state.clone())
-        .await
-        .unwrap();
+    let host = test_host(
+        WorktreeMode::DryRun,
+        watcher,
+        FakeClock::new(),
+        state.clone(),
+    )
+    .await
+    .unwrap();
     for _ in 0..20 {
         assert_eq!(
             host.snapshot().manual_availability,
@@ -348,9 +358,14 @@ async fn authoritative_busy_lasts_until_exact_request_completion() {
     let (watcher, _, _) = FakeWatcher::healthy();
     let state = ExecutorState::new();
     state.block.store(true, Ordering::Release);
-    let host = test_host(WorktreeMode::DryRun, watcher, FakeClock::new(), state.clone())
-        .await
-        .unwrap();
+    let host = test_host(
+        WorktreeMode::DryRun,
+        watcher,
+        FakeClock::new(),
+        state.clone(),
+    )
+    .await
+    .unwrap();
     let ticket = match host.submit_manual(WorktreeRuntimeManualRequest::dry_run(budget())) {
         WorktreeRuntimeManualSubmission::Accepted(ticket) => ticket,
         other => panic!("unexpected submission: {other:?}"),
@@ -387,9 +402,14 @@ async fn authoritative_busy_lasts_until_exact_request_completion() {
 async fn old_ticket_observation_cannot_clear_newer_request_busy() {
     let (watcher, _, _) = FakeWatcher::healthy();
     let state = ExecutorState::new();
-    let host = test_host(WorktreeMode::DryRun, watcher, FakeClock::new(), state.clone())
-        .await
-        .unwrap();
+    let host = test_host(
+        WorktreeMode::DryRun,
+        watcher,
+        FakeClock::new(),
+        state.clone(),
+    )
+    .await
+    .unwrap();
     let old = match host.submit_manual(WorktreeRuntimeManualRequest::dry_run(budget())) {
         WorktreeRuntimeManualSubmission::Accepted(ticket) => ticket,
         other => panic!("unexpected submission: {other:?}"),
@@ -510,11 +530,8 @@ async fn bounded_shutdown_timeout_publishes_failed_snapshot() {
         host.shutdown().await,
         Err(ServerWorktreeHostError::ShutdownTimedOut)
     );
-    let snapshot = ServerWorktreeStatusSnapshot::from_host(
-        WorktreeMode::DryRun,
-        *status.borrow(),
-        None,
-    );
+    let snapshot =
+        ServerWorktreeStatusSnapshot::from_host(WorktreeMode::DryRun, *status.borrow(), None);
     assert_eq!(snapshot.lifecycle, ServerWorktreeHostLifecycle::Failed);
     assert!(!snapshot.is_ready());
     assert_eq!(
