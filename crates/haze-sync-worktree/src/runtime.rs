@@ -45,7 +45,10 @@ impl WorktreeMode {
 
     #[must_use]
     pub const fn exports_core(self) -> bool {
-        matches!(self, Self::ReadOnly | Self::ExportOnly | Self::Bidirectional)
+        matches!(
+            self,
+            Self::ReadOnly | Self::ExportOnly | Self::Bidirectional
+        )
     }
 
     #[must_use]
