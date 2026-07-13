@@ -119,9 +119,7 @@ pub struct WorktreeRuntimeCycleBudget {
 
 impl WorktreeRuntimeCycleBudget {
     fn is_valid(self) -> bool {
-        self.max_import_actions > 0
-            && self.max_delete_candidates > 0
-            && self.max_export_actions > 0
+        self.max_import_actions > 0 && self.max_delete_candidates > 0 && self.max_export_actions > 0
     }
 }
 
@@ -620,9 +618,7 @@ where
         manual: WorktreeRuntimeManualRequest,
     ) -> WorktreeRuntimeManualOutcome {
         match self.lifecycle {
-            WorktreeRuntimeLifecycle::Created => {
-                return WorktreeRuntimeManualOutcome::NotStarted
-            }
+            WorktreeRuntimeLifecycle::Created => return WorktreeRuntimeManualOutcome::NotStarted,
             WorktreeRuntimeLifecycle::Shutdown => return WorktreeRuntimeManualOutcome::Shutdown,
             WorktreeRuntimeLifecycle::Cancelling => {
                 return WorktreeRuntimeManualOutcome::Cancelling
@@ -743,10 +739,7 @@ where
         &mut self.watcher
     }
 
-    fn automatic_request(
-        &self,
-        cause: WorktreeRuntimeCycleCause,
-    ) -> WorktreeRuntimeCycleRequest {
+    fn automatic_request(&self, cause: WorktreeRuntimeCycleCause) -> WorktreeRuntimeCycleRequest {
         WorktreeRuntimeCycleRequest {
             cause,
             mode: self.mode,
