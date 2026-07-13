@@ -2,98 +2,59 @@
 
 component: server
 branch: component/server
-status: PROMPT_READY
+status: BLOCKED_WAITING_OWNER
 
 active_prompt: crates/haze-sync-server/control/prompt.md
 active_report: crates/haze-sync-server/control/report.md
-active_agent_role: implementation-worker
-assigned_chat_name: server — W1 SRV-P7B4 Hosted Worktree Runtime
-prompt_revision: verified by Orchestrator after SRV-P7B3 bounded executor CLEAN_ACCEPT and green DB-capable exact-SHA Component CI
+active_agent_role: none
+assigned_chat_name: none
+prompt_revision: verified by Orchestrator after SRV-P7B4 feasibility audit found a concrete Worktree owner-contract defect
 
 wave: W1
-phase: SRV-P7B4-HOSTED-WORKTREE-RUNTIME
+phase: SRV-P7B4-WAIT-WT-P11
 
-implementation_status: NOT_STARTED
+implementation_status: BLOCKED_BY_CONTRACT
 fix_status: NOT_STARTED
 clean_review_status: NOT_STARTED
-architect_status: ARCHITECT_CHANGED_CONTRACTS
-ci_status: NOT_RUN
+architect_status: ARCHITECT_NOT_REQUIRED_OWNER_BOUNDARY_ALREADY_DECIDED
+ci_status: NOT_RUN_NO_PRODUCT_CHANGE
 known_failed_checks: []
 
-accepted_executor_baseline:
-- final_code_bearing_sha: f8475af72b3e1795c5b11fa39f4625191eff59b1
-- final_clean_report_commit: b9e22533091a9477876b91729c04682266a1b718
-- final_clean_report_blob: 18d6ac03c77498570b21db0768155cf31ad978d1
-- final_clean_status: CLEAN_ACCEPT
-- post_candidate_product_or_tooling_changes: none
+accepted_server_baseline:
+- bounded_executor_sha: f8475af72b3e1795c5b11fa39f4625191eff59b1
+- bounded_executor_clean_report_commit: b9e22533091a9477876b91729c04682266a1b718
+- bounded_executor_clean_status: CLEAN_ACCEPT
 
-accepted_owner_shas:
-- worktree: 1942946331e8362f19907ab6ad4eb779da70fd57
-- storage: 66b6a1f554aae1d1b774cc88560d46dd140c7a54
-- server_application_services: 647dce7b624d67663632808906896cb6745ea7e7
-- server_bounded_executor: f8475af72b3e1795c5b11fa39f4625191eff59b1
+blocker_evidence:
+- server_blocker_report_commit: 03e15367e1363bc4718581ca2c8993be52c2231e
+- server_blocker_report_blob: 7172be029d2480eb151be2151f36718a985d089d
+- status: BLOCKED_BY_CONTRACT
+- owner_component: worktree
+- accepted_worktree_sha: 1942946331e8362f19907ab6ad4eb779da70fd57
+- missing_contract_1: production path-free WorktreeWatcher implementation or Worktree-owned watcher factory/channel boundary
+- missing_contract_2: scheduler-accounted manual-cycle entrypoint preserving lifecycle, counters, last-cycle state, cancellation and no-overlap
 
-accepted_ci_evidence:
-- workflow: Component CI
-- run_id: 29257244778
-- run_number: 1860
-- run_attempt: 1
-- head_sha: f8475af72b3e1795c5b11fa39f4625191eff59b1
-- conclusion: success
-- rust_workspace_job: success
-- cargo_fmt: success
-- cargo_check: success
-- isolated_server_postgresql_tests: success
-- isolated_storage_postgresql_tests: success
-- remaining_workspace_tests: success
-- cargo_clippy: success
-- diagnostics_finalizer: success
+routing_decision:
+- architect pass not required because accepted architecture already assigns watcher/scheduler semantics to Worktree
+- activate bounded Worktree owner phase WT-P11
+- do not work around in Server
 
 archived_completed_slot:
-- prompt_index: crates/haze-sync-server/control/log/20260713-155200Z-W1-SRV-P7B3-EXECUTOR-CLEAN-REVIEW-clean-code-reviewer-prompt.md
-- report_index: crates/haze-sync-server/control/log/20260713-155200Z-W1-SRV-P7B3-EXECUTOR-CLEAN-REVIEW-clean-code-reviewer-report.md
-- prompt_blob: e58dfbf53c5b76cc4032190abbeade6c1321b377
-- report_blob: 18d6ac03c77498570b21db0768155cf31ad978d1
-- report_commit: b9e22533091a9477876b91729c04682266a1b718
+- prompt_index: crates/haze-sync-server/control/log/20260713-160500Z-W1-SRV-P7B4-HOSTED-WORKTREE-RUNTIME-implementation-worker-prompt.md
+- report_index: crates/haze-sync-server/control/log/20260713-160500Z-W1-SRV-P7B4-HOSTED-WORKTREE-RUNTIME-implementation-worker-report.md
+- prompt_blob: 0c7893ba143f4dad7c23ca2c0b924a274d404c6c
+- report_blob: 7172be029d2480eb151be2151f36718a985d089d
+- report_commit: 03e15367e1363bc4718581ca2c8993be52c2231e
 
-phase_goal:
-- implement one explicit joined cancellable ServerWorktreeRuntimeHost task
-- validate safe runtime-host config and disabled defaults
-- bind durable adapter/root identity before first cycle
-- drive startup, periodic, watcher and bounded internal manual triggers
-- preserve at-most-one-cycle and exact mode behavior
-- provide cooperative cancellation, bounded graceful shutdown and join
-- keep status internal count/category-only and secret-safe
+reactivation_requirements:
+- WT-P11 implementation SELF_ACCEPT and green exact-SHA CI
+- WT-P11 mandatory CLEAN_ACCEPT
+- explicit exact-SHA Worktree fan-in to component/server
+- Server integration CI and clean review
+- new executable SRV-P7B4 prompt from Orchestrator
 
-allowed_scope:
-- Server hosted runtime config/composition/module/tests
-- narrow startup/state/docs/manifest changes directly required
-- Server control report
-
-protected_scope:
-- accepted Worktree and Storage source snapshots
-- migrations and schema
-- Core, API, CLI and Deployment product files
-- sibling control files and workflows
-
-forbidden_early_work:
-- API-P8 public DTO/status contract
-- SRV-P7B5 readiness/status mapping or routes
-- CLI or Deployment behavior
-- detached/multiple runtime tasks, nested runtime, block_on or internal HTTP
-- unbounded retry, provider behavior, hard delete or automatic repair
-
-completion_requirements:
-- component/server advances with a real code-bearing hosted runtime commit
-- committed crates/haze-sync-server/control/report.md exists
-- report phase SRV-P7B4-HOSTED-WORKTREE-RUNTIME
-- report chat name server — W1 SRV-P7B4 Hosted Worktree Runtime
-- protected owner snapshots remain unchanged
-- exact final code-bearing SHA is recorded
-- authoritative DB-capable Component CI is green on exact final code-bearing SHA, or report records an honest blocker/failure with exact evidence
-
-next_gate_after_implementation:
-- SELF_ACCEPT plus green exact-SHA CI -> mandatory SRV-P7B4 clean-code review
-- red CI -> rotate fixer from exact diagnostics artifact evidence
-- owner contract defect -> route to exact Worktree or Storage owner
-- API-P8 and SRV-P7B5 remain blocked until SRV-P7B4 CLEAN_ACCEPT
+blocked_downstream:
+- API-P8
+- SRV-P7B5
+- CLI-P6A
+- DEP-P5A
