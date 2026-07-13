@@ -87,7 +87,9 @@ impl WorktreeWatcher for FakeWatcher {
             return Err(WorktreeWatcherFailure::Poll);
         }
         if self.hint.swap(false, Ordering::AcqRel) {
-            Ok(WorktreeWatcherPoll::Hint(WorktreeWatcherHint { sequence: 1 }))
+            Ok(WorktreeWatcherPoll::Hint(WorktreeWatcherHint {
+                sequence: 1,
+            }))
         } else {
             Ok(WorktreeWatcherPoll::Idle)
         }
@@ -106,7 +108,7 @@ struct ExecutorState {
     max_active: Arc<AtomicUsize>,
     block: Arc<AtomicBool>,
     release: Arc<Notify>,
-    cancelled: Arc<AtomicBool>,
+    cancelled_by_drop: Arc<AtomicBool>,
 }
 
 impl ExecutorState {
@@ -117,12 +119,44 @@ impl ExecutorState {
             max_active: Arc::new(AtomicUsize::new(0)),
             block: Arc::new(AtomicBool::new(false)),
             release: Arc::new(Notify::new()),
-            cancelled: Arc::new(AtomicBool::new(false)),
+            cancelled_by_drop: Arc::new(AtomicBool::new(false)),
         }
     }
 
     fn causes(&self) -> Vec<WorktreeRuntimeCycleCause> {
         self.causes.lock().expect("causes lock").clone()
+    }
+}
+
+struct ActiveCycleGuard {
+    state: ExecutorState,
+    completed: bool,
+}
+
+impl ActiveCycleGuard {
+    fn new(state: ExecutorState) -> Self {
+        let active = state.active.fetch_add(1, Ordering::AcqRel) + 1;
+        state.max_active.fetch_max(active, Ordering::AcqRel);
+        Self {
+            state,
+            completed: false,
+        }
+    }
+
+    fn complete(mut self) {
+        self.state.active.fetch_sub(1, Ordering::AcqRel);
+        self.completed = true;
+    }
+}
+
+impl Drop for ActiveCycleGuard {
+    fn drop(&mut self) {
+        if !self.completed {
+            self.state.active.fetch_sub(1, Ordering::AcqRel);
+            self.state
+                .cancelled_by_drop
+                .store(true, Ordering::Release);
+        }
     }
 }
 
@@ -136,22 +170,23 @@ impl WorktreeRuntimeCycle for FakeExecutor {
     ) -> WorktreeRuntimeCycleFuture<'a> {
         let state = self.0.clone();
         Box::pin(async move {
-            state.causes.lock().expect("causes lock").push(request.cause);
-            let active = state.active.fetch_add(1, Ordering::AcqRel) + 1;
-            state.max_active.fetch_max(active, Ordering::AcqRel);
+            state
+                .causes
+                .lock()
+                .expect("causes lock")
+                .push(request.cause);
+            let guard = ActiveCycleGuard::new(state.clone());
             while state.block.load(Ordering::Acquire) {
                 tokio::select! {
                     _ = state.release.notified() => {}
                     _ = tokio::time::sleep(Duration::from_millis(1)) => {
                         if cancellation.is_cancelled() {
-                            state.cancelled.store(true, Ordering::Release);
-                            state.active.fetch_sub(1, Ordering::AcqRel);
                             return Err(WorktreeRuntimeCycleFailure::Cancelled);
                         }
                     }
                 }
             }
-            state.active.fetch_sub(1, Ordering::AcqRel);
+            guard.complete();
             Ok(WorktreeRuntimeCycleSummary {
                 full_scan_completed: request.full_scan_required,
                 ..WorktreeRuntimeCycleSummary::default()
@@ -189,7 +224,9 @@ async fn test_host(
 ) -> Result<ServerWorktreeRuntimeHost, ServerWorktreeHostError> {
     let service = WorktreeRuntimeService::new(
         mode,
-        config(mode, Duration::from_millis(100)).policy().unwrap(),
+        config(mode, Duration::from_millis(100))
+            .policy()
+            .unwrap(),
         clock,
         watcher,
         FakeExecutor(executor),
@@ -257,17 +294,31 @@ fn invalid_bounds_fail_closed() {
 #[tokio::test]
 async fn disabled_host_is_inert_and_join_free() {
     let host = ServerWorktreeRuntimeHost::disabled(Duration::from_secs(1));
-    assert_eq!(host.status().await.lifecycle, ServerWorktreeHostLifecycle::Disabled);
-    assert_eq!(host.shutdown().await.unwrap().lifecycle, ServerWorktreeHostLifecycle::Disabled);
+    assert_eq!(
+        host.status().await.lifecycle,
+        ServerWorktreeHostLifecycle::Disabled
+    );
+    assert_eq!(
+        host.shutdown().await.unwrap().lifecycle,
+        ServerWorktreeHostLifecycle::Disabled
+    );
 }
 
 #[tokio::test]
 async fn enabled_start_acknowledges_running_and_joins_shutdown() {
     let (watcher, _, dropped) = FakeWatcher::healthy();
-    let host = test_host(WorktreeMode::ExportOnly, watcher, FakeClock::new(), ExecutorState::new())
-        .await
-        .unwrap();
-    assert_eq!(host.status().await.lifecycle, ServerWorktreeHostLifecycle::Running);
+    let host = test_host(
+        WorktreeMode::ExportOnly,
+        watcher,
+        FakeClock::new(),
+        ExecutorState::new(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        host.status().await.lifecycle,
+        ServerWorktreeHostLifecycle::Running
+    );
     let status = host.shutdown().await.unwrap();
     assert_eq!(status.lifecycle, ServerWorktreeHostLifecycle::Shutdown);
     assert!(dropped.load(Ordering::Acquire));
@@ -276,8 +327,17 @@ async fn enabled_start_acknowledges_running_and_joins_shutdown() {
 #[tokio::test]
 async fn startup_failure_is_propagated_and_task_is_cleaned_up() {
     let (watcher, dropped) = FakeWatcher::failing();
-    let result = test_host(WorktreeMode::ExportOnly, watcher, FakeClock::new(), ExecutorState::new()).await;
-    assert!(matches!(result, Err(ServerWorktreeHostError::RuntimeFailed)));
+    let result = test_host(
+        WorktreeMode::ImportOnly,
+        watcher,
+        FakeClock::new(),
+        ExecutorState::new(),
+    )
+    .await;
+    assert!(matches!(
+        result,
+        Err(ServerWorktreeHostError::RuntimeFailed)
+    ));
     assert!(dropped.load(Ordering::Acquire));
 }
 
@@ -286,14 +346,21 @@ async fn host_drives_startup_periodic_and_watcher_cycles_without_overlap() {
     let (watcher, hint, _) = FakeWatcher::healthy();
     let clock = FakeClock::new();
     let state = ExecutorState::new();
-    let host = test_host(WorktreeMode::Bidirectional, watcher, clock.clone(), state.clone())
-        .await
-        .unwrap();
+    let host = test_host(
+        WorktreeMode::Bidirectional,
+        watcher,
+        clock.clone(),
+        state.clone(),
+    )
+    .await
+    .unwrap();
     wait_for_cause(&state, WorktreeRuntimeCycleCause::Startup).await;
     clock.set_millis(20);
     wait_for_cause(&state, WorktreeRuntimeCycleCause::Periodic).await;
     hint.store(true, Ordering::Release);
     clock.set_millis(30);
+    tokio::time::sleep(Duration::from_millis(5)).await;
+    clock.set_millis(40);
     wait_for_cause(&state, WorktreeRuntimeCycleCause::WatcherHint).await;
     assert_eq!(state.max_active.load(Ordering::Acquire), 1);
     host.shutdown().await.unwrap();
@@ -304,9 +371,14 @@ async fn manual_boundary_reports_busy_and_completes_dry_run() {
     let (watcher, _, _) = FakeWatcher::healthy();
     let state = ExecutorState::new();
     state.block.store(true, Ordering::Release);
-    let host = test_host(WorktreeMode::DryRun, watcher, FakeClock::new(), state.clone())
-        .await
-        .unwrap();
+    let host = test_host(
+        WorktreeMode::DryRun,
+        watcher,
+        FakeClock::new(),
+        state.clone(),
+    )
+    .await
+    .unwrap();
     let first = host.submit_manual(WorktreeRuntimeManualRequest::dry_run(budget()));
     let ticket = match first {
         WorktreeRuntimeManualSubmission::Accepted(ticket) => ticket,
@@ -319,7 +391,9 @@ async fn manual_boundary_reports_busy_and_completes_dry_run() {
     state.block.store(false, Ordering::Release);
     state.release.notify_waiters();
     let outcome = wait_ticket(&ticket).await;
-    assert!(matches!(outcome, WorktreeRuntimeManualOutcome::Completed(summary) if summary.full_scan_completed));
+    assert!(
+        matches!(outcome, WorktreeRuntimeManualOutcome::Completed(summary) if summary.full_scan_completed)
+    );
     assert_eq!(state.causes(), vec![WorktreeRuntimeCycleCause::Manual]);
     host.shutdown().await.unwrap();
 }
@@ -329,13 +403,19 @@ async fn shutdown_cancels_pending_cycle_and_mandatorily_joins() {
     let (watcher, _, dropped) = FakeWatcher::healthy();
     let state = ExecutorState::new();
     state.block.store(true, Ordering::Release);
-    let host = test_host(WorktreeMode::ExportOnly, watcher, FakeClock::new(), state.clone())
-        .await
-        .unwrap();
+    let host = test_host(
+        WorktreeMode::ExportOnly,
+        watcher,
+        FakeClock::new(),
+        state.clone(),
+    )
+    .await
+    .unwrap();
     wait_for_cause(&state, WorktreeRuntimeCycleCause::Startup).await;
     let status = host.shutdown().await.unwrap();
     assert_eq!(status.lifecycle, ServerWorktreeHostLifecycle::Shutdown);
-    assert!(state.cancelled.load(Ordering::Acquire));
+    assert_eq!(state.active.load(Ordering::Acquire), 0);
+    assert!(state.cancelled_by_drop.load(Ordering::Acquire));
     assert!(dropped.load(Ordering::Acquire));
 }
 
@@ -353,8 +433,14 @@ async fn bounded_shutdown_timeout_aborts_and_awaits_retained_task() {
         join: Some(join),
         shutdown_timeout: Duration::from_millis(1),
     };
-    assert_eq!(host.shutdown().await, Err(ServerWorktreeHostError::ShutdownTimedOut));
-    assert_eq!(status.read().await.lifecycle, ServerWorktreeHostLifecycle::Failed);
+    assert_eq!(
+        host.shutdown().await,
+        Err(ServerWorktreeHostError::ShutdownTimedOut)
+    );
+    assert_eq!(
+        status.read().await.lifecycle,
+        ServerWorktreeHostLifecycle::Failed
+    );
 }
 
 #[test]
