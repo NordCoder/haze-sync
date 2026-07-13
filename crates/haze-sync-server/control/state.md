@@ -6,76 +6,86 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-server/control/prompt.md
 active_report: crates/haze-sync-server/control/report.md
-active_agent_role: implementation-worker
-assigned_chat_name: server — W1 SRV-P7B3 Exact-SHA Fan-In Retry
-prompt_revision: verified by Orchestrator after prior slot produced no report, no branch advance and no CI evidence
+active_agent_role: clean-code-reviewer
+assigned_chat_name: server — W1 SRV-P7B3 Fan-In Clean-Code Review
+prompt_revision: verified by Orchestrator after accepted exact-SHA Worktree/Storage fan-in implementation and green DB-capable Component CI
 
 wave: W1
-phase: SRV-P7B3-EXACT-SHA-FAN-IN-RETRY
+phase: SRV-P7B3-FAN-IN-CLEAN
 
-implementation_status: RETRY_REQUIRED_NO_RESULT
-fix_status: NOT_STARTED
+implementation_status: SELF_ACCEPT
+fix_status: FIX_COMPLETE
 clean_review_status: NOT_STARTED
 architect_status: ARCHITECT_CHANGED_CONTRACTS
-ci_status: NOT_RUN
+ci_status: CI_GREEN_DB_VERIFIED
 known_failed_checks: []
 
-previous_attempt_evidence:
-- checked branch head dbb50d98da88fd01cca5a88e0e0de30bfc6be131
-- branch head was still the Orchestrator control-state commit
-- crates/haze-sync-server/control/report.md returned 404
-- no new code-bearing fan-in SHA existed
-- no new Component CI run existed
-- previous slot therefore not accepted as complete
+accepted_fan_in_candidate:
+- pre_phase_head_sha: b5ec0e1089d1c50f0b121f35a4499bca4864ffa1
+- initial_candidate_sha: 6aecbf0678e631236cd3001cd694c8033def5dd6
+- final_code_bearing_sha: 4f8b3d9219961409847b12e393d9a38dc6377dea
+- implementation_report_commit: ae996b4811dde20a1bf535f85f214f6f61d5b53f
+- implementation_report_status: SELF_ACCEPT
+- post_candidate_changes_before_rotation: report-only
 
 accepted_owner_shas:
 - worktree: 1942946331e8362f19907ab6ad4eb779da70fd57
 - storage: 66b6a1f554aae1d1b774cc88560d46dd140c7a54
 - server: 647dce7b624d67663632808906896cb6745ea7e7
 
-accepted_owner_evidence:
-- WT-P10 CLEAN_ACCEPT; CI 29167289593 run 1799 success
-- STOR-P10 CLEAN_ACCEPT; CI 29185466870 run 1833 success; cross-branch report commit 13a0c80123061848235676b2a7dc7c3a3c644dee
-- SRV-P7B2 CLEAN_ACCEPT; CI 29186058268 run 1835 success; clean report commit 053eea1496bf9b541b462a82989b4cd956ed7276
+implementation_result:
+- exact accepted Worktree non-control product snapshot synchronized
+- exact accepted Storage non-control product/test/docs and migration snapshot synchronized
+- no sibling control files imported
+- no sibling workflow imported
+- no whole sibling branch merge used
+- Server application-service and thin-route boundaries preserved
+- Server normal/dev Storage test-support gating preserved
+- minimal fail-closed DryRun compatibility correction added
+- no executor, hosted runtime, public status DTO, CLI or Deployment behavior added
 
-fan_in_validation:
-- component/server diverges from accepted Storage SHA
-- component/server diverges from accepted Worktree SHA
-- accepted owner product snapshots are not yet synchronized in one integration line
-- whole component-branch merges are forbidden
-- exact non-control owner product path transfer is required
+ci_evidence:
+- workflow: Component CI
+- run_id: 29235942761
+- run_number: 1840
+- run_attempt: 1
+- head_sha: 4f8b3d9219961409847b12e393d9a38dc6377dea
+- conclusion: success
+- rust_workspace_job: success
+- cargo_fmt: success
+- cargo_check: success
+- isolated_server_postgresql_tests: success
+- isolated_storage_postgresql_tests: success
+- remaining_workspace_tests: success
+- cargo_clippy: success
+- diagnostics_finalizer: success
 
-required_preservation:
-- current accepted Server application-service behavior
-- transport-only routes
-- Server Storage test-support normal/dev dependency separation
-- isolated Server and Storage PostgreSQL CI services
-- complete workspace test coverage
-- no executor, host, scheduler or public DTO implementation in this phase
+archived_completed_slot:
+- prompt_index: crates/haze-sync-server/control/log/20260713-085500Z-W1-SRV-P7B3-EXACT-SHA-FAN-IN-RETRY-implementation-worker-prompt.md
+- report_index: crates/haze-sync-server/control/log/20260713-085500Z-W1-SRV-P7B3-EXACT-SHA-FAN-IN-RETRY-implementation-worker-report.md
+- prompt_blob: 0ee3c77b6a3dcd47ff3923427a294f7b50d99a9f
+- report_blob: 9aee5d80275877a95188539c48b9b92759c9dc38
 
-allowed_integration_scope:
-- exact Worktree non-control product/test/docs snapshot
-- exact Storage migration and non-control product/test/docs snapshot
-- Cargo.lock when required
-- minimal Server-local compile/test compatibility corrections directly caused by accepted contracts
-- Server control report
-
-forbidden_scope:
-- sibling control files or stale workflows
-- SRV-P7B3 executor behavior
-- SRV-P7B4 hosted runtime
-- API-P8 status DTOs
-- CLI or Deployment changes
-- Core policy or schema redesign
+review_requirements:
+- review range b5ec0e1089d1c50f0b121f35a4499bca4864ffa1..4f8b3d9219961409847b12e393d9a38dc6377dea
+- verify exact owner snapshot parity for transferred paths
+- verify no forbidden sibling lifecycle or workflow content
+- verify Server application-service, policy and ownership boundaries
+- verify Storage dependency gating and DB-capable CI coverage
+- verify DryRun correction is exhaustive and fail-closed
+- verify no future executor/runtime/API/CLI/Deployment behavior
+- preserve accepted owner files as immutable snapshots during Server review
+- write committed CLEAN_CODE_REVIEW report
 
 completion_requirements:
-- branch advances with a real code-bearing fan-in commit
 - committed crates/haze-sync-server/control/report.md exists
-- report phase SRV-P7B3-EXACT-SHA-FAN-IN-RETRY
-- report chat name server — W1 SRV-P7B3 Exact-SHA Fan-In Retry
-- DB-capable Component CI is green on exact final code-bearing SHA
+- report phase SRV-P7B3-FAN-IN-CLEAN
+- report chat name server — W1 SRV-P7B3 Fan-In Clean-Code Review
+- report reviews exact final candidate or a newer review correction SHA
+- authoritative DB-capable Component CI is green on any new code-bearing correction
+- no later product/tooling commit invalidates the review
 
-next_gate_after_implementation:
-- SELF_ACCEPT plus green DB-capable Component CI -> mandatory fan-in clean-code review
-- fan-in CLEAN_ACCEPT -> activate SRV-P7B3 Bounded Worktree Executor
-- blocked or red -> route exact contract/scope/tooling/CI evidence
+next_gate_after_clean_review:
+- CLEAN_ACCEPT -> Orchestrator may activate SRV-P7B3 Bounded Worktree Executor
+- CLEAN_NEEDS_FIX or red CI -> route exact evidence to fixer or owner component
+- blocked -> preserve dependency graph and route the stated contract/scope/tooling blocker
