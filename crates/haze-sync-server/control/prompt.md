@@ -1,65 +1,50 @@
-# W1-SRV-WT-P12-FAN-IN — Exact-SHA Worktree manual-status fan-in
+# W1-SRV-P7B5-MANUAL-STATUS-VERIFY — Final functional verification
 
 Before starting, name this worker chat exactly:
 
-`server — W1 WT-P12 Manual Status Fan-In`
+`server — W1 SRV-P7B5 Manual Status Verification`
 
 Component: server
 Path: crates/haze-sync-server
 Branch: component/server
 PR: #45
-Role: implementation-worker
-Phase: SRV-WT-P12-MANUAL-STATUS-FAN-IN
+Role: clean-code-reviewer
+Phase: SRV-P7B5-MANUAL-STATUS-VERIFY
 
-Do not merge, change draft state, rewrite history, modify sibling branches, or begin API-P8.
+Do not merge, rewrite history, modify sibling branches, or begin API-P8/CLI-P6A/Deployment work.
 
-## Accepted source
+## Candidate
 
-- Worktree accepted code-bearing SHA: `526714cdfe185713a09af68fd5bddcb967a7902e`;
-- Worktree clean-review commit: `c0f636964cdfc4a6686e09736c73431fdc964d51`;
-- clean report blob: `7c0d3e739642d01c363316b72a9075f6f876044a`;
-- Component CI run `29287214701`, number `1905`, success.
+- accepted WT-P12 SHA: `526714cdfe185713a09af68fd5bddcb967a7902e`;
+- final Server code-bearing SHA: `1d1fc8ca62c97db041cca09dd8316370285dfba1`;
+- fan-in implementation report commit: `854084ab642c70ad0abc7ec878817d6410d59f22`;
+- report blob: `2bb0637e819bc55530b0429cb728b09c8203cdbd`;
+- authoritative DB-capable Component CI: run `29289080020`, number `1912`, success.
 
-## Server baseline
+Formatting, rustfmt, naming taste and stylistic matters are out of scope and must not block acceptance.
 
-- current SRV-P7B5 candidate SHA: `78f4e4525327ff03fa1af1e8387e9e3ea07091d6`;
-- blocker: Server approximate manual availability mirror is racy and duplicates Worktree gate ownership;
-- blocker report commit: `d612196a33c56711e9102f09eaf1340ed7b696e0`.
+Verify only substantive correctness:
 
-## Task
+1. accepted WT-P12 product blobs match exactly and no Worktree semantic edits/control files were introduced;
+2. the Server Atomic/manual mirror and poll-based Busy/Available toggles are fully removed;
+3. Server snapshot reads accepted `WorktreeRuntimeManualStatusHandle` directly and passively;
+4. lifecycle mapping is deterministic: Created→NotStarted, Running DryRun idle→Available, Running DryRun busy→Busy, non-DryRun Running→Unavailable, Cancelling→Cancelling, Shutdown→Shutdown, host Failed→Failed;
+5. Busy remains Ready because readiness derives from host lifecycle, not gate occupancy;
+6. `busy` is interpreted as authoritative shared gate ownership, including automatic cycles, without false availability claims;
+7. older ticket/completion/drop cannot clear newer accepted work;
+8. lifecycle failure/shutdown overrides stale status safely;
+9. status reads submit no probe, perform no I/O and add no task/poller/runtime/retry;
+10. focused tests cover idle DryRun, pending Busy lifetime, old/new ticket safety, automatic-cycle semantics, Busy-is-Ready and lifecycle overrides;
+11. no public route/DTO/OpenAPI/readiness payload, migration, workflow or downstream product scope changed;
+12. exact-SHA DB-capable CI is green and no later product/tooling commit invalidates the candidate.
 
-Perform an exact-SHA fan-in of the accepted WT-P12 product changes required for Server integration:
-
-- `crates/haze-sync-worktree/src/hosted_runtime.rs`;
-- `crates/haze-sync-worktree/src/lib.rs`;
-- focused WT-P12 tests only if needed for workspace verification.
-
-Requirements:
-
-1. Product blobs must match accepted Worktree SHA exactly; no semantic edits.
-2. Do not copy Worktree control files.
-3. Preserve all existing Server product changes.
-4. After fan-in, replace the Server-owned approximate manual availability Atomic/mirror with direct mapping from the accepted Worktree manual status handle.
-5. Remove poll-based Busy/Available toggles.
-6. Map authoritative lifecycle/busy into existing Server categories:
-   - Created => NotStarted;
-   - Running + busy false => Available only for DryRun, otherwise Unavailable;
-   - Running + busy true => Busy for DryRun, otherwise Unavailable;
-   - Cancelling => Cancelling;
-   - Shutdown => Shutdown;
-   - host Failed => Failed.
-7. Busy must remain Ready at the readiness layer.
-8. Status reads remain passive, bounded and side-effect free.
-9. Add deterministic Server tests for idle DryRun availability, authoritative Busy lifetime, automatic-cycle Busy semantics, stale-completion safety, lifecycle overrides and no probe submission.
-10. No public route/DTO/OpenAPI/readiness payload, new task/poller/runtime, migration, workflow or sibling component changes.
-
-Create a real code-bearing commit without CI skip and obtain authoritative DB-capable Component CI on the exact final Server SHA.
+Do not modify code unless there is a concrete functional, concurrency, readiness, secrecy or scope defect. No formatting-only corrections.
 
 Write `crates/haze-sync-server/control/report.md` with:
 
-- `REPORT_TYPE: IMPLEMENTATION`;
-- `phase_id: SRV-WT-P12-MANUAL-STATUS-FAN-IN`;
-- `chat_name: server — W1 WT-P12 Manual Status Fan-In`;
-- honest status `SELF_ACCEPT`, `NEEDS_FIX`, `BLOCKED_BY_CONTRACT`, `BLOCKED_BY_SCOPE`, or `BLOCKED_BY_TOOLING`.
+- `REPORT_TYPE: CLEAN_CODE_REVIEW`;
+- `phase_id: SRV-P7B5-MANUAL-STATUS-VERIFY`;
+- `chat_name: server — W1 SRV-P7B5 Manual Status Verification`;
+- status `CLEAN_ACCEPT`, `CLEAN_NEEDS_FIX`, `CLEAN_BLOCKED_BY_CONTRACT`, `CLEAN_BLOCKED_BY_SCOPE`, or `CLEAN_BLOCKED_BY_TOOLING`.
 
-Record exact blob matching, removed mirror logic, authoritative mapping, tests, final SHA and exact CI evidence. Do not claim CLEAN_ACCEPT or begin API-P8.
+If no substantive blocker exists, use `CLEAN_ACCEPT` and state that Orchestrator may begin API-P8 passive status/manual HTTP contract work immediately.
