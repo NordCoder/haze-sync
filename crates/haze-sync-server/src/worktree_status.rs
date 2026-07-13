@@ -1,7 +1,9 @@
 //! Passive, secret-safe Server vocabulary for hosted Worktree status.
 
 use crate::worktree_host::{ServerWorktreeHostLifecycle, ServerWorktreeHostStatus};
-use haze_sync_worktree::WorktreeMode;
+use haze_sync_worktree::{
+    WorktreeMode, WorktreeRuntimeLifecycle, WorktreeRuntimeManualStatus,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ServerWorktreeModeCategory {
@@ -54,12 +56,6 @@ pub(crate) enum ServerWorktreeManualAvailability {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ServerWorktreeManualGate {
-    Available,
-    Busy,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct ServerWorktreeStatusSnapshot {
     pub(crate) mode: ServerWorktreeModeCategory,
     pub(crate) lifecycle: ServerWorktreeHostLifecycle,
@@ -76,10 +72,10 @@ impl ServerWorktreeStatusSnapshot {
     pub(crate) fn from_host(
         mode: WorktreeMode,
         status: ServerWorktreeHostStatus,
-        manual_gate: ServerWorktreeManualGate,
+        manual_status: Option<WorktreeRuntimeManualStatus>,
     ) -> Self {
         let (readiness, readiness_reason) = readiness(status.lifecycle);
-        let manual_availability = manual_availability(mode, status.lifecycle, manual_gate);
+        let manual_availability = manual_availability(mode, status.lifecycle, manual_status);
         Self {
             mode: mode.into(),
             lifecycle: status.lifecycle,
@@ -134,25 +130,38 @@ const fn readiness(
 
 const fn manual_availability(
     mode: WorktreeMode,
-    lifecycle: ServerWorktreeHostLifecycle,
-    gate: ServerWorktreeManualGate,
+    host_lifecycle: ServerWorktreeHostLifecycle,
+    manual_status: Option<WorktreeRuntimeManualStatus>,
 ) -> ServerWorktreeManualAvailability {
-    match lifecycle {
-        ServerWorktreeHostLifecycle::Disabled => ServerWorktreeManualAvailability::Unavailable,
-        ServerWorktreeHostLifecycle::Starting => ServerWorktreeManualAvailability::NotStarted,
-        ServerWorktreeHostLifecycle::Cancelling => ServerWorktreeManualAvailability::Cancelling,
-        ServerWorktreeHostLifecycle::Shutdown => ServerWorktreeManualAvailability::Shutdown,
-        ServerWorktreeHostLifecycle::Failed => ServerWorktreeManualAvailability::Failed,
-        ServerWorktreeHostLifecycle::Running => {
+    if matches!(host_lifecycle, ServerWorktreeHostLifecycle::Failed) {
+        return ServerWorktreeManualAvailability::Failed;
+    }
+    if matches!(host_lifecycle, ServerWorktreeHostLifecycle::Disabled) {
+        return ServerWorktreeManualAvailability::Unavailable;
+    }
+
+    let Some(manual_status) = manual_status else {
+        return match host_lifecycle {
+            ServerWorktreeHostLifecycle::Starting => ServerWorktreeManualAvailability::NotStarted,
+            ServerWorktreeHostLifecycle::Cancelling => ServerWorktreeManualAvailability::Cancelling,
+            ServerWorktreeHostLifecycle::Shutdown => ServerWorktreeManualAvailability::Shutdown,
+            ServerWorktreeHostLifecycle::Running => ServerWorktreeManualAvailability::Unavailable,
+            ServerWorktreeHostLifecycle::Disabled => ServerWorktreeManualAvailability::Unavailable,
+            ServerWorktreeHostLifecycle::Failed => ServerWorktreeManualAvailability::Failed,
+        };
+    };
+
+    match manual_status.lifecycle {
+        WorktreeRuntimeLifecycle::Created => ServerWorktreeManualAvailability::NotStarted,
+        WorktreeRuntimeLifecycle::Cancelling => ServerWorktreeManualAvailability::Cancelling,
+        WorktreeRuntimeLifecycle::Shutdown => ServerWorktreeManualAvailability::Shutdown,
+        WorktreeRuntimeLifecycle::Running => {
             if !matches!(mode, WorktreeMode::DryRun) {
                 ServerWorktreeManualAvailability::Unavailable
+            } else if manual_status.busy {
+                ServerWorktreeManualAvailability::Busy
             } else {
-                match gate {
-                    ServerWorktreeManualGate::Available => {
-                        ServerWorktreeManualAvailability::Available
-                    }
-                    ServerWorktreeManualGate::Busy => ServerWorktreeManualAvailability::Busy,
-                }
+                ServerWorktreeManualAvailability::Available
             }
         }
     }
@@ -172,12 +181,16 @@ mod tests {
         }
     }
 
+    fn manual(lifecycle: WorktreeRuntimeLifecycle, busy: bool) -> WorktreeRuntimeManualStatus {
+        WorktreeRuntimeManualStatus { lifecycle, busy }
+    }
+
     #[test]
     fn readiness_mapping_is_deterministic_and_counter_independent() {
         let disabled = ServerWorktreeStatusSnapshot::from_host(
             WorktreeMode::Disabled,
             status(ServerWorktreeHostLifecycle::Disabled),
-            ServerWorktreeManualGate::Available,
+            None,
         );
         assert!(disabled.is_ready());
         assert_eq!(
@@ -188,7 +201,7 @@ mod tests {
         let running = ServerWorktreeStatusSnapshot::from_host(
             WorktreeMode::DryRun,
             status(ServerWorktreeHostLifecycle::Running),
-            ServerWorktreeManualGate::Busy,
+            Some(manual(WorktreeRuntimeLifecycle::Running, true)),
         );
         assert!(running.is_ready());
         assert_eq!(
@@ -222,7 +235,7 @@ mod tests {
             let snapshot = ServerWorktreeStatusSnapshot::from_host(
                 WorktreeMode::DryRun,
                 status(lifecycle),
-                ServerWorktreeManualGate::Available,
+                Some(manual(WorktreeRuntimeLifecycle::Running, true)),
             );
             assert!(!snapshot.is_ready());
             assert_eq!(snapshot.readiness_reason, reason);
@@ -230,11 +243,41 @@ mod tests {
     }
 
     #[test]
-    fn manual_availability_is_typed_without_probe_submission() {
+    fn authoritative_manual_lifecycle_and_busy_are_mapped() {
+        for (manual_status, expected) in [
+            (
+                manual(WorktreeRuntimeLifecycle::Created, false),
+                ServerWorktreeManualAvailability::NotStarted,
+            ),
+            (
+                manual(WorktreeRuntimeLifecycle::Running, false),
+                ServerWorktreeManualAvailability::Available,
+            ),
+            (
+                manual(WorktreeRuntimeLifecycle::Running, true),
+                ServerWorktreeManualAvailability::Busy,
+            ),
+            (
+                manual(WorktreeRuntimeLifecycle::Cancelling, true),
+                ServerWorktreeManualAvailability::Cancelling,
+            ),
+            (
+                manual(WorktreeRuntimeLifecycle::Shutdown, false),
+                ServerWorktreeManualAvailability::Shutdown,
+            ),
+        ] {
+            let snapshot = ServerWorktreeStatusSnapshot::from_host(
+                WorktreeMode::DryRun,
+                status(ServerWorktreeHostLifecycle::Running),
+                Some(manual_status),
+            );
+            assert_eq!(snapshot.manual_availability, expected);
+        }
+
         let unavailable = ServerWorktreeStatusSnapshot::from_host(
             WorktreeMode::ExportOnly,
             status(ServerWorktreeHostLifecycle::Running),
-            ServerWorktreeManualGate::Available,
+            Some(manual(WorktreeRuntimeLifecycle::Running, true)),
         );
         assert_eq!(
             unavailable.manual_availability,
@@ -244,7 +287,7 @@ mod tests {
         let failed = ServerWorktreeStatusSnapshot::from_host(
             WorktreeMode::DryRun,
             status(ServerWorktreeHostLifecycle::Failed),
-            ServerWorktreeManualGate::Available,
+            Some(manual(WorktreeRuntimeLifecycle::Running, true)),
         );
         assert_eq!(
             failed.manual_availability,
@@ -259,7 +302,7 @@ mod tests {
             ServerWorktreeStatusSnapshot::from_host(
                 WorktreeMode::DryRun,
                 status(ServerWorktreeHostLifecycle::Running),
-                ServerWorktreeManualGate::Available,
+                Some(manual(WorktreeRuntimeLifecycle::Running, false)),
             )
         );
         for forbidden in [
