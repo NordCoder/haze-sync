@@ -12,6 +12,7 @@ path = "src/lib.rs"
 
 [dependencies]
 haze-sync-common = { path = "../haze-sync-common" }
+notify = "6.1"
 
 [lints]
 workspace = true

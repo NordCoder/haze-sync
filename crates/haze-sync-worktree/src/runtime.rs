@@ -12,52 +12,37 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-/// Worktree adapter operating mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WorktreeMode {
-    /// Runtime is completely inert.
     Disabled,
-    /// Adapter may read Core/apply exports but must not write local facts to Core.
     ReadOnly,
-    /// Observe and import local facts, but do not apply Core exports.
     ImportOnly,
-    /// Apply Core exports, but do not watch or import local filesystem changes.
     ExportOnly,
-    /// Observe/import local facts and apply Core exports.
     Bidirectional,
-    /// Explicit planning-only representation for a future manual Server command.
-    ///
-    /// Dry-run never starts automatic cycles and grants no mutation,
-    /// materialization, cursor-advance, trash, echo, or durable-state permission.
     DryRun,
 }
 
 impl WorktreeMode {
-    /// Whether the mode is distinct from the completely disabled adapter.
     #[must_use]
     pub const fn is_enabled(self) -> bool {
         !matches!(self, Self::Disabled)
     }
 
-    /// Whether startup/periodic/watcher cycles may run automatically.
     #[must_use]
     pub const fn runs_automatically(self) -> bool {
         !matches!(self, Self::Disabled | Self::DryRun)
     }
 
-    /// Whether this mode observes local state through authoritative scans.
     #[must_use]
     pub const fn observes_local(self) -> bool {
         matches!(self, Self::ImportOnly | Self::Bidirectional)
     }
 
-    /// Whether local facts may be submitted to Core.
     #[must_use]
     pub const fn imports_local(self) -> bool {
         matches!(self, Self::ImportOnly | Self::Bidirectional)
     }
 
-    /// Whether authoritative Core changes may be materialized locally.
     #[must_use]
     pub const fn exports_core(self) -> bool {
         matches!(
@@ -66,20 +51,17 @@ impl WorktreeMode {
         )
     }
 
-    /// Whether a future host may use this representation for manual planning.
     #[must_use]
     pub const fn allows_manual_planning(self) -> bool {
         matches!(self, Self::DryRun)
     }
 
-    /// Whether any mutation permission is represented by this mode.
     #[must_use]
     pub const fn permits_mutation(self) -> bool {
         self.imports_local() || self.exports_core()
     }
 }
 
-/// Monotonic clock used by the host-driven scheduler.
 pub trait WorktreeRuntimeClock {
     fn now(&self) -> Duration;
 }
@@ -125,6 +107,7 @@ pub enum WorktreeRuntimeCycleCause {
     Startup,
     WatcherHint,
     Periodic,
+    Manual,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -132,6 +115,12 @@ pub struct WorktreeRuntimeCycleBudget {
     pub max_import_actions: usize,
     pub max_delete_candidates: usize,
     pub max_export_actions: usize,
+}
+
+impl WorktreeRuntimeCycleBudget {
+    fn is_valid(self) -> bool {
+        self.max_import_actions > 0 && self.max_delete_candidates > 0 && self.max_export_actions > 0
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -146,17 +135,40 @@ pub struct WorktreeRuntimeCycleRequest {
 }
 
 impl WorktreeRuntimeCycleRequest {
-    /// Build an explicit future manual dry-run request with no mutation rights.
     #[must_use]
-    pub const fn manual_dry_run(budget: WorktreeRuntimeCycleBudget) -> WorktreeRuntimeCycleRequest {
+    pub const fn manual_dry_run(budget: WorktreeRuntimeCycleBudget) -> Self {
         Self {
-            cause: WorktreeRuntimeCycleCause::Periodic,
+            cause: WorktreeRuntimeCycleCause::Manual,
             mode: WorktreeMode::DryRun,
             full_scan_required: true,
             import_enabled: false,
             export_enabled: false,
             budget,
             coalesced_watcher_hints: 0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct WorktreeRuntimeManualRequest {
+    pub full_scan_required: bool,
+    pub budget: WorktreeRuntimeCycleBudget,
+}
+
+impl WorktreeRuntimeManualRequest {
+    #[must_use]
+    pub const fn new(full_scan_required: bool, budget: WorktreeRuntimeCycleBudget) -> Self {
+        Self {
+            full_scan_required,
+            budget,
+        }
+    }
+
+    #[must_use]
+    pub const fn dry_run(budget: WorktreeRuntimeCycleBudget) -> Self {
+        Self {
+            full_scan_required: true,
+            budget,
         }
     }
 }
@@ -194,10 +206,6 @@ impl WorktreeRuntimeCycleFailure {
     }
 }
 
-/// Cooperative cancellation shared with a future Server-owned executor.
-///
-/// The token carries only one atomic boolean. It contains no paths, payloads,
-/// cursors, credentials, or runtime handles.
 #[derive(Clone, Default)]
 pub struct WorktreeCancellationToken {
     cancelled: Arc<AtomicBool>,
@@ -228,7 +236,6 @@ impl fmt::Debug for WorktreeCancellationToken {
     }
 }
 
-/// Awaitable, `Send` cycle result without an async-trait dependency.
 pub type WorktreeRuntimeCycleFuture<'a> = Pin<
     Box<
         dyn Future<Output = Result<WorktreeRuntimeCycleSummary, WorktreeRuntimeCycleFailure>>
@@ -237,7 +244,6 @@ pub type WorktreeRuntimeCycleFuture<'a> = Pin<
     >,
 >;
 
-/// Host-provided authoritative async cycle executor.
 pub trait WorktreeRuntimeCycle {
     fn run_cycle<'a>(
         &'a mut self,
@@ -267,10 +273,7 @@ impl WorktreeRuntimePolicy {
         if max_watcher_hints_per_poll == 0 {
             return Err(WorktreeRuntimePolicyError::ZeroHintBudget);
         }
-        if budget.max_import_actions == 0
-            || budget.max_delete_candidates == 0
-            || budget.max_export_actions == 0
-        {
+        if !budget.is_valid() {
             return Err(WorktreeRuntimePolicyError::ZeroCycleBudget);
         }
         Ok(Self {
@@ -393,12 +396,25 @@ pub enum WorktreeRuntimePoll {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum WorktreeRuntimeManualOutcome {
+    NotStarted,
+    Busy,
+    Cancelling,
+    Shutdown,
+    Disabled,
+    Completed(WorktreeRuntimeCycleSummary),
+    Failed(WorktreeRuntimeCycleFailure),
+    Rejected(WorktreeRuntimeContractViolation),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WorktreeRuntimeContractViolation {
     RequiredScanMissing,
     ImportModeViolation,
     ExportModeViolation,
     BudgetExceeded,
     InvalidImportCounts,
+    InvalidManualRequest,
 }
 
 impl WorktreeRuntimeContractViolation {
@@ -410,6 +426,7 @@ impl WorktreeRuntimeContractViolation {
             Self::ExportModeViolation => "worktree_runtime_export_mode_violation",
             Self::BudgetExceeded => "worktree_runtime_cycle_budget_exceeded",
             Self::InvalidImportCounts => "worktree_runtime_invalid_import_counts",
+            Self::InvalidManualRequest => "worktree_runtime_invalid_manual_request",
         }
     }
 }
@@ -433,7 +450,45 @@ impl fmt::Display for WorktreeRuntimeLifecycleError {
 
 impl std::error::Error for WorktreeRuntimeLifecycleError {}
 
-/// Hostable Worktree runtime service. It never spawns or detaches a task.
+struct CycleAttemptGuard<'a> {
+    in_progress: &'a mut bool,
+    last_cycle_cause: &'a mut Option<WorktreeRuntimeCycleCause>,
+    previous_cause: Option<WorktreeRuntimeCycleCause>,
+    committed: bool,
+}
+
+impl<'a> CycleAttemptGuard<'a> {
+    fn begin(
+        in_progress: &'a mut bool,
+        last_cycle_cause: &'a mut Option<WorktreeRuntimeCycleCause>,
+        cause: WorktreeRuntimeCycleCause,
+    ) -> Self {
+        let previous_cause = *last_cycle_cause;
+        *in_progress = true;
+        *last_cycle_cause = Some(cause);
+        Self {
+            in_progress,
+            last_cycle_cause,
+            previous_cause,
+            committed: false,
+        }
+    }
+
+    fn commit(mut self) {
+        *self.in_progress = false;
+        self.committed = true;
+    }
+}
+
+impl Drop for CycleAttemptGuard<'_> {
+    fn drop(&mut self) {
+        *self.in_progress = false;
+        if !self.committed {
+            *self.last_cycle_cause = self.previous_cause;
+        }
+    }
+}
+
 pub struct WorktreeRuntimeService<C, W, X> {
     mode: WorktreeMode,
     policy: WorktreeRuntimePolicy,
@@ -516,13 +571,12 @@ where
         match self.lifecycle {
             WorktreeRuntimeLifecycle::Created => {}
             WorktreeRuntimeLifecycle::Shutdown => {
-                return Err(WorktreeRuntimeLifecycleError::AlreadyShutdown);
+                return Err(WorktreeRuntimeLifecycleError::AlreadyShutdown)
             }
             WorktreeRuntimeLifecycle::Running | WorktreeRuntimeLifecycle::Cancelling => {
-                return Err(WorktreeRuntimeLifecycleError::AlreadyStarted);
+                return Err(WorktreeRuntimeLifecycleError::AlreadyStarted)
             }
         }
-
         let now = self.clock.now();
         self.lifecycle = WorktreeRuntimeLifecycle::Running;
         self.startup_cycle_pending = self.mode.runs_automatically();
@@ -538,14 +592,12 @@ where
         } else {
             WorktreeRuntimeWatcherState::Disabled
         };
-
         Ok(WorktreeRuntimeStartSummary {
             watcher: self.watcher_state,
             startup_cycle_pending: self.startup_cycle_pending,
         })
     }
 
-    /// Clone a path-free cancellation token for an async host or executor.
     #[must_use]
     pub fn cancellation_token(&self) -> WorktreeCancellationToken {
         self.cancellation.clone()
@@ -565,19 +617,17 @@ where
         }
     }
 
-    /// Poll watcher hints and await at most one authoritative cycle.
     pub async fn poll(&mut self) -> Result<WorktreeRuntimePoll, WorktreeRuntimeLifecycleError> {
         match self.lifecycle {
             WorktreeRuntimeLifecycle::Created => {
-                return Err(WorktreeRuntimeLifecycleError::NotStarted);
+                return Err(WorktreeRuntimeLifecycleError::NotStarted)
             }
             WorktreeRuntimeLifecycle::Shutdown => {
-                return Err(WorktreeRuntimeLifecycleError::AlreadyShutdown);
+                return Err(WorktreeRuntimeLifecycleError::AlreadyShutdown)
             }
             WorktreeRuntimeLifecycle::Cancelling => return Ok(WorktreeRuntimePoll::Cancelled),
             WorktreeRuntimeLifecycle::Running => {}
         }
-
         if self.cancellation.is_cancelled() {
             self.lifecycle = WorktreeRuntimeLifecycle::Cancelling;
             return Ok(WorktreeRuntimePoll::Cancelled);
@@ -587,13 +637,68 @@ where
             WorktreeMode::DryRun => return Ok(WorktreeRuntimePoll::DryRun),
             _ => {}
         }
-
         let now = self.clock.now();
         self.collect_watcher_hints(now);
         let Some(cause) = self.due_cycle(now) else {
             return Ok(WorktreeRuntimePoll::Idle);
         };
-        Ok(self.run_one_cycle(cause, now).await)
+        Ok(self
+            .run_one_cycle(self.automatic_request(cause), now, true)
+            .await)
+    }
+
+    pub async fn run_manual_cycle(
+        &mut self,
+        manual: WorktreeRuntimeManualRequest,
+    ) -> WorktreeRuntimeManualOutcome {
+        match self.lifecycle {
+            WorktreeRuntimeLifecycle::Created => return WorktreeRuntimeManualOutcome::NotStarted,
+            WorktreeRuntimeLifecycle::Shutdown => return WorktreeRuntimeManualOutcome::Shutdown,
+            WorktreeRuntimeLifecycle::Cancelling => {
+                return WorktreeRuntimeManualOutcome::Cancelling
+            }
+            WorktreeRuntimeLifecycle::Running => {}
+        }
+        if self.cycle_in_progress {
+            return WorktreeRuntimeManualOutcome::Busy;
+        }
+        if self.cancellation.is_cancelled() {
+            self.lifecycle = WorktreeRuntimeLifecycle::Cancelling;
+            return WorktreeRuntimeManualOutcome::Cancelling;
+        }
+        if self.mode == WorktreeMode::Disabled {
+            return WorktreeRuntimeManualOutcome::Disabled;
+        }
+        if !manual.budget.is_valid()
+            || (self.mode == WorktreeMode::DryRun && !manual.full_scan_required)
+        {
+            return WorktreeRuntimeManualOutcome::Rejected(
+                WorktreeRuntimeContractViolation::InvalidManualRequest,
+            );
+        }
+        let request = WorktreeRuntimeCycleRequest {
+            cause: WorktreeRuntimeCycleCause::Manual,
+            mode: self.mode,
+            full_scan_required: manual.full_scan_required
+                || self.mode.observes_local()
+                || self.mode == WorktreeMode::DryRun,
+            import_enabled: self.mode.imports_local(),
+            export_enabled: self.mode.exports_core(),
+            budget: manual.budget,
+            coalesced_watcher_hints: 0,
+        };
+        match self.run_one_cycle(request, self.clock.now(), false).await {
+            WorktreeRuntimePoll::CycleCompleted { summary, .. } => {
+                WorktreeRuntimeManualOutcome::Completed(summary)
+            }
+            WorktreeRuntimePoll::CycleFailed { failure, .. } => {
+                WorktreeRuntimeManualOutcome::Failed(failure)
+            }
+            WorktreeRuntimePoll::CycleRejected { violation, .. } => {
+                WorktreeRuntimeManualOutcome::Rejected(violation)
+            }
+            _ => unreachable!("manual cycle always produces a cycle outcome"),
+        }
     }
 
     pub fn shutdown(
@@ -601,16 +706,15 @@ where
     ) -> Result<WorktreeRuntimeShutdownSummary, WorktreeRuntimeLifecycleError> {
         match self.lifecycle {
             WorktreeRuntimeLifecycle::Created => {
-                return Err(WorktreeRuntimeLifecycleError::NotStarted);
+                return Err(WorktreeRuntimeLifecycleError::NotStarted)
             }
             WorktreeRuntimeLifecycle::Shutdown => {
-                return Err(WorktreeRuntimeLifecycleError::AlreadyShutdown);
+                return Err(WorktreeRuntimeLifecycleError::AlreadyShutdown)
             }
             WorktreeRuntimeLifecycle::Running | WorktreeRuntimeLifecycle::Cancelling => {}
         }
-
         self.cancellation.cancel();
-        let watcher = match self.watcher_state {
+        self.watcher_state = match self.watcher_state {
             WorktreeRuntimeWatcherState::Running
             | WorktreeRuntimeWatcherState::Closed
             | WorktreeRuntimeWatcherState::Failed(WorktreeWatcherFailure::Poll) => {
@@ -619,20 +723,15 @@ where
                     Err(_) => WorktreeRuntimeWatcherState::Failed(WorktreeWatcherFailure::Shutdown),
                 }
             }
-            WorktreeRuntimeWatcherState::Disabled
-            | WorktreeRuntimeWatcherState::Failed(WorktreeWatcherFailure::Start)
-            | WorktreeRuntimeWatcherState::Failed(WorktreeWatcherFailure::Shutdown)
-            | WorktreeRuntimeWatcherState::Stopped => WorktreeRuntimeWatcherState::Stopped,
+            _ => WorktreeRuntimeWatcherState::Stopped,
         };
-        self.watcher_state = watcher;
         self.lifecycle = WorktreeRuntimeLifecycle::Shutdown;
         self.startup_cycle_pending = false;
         self.pending_watcher_hints = 0;
         self.debounce_deadline = None;
         self.next_periodic_cycle = None;
-
         Ok(WorktreeRuntimeShutdownSummary {
-            watcher,
+            watcher: self.watcher_state,
             cycles_completed: self.cycles_completed,
         })
     }
@@ -667,6 +766,18 @@ where
     #[must_use]
     pub fn watcher_mut(&mut self) -> &mut W {
         &mut self.watcher
+    }
+
+    fn automatic_request(&self, cause: WorktreeRuntimeCycleCause) -> WorktreeRuntimeCycleRequest {
+        WorktreeRuntimeCycleRequest {
+            cause,
+            mode: self.mode,
+            full_scan_required: self.mode.observes_local(),
+            import_enabled: self.mode.imports_local(),
+            export_enabled: self.mode.exports_core(),
+            budget: self.policy.budget,
+            coalesced_watcher_hints: self.pending_watcher_hints,
+        }
     }
 
     fn collect_watcher_hints(&mut self, now: Duration) {
@@ -716,28 +827,29 @@ where
 
     async fn run_one_cycle(
         &mut self,
-        cause: WorktreeRuntimeCycleCause,
+        request: WorktreeRuntimeCycleRequest,
         now: Duration,
+        advance_schedule: bool,
     ) -> WorktreeRuntimePoll {
-        debug_assert!(!self.cycle_in_progress);
-        self.cycle_in_progress = true;
-        self.last_cycle_cause = Some(cause);
-        let request = WorktreeRuntimeCycleRequest {
-            cause,
-            mode: self.mode,
-            full_scan_required: self.mode.observes_local(),
-            import_enabled: self.mode.imports_local(),
-            export_enabled: self.mode.exports_core(),
-            budget: self.policy.budget,
-            coalesced_watcher_hints: self.pending_watcher_hints,
-        };
+        if self.cycle_in_progress {
+            return WorktreeRuntimePoll::CycleRejected {
+                cause: request.cause,
+                violation: WorktreeRuntimeContractViolation::InvalidManualRequest,
+            };
+        }
+        let guard = CycleAttemptGuard::begin(
+            &mut self.cycle_in_progress,
+            &mut self.last_cycle_cause,
+            request.cause,
+        );
         let result = self
             .executor
             .run_cycle(request, self.cancellation.clone())
             .await;
-        self.cycle_in_progress = false;
-        self.finish_attempt(now);
-
+        guard.commit();
+        if advance_schedule {
+            self.finish_automatic_attempt(now);
+        }
         if self.cancellation.is_cancelled()
             || matches!(result, Err(WorktreeRuntimeCycleFailure::Cancelled))
         {
@@ -748,33 +860,41 @@ where
                 WorktreeRuntimeCycleFailure::Cancelled,
             ));
             return WorktreeRuntimePoll::CycleFailed {
-                cause,
+                cause: request.cause,
                 failure: WorktreeRuntimeCycleFailure::Cancelled,
             };
         }
-
         match result {
             Ok(summary) => match validate_cycle_summary(request, summary) {
                 Ok(()) => {
                     self.cycles_completed = self.cycles_completed.saturating_add(1);
                     self.last_cycle = Some(WorktreeRuntimeLastCycle::Completed(summary));
-                    WorktreeRuntimePoll::CycleCompleted { cause, summary }
+                    WorktreeRuntimePoll::CycleCompleted {
+                        cause: request.cause,
+                        summary,
+                    }
                 }
                 Err(violation) => {
                     self.cycles_failed = self.cycles_failed.saturating_add(1);
                     self.last_cycle = Some(WorktreeRuntimeLastCycle::Rejected(violation));
-                    WorktreeRuntimePoll::CycleRejected { cause, violation }
+                    WorktreeRuntimePoll::CycleRejected {
+                        cause: request.cause,
+                        violation,
+                    }
                 }
             },
             Err(failure) => {
                 self.cycles_failed = self.cycles_failed.saturating_add(1);
                 self.last_cycle = Some(WorktreeRuntimeLastCycle::Failed(failure));
-                WorktreeRuntimePoll::CycleFailed { cause, failure }
+                WorktreeRuntimePoll::CycleFailed {
+                    cause: request.cause,
+                    failure,
+                }
             }
         }
     }
 
-    fn finish_attempt(&mut self, now: Duration) {
+    fn finish_automatic_attempt(&mut self, now: Duration) {
         self.startup_cycle_pending = false;
         self.pending_watcher_hints = 0;
         self.debounce_deadline = None;
@@ -815,6 +935,6 @@ fn validate_cycle_summary(
     Ok(())
 }
 
-fn add_saturating(base: Duration, delta: Duration) -> Duration {
-    base.checked_add(delta).unwrap_or(Duration::MAX)
+fn add_saturating(left: Duration, right: Duration) -> Duration {
+    left.checked_add(right).unwrap_or(Duration::MAX)
 }
