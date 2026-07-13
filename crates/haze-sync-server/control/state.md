@@ -6,35 +6,34 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-server/control/prompt.md
 active_report: crates/haze-sync-server/control/report.md
-active_agent_role: clean-code-reviewer
-assigned_chat_name: server — W1 SRV-P7B3 Executor Final Clean Review
-prompt_revision: verified by Orchestrator after artifact-proven rustfmt fix and green DB-capable exact-SHA Component CI
+active_agent_role: implementation-worker
+assigned_chat_name: server — W1 SRV-P7B4 Hosted Worktree Runtime
+prompt_revision: verified by Orchestrator after SRV-P7B3 bounded executor CLEAN_ACCEPT and green DB-capable exact-SHA Component CI
 
 wave: W1
-phase: SRV-P7B3-EXECUTOR-CLEAN-REVIEW
+phase: SRV-P7B4-HOSTED-WORKTREE-RUNTIME
 
-implementation_status: SELF_ACCEPT
-fix_status: FIX_COMPLETE
-clean_review_status: NOT_STARTED_AFTER_FIX
+implementation_status: NOT_STARTED
+fix_status: NOT_STARTED
+clean_review_status: NOT_STARTED
 architect_status: ARCHITECT_CHANGED_CONTRACTS
-ci_status: CI_GREEN_DB_VERIFIED
+ci_status: NOT_RUN
 known_failed_checks: []
 
-final_executor_candidate:
-- original_implementation_sha: a08739cc8146b4f224475c83fa0652b60782db82
-- clean_review_correction_sha: 784a45f879f13914a1732b8ea071ea8f281d6721
-- final_fixed_code_bearing_sha: f8475af72b3e1795c5b11fa39f4625191eff59b1
-- fix_report_commit: 16c973093cde40625334591cec8d9ea96ef82998
-- fix_report_blob: 78b4e03e00a6a6fac00f1457602a445c2fa17d8e
-- fix_status: FIX_COMPLETE
-- post_fix_changes_before_rotation: report-only
+accepted_executor_baseline:
+- final_code_bearing_sha: f8475af72b3e1795c5b11fa39f4625191eff59b1
+- final_clean_report_commit: b9e22533091a9477876b91729c04682266a1b718
+- final_clean_report_blob: 18d6ac03c77498570b21db0768155cf31ad978d1
+- final_clean_status: CLEAN_ACCEPT
+- post_candidate_product_or_tooling_changes: none
 
 accepted_owner_shas:
 - worktree: 1942946331e8362f19907ab6ad4eb779da70fd57
 - storage: 66b6a1f554aae1d1b774cc88560d46dd140c7a54
 - server_application_services: 647dce7b624d67663632808906896cb6745ea7e7
+- server_bounded_executor: f8475af72b3e1795c5b11fa39f4625191eff59b1
 
-ci_evidence:
+accepted_ci_evidence:
 - workflow: Component CI
 - run_id: 29257244778
 - run_number: 1860
@@ -51,28 +50,50 @@ ci_evidence:
 - diagnostics_finalizer: success
 
 archived_completed_slot:
-- prompt_index: crates/haze-sync-server/control/log/20260713-142100Z-W1-SRV-P7B3-EXECUTOR-CI-FIX-fixer-worker-prompt.md
-- report_index: crates/haze-sync-server/control/log/20260713-142100Z-W1-SRV-P7B3-EXECUTOR-CI-FIX-fixer-worker-report.md
-- prompt_blob: 656961c3330e9761fa6559372dd0aa35a4ce1d65
-- report_blob: 78b4e03e00a6a6fac00f1457602a445c2fa17d8e
-- report_commit: 16c973093cde40625334591cec8d9ea96ef82998
+- prompt_index: crates/haze-sync-server/control/log/20260713-155200Z-W1-SRV-P7B3-EXECUTOR-CLEAN-REVIEW-clean-code-reviewer-prompt.md
+- report_index: crates/haze-sync-server/control/log/20260713-155200Z-W1-SRV-P7B3-EXECUTOR-CLEAN-REVIEW-clean-code-reviewer-report.md
+- prompt_blob: e58dfbf53c5b76cc4032190abbeade6c1321b377
+- report_blob: 18d6ac03c77498570b21db0768155cf31ad978d1
+- report_commit: b9e22533091a9477876b91729c04682266a1b718
 
-review_requirements:
-- review range 230a381dc37c300d6b2c17252f2c7ec163634be1..f8475af72b3e1795c5b11fa39f4625191eff59b1
-- revalidate boundedness, validation, cancellation, replay, transactions and secrecy
-- verify clean-review corrections and formatting fix preserve intent
-- verify owner snapshots/migrations/workflows unchanged
-- write committed CLEAN_CODE_REVIEW report
+phase_goal:
+- implement one explicit joined cancellable ServerWorktreeRuntimeHost task
+- validate safe runtime-host config and disabled defaults
+- bind durable adapter/root identity before first cycle
+- drive startup, periodic, watcher and bounded internal manual triggers
+- preserve at-most-one-cycle and exact mode behavior
+- provide cooperative cancellation, bounded graceful shutdown and join
+- keep status internal count/category-only and secret-safe
+
+allowed_scope:
+- Server hosted runtime config/composition/module/tests
+- narrow startup/state/docs/manifest changes directly required
+- Server control report
+
+protected_scope:
+- accepted Worktree and Storage source snapshots
+- migrations and schema
+- Core, API, CLI and Deployment product files
+- sibling control files and workflows
+
+forbidden_early_work:
+- API-P8 public DTO/status contract
+- SRV-P7B5 readiness/status mapping or routes
+- CLI or Deployment behavior
+- detached/multiple runtime tasks, nested runtime, block_on or internal HTTP
+- unbounded retry, provider behavior, hard delete or automatic repair
 
 completion_requirements:
+- component/server advances with a real code-bearing hosted runtime commit
 - committed crates/haze-sync-server/control/report.md exists
-- report phase SRV-P7B3-EXECUTOR-CLEAN-REVIEW
-- report chat name server — W1 SRV-P7B3 Executor Final Clean Review
-- report reviews exact final candidate or newer justified correction
-- exact-SHA DB-capable CI green for any new code-bearing correction
-- no later product/tooling commit invalidates review
+- report phase SRV-P7B4-HOSTED-WORKTREE-RUNTIME
+- report chat name server — W1 SRV-P7B4 Hosted Worktree Runtime
+- protected owner snapshots remain unchanged
+- exact final code-bearing SHA is recorded
+- authoritative DB-capable Component CI is green on exact final code-bearing SHA, or report records an honest blocker/failure with exact evidence
 
-next_gate_after_clean_review:
-- CLEAN_ACCEPT -> Orchestrator may activate SRV-P7B4 Hosted Worktree Runtime
-- CLEAN_NEEDS_FIX or red CI -> route exact evidence to fixer
+next_gate_after_implementation:
+- SELF_ACCEPT plus green exact-SHA CI -> mandatory SRV-P7B4 clean-code review
+- red CI -> rotate fixer from exact diagnostics artifact evidence
 - owner contract defect -> route to exact Worktree or Storage owner
+- API-P8 and SRV-P7B5 remain blocked until SRV-P7B4 CLEAN_ACCEPT
