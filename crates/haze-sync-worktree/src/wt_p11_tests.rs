@@ -147,7 +147,10 @@ fn hosted_manual_request_has_reachable_busy_and_ticket_completion() {
         handle.submit(WorktreeRuntimeManualRequest::new(true, budget())),
         WorktreeRuntimeManualSubmission::Busy
     ));
-    assert_eq!(ticket.try_result(), WorktreeRuntimeManualTicketPoll::Pending);
+    assert_eq!(
+        ticket.try_result(),
+        WorktreeRuntimeManualTicketPoll::Pending
+    );
     assert!(matches!(
         block_on(runtime.poll()).unwrap(),
         WorktreeHostedRuntimePoll::Manual(WorktreeRuntimeManualOutcome::Completed(_))
