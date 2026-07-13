@@ -272,8 +272,8 @@ impl ServerWorktreeRuntimeHost {
         })
         .await
         .map_err(|_| ServerWorktreeHostError::InvalidRoot)??;
-        let adapter_id = AdapterId::parse("worktree")
-            .map_err(|_| ServerWorktreeHostError::InvalidConfig)?;
+        let adapter_id =
+            AdapterId::parse("worktree").map_err(|_| ServerWorktreeHostError::InvalidConfig)?;
         let root_fingerprint = fingerprint_root(&canonical_root);
         bind_or_verify_worktree_instance(
             &pool,
@@ -319,7 +319,12 @@ impl ServerWorktreeRuntimeHost {
         let status = Arc::new(RwLock::new(ServerWorktreeHostStatus::starting()));
         let task_status = status.clone();
         let (shutdown, receiver) = oneshot::channel();
-        let join = tokio::spawn(run_hosted(runtime, receiver, task_status, config.poll_interval()));
+        let join = tokio::spawn(run_hosted(
+            runtime,
+            receiver,
+            task_status,
+            config.poll_interval(),
+        ));
         Self {
             manual: Some(manual),
             status,
