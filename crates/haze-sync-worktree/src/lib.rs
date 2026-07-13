@@ -16,6 +16,7 @@ mod reconciliation;
 mod runtime;
 mod scanner;
 mod trash;
+mod watcher;
 
 pub use delete_guard::{
     WorktreeDeleteAuthorization, WorktreeDeleteBlockReason, WorktreeDeleteCandidate,
@@ -65,11 +66,11 @@ pub use runtime::{
     WorktreeRuntimeContractViolation, WorktreeRuntimeCycle, WorktreeRuntimeCycleBudget,
     WorktreeRuntimeCycleCause, WorktreeRuntimeCycleFailure, WorktreeRuntimeCycleFuture,
     WorktreeRuntimeCycleRequest, WorktreeRuntimeCycleSummary, WorktreeRuntimeLastCycle,
-    WorktreeRuntimeLifecycle, WorktreeRuntimeLifecycleError, WorktreeRuntimePolicy,
-    WorktreeRuntimePolicyError, WorktreeRuntimePoll, WorktreeRuntimeService,
-    WorktreeRuntimeShutdownSummary, WorktreeRuntimeStartSummary, WorktreeRuntimeStatus,
-    WorktreeRuntimeWatcherState, WorktreeWatcher, WorktreeWatcherFailure, WorktreeWatcherHint,
-    WorktreeWatcherPoll,
+    WorktreeRuntimeLifecycle, WorktreeRuntimeLifecycleError, WorktreeRuntimeManualOutcome,
+    WorktreeRuntimeManualRequest, WorktreeRuntimePolicy, WorktreeRuntimePolicyError,
+    WorktreeRuntimePoll, WorktreeRuntimeService, WorktreeRuntimeShutdownSummary,
+    WorktreeRuntimeStartSummary, WorktreeRuntimeStatus, WorktreeRuntimeWatcherState,
+    WorktreeWatcher, WorktreeWatcherFailure, WorktreeWatcherHint, WorktreeWatcherPoll,
 };
 pub use scanner::{
     StableFileDetector, StableFileObservation, StableFileState, WorktreeFileSnapshot,
@@ -81,43 +82,28 @@ pub use trash::{
     WorktreeTrashError, WorktreeTrashManager, WorktreeTrashPolicy, WorktreeTrashRecord,
     WorktreeTrashRecordId,
 };
+pub use watcher::{ProductionWorktreeWatcher, ProductionWorktreeWatcherState};
 
-/// Human-readable crate role used by skeleton smoke checks and documentation.
 pub const CRATE_ROLE: &str = "Built-in VPS worktree adapter foundations.";
 
-/// Returns the package name for this crate.
 #[must_use]
-pub const fn package_name() -> &'static str {
-    "haze-sync-worktree"
-}
+pub const fn package_name() -> &'static str { "haze-sync-worktree" }
 
-#[cfg(test)]
-mod delete_guard_reserved_tests;
-#[cfg(test)]
-mod delete_guard_tests;
-#[cfg(test)]
-mod doctor_tests;
-#[cfg(test)]
-mod echo_guard_tests;
-#[cfg(test)]
-mod file_import_tests;
-#[cfg(test)]
-mod materializer_safety_tests;
-#[cfg(test)]
-mod reconciliation_tests;
-#[cfg(test)]
-mod runtime_tests;
-#[cfg(test)]
-mod trash_integrity_tests;
-#[cfg(test)]
-mod trash_tests;
+#[cfg(test)] mod delete_guard_reserved_tests;
+#[cfg(test)] mod delete_guard_tests;
+#[cfg(test)] mod doctor_tests;
+#[cfg(test)] mod echo_guard_tests;
+#[cfg(test)] mod file_import_tests;
+#[cfg(test)] mod materializer_safety_tests;
+#[cfg(test)] mod reconciliation_tests;
+#[cfg(test)] mod runtime_tests;
+#[cfg(test)] mod trash_integrity_tests;
+#[cfg(test)] mod trash_tests;
+#[cfg(test)] mod wt_p11_tests;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
-    fn package_name_matches_crate() {
-        assert_eq!(package_name(), "haze-sync-worktree");
-    }
+    fn package_name_matches_crate() { assert_eq!(package_name(), "haze-sync-worktree"); }
 }
