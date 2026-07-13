@@ -91,7 +91,9 @@ impl WorktreeWatcher for FakeWatcher {
             return Err(WorktreeWatcherFailure::Poll);
         }
         if self.hint.swap(false, Ordering::AcqRel) {
-            Ok(WorktreeWatcherPoll::Hint(WorktreeWatcherHint { sequence: 1 }))
+            Ok(WorktreeWatcherPoll::Hint(WorktreeWatcherHint {
+                sequence: 1,
+            }))
         } else {
             Ok(WorktreeWatcherPoll::Idle)
         }
