@@ -1,8 +1,9 @@
 use crate::{
-    WorktreeRuntimeClock, WorktreeRuntimeCycle, WorktreeRuntimeLifecycle,
-    WorktreeRuntimeLifecycleError, WorktreeRuntimeManualOutcome, WorktreeRuntimeManualRequest,
-    WorktreeRuntimePoll, WorktreeRuntimeService, WorktreeRuntimeShutdownSummary,
-    WorktreeRuntimeStartSummary, WorktreeRuntimeStatus, WorktreeWatcher,
+    WorktreeRuntimeClock, WorktreeRuntimeCycle, WorktreeRuntimeCycleFailure,
+    WorktreeRuntimeLifecycle, WorktreeRuntimeLifecycleError, WorktreeRuntimeManualOutcome,
+    WorktreeRuntimeManualRequest, WorktreeRuntimePoll, WorktreeRuntimeService,
+    WorktreeRuntimeShutdownSummary, WorktreeRuntimeStartSummary, WorktreeRuntimeStatus,
+    WorktreeWatcher,
 };
 use std::fmt;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
@@ -22,6 +23,60 @@ struct Envelope {
 struct Gate {
     lifecycle: AtomicU8,
     busy: AtomicBool,
+}
+
+struct HostedInFlightGuard {
+    gate: Arc<Gate>,
+    response: Option<SyncSender<WorktreeRuntimeManualOutcome>>,
+    finished: bool,
+}
+
+impl HostedInFlightGuard {
+    fn automatic(gate: Arc<Gate>) -> Self {
+        Self {
+            gate,
+            response: None,
+            finished: false,
+        }
+    }
+
+    fn manual(
+        gate: Arc<Gate>,
+        response: SyncSender<WorktreeRuntimeManualOutcome>,
+    ) -> Self {
+        Self {
+            gate,
+            response: Some(response),
+            finished: false,
+        }
+    }
+
+    fn finish_manual(mut self, outcome: WorktreeRuntimeManualOutcome) {
+        if let Some(response) = self.response.take() {
+            let _ = response.try_send(outcome);
+        }
+        self.gate.busy.store(false, Ordering::Release);
+        self.finished = true;
+    }
+
+    fn finish_automatic(mut self) {
+        self.gate.busy.store(false, Ordering::Release);
+        self.finished = true;
+    }
+}
+
+impl Drop for HostedInFlightGuard {
+    fn drop(&mut self) {
+        if self.finished {
+            return;
+        }
+        if let Some(response) = self.response.take() {
+            let _ = response.try_send(WorktreeRuntimeManualOutcome::Failed(
+                WorktreeRuntimeCycleFailure::Cancelled,
+            ));
+        }
+        self.gate.busy.store(false, Ordering::Release);
+    }
 }
 
 #[derive(Clone)]
@@ -190,9 +245,9 @@ where
     ) -> Result<WorktreeHostedRuntimePoll, WorktreeRuntimeLifecycleError> {
         match self.receiver.try_recv() {
             Ok(envelope) => {
+                let guard = HostedInFlightGuard::manual(self.gate.clone(), envelope.response);
                 let outcome = self.service.run_manual_cycle(envelope.request).await;
-                let _ = envelope.response.try_send(outcome);
-                self.gate.busy.store(false, Ordering::Release);
+                guard.finish_manual(outcome);
                 Ok(WorktreeHostedRuntimePoll::Manual(outcome))
             }
             Err(TryRecvError::Empty | TryRecvError::Disconnected) => {
@@ -204,8 +259,9 @@ where
                 {
                     return Ok(WorktreeHostedRuntimePoll::Idle);
                 }
+                let guard = HostedInFlightGuard::automatic(self.gate.clone());
                 let result = self.service.poll().await;
-                self.gate.busy.store(false, Ordering::Release);
+                guard.finish_automatic();
                 result.map(WorktreeHostedRuntimePoll::Automatic)
             }
         }
