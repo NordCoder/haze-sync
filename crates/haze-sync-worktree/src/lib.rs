@@ -42,8 +42,8 @@ pub use file_import::{
 };
 pub use hosted_runtime::{
     WorktreeHostedRuntime, WorktreeHostedRuntimeError, WorktreeHostedRuntimePoll,
-    WorktreeRuntimeManualHandle, WorktreeRuntimeManualSubmission, WorktreeRuntimeManualTicket,
-    WorktreeRuntimeManualTicketPoll,
+    WorktreeRuntimeManualHandle, WorktreeRuntimeManualStatus, WorktreeRuntimeManualStatusHandle,
+    WorktreeRuntimeManualSubmission, WorktreeRuntimeManualTicket, WorktreeRuntimeManualTicketPoll,
 };
 pub use import_planner::{
     WorktreeAcceptedImport, WorktreeAppliedFileState, WorktreeAppliedPathState,
@@ -119,6 +119,8 @@ mod trash_integrity_tests;
 mod trash_tests;
 #[cfg(test)]
 mod wt_p11_tests;
+#[cfg(test)]
+mod wt_p12_tests;
 
 #[cfg(test)]
 mod tests {
