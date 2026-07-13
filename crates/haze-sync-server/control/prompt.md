@@ -1,135 +1,49 @@
-# W1-SRV-P7B4-HOSTED-WORKTREE-RUNTIME — Implement Server-hosted Worktree runtime
+# W1-SRV-P7B4-FUNCTIONAL-REVIEW — Functional review of Server-hosted Worktree runtime
 
 Before starting, name this worker chat exactly:
 
-`server — W1 SRV-P7B4 Hosted Worktree Runtime`
+`server — W1 SRV-P7B4 Hosted Runtime Functional Review`
 
 Component: server
 Path: crates/haze-sync-server
 Branch: component/server
 PR: #45
-Role: implementation-worker
-Phase: SRV-P7B4-HOSTED-WORKTREE-RUNTIME
+Role: clean-code-reviewer
+Phase: SRV-P7B4-FUNCTIONAL-REVIEW
 
-Do not merge PR #45, change draft state, rewrite history, modify sibling branches, or begin API/CLI/Deployment phases.
+Do not merge, rewrite history, modify sibling branches, or begin SRV-P7B5/API-P8.
 
-## Accepted baselines
+## Candidate
 
-- Server bounded executor SHA: `f8475af72b3e1795c5b11fa39f4625191eff59b1`;
-- accepted Worktree WT-P11 source SHA: `b38264ce2b09632a4c0bab0dd77319e1db239a3b`;
-- accepted Server fan-in SHA: `1b2b572a1a200f2968d005e48e9c0674f9db8bc0`;
-- fan-in clean-review report commit: `0d2d6038fb84805e3844cd539c88fcb409a36cfc`;
-- fan-in report blob: `ef03533a379c842d93beb4dc072958978da2991a`;
-- authoritative DB-capable Component CI: run `29275250064`, number `1882`, success.
+- accepted Server/Worktree integration baseline: `1b2b572a1a200f2968d005e48e9c0674f9db8bc0`;
+- final SRV-P7B4 code-bearing SHA: `5536d260bb4f95ec11c0cd07501c23903a72757d`;
+- implementation report commit: `896f28c3c1d5d8f86d4b58e3428b1d289ee6aa8a`;
+- implementation report blob: `c9fa7ce4ae3876b8d602fbf15662a3651babc023`;
+- authoritative DB-capable Component CI: run `29278756276`, number `1888`, success.
 
-The prior owner-contract blocker is resolved. Do not re-open it unless the accepted integrated contract is demonstrably insufficient.
+Formatting, rustfmt, naming taste and stylistic matters are out of scope and must not block acceptance.
 
-## Goal
+Review only substantive correctness:
 
-Implement `ServerWorktreeRuntimeHost`: exactly one explicit joined cancellable Tokio task that owns and drives the accepted Worktree hosted runtime and accepted Server bounded cycle executor.
+1. Enabled mode owns exactly one explicit joined cancellable Tokio task; Disabled is inert and task-free.
+2. No detached task, nested runtime, `block_on`, internal HTTP or second executor path exists.
+3. Durable root/adapter binding is verified before first cycle and errors remain coarse/secret-safe.
+4. Production watcher, WorktreeHostedRuntime and ServerWorktreeCycleExecutor are composed without duplicating Worktree scheduling/no-overlap/accounting.
+5. Internal manual submission uses the accepted bounded Worktree handle/ticket contract with typed Busy/NotStarted/Cancelling/Shutdown/Cancelled outcomes.
+6. Mode defaults and permissions are fail-safe; DryRun remains manual-only/full-scan/non-mutating.
+7. Shutdown is cooperative, bounded, mandatory-join and cancellation-by-drop safe; timeout aborts then awaits the retained handle without detachment.
+8. Internal status exposes only coarse categories/counts and no paths, URLs, backend errors or payloads.
+9. Tests substantively cover host-owned task lifecycle, startup/periodic/watcher/manual/no-overlap/DryRun/shutdown/join behavior rather than relying only on lower-level Worktree tests.
+10. Exact-SHA DB-capable CI is green and no later product/tooling commit invalidates the candidate.
+11. No accepted Worktree/Storage, migration, Core/API/CLI/Deployment, public route/DTO, readiness or workflow scope was modified.
 
-## Required behavior
-
-1. Add validated Server runtime-host configuration for:
-   - mode;
-   - debounce;
-   - periodic interval;
-   - watcher hint budget;
-   - action budgets;
-   - bounded shutdown timeout;
-   - bounded manual request capacity.
-
-Defaults must be safe. Never silently enable bidirectional mutation.
-
-2. Bind and verify durable Worktree adapter/root identity before the first cycle.
-
-3. Construct and own the accepted Worktree components:
-   - `ProductionWorktreeWatcher` from validated Worktree config/root capability;
-   - `WorktreeRuntimeService` / `WorktreeHostedRuntime`;
-   - accepted `ServerWorktreeCycleExecutor`.
-
-Do not duplicate Worktree watcher, scheduler, no-overlap, cancellation or accounting policy in Server.
-
-4. Host exactly one joined task:
-   - no detached task;
-   - no nested runtime;
-   - no `block_on`;
-   - no internal HTTP;
-   - no concurrent cycle executor ownership.
-
-5. Drive startup, periodic and watcher-hint polling through the accepted hosted runtime contract.
-
-6. Expose an internal bounded manual one-cycle submission boundary for later API integration:
-   - use the accepted Worktree manual handle/ticket contract;
-   - preserve typed Busy/NotStarted/Cancelling/Shutdown/Cancelled outcomes;
-   - no public DTO or route yet;
-   - no executor bypass.
-
-7. Mode semantics:
-   - Disabled: inert and not unready by itself;
-   - ReadOnly / ImportOnly / ExportOnly / Bidirectional: accepted automatic permissions only;
-   - DryRun: manual-only, full-scan, no mutation and no cursor/checkpoint advancement.
-
-8. Shutdown:
-   - cooperative cancellation;
-   - bounded graceful shutdown;
-   - mandatory task join;
-   - no lifecycle leak;
-   - safe coarse status if timeout/failure occurs.
-
-9. Add internal count/category-only, secret-safe runtime status suitable for later Server readiness/status work. Do not expose paths, database URLs, backend errors or payloads.
-
-10. Preserve at-most-one-cycle across startup, periodic, watcher and manual triggers using only the accepted Worktree runtime boundary.
-
-## Tests
-
-Add focused Tokio tests, using paused time where useful, for:
-
-- Disabled inert behavior;
-- startup cycle;
-- periodic cadence;
-- watcher hint/debounce path;
-- manual accepted/completed and Busy outcomes;
-- DryRun non-mutation;
-- cooperative cancellation;
-- dropped/timeout shutdown path;
-- mandatory task join;
-- no overlapping cycles;
-- safe redacted status;
-- DB/object-store/temp-worktree integration where required.
-
-## Scope
-
-Allowed:
-
-- Server runtime-host modules, focused tests and exports;
-- minimal Server config/dependency wiring;
-- narrow composition with accepted Worktree and Server executor contracts;
-- Server control report.
-
-Forbidden:
-
-- accepted Worktree or Storage source changes;
-- migrations/schema;
-- Core/API/CLI/Deployment product files;
-- public status/readiness/manual DTOs or routes;
-- multiple/detached tasks, hidden runtimes or unbounded retry;
-- provider behavior, repair, hard delete or unrelated cleanup;
-- sibling control files or workflows.
-
-Formatting/style alone is non-blocking when exact-SHA CI is green.
-
-## Completion
-
-Create a real code-bearing commit without CI skip. Obtain authoritative DB-capable Component CI on the exact final code-bearing SHA.
+Do not modify code unless a concrete functional, lifecycle, safety, concurrency or scope defect exists. No formatting-only corrections.
 
 Write `crates/haze-sync-server/control/report.md` with:
 
-- `REPORT_TYPE: IMPLEMENTATION`;
-- `phase_id: SRV-P7B4-HOSTED-WORKTREE-RUNTIME`;
-- `chat_name: server — W1 SRV-P7B4 Hosted Worktree Runtime`;
-- honest status `SELF_ACCEPT`, `NEEDS_FIX`, `BLOCKED_BY_CONTRACT`, `BLOCKED_BY_SCOPE`, or `BLOCKED_BY_TOOLING`.
+- `REPORT_TYPE: CLEAN_CODE_REVIEW`;
+- `phase_id: SRV-P7B4-FUNCTIONAL-REVIEW`;
+- `chat_name: server — W1 SRV-P7B4 Hosted Runtime Functional Review`;
+- status `CLEAN_ACCEPT`, `CLEAN_NEEDS_FIX`, `CLEAN_BLOCKED_BY_CONTRACT`, `CLEAN_BLOCKED_BY_SCOPE`, or `CLEAN_BLOCKED_BY_TOOLING`.
 
-Record changed paths, task ownership/join semantics, config defaults, accepted Worktree composition, manual boundary, tests, secrecy, final SHA and exact CI evidence.
-
-Do not claim `CLEAN_ACCEPT`, begin API-P8/SRV-P7B5 or change merge readiness. A focused functional review follows.
+If no substantive blocker exists, use `CLEAN_ACCEPT` and state that Orchestrator may begin SRV-P7B5 status/readiness work. Do not begin that phase yourself.
