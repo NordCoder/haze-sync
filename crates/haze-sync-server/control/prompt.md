@@ -1,93 +1,244 @@
-# W1-SRV-P7B3-FAN-IN-CLEAN — Clean review of exact-SHA Worktree/Storage fan-in
+# W1-SRV-P7B3-BOUNDED-WORKTREE-EXECUTOR — Implement the real bounded Worktree cycle executor
 
 Before starting, name this worker chat exactly:
 
-`server — W1 SRV-P7B3 Fan-In Clean-Code Review`
+`server — W1 SRV-P7B3 Bounded Worktree Executor`
 
 Component: server
 Path: crates/haze-sync-server
 Branch: component/server
 PR: #45
-Role: clean-code-reviewer
-Phase: SRV-P7B3-FAN-IN-CLEAN
+Role: implementation-worker
+Phase: SRV-P7B3-BOUNDED-WORKTREE-EXECUTOR
 
-Work through the GitHub connector. Do not merge PR #45 into main, change draft state, rebase, reset, rewrite history, force-push, modify sibling branches, or begin the bounded Worktree executor.
+Work through the GitHub connector. Do not merge PR #45 into main, change draft state, rebase, reset, rewrite history, force-push, modify sibling branches, or begin the hosted-runtime phase.
 
-## Accepted implementation candidate
+## Accepted prerequisites
 
-Review the completed exact-SHA fan-in implementation:
+This phase is unblocked by the following exact accepted evidence:
 
-- pre-phase Server head: `b5ec0e1089d1c50f0b121f35a4499bca4864ffa1`;
-- initial fan-in candidate: `6aecbf0678e631236cd3001cd694c8033def5dd6`;
-- final code-bearing candidate: `4f8b3d9219961409847b12e393d9a38dc6377dea`;
-- implementation report commit: `ae996b4811dde20a1bf535f85f214f6f61d5b53f`;
-- archived implementation report index: `crates/haze-sync-server/control/log/20260713-085500Z-W1-SRV-P7B3-EXACT-SHA-FAN-IN-RETRY-implementation-worker-report.md`;
-- authoritative Component CI: run ID `29235942761`, run number `1840`, attempt `1`, conclusion `success` on exact SHA `4f8b3d9219961409847b12e393d9a38dc6377dea`.
+- fan-in clean review report commit: `05250a460f9865d00a822e795ec510866f52bd0a`;
+- fan-in clean report blob: `558bd7b62ac08dbdc06efacceace84764217de70`;
+- fan-in status: `CLEAN_ACCEPT`;
+- accepted integration code-bearing SHA: `4f8b3d9219961409847b12e393d9a38dc6377dea`;
+- authoritative Component CI: run ID `29235942761`, run number `1840`, attempt `1`, conclusion `success` on that exact SHA;
+- Worktree WT-P10 owner SHA: `1942946331e8362f19907ab6ad4eb779da70fd57`;
+- Storage STOR-P10 owner SHA: `66b6a1f554aae1d1b774cc88560d46dd140c7a54`;
+- Server SRV-P7B2 application-services SHA: `647dce7b624d67663632808906896cb6745ea7e7`.
 
-Accepted owner snapshots that must remain authoritative:
+The accepted Worktree and Storage snapshots on `component/server` are authoritative and immutable for this phase.
 
-- Worktree WT-P10: `1942946331e8362f19907ab6ad4eb779da70fd57`;
-- Storage STOR-P10: `66b6a1f554aae1d1b774cc88560d46dd140c7a54`;
-- Server SRV-P7B2 semantics: `647dce7b624d67663632808906896cb6745ea7e7`.
+## Goal
 
-## Review goal
+Implement a real `ServerWorktreeCycleExecutor` that satisfies the accepted async `WorktreeRuntimeCycle` contract for exactly one bounded cycle.
 
-Determine whether the fan-in candidate cleanly and correctly integrates the exact accepted Worktree and Storage contracts into the Server integration line without importing sibling lifecycle state, changing owner policy, or starting future runtime phases.
+The executor must connect existing Worktree filesystem/reconciliation primitives to existing Server application services and accepted Storage durable Worktree state/cursor repositories without duplicating Core policy or creating a hosted scheduler.
 
-A `CLEAN_ACCEPT` is required before the Orchestrator may activate `SRV-P7B3 Bounded Worktree Executor`.
+This phase implements the executor only. It does not start or host it.
 
-## Required review
+## Required architecture
 
-Review the complete implementation range:
+Preserve these ownership boundaries:
 
-`b5ec0e1089d1c50f0b121f35a4499bca4864ffa1..4f8b3d9219961409847b12e393d9a38dc6377dea`
+- Core is the only conflict, overwrite and guarded-delete policy authority.
+- Server application services are the only authoritative internal mutation/read boundary used by the executor.
+- Worktree owns scanning, reconciliation, filesystem writing, trash, echo and scheduler semantics.
+- Storage owns schema and passive repositories; transaction timing remains Server-owned.
+- API owns future public status/manual-cycle DTOs.
+- Server hosted task lifecycle belongs to SRV-P7B4, not this phase.
 
-Verify at minimum:
+Do not call Server HTTP routes from the executor. Do not duplicate route-private policy. Do not use internal HTTP.
 
-1. the transferred Worktree product files match the accepted WT-P10 owner snapshot for every transferred path;
-2. the transferred Storage product, test, documentation and migration files match the accepted STOR-P10 owner snapshot for every transferred path;
-3. no sibling `control/**` or sibling workflow was imported;
-4. no whole sibling branch merge or unrelated historical content entered the Server integration line;
-5. `ServerApplicationServices` and thin transport/auth/DTO route boundaries remain intact;
-6. Core remains the sole policy authority;
-7. Worktree retains filesystem and scheduler ownership;
-8. Storage retains schema and repository ownership, including passive caller-owned transaction behavior;
-9. the normal Server dependency on `haze-sync-storage` does not enable `test-support`;
-10. Server dev/test scope enables Storage `test-support` only where required;
-11. isolated Server and Storage PostgreSQL CI coverage and remaining workspace coverage remain intact;
-12. the Server-local `WorktreeMode::DryRun` correction is exhaustive, fail-closed, secret-safe and does not create a manual operation or hosted runtime;
-13. no executor, host task, scheduler, background runtime, API-P8 DTO, CLI behavior, Deployment behavior, nested runtime, `block_on`, internal HTTP call, fake repository or hard delete was introduced;
-14. tests are honest and cover the changed Server compatibility behavior;
-15. public errors, status and Debug output remain redacted and path/token/DB-safe;
-16. no product or tooling commit after `4f8b3d9219961409847b12e393d9a38dc6377dea` invalidates the candidate.
+## Required implementation
 
-## Owner snapshot protection
+### 1. Executor contract
 
-The accepted Worktree and Storage files are owner-controlled snapshots.
+Implement a Server-owned executor type, expected name:
 
-Do not refactor, clean up or otherwise modify files under:
+`ServerWorktreeCycleExecutor`
+
+It must implement:
+
+`haze_sync_worktree::WorktreeRuntimeCycle`
+
+Its `run_cycle` must:
+
+- return the accepted boxed `Send` future;
+- await all asynchronous authority directly;
+- execute at most the single requested cycle;
+- perform no task detachment or hidden scheduling;
+- observe cooperative cancellation before work, between bounded stages and between individual actions;
+- return only accepted `WorktreeRuntimeCycleSummary` counts or accepted coarse `WorktreeRuntimeCycleFailure` categories.
+
+### 2. Dependencies and construction
+
+Use explicit injected dependencies. They may include:
+
+- `ServerApplicationServices`;
+- the Worktree adapter identity;
+- validated Worktree configuration/root;
+- PostgreSQL pool or narrowly scoped transaction/repository access required for accepted Storage repositories;
+- synchronous Worktree scanner/reconciler/materializer/trash/echo primitives;
+- bounded configuration required by one cycle.
+
+Do not introduce global state, fake production repositories, nested runtimes or blocking async bridges.
+
+The Worktree instance/root binding is an accepted Storage contract. The executor must fail safely on a missing or mismatched required binding. Do not silently rebind a different root. Explicit startup binding/host orchestration remains SRV-P7B4.
+
+### 3. Bounded local-state load and scan
+
+For a request requiring a full scan:
+
+- load the durable Worktree path-state snapshot through accepted paginated Storage repository operations;
+- keep every page and total action count bounded;
+- execute synchronous filesystem scanning/reconciliation through awaited bounded blocking-pool work only;
+- do not run synchronous filesystem work on the async executor thread;
+- preserve Worktree ignore/path-safety/stability semantics;
+- treat watcher hints only as latency hints; do not replace required full scans with hinted paths.
+
+If `full_scan_required` is false, do not claim a full scan was completed.
+
+### 4. Local import and guarded delete
+
+When `request.import_enabled` is true and the mode permits imports:
+
+- derive local import/delete actions through accepted Worktree planning/reconciliation primitives;
+- process no more than `max_import_actions` imports and `max_delete_candidates` delete candidates;
+- submit every authoritative file mutation through `ServerApplicationServices::apply_file`;
+- submit every authoritative delete through `ServerApplicationServices::apply_delete`;
+- use the accepted Worktree adapter actor identity;
+- use deterministic, domain-separated replay/idempotency material without logging it;
+- preserve base-revision semantics from durable Worktree state;
+- record accepted resulting revision/hash/tombstone facts through accepted Storage Worktree state repositories;
+- never directly write authoritative revision/conflict/tombstone/operation-log tables from executor code;
+- never turn a missing local file directly into an unsafe hard delete.
+
+Crash/retry behavior must be safe when an application-service mutation succeeds before durable Worktree path state is updated. Re-running the cycle must converge through deterministic idempotency rather than duplicate authoritative operations.
+
+### 5. Ordered Core-to-Worktree export
+
+When `request.export_enabled` is true and the mode permits exports:
+
+- initialize/read the accepted adapter cursor without exposing raw cursor details;
+- retrieve authoritative changes through `ServerApplicationServices::authoritative_changes` using a bounded limit derived from `max_export_actions`;
+- process changes in exact ascending contiguous sequence order;
+- retrieve authoritative revision bytes through `ServerApplicationServices::revision_content` when required;
+- materialize files or tombstones through accepted Worktree filesystem/trash/echo primitives;
+- persist corresponding durable Worktree path state through accepted Storage repositories;
+- advance `adapter_cursors.last_core_seq` only through `advance_exact_contiguous`;
+- advance a sequence only after its filesystem and durable path-state effects are successfully complete;
+- never skip a failed sequence or advance beyond an unprocessed change;
+- stop safely at the first non-recoverable export failure.
+
+A crash after a filesystem effect but before durable state/cursor commit must be replay-safe and converge without corrupting or silently skipping the authoritative sequence.
+
+### 6. Transactions and blocking boundaries
+
+Storage repositories remain passive and caller-transaction-owned.
+
+Use Server-owned transactions where atomic Storage state/cursor updates are required. Do not hold a database transaction open across unbounded filesystem work or application-service calls.
+
+Only synchronous filesystem phases may use `tokio::task::spawn_blocking` or an equivalent awaited bounded blocking-pool boundary. Every spawned blocking operation must be joined before `run_cycle` returns. Do not use `block_on`.
+
+### 7. Cancellation, summaries and failures
+
+Cancellation must:
+
+- prevent starting later stages/actions;
+- avoid cursor advancement for incomplete export work;
+- avoid false durable-state claims;
+- return `WorktreeRuntimeCycleFailure::Cancelled`.
+
+Summaries must be truthful and count-only:
+
+- `full_scan_completed` reflects an actually completed required scan;
+- `scanned_files` and `skipped_entries` reflect observed scan results;
+- planned/submitted/applied counts must not exceed request budgets;
+- `submitted_imports` counts actual completed authoritative import/delete submissions according to the accepted summary contract;
+- `applied_exports` counts only fully applied and checkpointed export actions.
+
+Do not place paths, roots, content, cursor values, tokens, database URLs or raw internal errors in public/coarse failures, Debug output or report text.
+
+## Required tests
+
+Add focused Server-owned tests proving at minimum:
+
+1. a bounded full-scan cycle imports a new or modified local file through application services;
+2. deterministic replay after mutation-before-state interruption does not duplicate authoritative operations;
+3. local deletion uses guarded application-service delete behavior and remains bounded;
+4. ordered export materializes authoritative content and advances only the exact contiguous cursor;
+5. export failure before completion leaves the failed sequence unadvanced;
+6. replay after materialization-before-checkpoint converges safely;
+7. cancellation before and during action processing stops later work and leaves incomplete cursor/state unclaimed;
+8. import, delete and export budgets are enforced;
+9. required-scan and mode permissions are preserved rather than bypassed;
+10. no cycle overlap, task detachment, nested runtime, internal HTTP or fake production repository is introduced;
+11. errors, Debug and summaries do not expose private root/path/DB/idempotency material.
+
+Use real PostgreSQL, real object-store/temp-worktree integration where required. Test-only failure-injection seams are allowed when narrowly scoped and impossible to activate in production.
+
+## Allowed files
+
+Primary allowed scope:
+
+- `crates/haze-sync-server/src/worktree_executor/**` or an equivalently clear Server-owned executor module;
+- `crates/haze-sync-server/src/lib.rs` or internal module declarations required to expose the executor inside the Server crate;
+- `crates/haze-sync-server/src/application/**` only for narrowly required internal visibility or reusable typed helpers, without changing accepted route behavior;
+- `crates/haze-sync-server/src/worktree_runtime.rs` only for executor-facing Server-local composition types, not hosted scheduling;
+- Server-owned tests and test support required for this phase;
+- `crates/haze-sync-server/docs/component-contract.md`;
+- `crates/haze-sync-server/docs/implementation-plan.md`;
+- `crates/haze-sync-server/docs/implementation-log.md`;
+- `crates/haze-sync-server/docs/dependency-map.md`;
+- `crates/haze-sync-server/Cargo.toml` and `Cargo.lock` only when directly required by this implementation;
+- `crates/haze-sync-server/control/report.md`.
+
+Any broader Server-internal change must be necessary for a clean executor implementation and must be explained in the report.
+
+## Protected and forbidden files
+
+Do not modify:
 
 - `crates/haze-sync-worktree/**`;
 - `crates/haze-sync-storage/**`;
-- `migrations/0010_worktree_durable_state.sql`.
+- `migrations/**`;
+- `crates/haze-sync-core/**`;
+- `crates/haze-sync-api/**`;
+- `crates/haze-sync-cli/**`;
+- `deploy/**`;
+- sibling component `control/**`;
+- `.github/workflows/**` unless the Orchestrator issues a separate tooling/fixer prompt.
 
-If review finds a concrete owner-component defect or snapshot mismatch, do not silently repair it on the Server branch. Report `CLEAN_BLOCKED_BY_SCOPE` or `CLEAN_BLOCKED_BY_CONTRACT` with exact paths, owner SHA and evidence so the Orchestrator can route the issue to the correct owner.
+Do not implement:
 
-## Allowed corrections
+- `ServerWorktreeRuntimeHost`;
+- startup/shutdown host task wiring;
+- watcher or periodic scheduling ownership;
+- manual request channels or public manual-cycle routes;
+- API-P8 DTOs or lifecycle vocabulary;
+- SRV-P7B5 readiness/status behavior;
+- CLI or Deployment behavior;
+- provider behavior;
+- schema redesign;
+- hard delete or automatic destructive repair.
 
-You may edit Server-owned code, tests or documentation inside `crates/haze-sync-server/**` only when a concrete review finding requires correction and the change remains inside the fan-in integration boundary.
+If an accepted Worktree or Storage contract is insufficient or defective, do not silently change the owner snapshot. Report `BLOCKED_BY_CONTRACT` with exact owner path, owner SHA, required change and evidence.
 
-Do not implement `ServerWorktreeCycleExecutor` or any SRV-P7B3 executor behavior in this review.
+## Verification and CI
 
-If you make any executable, test, dependency, workflow, contract or implementation-document change:
+Create a real code-bearing implementation commit without CI skip.
 
-- create a new code-bearing commit without CI skip;
-- require authoritative DB-capable Component CI on that exact final SHA;
-- report the new exact SHA and run evidence.
+Authoritative completion requires DB-capable Component CI on the exact final code-bearing SHA with:
 
-If no executable correction is needed, the existing successful CI run `29235942761` on `4f8b3d9219961409847b12e393d9a38dc6377dea` remains the authoritative candidate evidence, and the final report-only commit may use `[skip ci]`.
+- cargo fmt success;
+- cargo check success;
+- isolated Server PostgreSQL tests success;
+- isolated Storage PostgreSQL tests including mandatory STOR-P10 evidence success;
+- remaining workspace tests success;
+- cargo clippy with warnings denied success;
+- diagnostics finalizer success.
 
-Do not read CI diagnostics artifacts unless a new code-bearing review correction produces a failing run and the active role is explicitly changed by the Orchestrator. A clean-code reviewer must not perform fixer work from failure artifacts.
+If CI fails, do not guess from wrapper summaries. Record the failed run/artifact metadata honestly and leave CI diagnostics work to a fixer slot unless this prompt is explicitly changed.
 
 ## Mandatory report
 
@@ -95,27 +246,31 @@ Write `crates/haze-sync-server/control/report.md` using `report-template.md`.
 
 Set:
 
-- `REPORT_TYPE: CLEAN_CODE_REVIEW`;
-- `phase_id: SRV-P7B3-FAN-IN-CLEAN`;
-- `chat_name: server — W1 SRV-P7B3 Fan-In Clean-Code Review`.
+- `REPORT_TYPE: IMPLEMENTATION`;
+- `phase_id: SRV-P7B3-BOUNDED-WORKTREE-EXECUTOR`;
+- `chat_name: server — W1 SRV-P7B3 Bounded Worktree Executor`.
 
 Use one honest status:
 
-- `CLEAN_ACCEPT`;
-- `CLEAN_ACCEPT_PENDING_CI`;
-- `CLEAN_NEEDS_FIX`;
-- `CLEAN_BLOCKED_BY_CONTRACT`;
-- `CLEAN_BLOCKED_BY_SCOPE`;
-- `CLEAN_BLOCKED_BY_TOOLING`.
+- `SELF_ACCEPT`;
+- `SELF_ACCEPT_PENDING_CI`;
+- `SELF_NEEDS_FIX`;
+- `BLOCKED_BY_CONTRACT`;
+- `BLOCKED_BY_DEPENDENCY`;
+- `BLOCKED_BY_TOOLING`.
 
 The report must include:
 
-- exact reviewed range and final reviewed code-bearing SHA;
-- exact owner SHAs and snapshot-parity assessment;
-- complete findings for integration boundaries, DryRun handling, tests and secrecy;
-- every correction, if any;
-- exact CI run ID, number, attempt, SHA and job conclusions;
-- confirmation that later commits are control-only or a precise invalidation finding;
-- whether the fan-in is `CLEAN_ACCEPT` and ready for Orchestrator activation of the bounded executor phase.
+- exact base and final code-bearing SHA;
+- complete changed paths;
+- executor architecture and explicit dependencies;
+- import/delete/export/checkpoint flow;
+- transaction and blocking-pool boundaries;
+- cancellation and replay/crash behavior;
+- exact tests added and evidence;
+- confirmation that protected owner snapshots were unchanged;
+- exact final Component CI run ID, number, attempt, SHA and job conclusions;
+- any blocker or deferred host/status work;
+- whether the implementation is ready for mandatory SRV-P7B3 clean-code review.
 
-Do not claim that the bounded executor phase is active. Only the Orchestrator may rotate the next control slot.
+This phase is incomplete until a real code-bearing branch advance and committed report exist. Do not claim that SRV-P7B4 is active; only the Orchestrator may rotate the next slot after mandatory clean review.
