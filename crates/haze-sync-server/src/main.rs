@@ -66,7 +66,9 @@ async fn run_with_config(config: ServerConfig) -> Result<(), StartupError> {
         ServerWorktreeRuntimeHost::start(host_config, config.worktree.root.clone(), pool, services)
             .await?;
     let _manual_submission_boundary = ServerWorktreeRuntimeHost::submit_manual;
+    let _legacy_status_boundary = ServerWorktreeRuntimeHost::status;
     let _status_snapshot_boundary = ServerWorktreeRuntimeHost::snapshot;
+    let _readiness_boundary = crate::worktree_status::ServerWorktreeStatusSnapshot::is_ready;
 
     let listener = TcpListener::bind(listen_addr)
         .await
