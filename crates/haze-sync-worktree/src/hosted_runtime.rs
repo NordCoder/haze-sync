@@ -1,4 +1,9 @@
-use crate::{WorktreeRuntimeClock, WorktreeRuntimeCycle, WorktreeRuntimeLifecycle, WorktreeRuntimeLifecycleError, WorktreeRuntimeManualOutcome, WorktreeRuntimeManualRequest, WorktreeRuntimePoll, WorktreeRuntimeService, WorktreeRuntimeShutdownSummary, WorktreeRuntimeStartSummary, WorktreeRuntimeStatus, WorktreeWatcher};
+use crate::{
+    WorktreeRuntimeClock, WorktreeRuntimeCycle, WorktreeRuntimeLifecycle,
+    WorktreeRuntimeLifecycleError, WorktreeRuntimeManualOutcome, WorktreeRuntimeManualRequest,
+    WorktreeRuntimePoll, WorktreeRuntimeService, WorktreeRuntimeShutdownSummary,
+    WorktreeRuntimeStartSummary, WorktreeRuntimeStatus, WorktreeWatcher,
+};
 use std::fmt;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TryRecvError, TrySendError};
@@ -37,17 +42,28 @@ impl fmt::Debug for WorktreeRuntimeManualHandle {
 impl WorktreeRuntimeManualHandle {
     pub fn submit(&self, request: WorktreeRuntimeManualRequest) -> WorktreeRuntimeManualSubmission {
         match self.lifecycle() {
-            WorktreeRuntimeLifecycle::Created => return WorktreeRuntimeManualSubmission::NotStarted,
-            WorktreeRuntimeLifecycle::Cancelling => return WorktreeRuntimeManualSubmission::Cancelling,
+            WorktreeRuntimeLifecycle::Created => {
+                return WorktreeRuntimeManualSubmission::NotStarted
+            }
+            WorktreeRuntimeLifecycle::Cancelling => {
+                return WorktreeRuntimeManualSubmission::Cancelling
+            }
             WorktreeRuntimeLifecycle::Shutdown => return WorktreeRuntimeManualSubmission::Shutdown,
             WorktreeRuntimeLifecycle::Running => {}
         }
-        if self.gate.busy.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).is_err() {
+        if self
+            .gate
+            .busy
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
             return WorktreeRuntimeManualSubmission::Busy;
         }
         let (response, receiver) = sync_channel(1);
         match self.sender.try_send(Envelope { request, response }) {
-            Ok(()) => WorktreeRuntimeManualSubmission::Accepted(WorktreeRuntimeManualTicket { receiver }),
+            Ok(()) => {
+                WorktreeRuntimeManualSubmission::Accepted(WorktreeRuntimeManualTicket { receiver })
+            }
             Err(TrySendError::Full(_)) => {
                 self.gate.busy.store(false, Ordering::Release);
                 WorktreeRuntimeManualSubmission::Busy
@@ -122,14 +138,30 @@ where
     W: WorktreeWatcher,
     X: WorktreeRuntimeCycle,
 {
-    pub fn new(service: WorktreeRuntimeService<C, W, X>, capacity: usize) -> Result<(Self, WorktreeRuntimeManualHandle), WorktreeHostedRuntimeError> {
+    pub fn new(
+        service: WorktreeRuntimeService<C, W, X>,
+        capacity: usize,
+    ) -> Result<(Self, WorktreeRuntimeManualHandle), WorktreeHostedRuntimeError> {
         if capacity == 0 {
             return Err(WorktreeHostedRuntimeError::ZeroManualCapacity);
         }
         let (sender, receiver) = sync_channel(capacity);
-        let gate = Arc::new(Gate { lifecycle: AtomicU8::new(CREATED), busy: AtomicBool::new(false) });
-        let handle = WorktreeRuntimeManualHandle { sender, gate: gate.clone() };
-        Ok((Self { service, receiver, gate }, handle))
+        let gate = Arc::new(Gate {
+            lifecycle: AtomicU8::new(CREATED),
+            busy: AtomicBool::new(false),
+        });
+        let handle = WorktreeRuntimeManualHandle {
+            sender,
+            gate: gate.clone(),
+        };
+        Ok((
+            Self {
+                service,
+                receiver,
+                gate,
+            },
+            handle,
+        ))
     }
 
     pub fn start(&mut self) -> Result<WorktreeRuntimeStartSummary, WorktreeRuntimeLifecycleError> {
@@ -144,14 +176,18 @@ where
         Ok(())
     }
 
-    pub fn shutdown(&mut self) -> Result<WorktreeRuntimeShutdownSummary, WorktreeRuntimeLifecycleError> {
+    pub fn shutdown(
+        &mut self,
+    ) -> Result<WorktreeRuntimeShutdownSummary, WorktreeRuntimeLifecycleError> {
         let value = self.service.shutdown()?;
         self.gate.lifecycle.store(SHUTDOWN, Ordering::Release);
         self.gate.busy.store(false, Ordering::Release);
         Ok(value)
     }
 
-    pub async fn poll(&mut self) -> Result<WorktreeHostedRuntimePoll, WorktreeRuntimeLifecycleError> {
+    pub async fn poll(
+        &mut self,
+    ) -> Result<WorktreeHostedRuntimePoll, WorktreeRuntimeLifecycleError> {
         match self.receiver.try_recv() {
             Ok(envelope) => {
                 let outcome = self.service.run_manual_cycle(envelope.request).await;
@@ -160,7 +196,12 @@ where
                 Ok(WorktreeHostedRuntimePoll::Manual(outcome))
             }
             Err(TryRecvError::Empty | TryRecvError::Disconnected) => {
-                if self.gate.busy.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).is_err() {
+                if self
+                    .gate
+                    .busy
+                    .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                    .is_err()
+                {
                     return Ok(WorktreeHostedRuntimePoll::Idle);
                 }
                 let result = self.service.poll().await;
