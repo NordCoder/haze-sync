@@ -1,66 +1,47 @@
-# W1-SRV-WT-P11-FAN-IN — Synchronize accepted Worktree contract into Server
+# W1-SRV-WT-P11-FAN-IN-REVIEW — Functional integration review of accepted Worktree fan-in
 
 Before starting, name this worker chat exactly:
 
-`server — W1 WT-P11 Exact-SHA Fan-In`
+`server — W1 WT-P11 Fan-In Functional Review`
 
 Component: server
 Path: crates/haze-sync-server
 Branch: component/server
 PR: #45
-Role: implementation-worker
-Phase: SRV-WT-P11-FAN-IN
+Role: clean-code-reviewer
+Phase: SRV-WT-P11-FAN-IN-REVIEW
 
-Do not merge PR #45, change draft state, rewrite history, modify sibling branches, or begin SRV-P7B4 hosted-runtime implementation before this fan-in is accepted.
+Do not merge, rewrite history, modify sibling branches, or begin SRV-P7B4 implementation.
 
-## Accepted Worktree source
+## Candidate
 
-Synchronize the exact accepted Worktree product snapshot:
+- pre-fan-in Server head: `08ae17ac71aec82b4e4c44b1f06202492a2bdfcb`;
+- accepted Worktree source SHA: `b38264ce2b09632a4c0bab0dd77319e1db239a3b`;
+- final Server fan-in SHA: `1b2b572a1a200f2968d005e48e9c0674f9db8bc0`;
+- fan-in report commit: `d4f4abc407256eaaf519489bea2ab527e26da600`;
+- fan-in report blob: `3731a676deba5a4346cd9e68dd4df5350d41a71d`;
+- authoritative Component CI: run `29275250064`, number `1882`, success.
 
-- source branch: `component/worktree`;
-- accepted code-bearing SHA: `b38264ce2b09632a4c0bab0dd77319e1db239a3b`;
-- final clean-review report commit: `b76f88369d079a9cb264bb4cdb9b6c62e361a9bc`;
-- final clean-review report blob: `84fb7a399d708088c3b545efd0e2adbaad3f909e`;
-- status: `CLEAN_ACCEPT`;
-- authoritative Component CI run: `29272964159`, number `1881`, attempt `1`, success.
+Formatting, rustfmt, naming taste and stylistic matters are out of scope and must not block acceptance.
 
-## Goal
+Verify only:
 
-Bring only the Worktree-owned product changes from accepted baseline `1942946331e8362f19907ab6ad4eb779da70fd57` through exact SHA `b38264ce2b09632a4c0bab0dd77319e1db239a3b` into `component/server`, preserving Server-owned work and all unrelated component snapshots.
+1. the fan-in changed exactly the accepted WT-P11 Worktree product/dependency files;
+2. copied content matches exact source SHA without semantic edits;
+3. no Worktree control/log files were copied;
+4. no Server, Storage, Core, API, CLI, Deployment, migration or workflow product files changed;
+5. Server branch still contains accepted bounded executor and prior Server product work;
+6. exact-SHA DB-capable Component CI is green;
+7. no later product/tooling commit invalidates the candidate;
+8. accepted Worktree exports compile and are available for SRV-P7B4 hosting without requiring owner changes.
 
-## Required actions
-
-1. Compare the accepted Worktree range and identify only Worktree product/dependency files required for WT-P11.
-2. Apply the exact product content into `component/server` without merging the entire sibling branch and without copying Worktree control/log files.
-3. Preserve all Server product/control history and accepted Storage/Server snapshots.
-4. Do not modify Worktree semantics during fan-in.
-5. Resolve only integration conflicts caused by existing Server fan-in state; record each resolution precisely.
-6. Run authoritative DB-capable Component CI on the exact final code-bearing Server SHA.
-7. Verify no API/CLI/Deployment/migration/workflow or unrelated sibling changes occurred.
-
-Expected Worktree-owned product paths include only the exact accepted changes under:
-
-- `crates/haze-sync-worktree/Cargo.toml`;
-- `crates/haze-sync-worktree/src/lib.rs`;
-- `crates/haze-sync-worktree/src/runtime.rs`;
-- `crates/haze-sync-worktree/src/watcher.rs`;
-- `crates/haze-sync-worktree/src/hosted_runtime.rs`;
-- `crates/haze-sync-worktree/src/wt_p11_tests.rs`;
-- workspace lockfile only if exact accepted dependency content requires it.
-
-Do not assume this list overrides the exact accepted compare; use the compare as source of truth.
-
-## Completion
-
-Create a real code-bearing fan-in commit without CI skip.
+Do not modify code unless there is a concrete functional integration or scope defect. No formatting-only corrections.
 
 Write `crates/haze-sync-server/control/report.md` with:
 
-- `REPORT_TYPE: IMPLEMENTATION`;
-- `phase_id: SRV-WT-P11-FAN-IN`;
-- `chat_name: server — W1 WT-P11 Exact-SHA Fan-In`;
-- honest status `SELF_ACCEPT`, `NEEDS_FIX`, `BLOCKED_BY_CONTRACT`, `BLOCKED_BY_SCOPE`, or `BLOCKED_BY_TOOLING`.
+- `REPORT_TYPE: CLEAN_CODE_REVIEW`;
+- `phase_id: SRV-WT-P11-FAN-IN-REVIEW`;
+- `chat_name: server — W1 WT-P11 Fan-In Functional Review`;
+- status `CLEAN_ACCEPT`, `CLEAN_NEEDS_FIX`, `CLEAN_BLOCKED_BY_CONTRACT`, `CLEAN_BLOCKED_BY_SCOPE`, or `CLEAN_BLOCKED_BY_TOOLING`.
 
-Report exact source SHA/range, copied product paths, conflict resolutions, final Server code-bearing SHA, exact CI evidence, scope verification and whether the fan-in is ready for functional integration review.
-
-Formatting/style alone is non-blocking when exact-SHA CI is green. Do not begin SRV-P7B4 implementation or claim fan-in CLEAN_ACCEPT; Orchestrator controls the next gate.
+If the exact fan-in and integration invariants hold, use `CLEAN_ACCEPT` and state that Orchestrator may reactivate SRV-P7B4 Hosted Worktree Runtime.
