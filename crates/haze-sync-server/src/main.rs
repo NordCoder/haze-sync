@@ -26,6 +26,7 @@ mod worktree_executor;
 mod worktree_host;
 #[allow(dead_code)]
 mod worktree_runtime;
+mod worktree_status;
 
 pub const CRATE_ROLE: &str =
     "Haze Sync HTTP server scaffolding, configuration, DB readiness, migrations, and W2/W3 route wiring.";
@@ -65,6 +66,7 @@ async fn run_with_config(config: ServerConfig) -> Result<(), StartupError> {
         ServerWorktreeRuntimeHost::start(host_config, config.worktree.root.clone(), pool, services)
             .await?;
     let _manual_submission_boundary = ServerWorktreeRuntimeHost::submit_manual;
+    let _status_snapshot_boundary = ServerWorktreeRuntimeHost::snapshot;
 
     let listener = TcpListener::bind(listen_addr)
         .await
