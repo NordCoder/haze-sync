@@ -21,9 +21,7 @@ pub(super) struct LoadedState {
 }
 
 impl ServerWorktreeCycleExecutor {
-    pub(super) async fn verify_required_binding(
-        &self,
-    ) -> Result<(), WorktreeRuntimeCycleFailure> {
+    pub(super) async fn verify_required_binding(&self) -> Result<(), WorktreeRuntimeCycleFailure> {
         let binding = load_worktree_instance(&self.pool, &self.adapter_id)
             .await
             .map_err(|_| WorktreeRuntimeCycleFailure::Plan)?
