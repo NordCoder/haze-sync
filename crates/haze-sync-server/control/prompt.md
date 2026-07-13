@@ -1,104 +1,75 @@
-# W1-SRV-P7B3-EXECUTOR-CI-FIX — Fix failed exact-SHA executor review correction CI
+# W1-SRV-P7B3-EXECUTOR-CLEAN-REVIEW — Final clean review after CI fix
 
 Before starting, name this worker chat exactly:
 
-`server — W1 SRV-P7B3 Executor CI Fix`
+`server — W1 SRV-P7B3 Executor Final Clean Review`
 
 Component: server
 Path: crates/haze-sync-server
 Branch: component/server
 PR: #45
-Role: fixer-worker
-Phase: SRV-P7B3-EXECUTOR-CI-FIX
+Role: clean-code-reviewer
+Phase: SRV-P7B3-EXECUTOR-CLEAN-REVIEW
 
 Work through the GitHub connector. Do not merge PR #45, change draft state, rewrite history, modify sibling branches, or begin SRV-P7B4.
 
-## Failed candidate
+## Candidate
 
-Fix the exact review-correction candidate:
+Review the complete executor line through the exact fixed SHA:
 
-- implementation candidate: `a08739cc8146b4f224475c83fa0652b60782db82`;
-- clean-review correction SHA: `784a45f879f13914a1732b8ea071ea8f281d6721`;
-- clean-review report commit: `c00f8d4c128f6770ad3062b6d753e7310299faf0`;
-- clean-review report blob: `9bafafc37d0fb789687aedb1920d8b4c52c2eb45`;
-- failed Component CI run ID: `29255656933`;
-- run number: `1859`;
-- run attempt: `1`;
-- exact head SHA: `784a45f879f13914a1732b8ea071ea8f281d6721`.
+- original executor candidate: `a08739cc8146b4f224475c83fa0652b60782db82`;
+- clean-review validation correction: `784a45f879f13914a1732b8ea071ea8f281d6721`;
+- final formatting fix SHA: `f8475af72b3e1795c5b11fa39f4625191eff59b1`;
+- FIX report commit: `16c973093cde40625334591cec8d9ea96ef82998`;
+- FIX report blob: `78b4e03e00a6a6fac00f1457602a445c2fa17d8e`;
+- authoritative Component CI: run `29257244778`, number `1860`, attempt `1`, success on exact final SHA.
 
-## Mandatory diagnostics artifact
+Review range:
 
-Use this exact artifact:
+`230a381dc37c300d6b2c17252f2c7ec163634be1..f8475af72b3e1795c5b11fa39f4625191eff59b1`
 
-- artifact ID: `8281161500`;
-- artifact name: `ci-diag__component-server__wf-component-ci__run-29255656933__attempt-1`;
-- artifact digest: `sha256:b005e355fd1cef4f4df37ee0b13e5e6156964eaa79b6fdc46bbe9a8e3a1cc2dc`;
-- expired: `false` at rotation time;
-- expires at: `2026-07-14T13:56:33Z`.
+Accepted owner snapshots remain immutable:
 
-Download and read:
+- Worktree `1942946331e8362f19907ab6ad4eb779da70fd57`;
+- Storage `66b6a1f554aae1d1b774cc88560d46dd140c7a54`;
+- Server application services `647dce7b624d67663632808906896cb6745ea7e7`.
 
-- `ci-diagnostics/summary.md`;
-- `ci-diagnostics/manifest.json`;
-- every file listed in `failed_checks`.
+## Required review
 
-Do not infer root cause from the wrapper job summary. Raw GitHub job logs are fallback-only if the artifact is missing, corrupt or materially insufficient, and that limitation must be reported honestly.
+Revalidate the complete executor after corrections, including:
 
-Observed wrapper evidence only:
+1. one-cycle boundedness and no hidden task/scheduler ownership;
+2. fail-closed upper bounds for import/delete/export budgets;
+3. DryRun requires full scan and remains non-mutating;
+4. cancellation before, between and within bounded phases;
+5. awaited blocking execution only for synchronous filesystem work;
+6. application-service-only authoritative operations;
+7. passive Storage repositories and Server-owned transaction timing;
+8. deterministic bounded state pagination;
+9. idempotent import/delete replay;
+10. ordered exports, verified content, materialization-before-checkpoint and exact-contiguous cursor advancement;
+11. recoverable crash windows;
+12. count-only summaries and coarse safe failures;
+13. secrecy/redaction;
+14. honest tests for limits, cancellation, replay, rollback, binding/version/cursor failures;
+15. owner snapshots, migrations and workflows unchanged;
+16. no hosted runtime/API/readiness/CLI/Deployment work;
+17. no later product/tooling commit invalidates final SHA.
 
-- cargo fmt: success;
-- cargo check: success;
-- cargo test: success;
-- cargo clippy: success;
-- diagnostics finalizer: failure;
-- diagnostics artifact upload: success.
+No cleanup for its own sake. Modify only Server-owned executor code/tests/docs for a concrete defect. Any code-bearing correction requires new exact-SHA DB-capable CI. Do not read diagnostics artifacts unless Orchestrator changes the role to fixer.
 
-The wrapper evidence does not identify the root cause.
+## Mandatory report
 
-## Scope
+Write `crates/haze-sync-server/control/report.md` using `report-template.md`.
 
-Fix only the exact artifact-proven failure caused by the SRV-P7B3 clean-review correction.
+Set:
 
-Allowed:
+- `REPORT_TYPE: CLEAN_CODE_REVIEW`;
+- `phase_id: SRV-P7B3-EXECUTOR-CLEAN-REVIEW`;
+- `chat_name: server — W1 SRV-P7B3 Executor Final Clean Review`.
 
-- Server-owned executor validation code and focused tests;
-- directly related Server-owned test/tooling correction proven by the artifact;
-- Server control report.
+Use one honest status: `CLEAN_ACCEPT`, `CLEAN_ACCEPT_PENDING_CI`, `CLEAN_NEEDS_FIX`, `CLEAN_BLOCKED_BY_CONTRACT`, `CLEAN_BLOCKED_BY_SCOPE`, or `CLEAN_BLOCKED_BY_TOOLING`.
 
-Forbidden:
+Include exact range/final SHA, all findings, validation-correction assessment, CI evidence, owner-snapshot protection, later-commit validation and whether Orchestrator may activate SRV-P7B4.
 
-- accepted Worktree or Storage files;
-- migrations;
-- Core, API, CLI or Deployment product files;
-- sibling control files or workflows;
-- hosted runtime, startup/shutdown task, manual channel, public DTO/status/readiness work;
-- unrelated cleanup or redesign.
-
-Preserve the clean-review corrections unless the artifact proves they are themselves wrong:
-
-- reject import/delete/export budgets above 1000;
-- require `full_scan_required` for DryRun;
-- keep DryRun non-mutating.
-
-## Completion
-
-Create a real code-bearing fix commit without CI skip when executable/test/tooling content changes. Run authoritative DB-capable Component CI on the exact final code-bearing SHA.
-
-Write `crates/haze-sync-server/control/report.md` using `report-template.md` with:
-
-- `REPORT_TYPE: FIX`;
-- `phase_id: SRV-P7B3-EXECUTOR-CI-FIX`;
-- `chat_name: server — W1 SRV-P7B3 Executor CI Fix`.
-
-Use one honest status:
-
-- `FIX_COMPLETE`;
-- `FIX_NEEDS_MORE_WORK`;
-- `FIX_BLOCKED_BY_LOGS`;
-- `FIX_BLOCKED_BY_CONTRACT`;
-- `FIX_BLOCKED_BY_SCOPE`;
-- `FIX_BLOCKED_BY_TOOLING`.
-
-The report must include artifact metadata, files read from the artifact, exact diagnosed root cause, changed paths, exact final code-bearing SHA, exact CI run evidence and whether the candidate is ready to return to mandatory clean-code review.
-
-Do not claim `CLEAN_ACCEPT` or activate SRV-P7B4. After a successful fix, Orchestrator must rotate another clean-review slot.
+Do not claim SRV-P7B4 is active.
