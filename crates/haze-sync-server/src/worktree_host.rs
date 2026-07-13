@@ -17,8 +17,8 @@ use haze_sync_worktree::{
     WorktreeHostedRuntimePoll, WorktreeMode, WorktreeRuntimeClock, WorktreeRuntimeCycle,
     WorktreeRuntimeCycleBudget, WorktreeRuntimeLifecycle, WorktreeRuntimeManualHandle,
     WorktreeRuntimeManualRequest, WorktreeRuntimeManualSubmission, WorktreeRuntimePolicy,
-    WorktreeRuntimePolicyError, WorktreeRuntimeService, WorktreeRuntimeStatus, WorktreeWatcher,
-    WorktreeWatcherFailure,
+    WorktreeRuntimePolicyError, WorktreeRuntimeService, WorktreeRuntimeStatus,
+    WorktreeRuntimeWatcherState, WorktreeWatcher, WorktreeWatcherFailure,
 };
 use sha2::{Digest, Sha256 as Sha256Hasher};
 use sqlx::PgPool;
@@ -441,7 +441,12 @@ where
     W: WorktreeWatcher + Send + 'static,
     X: WorktreeRuntimeCycle + Send + 'static,
 {
-    if runtime.start().is_err() {
+    let start_failed = runtime.start().is_err()
+        || matches!(
+            runtime.status().watcher,
+            WorktreeRuntimeWatcherState::Failed(_)
+        );
+    if start_failed {
         *status.write().await = ServerWorktreeHostStatus::failed_from(runtime.status());
         let _ = startup.send(Err(ServerWorktreeHostError::RuntimeFailed));
         return Err(ServerWorktreeHostError::RuntimeFailed);
