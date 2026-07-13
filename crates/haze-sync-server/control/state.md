@@ -6,47 +6,53 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-server/control/prompt.md
 active_report: crates/haze-sync-server/control/report.md
-active_agent_role: fixer-worker
-assigned_chat_name: server — W1 SRV-P7B4 Lifecycle Fix
-prompt_revision: verified by Orchestrator after functional review found fail-open enabled startup and missing Server-owned lifecycle coverage; formatting/style excluded from blocking scope
+active_agent_role: clean-code-reviewer
+assigned_chat_name: server — W1 SRV-P7B4 Lifecycle Verification
+prompt_revision: verified by Orchestrator after FIX_COMPLETE lifecycle correction and green DB-capable exact-SHA CI; formatting/style excluded from blocking scope
 
 wave: W1
-phase: SRV-P7B4-LIFECYCLE-FIX
+phase: SRV-P7B4-LIFECYCLE-VERIFY
 
 implementation_status: SELF_ACCEPT
-fix_status: NOT_STARTED
-clean_review_status: CLEAN_NEEDS_FIX
+fix_status: FIX_COMPLETE
+clean_review_status: NOT_STARTED_FINAL_FUNCTIONAL
 architect_status: ARCHITECT_NOT_REQUIRED
-ci_status: CI_GREEN_FOR_REVIEWED_SHA
+ci_status: CI_GREEN_DB_VERIFIED
 known_failed_checks: []
 
-reviewed_candidate:
-- code_bearing_sha: 5536d260bb4f95ec11c0cd07501c23903a72757d
-- functional_review_report_commit: de06e35bb687448ea61fe6eacc0d1dd76ad04766
-- functional_review_report_blob: 07e298a0622c6e5b1210160dc70b04c714a858e7
-- review_status: CLEAN_NEEDS_FIX
+final_candidate:
+- previous_code_bearing_sha: 5536d260bb4f95ec11c0cd07501c23903a72757d
+- final_code_bearing_sha: 55ed0d6c6ab9b78a953b954fcf5a9a68a6a708fe
+- fix_report_commit: a0dc770a14e2a9d1a9a0aab2c30aef8e0c4e5ea5
+- fix_report_blob: 7963d704e7dfba89ef8d7e26178e772d7f3a947a
+- post_candidate_changes: report-only before rotation
 
-substantive_blockers:
-- enabled host returns before runtime/watcher startup acknowledgement
-- startup failure is asynchronous and can allow HTTP serving to begin
-- early task failure may leave shared status at Starting
-- Server-owned lifecycle/join/concurrency tests are insufficient
+ci_evidence:
+- workflow: Component CI
+- run_id: 29281569666
+- run_number: 1893
+- run_attempt: 1
+- head_sha: 55ed0d6c6ab9b78a953b954fcf5a9a68a6a708fe
+- conclusion: success
+- db_capable: yes
+- cargo_fmt: success
+- cargo_check: success
+- cargo_test: success
+- cargo_clippy: success
+- diagnostics_finalizer: success
 
-required_fix:
-- bounded cancellation-safe startup acknowledgement
-- fail-closed coarse startup error propagation
-- publish Failed on all task error paths
-- cleanup and mandatory join/abort-await before returning startup error
-- real Server-host Tokio lifecycle tests for startup, polling, manual, Busy, no-overlap, DryRun, cancellation, timeout and join
-- no stylistic or formatting-only work
+review_policy:
+- formatting, rustfmt, naming taste and style are non-blocking and out of scope
+- verify only startup acknowledgement, failed-start cleanup, status, task ownership/join, lifecycle tests, secrecy, CI and protected scope
 
 completion_requirements:
-- real code-bearing lifecycle fix commit
-- exact final SHA recorded
-- authoritative DB-capable exact-SHA Component CI green or honest blocker
-- committed FIX report exists
+- committed CLEAN_CODE_REVIEW report exists
+- report phase SRV-P7B4-LIFECYCLE-VERIFY
+- report chat name server — W1 SRV-P7B4 Lifecycle Verification
+- exact final SHA reviewed
+- no later product/tooling invalidation
 
-next_gate_after_fix:
-- FIX_COMPLETE plus green exact-SHA CI -> final focused functional verification
-- formatting/style does not block
-- SRV-P7B5 and API-P8 remain blocked until SRV-P7B4 CLEAN_ACCEPT
+next_gate_after_review:
+- CLEAN_ACCEPT -> begin SRV-P7B5 status/readiness work immediately
+- substantive defect -> focused fix only
+- API-P8 remains blocked until SRV-P7B5 contract is accepted
