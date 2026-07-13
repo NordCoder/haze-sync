@@ -2,6 +2,8 @@ use crate::*;
 use std::collections::VecDeque;
 use std::future::Future;
 use std::path::PathBuf;
+use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, Wake, Waker};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -85,6 +87,48 @@ impl WorktreeRuntimeCycle for Cycle {
     }
 }
 
+#[derive(Debug)]
+struct ControlledCycle {
+    ready: Arc<AtomicBool>,
+}
+
+impl WorktreeRuntimeCycle for ControlledCycle {
+    fn run_cycle<'a>(
+        &'a mut self,
+        request: WorktreeRuntimeCycleRequest,
+        cancellation: WorktreeCancellationToken,
+    ) -> WorktreeRuntimeCycleFuture<'a> {
+        Box::pin(ControlledFuture {
+            ready: self.ready.clone(),
+            cancellation,
+            request,
+        })
+    }
+}
+
+struct ControlledFuture {
+    ready: Arc<AtomicBool>,
+    cancellation: WorktreeCancellationToken,
+    request: WorktreeRuntimeCycleRequest,
+}
+
+impl Future for ControlledFuture {
+    type Output = Result<WorktreeRuntimeCycleSummary, WorktreeRuntimeCycleFailure>;
+
+    fn poll(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Self::Output> {
+        if self.cancellation.is_cancelled() {
+            Poll::Ready(Err(WorktreeRuntimeCycleFailure::Cancelled))
+        } else if self.ready.load(Ordering::Acquire) {
+            Poll::Ready(Ok(WorktreeRuntimeCycleSummary {
+                full_scan_completed: self.request.full_scan_required,
+                ..Default::default()
+            }))
+        } else {
+            Poll::Pending
+        }
+    }
+}
+
 struct Noop;
 
 impl Wake for Noop {
@@ -101,6 +145,12 @@ fn block_on<F: Future>(future: F) -> F::Output {
         }
         std::thread::yield_now();
     }
+}
+
+fn poll_once<F: Future>(future: Pin<&mut F>) -> Poll<F::Output> {
+    let waker = Waker::from(Arc::new(Noop));
+    let mut context = Context::from_waker(&waker);
+    future.poll(&mut context)
 }
 
 fn budget() -> WorktreeRuntimeCycleBudget {
@@ -128,6 +178,28 @@ fn hosted(
         1,
     )
     .unwrap()
+}
+
+fn controlled_hosted() -> (
+    WorktreeHostedRuntime<Clock, Watcher, ControlledCycle>,
+    WorktreeRuntimeManualHandle,
+    Arc<AtomicBool>,
+) {
+    let ready = Arc::new(AtomicBool::new(false));
+    let (runtime, handle) = WorktreeHostedRuntime::new(
+        WorktreeRuntimeService::new(
+            WorktreeMode::ImportOnly,
+            policy(),
+            Clock::new(),
+            Watcher::default(),
+            ControlledCycle {
+                ready: ready.clone(),
+            },
+        ),
+        1,
+    )
+    .unwrap();
+    (runtime, handle, ready)
 }
 
 #[test]
@@ -164,6 +236,82 @@ fn hosted_manual_request_has_reachable_busy_and_ticket_completion() {
         runtime.status().last_cycle_cause,
         Some(WorktreeRuntimeCycleCause::Manual)
     );
+}
+
+#[test]
+fn dropped_manual_poll_releases_gate_and_completes_ticket_as_cancelled() {
+    let (mut runtime, handle, ready) = controlled_hosted();
+    runtime.start().unwrap();
+    let ticket = match handle.submit(WorktreeRuntimeManualRequest::new(true, budget())) {
+        WorktreeRuntimeManualSubmission::Accepted(ticket) => ticket,
+        other => panic!("unexpected submission: {other:?}"),
+    };
+
+    let mut future = Box::pin(runtime.poll());
+    assert!(poll_once(future.as_mut()).is_pending());
+    drop(future);
+
+    assert_eq!(
+        ticket.try_result(),
+        WorktreeRuntimeManualTicketPoll::Completed(WorktreeRuntimeManualOutcome::Failed(
+            WorktreeRuntimeCycleFailure::Cancelled
+        ))
+    );
+    let status = runtime.status();
+    assert!(!status.cycle_in_progress);
+    assert_eq!(status.cycles_completed, 0);
+    assert_eq!(status.cycles_failed, 0);
+    assert_eq!(status.last_cycle_cause, None);
+    assert_eq!(status.last_cycle, None);
+
+    let next_ticket = match handle.submit(WorktreeRuntimeManualRequest::new(true, budget())) {
+        WorktreeRuntimeManualSubmission::Accepted(ticket) => ticket,
+        other => panic!("gate was not released: {other:?}"),
+    };
+    ready.store(true, Ordering::Release);
+    assert!(matches!(
+        block_on(runtime.poll()).unwrap(),
+        WorktreeHostedRuntimePoll::Manual(WorktreeRuntimeManualOutcome::Completed(_))
+    ));
+    assert!(matches!(
+        next_ticket.try_result(),
+        WorktreeRuntimeManualTicketPoll::Completed(WorktreeRuntimeManualOutcome::Completed(_))
+    ));
+}
+
+#[test]
+fn dropped_automatic_poll_releases_gate_and_preserves_startup_work() {
+    let (mut runtime, handle, ready) = controlled_hosted();
+    runtime.start().unwrap();
+
+    let mut future = Box::pin(runtime.poll());
+    assert!(poll_once(future.as_mut()).is_pending());
+    drop(future);
+
+    let status = runtime.status();
+    assert!(!status.cycle_in_progress);
+    assert!(status.startup_cycle_pending);
+    assert_eq!(status.cycles_completed, 0);
+    assert_eq!(status.last_cycle_cause, None);
+
+    let ticket = match handle.submit(WorktreeRuntimeManualRequest::new(true, budget())) {
+        WorktreeRuntimeManualSubmission::Accepted(ticket) => ticket,
+        other => panic!("automatic drop left gate busy: {other:?}"),
+    };
+    ready.store(true, Ordering::Release);
+    block_on(runtime.poll()).unwrap();
+    assert!(matches!(
+        ticket.try_result(),
+        WorktreeRuntimeManualTicketPoll::Completed(WorktreeRuntimeManualOutcome::Completed(_))
+    ));
+    assert!(runtime.status().startup_cycle_pending);
+    assert!(matches!(
+        block_on(runtime.poll()).unwrap(),
+        WorktreeHostedRuntimePoll::Automatic(WorktreeRuntimePoll::CycleCompleted {
+            cause: WorktreeRuntimeCycleCause::Startup,
+            ..
+        })
+    ));
 }
 
 #[test]
