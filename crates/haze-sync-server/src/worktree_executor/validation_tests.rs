@@ -32,33 +32,9 @@ fn request(
 fn all_action_budgets_fail_closed_above_server_limit() {
     let too_many = MAX_APPLICATION_CHANGE_LIMIT + 1;
     for invalid in [
-        request(
-            WorktreeMode::ImportOnly,
-            true,
-            true,
-            false,
-            too_many,
-            1,
-            1,
-        ),
-        request(
-            WorktreeMode::ImportOnly,
-            true,
-            true,
-            false,
-            1,
-            too_many,
-            1,
-        ),
-        request(
-            WorktreeMode::ExportOnly,
-            false,
-            false,
-            true,
-            1,
-            1,
-            too_many,
-        ),
+        request(WorktreeMode::ImportOnly, true, true, false, too_many, 1, 1),
+        request(WorktreeMode::ImportOnly, true, true, false, 1, too_many, 1),
+        request(WorktreeMode::ExportOnly, false, false, true, 1, 1, too_many),
     ] {
         assert_eq!(
             validate_request(invalid),
