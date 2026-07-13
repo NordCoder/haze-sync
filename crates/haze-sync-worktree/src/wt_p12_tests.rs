@@ -110,13 +110,8 @@ fn hosted() -> (
     Arc<AtomicBool>,
 ) {
     let ready = Arc::new(AtomicBool::new(false));
-    let policy = WorktreeRuntimePolicy::new(
-        Duration::ZERO,
-        Duration::from_secs(60),
-        1,
-        budget(),
-    )
-    .unwrap();
+    let policy =
+        WorktreeRuntimePolicy::new(Duration::ZERO, Duration::from_secs(60), 1, budget()).unwrap();
     let service = WorktreeRuntimeService::new(
         WorktreeMode::ImportOnly,
         policy,
@@ -177,10 +172,16 @@ fn passive_status_tracks_created_running_busy_cancelling_and_shutdown() {
     ));
 
     runtime.request_cancel().unwrap();
-    assert_eq!(status.status().lifecycle, WorktreeRuntimeLifecycle::Cancelling);
+    assert_eq!(
+        status.status().lifecycle,
+        WorktreeRuntimeLifecycle::Cancelling
+    );
     assert!(!status.status().busy);
     runtime.shutdown().unwrap();
-    assert_eq!(status.status().lifecycle, WorktreeRuntimeLifecycle::Shutdown);
+    assert_eq!(
+        status.status().lifecycle,
+        WorktreeRuntimeLifecycle::Shutdown
+    );
     assert!(!status.status().busy);
 }
 
