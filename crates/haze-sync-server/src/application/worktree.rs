@@ -2,10 +2,7 @@
 
 use super::{files, ApplicationError, AuthoritativeRevisionContent, RevisionContentQuery};
 use haze_sync_common::{RevisionId, VaultPath};
-use haze_sync_storage::{
-    repositories::revisions::get_file_revision_by_id,
-    LocalObjectStore,
-};
+use haze_sync_storage::{repositories::revisions::get_file_revision_by_id, LocalObjectStore};
 use sqlx::PgPool;
 
 /// Resolve a revision's authoritative path before loading and verifying its bytes.
