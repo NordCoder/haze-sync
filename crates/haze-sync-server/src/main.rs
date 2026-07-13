@@ -12,9 +12,7 @@ use crate::{
     config::{ConfigError, ObjectStoreConfig, ServerConfig},
     db::DbRuntimeError,
     state::ServerAppState,
-    worktree_host::{
-        ServerWorktreeHostConfig, ServerWorktreeHostError, ServerWorktreeRuntimeHost,
-    },
+    worktree_host::{ServerWorktreeHostConfig, ServerWorktreeHostError, ServerWorktreeRuntimeHost},
 };
 
 mod application;
@@ -26,6 +24,7 @@ pub mod routes;
 pub mod state;
 mod worktree_executor;
 mod worktree_host;
+#[allow(dead_code)]
 mod worktree_runtime;
 
 pub const CRATE_ROLE: &str =
@@ -58,15 +57,14 @@ async fn run_with_config(config: ServerConfig) -> Result<(), StartupError> {
     let state = ServerAppState::from_config(config.clone(), pool.clone());
     let services = state
         .application_services()
-        .ok_or(StartupError::WorktreeHost(ServerWorktreeHostError::RuntimeFailed))?;
+        .ok_or(StartupError::WorktreeHost(
+            ServerWorktreeHostError::RuntimeFailed,
+        ))?;
     let host_config = ServerWorktreeHostConfig::from_adapter_mode(config.worktree.mode)?;
-    let worktree_host = ServerWorktreeRuntimeHost::start(
-        host_config,
-        config.worktree.root.clone(),
-        pool,
-        services,
-    )
-    .await?;
+    let worktree_host =
+        ServerWorktreeRuntimeHost::start(host_config, config.worktree.root.clone(), pool, services)
+            .await?;
+    let _manual_submission_boundary = ServerWorktreeRuntimeHost::submit_manual;
 
     let listener = TcpListener::bind(listen_addr)
         .await
@@ -148,7 +146,8 @@ mod tests {
 
     #[test]
     fn worktree_host_errors_are_secret_safe() {
-        let rendered = StartupError::WorktreeHost(ServerWorktreeHostError::BindingFailed).to_string();
+        let rendered =
+            StartupError::WorktreeHost(ServerWorktreeHostError::BindingFailed).to_string();
         assert!(!rendered.contains("postgres://"));
         assert!(!rendered.contains("/srv/"));
         assert!(!rendered.contains("fingerprint"));
