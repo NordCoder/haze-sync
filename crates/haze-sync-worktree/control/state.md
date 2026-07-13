@@ -6,54 +6,49 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-worktree/control/prompt.md
 active_report: crates/haze-sync-worktree/control/report.md
-active_agent_role: clean-code-reviewer
-assigned_chat_name: worktree — W1 WT-P11 Final Functional Review
-prompt_revision: verified by Orchestrator after substantive clean-review fixes and green exact-SHA CI; formatting/style excluded from blocking scope
+active_agent_role: fixer-worker
+assigned_chat_name: worktree — W1 WT-P11 Cancellation Safety Fix
+prompt_revision: verified by Orchestrator after final functional review found one substantive cancellation-by-drop defect; formatting/style remain non-blocking
 
 wave: W1
-phase: WT-P11-FINAL-FUNCTIONAL-REVIEW
+phase: WT-P11-CANCELLATION-FIX
 
 implementation_status: SELF_ACCEPT_AFTER_FIX
-fix_status: FIX_COMPLETE
-clean_review_status: NOT_STARTED_FINAL_FUNCTIONAL
+fix_status: NOT_STARTED
+clean_review_status: CLEAN_NEEDS_FIX
 architect_status: ARCHITECT_NOT_REQUIRED
-ci_status: CI_GREEN
+ci_status: CI_GREEN_FOR_REVIEWED_SHA
 known_failed_checks: []
 
-final_candidate:
-- accepted_wt_p10_baseline: 1942946331e8362f19907ab6ad4eb779da70fd57
-- prior_reviewed_sha: 61c24544a3fb9d785cb95ab2016f6d29f4661d3e
-- final_code_bearing_sha: 9cce5f5a34597f13a506fadad49a7ab46972fa98
-- fix_report_commit: 4dfa340ccce6169eab566e93be4c12747551f0fe
-- fix_report_blob: 6120e4b0b1ba4be1e20af6c55ac287b3fface6fe
-- post_candidate_changes: report-only before rotation
+reviewed_candidate:
+- code_bearing_sha: 9cce5f5a34597f13a506fadad49a7ab46972fa98
+- functional_review_report_commit: 7e761ccf1b3ba0036d10067a9d6e4bf395db4bf1
+- functional_review_report_blob: db35ddba7c77518f6c04216a52907634b451eeef
+- review_status: CLEAN_NEEDS_FIX
+- sole_blocker: cancellation-by-drop can wedge shared busy gate and close manual ticket without typed cancellation
+- post_candidate_product_or_tooling_changes: none
 
 ci_evidence:
 - workflow: Component CI
 - run_id: 29269422217
 - run_number: 1876
-- run_attempt: 1
 - head_sha: 9cce5f5a34597f13a506fadad49a7ab46972fa98
 - conclusion: success
-- cargo_fmt: success
-- cargo_check: success
-- cargo_test: success
-- cargo_clippy: success
-- diagnostics_finalizer: success
 
-review_policy:
-- formatting, line wrapping, naming taste and stylistic preferences are non-blocking
-- review only functional, safety, lifecycle, concurrency, contract, secrecy and scope defects
-- no formatting-only code corrections
+required_fix:
+- RAII busy/in-flight guard releases gate on normal completion and Drop
+- dropped manual execution completes ticket with typed cancellation
+- dropped incomplete cycle does not commit completed-cycle accounting
+- deterministic pending manual and automatic drop tests
+- no stylistic or formatting-only work
 
 completion_requirements:
-- committed CLEAN_CODE_REVIEW report exists
-- report phase WT-P11-FINAL-FUNCTIONAL-REVIEW
-- report chat name worktree — W1 WT-P11 Final Functional Review
-- exact final SHA reviewed
-- no later product/tooling invalidation
+- real code-bearing cancellation fix commit
+- exact final SHA recorded
+- exact-SHA Component CI green or honest blocker
+- committed FIX report exists
 
-next_gate_after_review:
-- CLEAN_ACCEPT -> explicit exact-SHA Worktree fan-in to component/server
-- substantive defect -> focused fix only
+next_gate_after_fix:
+- FIX_COMPLETE plus green exact-SHA CI -> final lightweight functional verification, then exact-SHA Server fan-in
+- formatting/style does not block
 - Server SRV-P7B4 remains blocked until fan-in acceptance
