@@ -7,7 +7,7 @@ use crate::{
         ServerWorktreeExecutorPolicy,
     },
     worktree_runtime::{map_adapter_mode, ServerWorktreeModeMapping},
-    worktree_status::{ServerWorktreeManualGate, ServerWorktreeStatusSnapshot},
+    worktree_status::ServerWorktreeStatusSnapshot,
 };
 use haze_sync_common::{AdapterId, AdapterMode, Sha256};
 use haze_sync_storage::repositories::worktree_state::{
@@ -17,21 +17,14 @@ use haze_sync_worktree::{
     ProductionWorktreeWatcher, WorktreeConfig, WorktreeHostedRuntime, WorktreeHostedRuntimeError,
     WorktreeHostedRuntimePoll, WorktreeMode, WorktreeRuntimeClock, WorktreeRuntimeCycle,
     WorktreeRuntimeCycleBudget, WorktreeRuntimeLifecycle, WorktreeRuntimeManualHandle,
-    WorktreeRuntimeManualRequest, WorktreeRuntimeManualSubmission, WorktreeRuntimePolicy,
-    WorktreeRuntimePolicyError, WorktreeRuntimeService, WorktreeRuntimeStatus,
-    WorktreeRuntimeWatcherState, WorktreeWatcher, WorktreeWatcherFailure,
+    WorktreeRuntimeManualRequest, WorktreeRuntimeManualStatusHandle,
+    WorktreeRuntimeManualSubmission, WorktreeRuntimePolicy, WorktreeRuntimePolicyError,
+    WorktreeRuntimeService, WorktreeRuntimeStatus, WorktreeRuntimeWatcherState, WorktreeWatcher,
+    WorktreeWatcherFailure,
 };
 use sha2::{Digest, Sha256 as Sha256Hasher};
 use sqlx::PgPool;
-use std::{
-    fmt,
-    path::PathBuf,
-    sync::{
-        atomic::{AtomicU8, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use std::{fmt, path::PathBuf, time::Duration};
 use tokio::{
     sync::{oneshot, watch},
     task::JoinHandle,
@@ -41,8 +34,6 @@ use tokio::{
 const MAX_ACTION_BUDGET: usize = 1_000;
 const MAX_MANUAL_CAPACITY: usize = 64;
 const MAX_WATCHER_HINT_BUDGET: usize = 4_096;
-const MANUAL_AVAILABLE: u8 = 0;
-const MANUAL_BUSY: u8 = 1;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct ServerWorktreeHostConfig {
@@ -254,7 +245,7 @@ impl From<WorktreeHostedRuntimeError> for ServerWorktreeHostError {
 pub(crate) struct ServerWorktreeRuntimeHost {
     mode: WorktreeMode,
     manual: Option<WorktreeRuntimeManualHandle>,
-    manual_gate: Arc<AtomicU8>,
+    manual_status: Option<WorktreeRuntimeManualStatusHandle>,
     status: watch::Sender<ServerWorktreeHostStatus>,
     shutdown: Option<oneshot::Sender<()>>,
     join: Option<JoinHandle<Result<(), ServerWorktreeHostError>>>,
@@ -327,7 +318,7 @@ impl ServerWorktreeRuntimeHost {
         Self {
             mode: WorktreeMode::Disabled,
             manual: None,
-            manual_gate: Arc::new(AtomicU8::new(MANUAL_AVAILABLE)),
+            manual_status: None,
             status,
             shutdown: None,
             join: None,
@@ -345,10 +336,9 @@ impl ServerWorktreeRuntimeHost {
         W: WorktreeWatcher + Send + 'static,
         X: WorktreeRuntimeCycle + Send + 'static,
     {
+        let manual_status = manual.status_handle();
         let (status, _receiver) = watch::channel(ServerWorktreeHostStatus::starting());
         let task_status = status.clone();
-        let manual_gate = Arc::new(AtomicU8::new(MANUAL_AVAILABLE));
-        let task_manual_gate = manual_gate.clone();
         let (shutdown, shutdown_receiver) = oneshot::channel();
         let (startup, startup_receiver) = oneshot::channel();
         let mut join = tokio::spawn(run_hosted(
@@ -356,7 +346,6 @@ impl ServerWorktreeRuntimeHost {
             shutdown_receiver,
             startup,
             task_status,
-            task_manual_gate,
             config.poll_interval(),
         ));
 
@@ -364,7 +353,7 @@ impl ServerWorktreeRuntimeHost {
             Ok(Ok(Ok(()))) => Ok(Self {
                 mode: config.mode,
                 manual: Some(manual),
-                manual_gate,
+                manual_status: Some(manual_status),
                 status,
                 shutdown: Some(shutdown),
                 join: Some(join),
@@ -390,29 +379,18 @@ impl ServerWorktreeRuntimeHost {
         &self,
         request: WorktreeRuntimeManualRequest,
     ) -> WorktreeRuntimeManualSubmission {
-        let submission = self
-            .manual
+        self.manual
             .as_ref()
             .map_or(WorktreeRuntimeManualSubmission::Shutdown, |manual| {
                 manual.submit(request)
-            });
-        match submission {
-            WorktreeRuntimeManualSubmission::Accepted(_)
-            | WorktreeRuntimeManualSubmission::Busy => {
-                self.manual_gate.store(MANUAL_BUSY, Ordering::Release);
-            }
-            WorktreeRuntimeManualSubmission::NotStarted
-            | WorktreeRuntimeManualSubmission::Cancelling
-            | WorktreeRuntimeManualSubmission::Shutdown => {}
-        }
-        submission
+            })
     }
 
     pub(crate) fn snapshot(&self) -> ServerWorktreeStatusSnapshot {
         ServerWorktreeStatusSnapshot::from_host(
             self.mode,
             *self.status.borrow(),
-            manual_gate(self.manual_gate.load(Ordering::Acquire)),
+            self.manual_status.as_ref().map(|status| status.status()),
         )
     }
 
@@ -459,14 +437,6 @@ impl Drop for ServerWorktreeRuntimeHost {
     }
 }
 
-fn manual_gate(value: u8) -> ServerWorktreeManualGate {
-    if value == MANUAL_BUSY {
-        ServerWorktreeManualGate::Busy
-    } else {
-        ServerWorktreeManualGate::Available
-    }
-}
-
 async fn join_failed_start(
     join: &mut JoinHandle<Result<(), ServerWorktreeHostError>>,
     timeout: Duration,
@@ -482,7 +452,6 @@ async fn run_hosted<C, W, X>(
     mut shutdown: oneshot::Receiver<()>,
     startup: oneshot::Sender<Result<(), ServerWorktreeHostError>>,
     status: watch::Sender<ServerWorktreeHostStatus>,
-    manual_gate: Arc<AtomicU8>,
     poll_interval: Duration,
 ) -> Result<(), ServerWorktreeHostError>
 where
@@ -516,7 +485,6 @@ where
                 return Ok(());
             }
             _ = ticker.tick() => {
-                manual_gate.store(MANUAL_BUSY, Ordering::Release);
                 let poll_result = tokio::select! {
                     biased;
                     _ = &mut shutdown => None,
@@ -526,7 +494,6 @@ where
                     cancel_and_shutdown(&mut runtime, &status).await?;
                     return Ok(());
                 };
-                manual_gate.store(MANUAL_AVAILABLE, Ordering::Release);
                 match result {
                     Ok(WorktreeHostedRuntimePoll::Idle
                         | WorktreeHostedRuntimePoll::Automatic(_)
