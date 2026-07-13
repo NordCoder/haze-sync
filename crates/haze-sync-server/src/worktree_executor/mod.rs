@@ -10,6 +10,8 @@ mod scan;
 mod state;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod validation_tests;
 
 use crate::application::ServerApplicationServices;
 use haze_sync_common::{AdapterId, Sha256};
@@ -281,6 +283,9 @@ fn validate_request(
     if request.budget.max_import_actions == 0
         || request.budget.max_delete_candidates == 0
         || request.budget.max_export_actions == 0
+        || request.budget.max_import_actions > MAX_APPLICATION_CHANGE_LIMIT
+        || request.budget.max_delete_candidates > MAX_APPLICATION_CHANGE_LIMIT
+        || request.budget.max_export_actions > MAX_APPLICATION_CHANGE_LIMIT
     {
         return Err(WorktreeRuntimeCycleFailure::Plan);
     }
@@ -293,7 +298,9 @@ fn validate_request(
     if request.import_enabled && !request.full_scan_required {
         return Err(WorktreeRuntimeCycleFailure::Plan);
     }
-    if request.mode == WorktreeMode::DryRun && (request.import_enabled || request.export_enabled) {
+    if request.mode == WorktreeMode::DryRun
+        && (!request.full_scan_required || request.import_enabled || request.export_enabled)
+    {
         return Err(WorktreeRuntimeCycleFailure::Plan);
     }
     Ok(())
