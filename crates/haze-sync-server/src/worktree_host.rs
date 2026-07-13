@@ -22,7 +22,7 @@ use haze_sync_worktree::{
 };
 use sha2::{Digest, Sha256 as Sha256Hasher};
 use sqlx::PgPool;
-use std::{fmt, future::Future, path::PathBuf, sync::Arc, time::Duration};
+use std::{fmt, path::PathBuf, sync::Arc, time::Duration};
 use tokio::{
     sync::{oneshot, RwLock},
     task::JoinHandle,
@@ -230,6 +230,7 @@ impl From<WorktreeHostedRuntimeError> for ServerWorktreeHostError {
     }
 }
 
+#[must_use = "the host must be shut down and joined"]
 pub(crate) struct ServerWorktreeRuntimeHost {
     manual: Option<WorktreeRuntimeManualHandle>,
     status: Arc<RwLock<ServerWorktreeHostStatus>>,
@@ -294,8 +295,10 @@ impl ServerWorktreeRuntimeHost {
         )?;
         let service = WorktreeRuntimeService::new(
             config.mode,
-            config.policy().map_err(|_| ServerWorktreeHostError::InvalidConfig)?,
-            TokioWorktreeClock,
+            config
+                .policy()
+                .map_err(|_| ServerWorktreeHostError::InvalidConfig)?,
+            TokioWorktreeClock::new(),
             watcher,
             executor,
         );
@@ -341,23 +344,26 @@ impl ServerWorktreeRuntimeHost {
         *self.status.read().await
     }
 
-    pub(crate) async fn shutdown(mut self) -> Result<ServerWorktreeHostStatus, ServerWorktreeHostError> {
+    pub(crate) async fn shutdown(
+        mut self,
+    ) -> Result<ServerWorktreeHostStatus, ServerWorktreeHostError> {
         if self.join.is_none() {
             return Ok(self.status().await);
         }
         if let Some(shutdown) = self.shutdown.take() {
             let _ = shutdown.send(());
         }
-        let mut join = self.join.take().expect("checked above");
+        let mut join = self.join.take().expect("join existence checked above");
         match time::timeout(self.shutdown_timeout, &mut join).await {
             Ok(Ok(result)) => result?,
             Ok(Err(_)) => return Err(ServerWorktreeHostError::TaskFailed),
             Err(_) => {
                 join.abort();
                 let _ = join.await;
+                let previous = self.status().await;
                 *self.status.write().await = ServerWorktreeHostStatus {
                     lifecycle: ServerWorktreeHostLifecycle::Failed,
-                    ..self.status().await
+                    ..previous
                 };
                 return Err(ServerWorktreeHostError::ShutdownTimedOut);
             }
@@ -384,11 +390,13 @@ async fn run_hosted<C, W, X>(
     poll_interval: Duration,
 ) -> Result<(), ServerWorktreeHostError>
 where
-    C: WorktreeRuntimeClock,
-    W: WorktreeWatcher,
-    X: WorktreeRuntimeCycle,
+    C: WorktreeRuntimeClock + Send + 'static,
+    W: WorktreeWatcher + Send + 'static,
+    X: WorktreeRuntimeCycle + Send + 'static,
 {
-    runtime.start().map_err(|_| ServerWorktreeHostError::RuntimeFailed)?;
+    runtime
+        .start()
+        .map_err(|_| ServerWorktreeHostError::RuntimeFailed)?;
     publish_status(&status, runtime.status()).await;
     let mut ticker = time::interval(poll_interval);
     ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
@@ -397,40 +405,53 @@ where
         tokio::select! {
             biased;
             _ = &mut shutdown => {
-                let _ = runtime.request_cancel();
-                runtime.shutdown().map_err(|_| ServerWorktreeHostError::RuntimeFailed)?;
-                publish_status(&status, runtime.status()).await;
+                cancel_and_shutdown(&mut runtime, &status).await?;
                 return Ok(());
             }
             _ = ticker.tick() => {
-                let poll = runtime.poll();
-                tokio::pin!(poll);
-                tokio::select! {
+                let poll_result = tokio::select! {
                     biased;
-                    _ = &mut shutdown => {
-                        drop(poll);
-                        let _ = runtime.request_cancel();
-                        runtime.shutdown().map_err(|_| ServerWorktreeHostError::RuntimeFailed)?;
+                    _ = &mut shutdown => None,
+                    result = runtime.poll() => Some(result),
+                };
+                let Some(result) = poll_result else {
+                    cancel_and_shutdown(&mut runtime, &status).await?;
+                    return Ok(());
+                };
+                match result {
+                    Ok(WorktreeHostedRuntimePoll::Idle
+                        | WorktreeHostedRuntimePoll::Automatic(_)
+                        | WorktreeHostedRuntimePoll::Manual(_)) => {
                         publish_status(&status, runtime.status()).await;
-                        return Ok(());
                     }
-                    result = &mut poll => {
-                        match result {
-                            Ok(WorktreeHostedRuntimePoll::Idle | WorktreeHostedRuntimePoll::Automatic(_) | WorktreeHostedRuntimePoll::Manual(_)) => {}
-                            Err(_) => {
-                                *status.write().await = ServerWorktreeHostStatus {
-                                    lifecycle: ServerWorktreeHostLifecycle::Failed,
-                                    ..ServerWorktreeHostStatus::from_runtime(runtime.status())
-                                };
-                                return Err(ServerWorktreeHostError::RuntimeFailed);
-                            }
-                        }
-                        publish_status(&status, runtime.status()).await;
+                    Err(_) => {
+                        *status.write().await = ServerWorktreeHostStatus {
+                            lifecycle: ServerWorktreeHostLifecycle::Failed,
+                            ..ServerWorktreeHostStatus::from_runtime(runtime.status())
+                        };
+                        return Err(ServerWorktreeHostError::RuntimeFailed);
                     }
                 }
             }
         }
     }
+}
+
+async fn cancel_and_shutdown<C, W, X>(
+    runtime: &mut WorktreeHostedRuntime<C, W, X>,
+    status: &RwLock<ServerWorktreeHostStatus>,
+) -> Result<(), ServerWorktreeHostError>
+where
+    C: WorktreeRuntimeClock,
+    W: WorktreeWatcher,
+    X: WorktreeRuntimeCycle,
+{
+    let _ = runtime.request_cancel();
+    runtime
+        .shutdown()
+        .map_err(|_| ServerWorktreeHostError::RuntimeFailed)?;
+    publish_status(status, runtime.status()).await;
+    Ok(())
 }
 
 async fn publish_status(status: &RwLock<ServerWorktreeHostStatus>, runtime: WorktreeRuntimeStatus) {
@@ -445,11 +466,21 @@ fn fingerprint_root(root: &std::path::Path) -> Sha256 {
 }
 
 #[derive(Clone, Copy, Debug)]
-struct TokioWorktreeClock;
+struct TokioWorktreeClock {
+    origin: time::Instant,
+}
+
+impl TokioWorktreeClock {
+    fn new() -> Self {
+        Self {
+            origin: time::Instant::now(),
+        }
+    }
+}
 
 impl WorktreeRuntimeClock for TokioWorktreeClock {
     fn now(&self) -> Duration {
-        time::Instant::now().duration_since(time::Instant::now() - Duration::from_secs(1))
+        time::Instant::now().duration_since(self.origin)
     }
 }
 
@@ -492,8 +523,14 @@ mod tests {
             join: None,
             shutdown_timeout: Duration::from_secs(1),
         };
-        assert_eq!(host.status().await.lifecycle, ServerWorktreeHostLifecycle::Disabled);
-        assert_eq!(host.shutdown().await.unwrap().lifecycle, ServerWorktreeHostLifecycle::Disabled);
+        assert_eq!(
+            host.status().await.lifecycle,
+            ServerWorktreeHostLifecycle::Disabled
+        );
+        assert_eq!(
+            host.shutdown().await.unwrap().lifecycle,
+            ServerWorktreeHostLifecycle::Disabled
+        );
     }
 
     #[test]
