@@ -1,47 +1,67 @@
-# W1-WT-P11-CI-FIX — Fix exact-SHA WT-P11 CI failure
+# W1-WT-P11-CLEAN — Clean review of hosted runtime contract extension
 
 Before starting, name this worker chat exactly:
 
-`worktree — W1 WT-P11 CI Fix`
+`worktree — W1 WT-P11 Hosted Runtime Contract Clean Review`
 
 Component: worktree
 Path: crates/haze-sync-worktree
 Branch: component/worktree
 PR: #49
-Role: fixer-worker
-Phase: WT-P11-CI-FIX
+Role: clean-code-reviewer
+Phase: WT-P11-CLEAN
 
-Do not merge, rewrite history, modify sibling branches, or begin clean review/Server fan-in.
+Do not merge PR #49, change draft state, rewrite history, modify sibling branches, or begin Server fan-in.
 
-## Failed candidate
+## Candidate
 
-- code-bearing SHA: `8a21497c845710a4205cb91b2af7d13b5346bd95`;
-- implementation report commit: `0873d1ea23627f8f7ac62ee3437fbc3ad92600bf`;
-- report blob: `f8ab6904d5a6b4555fc9e0f39ed30eacefa69bce`;
-- Component CI run: `29265781943`, number `1865`, attempt `1`, conclusion `failure`.
+Review the complete WT-P11 contract extension through exact final SHA:
 
-Visible wrapper evidence: fmt/check/test/clippy succeeded; diagnostics finalizer failed; artifact upload succeeded. Do not infer root cause from wrapper evidence.
+- accepted WT-P10 baseline: `1942946331e8362f19907ab6ad4eb779da70fd57`;
+- original WT-P11 implementation SHA: `8a21497c845710a4205cb91b2af7d13b5346bd95`;
+- final fixed code-bearing SHA: `61c24544a3fb9d785cb95ab2016f6d29f4661d3e`;
+- FIX report commit: `21ac67c51bb2286b6fe26b890658f64320244067`;
+- FIX report blob: `9ecb40e00d136db03ada66a5a01d8d549699ed90`;
+- authoritative Component CI: run `29266803510`, number `1870`, attempt `1`, success.
 
-## Mandatory artifact
+Review range:
 
-- artifact ID: `8285369808`;
-- name: `ci-diag__component-worktree__wf-component-ci__run-29265781943__attempt-1`;
-- digest: `sha256:8703d14197a2a867bd633f9f25d8168f99d3b50a209fdd3d130c4ad6165a0c50`;
-- head SHA: `8a21497c845710a4205cb91b2af7d13b5346bd95`;
-- expired: false at rotation;
-- expires: `2026-07-14T16:19:06Z`.
+`1942946331e8362f19907ab6ad4eb779da70fd57..61c24544a3fb9d785cb95ab2016f6d29f4661d3e`
 
-Download and read summary, manifest and every `failed_checks` log. Raw job logs are fallback-only if the artifact is missing/corrupt/insufficient.
+## Required review
 
-Fix only the exact artifact-proven failure. Allowed scope: WT-P11 Worktree watcher/runtime/tests/manifest and Worktree control report. Forbidden: Server/Storage/Core/API/CLI/Deployment, migrations, workflows, sibling control files, unrelated cleanup.
+Verify at minimum:
 
-Preserve WT-P11 semantics unless the artifact proves them wrong: production path-free watcher lifecycle; scheduler-accounted manual cycles; no-overlap; DryRun non-mutation; safe coarse outcomes.
+1. production watcher lifecycle is genuinely production-complete and Worktree-owned;
+2. watcher hints are path-free and bounded;
+3. overflow/closure/backend failure degrade safely and preserve authoritative full-scan behavior;
+4. no unmanaged detached task/thread or lifecycle leak exists;
+5. shutdown/drop behavior is deterministic and coarse-safe;
+6. `run_manual_cycle` preserves at-most-one-cycle semantics;
+7. busy/not-started/cancelling/shutdown outcomes are typed and coarse;
+8. manual cycles use the same executor/cancellation/accounting path as automatic cycles;
+9. counters, last-cycle cause/result and lifecycle/status accounting are consistent;
+10. manual DryRun requires full scan and remains mutation/checkpoint-free;
+11. automatic startup/periodic/watcher behavior remains unchanged;
+12. budget/mode/full-scan validation is fail-closed;
+13. Debug/Display/errors expose no roots, paths, backend internals or sensitive material;
+14. tests honestly cover watcher lifecycle, coalescing, overflow, failure, manual success/busy/DryRun/cancellation/shutdown and no-overlap;
+15. manifest dependency choice is minimal and justified;
+16. no Server/Storage/Core/API/CLI/Deployment/migration/workflow/sibling-control changes occurred;
+17. no later product/tooling commit invalidates final SHA.
 
-Produce a real code-bearing fix commit when code/test/tooling changes, obtain exact-SHA Component CI, then write `crates/haze-sync-worktree/control/report.md` with:
+No cleanup for its own sake. Modify only Worktree-owned WT-P11 code/tests/docs for a concrete defect. Any code-bearing correction requires new exact-SHA Component CI. Do not inspect failure artifacts unless Orchestrator changes the role to fixer-worker.
 
-- `REPORT_TYPE: FIX`;
-- `phase_id: WT-P11-CI-FIX`;
-- `chat_name: worktree — W1 WT-P11 CI Fix`;
-- honest status `FIX_COMPLETE`, `FIX_NEEDS_MORE_WORK`, `FIX_BLOCKED_BY_LOGS`, `FIX_BLOCKED_BY_CONTRACT`, `FIX_BLOCKED_BY_SCOPE`, or `FIX_BLOCKED_BY_TOOLING`.
+## Mandatory report
 
-Record artifact files read, root cause, changed paths, final SHA and exact CI evidence. Do not claim CLEAN_ACCEPT or reactivate Server.
+Write `crates/haze-sync-worktree/control/report.md` using `report-template.md` with:
+
+- `REPORT_TYPE: CLEAN_CODE_REVIEW`;
+- `phase_id: WT-P11-CLEAN`;
+- `chat_name: worktree — W1 WT-P11 Hosted Runtime Contract Clean Review`.
+
+Use one honest status: `CLEAN_ACCEPT`, `CLEAN_ACCEPT_PENDING_CI`, `CLEAN_NEEDS_FIX`, `CLEAN_BLOCKED_BY_CONTRACT`, `CLEAN_BLOCKED_BY_SCOPE`, or `CLEAN_BLOCKED_BY_TOOLING`.
+
+Include exact range/SHA, findings for watcher lifecycle/manual scheduling/accounting/secrecy/tests/dependency choice, every correction, exact CI evidence, later-commit validation and whether Orchestrator may begin exact-SHA fan-in to Server.
+
+Do not claim Server is reactivated or fan-in complete.
