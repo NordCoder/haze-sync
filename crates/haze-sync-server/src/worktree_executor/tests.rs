@@ -1,8 +1,8 @@
 use super::*;
 use crate::application::{
-    delete_request_fingerprint, file_request_fingerprint, test_db, ApplyDeleteCommand,
-    ApplyDeleteOutcome, ApplyFileCommand, ApplyFileOutcome, ApplicationActor,
-    ApplicationIdempotency, ServerApplicationServices,
+    delete_request_fingerprint, file_request_fingerprint, test_db, ApplicationActor,
+    ApplicationIdempotency, ApplyDeleteCommand, ApplyDeleteOutcome, ApplyFileCommand,
+    ApplyFileOutcome, ServerApplicationServices,
 };
 use haze_sync_common::{AdapterId, RevisionId, Sha256, VaultPath};
 use haze_sync_core::revision_service::compute_content_hash;
@@ -434,7 +434,10 @@ async fn conflict_created_export_uses_revision_materialized_path() {
 
     assert_eq!(summary.applied_exports, 3);
     assert_eq!(harness.worktree.read(original.as_str()), b"second");
-    assert_eq!(harness.worktree.read(materialized_path.as_str()), b"incoming");
+    assert_eq!(
+        harness.worktree.read(materialized_path.as_str()),
+        b"incoming"
+    );
     assert_eq!(
         get_current_revision_by_path(&harness.pool, &original)
             .await
@@ -479,11 +482,7 @@ async fn tombstone_export_moves_content_to_retained_trash_and_checkpoints() {
 
     assert_eq!(summary.applied_exports, 2);
     assert!(!harness.worktree.root.join(path.as_str()).exists());
-    assert!(harness
-        .worktree
-        .root
-        .join("_haze_runtime/trash/records")
-        .exists());
+    assert!(harness.worktree.root.join("_haze_runtime/trash/records").exists());
     assert_eq!(
         load_path_state(&harness.pool, &harness.worktree_id, &path)
             .await
@@ -507,7 +506,9 @@ async fn tombstone_export_moves_content_to_retained_trash_and_checkpoints() {
 async fn dirty_export_failure_leaves_failed_sequence_unadvanced() {
     let harness = Harness::new("export-dirty").await;
     let path = VaultPath::parse("Notes/dirty.md").unwrap();
-    harness.seed_remote_file(&path, b"core", "remote-dirty").await;
+    harness
+        .seed_remote_file(&path, b"core", "remote-dirty")
+        .await;
     harness.worktree.write("Notes/dirty.md", b"local-dirty");
     let mut executor = harness.executor();
 
@@ -536,7 +537,9 @@ async fn dirty_export_failure_leaves_failed_sequence_unadvanced() {
 async fn materialization_before_checkpoint_replay_converges() {
     let harness = Harness::new("export-replay").await;
     let path = VaultPath::parse("Notes/replay-export.md").unwrap();
-    harness.seed_remote_file(&path, b"core", "remote-replay").await;
+    harness
+        .seed_remote_file(&path, b"core", "remote-replay")
+        .await;
     let mut executor = harness.executor();
     executor.fail_after_export_filesystem_once();
 
@@ -717,8 +720,8 @@ async fn missing_binding_fails_before_filesystem_or_authoritative_work() {
     assert_eq!(operation_count(&pool).await, 0);
 }
 
-#[test]
-fn debug_and_errors_are_root_database_and_fingerprint_safe() {
+#[tokio::test]
+async fn debug_and_errors_are_root_database_and_fingerprint_safe() {
     let pool = PgPool::connect_lazy("postgres://user:secret@db.invalid/private").unwrap();
     let root = Path::new("/srv/private/token-like-worktree-root").to_path_buf();
     let services = ServerApplicationServices::new(pool.clone(), None);
