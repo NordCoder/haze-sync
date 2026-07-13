@@ -100,7 +100,10 @@ impl ServerWorktreeStatusSnapshot {
 
 const fn readiness(
     lifecycle: ServerWorktreeHostLifecycle,
-) -> (ServerWorktreeReadinessCategory, ServerWorktreeReadinessReason) {
+) -> (
+    ServerWorktreeReadinessCategory,
+    ServerWorktreeReadinessReason,
+) {
     match lifecycle {
         ServerWorktreeHostLifecycle::Disabled => (
             ServerWorktreeReadinessCategory::Ready,
