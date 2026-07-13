@@ -1,48 +1,52 @@
-# W1-WT-P11-FINAL-FUNCTIONAL-REVIEW — Functional re-review after clean-review fixes
+# W1-WT-P11-CANCELLATION-FIX — Make hosted runtime cancellation-by-drop safe
 
 Before starting, name this worker chat exactly:
 
-`worktree — W1 WT-P11 Final Functional Review`
+`worktree — W1 WT-P11 Cancellation Safety Fix`
 
 Component: worktree
 Path: crates/haze-sync-worktree
 Branch: component/worktree
 PR: #49
-Role: clean-code-reviewer
-Phase: WT-P11-FINAL-FUNCTIONAL-REVIEW
+Role: fixer-worker
+Phase: WT-P11-CANCELLATION-FIX
 
-Do not merge, rewrite history, modify sibling branches, or begin Server fan-in.
+Do not merge, rewrite history, modify sibling branches, begin Server fan-in, or perform stylistic/formatting cleanup.
 
-## Candidate
+## Sole blocker
 
-- accepted WT-P10 baseline: `1942946331e8362f19907ab6ad4eb779da70fd57`;
-- prior reviewed SHA: `61c24544a3fb9d785cb95ab2016f6d29f4661d3e`;
-- final corrected SHA: `9cce5f5a34597f13a506fadad49a7ab46972fa98`;
-- FIX report commit: `4dfa340ccce6169eab566e93be4c12747551f0fe`;
-- FIX report blob: `6120e4b0b1ba4be1e20af6c55ac287b3fface6fe`;
-- authoritative Component CI: run `29269422217`, number `1876`, success.
+Reviewed SHA: `9cce5f5a34597f13a506fadad49a7ab46972fa98`.
+Functional review report commit: `7e761ccf1b3ba0036d10067a9d6e4bf395db4bf1`.
+Report blob: `db35ddba7c77518f6c04216a52907634b451eeef`.
 
-Review only substantive correctness. Do not raise or block on formatting, stylistic preference, line wrapping, naming taste or rustfmt-only matters when exact-SHA CI is green.
+`WorktreeHostedRuntime::poll()` is not cancellation-by-drop safe:
 
-Verify only:
+- busy state is cleared only after awaited execution returns;
+- dropping a pending poll future can leave the shared busy gate permanently set;
+- a dequeued manual request can lose its response sender and produce `Closed` instead of typed cancellation.
 
-1. validated Worktree root/config construction is enforced;
-2. watcher overflow/failure/closure/shutdown/drop behavior is deterministically tested and path-free;
-3. bounded host-facing manual request boundary makes Busy and lifecycle outcomes externally reachable;
-4. runtime service remains sole owner of executor, cancellation, lifecycle and accounting;
-5. no-overlap, pending-cycle cancellation and ticket completion are correct;
-6. manual cycles do not consume startup/watcher/periodic scheduling state;
-7. automatic cycles remain compatible;
-8. no detached execution, raw paths, cross-component changes or scope creep;
-9. exact-SHA CI is green and no later product/tooling commit invalidates the candidate.
+## Required fix
 
-Do not modify code unless a concrete functional, safety, contract or concurrency defect exists. Do not make formatting-only corrections.
+1. Add an RAII in-flight guard whose `Drop` always releases the shared busy gate.
+2. For dequeued manual work, cancellation-by-drop must complete the ticket with the existing coarse typed cancelled outcome.
+3. Do not commit completed-cycle accounting when execution was dropped before completion.
+4. Add deterministic pending-future tests for:
+   - accepted manual request;
+   - hosted poll reaches Pending;
+   - poll future is dropped;
+   - ticket receives typed cancellation, not Pending/Closed;
+   - subsequent request is accepted, not permanently Busy;
+   - counters and last-cycle state remain consistent;
+   - equivalent dropped automatic-poll path releases the gate and allows later work.
+5. Preserve all already accepted WT-P11 behavior and scope.
+
+Formatting/style/naming-only changes are out of scope. Exact-SHA green CI is authoritative.
 
 Write `crates/haze-sync-worktree/control/report.md` with:
 
-- `REPORT_TYPE: CLEAN_CODE_REVIEW`;
-- `phase_id: WT-P11-FINAL-FUNCTIONAL-REVIEW`;
-- `chat_name: worktree — W1 WT-P11 Final Functional Review`;
-- status `CLEAN_ACCEPT`, `CLEAN_NEEDS_FIX`, `CLEAN_BLOCKED_BY_CONTRACT`, `CLEAN_BLOCKED_BY_SCOPE`, or `CLEAN_BLOCKED_BY_TOOLING`.
+- `REPORT_TYPE: FIX`;
+- `phase_id: WT-P11-CANCELLATION-FIX`;
+- `chat_name: worktree — W1 WT-P11 Cancellation Safety Fix`;
+- honest status `FIX_COMPLETE`, `FIX_NEEDS_MORE_WORK`, `FIX_BLOCKED_BY_CONTRACT`, `FIX_BLOCKED_BY_SCOPE`, or `FIX_BLOCKED_BY_TOOLING`.
 
-If no substantive blocker exists, use `CLEAN_ACCEPT` and explicitly state that formatting/style were out of review scope by Orchestrator direction.
+Record changed paths, RAII/ticket semantics, tests, final SHA and exact CI evidence. Do not claim CLEAN_ACCEPT or begin Server fan-in.
