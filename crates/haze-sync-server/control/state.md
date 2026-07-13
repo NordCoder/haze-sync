@@ -6,53 +6,65 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-server/control/prompt.md
 active_report: crates/haze-sync-server/control/report.md
-active_agent_role: clean-code-reviewer
-assigned_chat_name: server — W1 WT-P11 Fan-In Functional Review
-prompt_revision: verified by Orchestrator after exact WT-P11 fan-in and green DB-capable exact-SHA CI; formatting/style excluded from blocking scope
+active_agent_role: implementation-worker
+assigned_chat_name: server — W1 SRV-P7B4 Hosted Worktree Runtime
+prompt_revision: verified by Orchestrator after WT-P11 exact-SHA fan-in CLEAN_ACCEPT and green DB-capable CI
 
 wave: W1
-phase: SRV-WT-P11-FAN-IN-REVIEW
+phase: SRV-P7B4-HOSTED-WORKTREE-RUNTIME
 
-implementation_status: SELF_ACCEPT
+implementation_status: NOT_STARTED
 fix_status: NOT_STARTED
-clean_review_status: NOT_STARTED_FUNCTIONAL
-architect_status: ARCHITECT_NOT_REQUIRED
-ci_status: CI_GREEN_DB_VERIFIED
+clean_review_status: NOT_STARTED
+architect_status: ARCHITECT_NOT_REQUIRED_OWNER_BLOCKER_RESOLVED
+ci_status: NOT_RUN
 known_failed_checks: []
 
-fan_in_candidate:
-- pre_fan_in_server_head: 08ae17ac71aec82b4e4c44b1f06202492a2bdfcb
-- source_worktree_sha: b38264ce2b09632a4c0bab0dd77319e1db239a3b
-- final_server_code_bearing_sha: 1b2b572a1a200f2968d005e48e9c0674f9db8bc0
-- fan_in_report_commit: d4f4abc407256eaaf519489bea2ab527e26da600
-- fan_in_report_blob: 3731a676deba5a4346cd9e68dd4df5350d41a71d
-- post_candidate_changes: report-only before rotation
+accepted_server_baseline:
+- bounded_executor_sha: f8475af72b3e1795c5b11fa39f4625191eff59b1
+- bounded_executor_clean_report_commit: b9e22533091a9477876b91729c04682266a1b718
+- bounded_executor_clean_status: CLEAN_ACCEPT
 
-ci_evidence:
-- workflow: Component CI
-- run_id: 29275250064
-- run_number: 1882
-- run_attempt: 1
-- head_sha: 1b2b572a1a200f2968d005e48e9c0674f9db8bc0
-- conclusion: success
+accepted_worktree_integration:
+- owner_source_sha: b38264ce2b09632a4c0bab0dd77319e1db239a3b
+- server_fan_in_sha: 1b2b572a1a200f2968d005e48e9c0674f9db8bc0
+- fan_in_clean_report_commit: 0d2d6038fb84805e3844cd539c88fcb409a36cfc
+- fan_in_clean_report_blob: ef03533a379c842d93beb4dc072958978da2991a
+- fan_in_clean_status: CLEAN_ACCEPT
+- ci_run_id: 29275250064
+- ci_run_number: 1882
+- ci_conclusion: success
 - db_capable: yes
-- cargo_fmt: success
-- cargo_check: success
-- cargo_test: success
-- cargo_clippy: success
-- diagnostics_finalizer: success
 
-review_policy:
-- formatting, rustfmt, naming taste and style are non-blocking and out of scope
-- verify only exact fan-in content, integration, preserved Server baseline, CI and scope
+resolved_blocker:
+- production path-free watcher lifecycle is integrated
+- scheduler-accounted host-facing manual request boundary is integrated
+- typed Busy/cancellation/lifecycle outcomes are integrated
+- cancellation-by-drop safety is integrated
+- no further owner change required before SRV-P7B4
+
+phase_goal:
+- implement exactly one joined cancellable Server-hosted Worktree runtime task
+- compose accepted ProductionWorktreeWatcher, WorktreeHostedRuntime and ServerWorktreeCycleExecutor
+- add safe validated host config and bounded manual boundary
+- preserve Worktree ownership of scheduling/no-overlap/accounting
+- provide secret-safe internal status and focused lifecycle tests
+
+protected_scope:
+- accepted Worktree and Storage source
+- migrations/schema
+- Core/API/CLI/Deployment product files
+- public DTO/routes/readiness surfaces
+- sibling control files and workflows
 
 completion_requirements:
-- committed CLEAN_CODE_REVIEW report exists
-- report phase SRV-WT-P11-FAN-IN-REVIEW
-- report chat name server — W1 WT-P11 Fan-In Functional Review
-- exact final Server SHA reviewed
-- no later product/tooling invalidation
+- real code-bearing Server implementation commit
+- exact final SHA recorded
+- authoritative DB-capable exact-SHA Component CI green or honest blocker
+- committed IMPLEMENTATION report exists
 
-next_gate_after_review:
-- CLEAN_ACCEPT -> reactivate SRV-P7B4 Hosted Worktree Runtime immediately
-- substantive defect -> focused fix only
+next_gate_after_implementation:
+- SELF_ACCEPT plus green exact-SHA CI -> focused functional clean review
+- substantive defect or red CI -> focused fixer
+- formatting/style alone is non-blocking
+- API-P8 and SRV-P7B5 remain blocked until SRV-P7B4 CLEAN_ACCEPT
