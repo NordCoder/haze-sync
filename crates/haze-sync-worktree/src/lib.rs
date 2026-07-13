@@ -9,6 +9,7 @@ mod doctor;
 mod echo_guard;
 mod file_import;
 mod hashing;
+mod hosted_runtime;
 mod import_planner;
 mod materializer;
 mod path_mapping;
@@ -38,6 +39,11 @@ pub use echo_guard::{
 pub use file_import::{
     WorktreeImportPlan, WorktreeImportPlanner, WorktreeImportRunner, WorktreeImportSubmission,
     WorktreeImportSubmissionReport,
+};
+pub use hosted_runtime::{
+    WorktreeHostedRuntime, WorktreeHostedRuntimeError, WorktreeHostedRuntimePoll,
+    WorktreeRuntimeManualHandle, WorktreeRuntimeManualSubmission, WorktreeRuntimeManualTicket,
+    WorktreeRuntimeManualTicketPoll,
 };
 pub use import_planner::{
     WorktreeAcceptedImport, WorktreeAppliedFileState, WorktreeAppliedPathState,
