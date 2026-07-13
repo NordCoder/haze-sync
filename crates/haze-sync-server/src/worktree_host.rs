@@ -167,6 +167,13 @@ impl ServerWorktreeHostStatus {
         }
     }
 
+    fn failed_from(status: WorktreeRuntimeStatus) -> Self {
+        Self {
+            lifecycle: ServerWorktreeHostLifecycle::Failed,
+            ..Self::from_runtime(status)
+        }
+    }
+
     fn from_runtime(status: WorktreeRuntimeStatus) -> Self {
         Self {
             lifecycle: match status.lifecycle {
@@ -192,6 +199,7 @@ pub(crate) enum ServerWorktreeHostError {
     ExecutorFailed,
     RuntimeFailed,
     TaskFailed,
+    StartupTimedOut,
     ShutdownTimedOut,
 }
 
@@ -205,6 +213,7 @@ impl fmt::Display for ServerWorktreeHostError {
             Self::ExecutorFailed => "worktree executor construction failed",
             Self::RuntimeFailed => "worktree hosted runtime failed",
             Self::TaskFailed => "worktree host task failed",
+            Self::StartupTimedOut => "worktree host startup timed out",
             Self::ShutdownTimedOut => "worktree host shutdown timed out",
         })
     }
@@ -257,13 +266,7 @@ impl ServerWorktreeRuntimeHost {
         services: ServerApplicationServices,
     ) -> Result<Self, ServerWorktreeHostError> {
         if config.mode == WorktreeMode::Disabled {
-            return Ok(Self {
-                manual: None,
-                status: Arc::new(RwLock::new(ServerWorktreeHostStatus::disabled())),
-                shutdown: None,
-                join: None,
-                shutdown_timeout: config.shutdown_timeout,
-            });
+            return Ok(Self::disabled(config.shutdown_timeout));
         }
 
         let canonical_root = tokio::task::spawn_blocking(move || {
@@ -303,14 +306,24 @@ impl ServerWorktreeRuntimeHost {
             executor,
         );
         let (runtime, manual) = WorktreeHostedRuntime::new(service, config.manual_capacity)?;
-        Ok(Self::spawn_runtime(runtime, manual, config))
+        Self::start_runtime(runtime, manual, config).await
     }
 
-    fn spawn_runtime<C, W, X>(
+    fn disabled(shutdown_timeout: Duration) -> Self {
+        Self {
+            manual: None,
+            status: Arc::new(RwLock::new(ServerWorktreeHostStatus::disabled())),
+            shutdown: None,
+            join: None,
+            shutdown_timeout,
+        }
+    }
+
+    async fn start_runtime<C, W, X>(
         runtime: WorktreeHostedRuntime<C, W, X>,
         manual: WorktreeRuntimeManualHandle,
         config: ServerWorktreeHostConfig,
-    ) -> Self
+    ) -> Result<Self, ServerWorktreeHostError>
     where
         C: WorktreeRuntimeClock + Send + 'static,
         W: WorktreeWatcher + Send + 'static,
@@ -318,19 +331,37 @@ impl ServerWorktreeRuntimeHost {
     {
         let status = Arc::new(RwLock::new(ServerWorktreeHostStatus::starting()));
         let task_status = status.clone();
-        let (shutdown, receiver) = oneshot::channel();
-        let join = tokio::spawn(run_hosted(
+        let (shutdown, shutdown_receiver) = oneshot::channel();
+        let (startup, startup_receiver) = oneshot::channel();
+        let mut join = tokio::spawn(run_hosted(
             runtime,
-            receiver,
+            shutdown_receiver,
+            startup,
             task_status,
             config.poll_interval(),
         ));
-        Self {
-            manual: Some(manual),
-            status,
-            shutdown: Some(shutdown),
-            join: Some(join),
-            shutdown_timeout: config.shutdown_timeout,
+
+        match time::timeout(config.shutdown_timeout, startup_receiver).await {
+            Ok(Ok(Ok(()))) => Ok(Self {
+                manual: Some(manual),
+                status,
+                shutdown: Some(shutdown),
+                join: Some(join),
+                shutdown_timeout: config.shutdown_timeout,
+            }),
+            Ok(Ok(Err(error))) => {
+                join_failed_start(&mut join, config.shutdown_timeout).await;
+                Err(error)
+            }
+            Ok(Err(_)) => {
+                join_failed_start(&mut join, config.shutdown_timeout).await;
+                Err(ServerWorktreeHostError::TaskFailed)
+            }
+            Err(_) => {
+                let _ = shutdown.send(());
+                join_failed_start(&mut join, config.shutdown_timeout).await;
+                Err(ServerWorktreeHostError::StartupTimedOut)
+            }
         }
     }
 
@@ -388,9 +419,20 @@ impl Drop for ServerWorktreeRuntimeHost {
     }
 }
 
+async fn join_failed_start(
+    join: &mut JoinHandle<Result<(), ServerWorktreeHostError>>,
+    timeout: Duration,
+) {
+    if time::timeout(timeout, &mut *join).await.is_err() {
+        join.abort();
+        let _ = join.await;
+    }
+}
+
 async fn run_hosted<C, W, X>(
     mut runtime: WorktreeHostedRuntime<C, W, X>,
     mut shutdown: oneshot::Receiver<()>,
+    startup: oneshot::Sender<Result<(), ServerWorktreeHostError>>,
     status: Arc<RwLock<ServerWorktreeHostStatus>>,
     poll_interval: Duration,
 ) -> Result<(), ServerWorktreeHostError>
@@ -399,13 +441,19 @@ where
     W: WorktreeWatcher + Send + 'static,
     X: WorktreeRuntimeCycle + Send + 'static,
 {
-    runtime
-        .start()
-        .map_err(|_| ServerWorktreeHostError::RuntimeFailed)?;
+    if runtime.start().is_err() {
+        *status.write().await = ServerWorktreeHostStatus::failed_from(runtime.status());
+        let _ = startup.send(Err(ServerWorktreeHostError::RuntimeFailed));
+        return Err(ServerWorktreeHostError::RuntimeFailed);
+    }
     publish_status(&status, runtime.status()).await;
+    if startup.send(Ok(())).is_err() {
+        cancel_and_shutdown(&mut runtime, &status).await?;
+        return Err(ServerWorktreeHostError::TaskFailed);
+    }
+
     let mut ticker = time::interval(poll_interval);
     ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
-
     loop {
         tokio::select! {
             biased;
@@ -430,10 +478,7 @@ where
                         publish_status(&status, runtime.status()).await;
                     }
                     Err(_) => {
-                        *status.write().await = ServerWorktreeHostStatus {
-                            lifecycle: ServerWorktreeHostLifecycle::Failed,
-                            ..ServerWorktreeHostStatus::from_runtime(runtime.status())
-                        };
+                        *status.write().await = ServerWorktreeHostStatus::failed_from(runtime.status());
                         return Err(ServerWorktreeHostError::RuntimeFailed);
                     }
                 }
@@ -452,9 +497,10 @@ where
     X: WorktreeRuntimeCycle,
 {
     let _ = runtime.request_cancel();
-    runtime
-        .shutdown()
-        .map_err(|_| ServerWorktreeHostError::RuntimeFailed)?;
+    if runtime.shutdown().is_err() {
+        *status.write().await = ServerWorktreeHostStatus::failed_from(runtime.status());
+        return Err(ServerWorktreeHostError::RuntimeFailed);
+    }
     publish_status(status, runtime.status()).await;
     Ok(())
 }
@@ -490,59 +536,5 @@ impl WorktreeRuntimeClock for TokioWorktreeClock {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn defaults_are_disabled_and_bounded() {
-        let config = ServerWorktreeHostConfig::from_adapter_mode(AdapterMode::Disabled).unwrap();
-        assert_eq!(config.mode, WorktreeMode::Disabled);
-        assert!(config.action_budget.max_import_actions <= MAX_ACTION_BUDGET);
-        assert!(config.manual_capacity <= MAX_MANUAL_CAPACITY);
-    }
-
-    #[test]
-    fn invalid_bounds_fail_closed() {
-        let result = ServerWorktreeHostConfig::new(
-            WorktreeMode::Bidirectional,
-            Duration::ZERO,
-            Duration::ZERO,
-            0,
-            WorktreeRuntimeCycleBudget {
-                max_import_actions: MAX_ACTION_BUDGET + 1,
-                max_delete_candidates: 1,
-                max_export_actions: 1,
-            },
-            Duration::ZERO,
-            0,
-        );
-        assert_eq!(result, Err(ServerWorktreeHostError::InvalidConfig));
-    }
-
-    #[tokio::test]
-    async fn disabled_host_is_inert_and_join_free() {
-        let host = ServerWorktreeRuntimeHost {
-            manual: None,
-            status: Arc::new(RwLock::new(ServerWorktreeHostStatus::disabled())),
-            shutdown: None,
-            join: None,
-            shutdown_timeout: Duration::from_secs(1),
-        };
-        assert_eq!(
-            host.status().await.lifecycle,
-            ServerWorktreeHostLifecycle::Disabled
-        );
-        assert_eq!(
-            host.shutdown().await.unwrap().lifecycle,
-            ServerWorktreeHostLifecycle::Disabled
-        );
-    }
-
-    #[test]
-    fn debug_and_errors_are_secret_safe() {
-        let error = ServerWorktreeHostError::BindingFailed.to_string();
-        assert!(!error.contains("postgres://"));
-        assert!(!error.contains("/srv/"));
-        assert!(!error.contains("fingerprint"));
-    }
-}
+#[path = "worktree_host_tests.rs"]
+mod tests;
