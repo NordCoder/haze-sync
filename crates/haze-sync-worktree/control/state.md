@@ -6,27 +6,27 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-worktree/control/prompt.md
 active_report: crates/haze-sync-worktree/control/report.md
-active_agent_role: clean-code-reviewer
-assigned_chat_name: worktree — W1 WT-P11 Hosted Runtime Contract Clean Review
-prompt_revision: verified by Orchestrator after artifact-proven rustfmt fixes and green exact-SHA Component CI
+active_agent_role: fixer-worker
+assigned_chat_name: worktree — W1 WT-P11 Clean Review Fix
+prompt_revision: verified by Orchestrator after WT-P11 CLEAN_NEEDS_FIX findings
 
 wave: W1
-phase: WT-P11-CLEAN
+phase: WT-P11-CLEAN-FIX
 
 implementation_status: SELF_ACCEPT_AFTER_FIX
-fix_status: FIX_COMPLETE
-clean_review_status: NOT_STARTED
-architect_status: ARCHITECT_NOT_REQUIRED_OWNER_BOUNDARY_ALREADY_DECIDED
-ci_status: CI_GREEN
+fix_status: NOT_STARTED
+clean_review_status: CLEAN_NEEDS_FIX
+architect_status: ARCHITECT_NOT_REQUIRED_BUSY_REQUIREMENT_ALREADY_EXPLICIT
+ci_status: CI_GREEN_FOR_REVIEWED_SHA
 known_failed_checks: []
 
-final_candidate:
+reviewed_candidate:
 - accepted_wt_p10_baseline: 1942946331e8362f19907ab6ad4eb779da70fd57
-- original_wt_p11_sha: 8a21497c845710a4205cb91b2af7d13b5346bd95
-- final_fixed_code_bearing_sha: 61c24544a3fb9d785cb95ab2016f6d29f4661d3e
-- fix_report_commit: 21ac67c51bb2286b6fe26b890658f64320244067
-- fix_report_blob: 9ecb40e00d136db03ada66a5a01d8d549699ed90
-- post_candidate_changes: report-only
+- reviewed_wt_p11_sha: 61c24544a3fb9d785cb95ab2016f6d29f4661d3e
+- clean_report_commit: de1454fceed9cecc11b7ef6ebc177af35f2764a4
+- clean_report_blob: 52e9811d1b18eb5b74bda383ea67961c16bea446
+- clean_status: CLEAN_NEEDS_FIX
+- post_candidate_product_or_tooling_changes: none
 
 ci_evidence:
 - workflow: Component CI
@@ -35,37 +35,34 @@ ci_evidence:
 - run_attempt: 1
 - head_sha: 61c24544a3fb9d785cb95ab2016f6d29f4661d3e
 - conclusion: success
-- cargo_fmt: success
-- cargo_check: success
-- cargo_test: success
-- cargo_clippy: success
-- diagnostics_finalizer: success
+
+required_fixes:
+- deterministic watcher overflow/failure/closure/shutdown/drop/path-free tests via internal seam
+- externally reachable bounded host-facing manual request boundary with typed Busy and lifecycle outcomes
+- pending-future no-overlap/cancellation/accounting tests
+- automatic/manual startup-periodic-watcher compatibility tests
+- production watcher construction through validated Worktree root/config capability
+
+routing_decision:
+- no architect phase; host-visible Busy was mandatory in WT-P11 prompt
+- preserve Worktree ownership of watcher/scheduler/accounting
+- use focused fixer-worker slot
 
 archived_completed_slot:
-- prompt_index: crates/haze-sync-worktree/control/log/20260713-163700Z-W1-WT-P11-CI-FIX-fixer-worker-prompt.md
-- report_index: crates/haze-sync-worktree/control/log/20260713-163700Z-W1-WT-P11-CI-FIX-fixer-worker-report.md
-- prompt_blob: 76631b21eaebfb92aa759d3c62c4e5a4d7ba819b
-- report_blob: 9ecb40e00d136db03ada66a5a01d8d549699ed90
-- report_commit: 21ac67c51bb2286b6fe26b890658f64320244067
-
-review_requirements:
-- review range 1942946331e8362f19907ab6ad4eb779da70fd57..61c24544a3fb9d785cb95ab2016f6d29f4661d3e
-- verify production watcher ownership/lifecycle/path-free bounded hints
-- verify overflow/failure/full-scan behavior and no lifecycle leak
-- verify scheduler-accounted manual cycle, no-overlap and typed outcomes
-- verify DryRun non-mutation and consistent accounting
-- verify automatic behavior compatibility, secrecy, tests and dependency choice
-- write committed CLEAN_CODE_REVIEW report
+- prompt_index: crates/haze-sync-worktree/control/log/20260713-164800Z-W1-WT-P11-CLEAN-clean-code-reviewer-prompt.md
+- report_index: crates/haze-sync-worktree/control/log/20260713-164800Z-W1-WT-P11-CLEAN-clean-code-reviewer-report.md
+- prompt_blob: ef3bd39a512947e95797b25ff9f7d16625c0fdff
+- report_blob: 52e9811d1b18eb5b74bda383ea67961c16bea446
+- report_commit: de1454fceed9cecc11b7ef6ebc177af35f2764a4
 
 completion_requirements:
-- committed crates/haze-sync-worktree/control/report.md exists
-- report phase WT-P11-CLEAN
-- report chat name worktree — W1 WT-P11 Hosted Runtime Contract Clean Review
-- report reviews exact final candidate or newer justified correction
-- exact-SHA Component CI green for any new correction
-- no later product/tooling commit invalidates review
+- all four clean-review findings corrected or honestly blocked
+- exact final code-bearing SHA recorded
+- authoritative exact-SHA Component CI green, or honest blocker
+- committed FIX report exists
+- no Server fan-in yet
 
-next_gate_after_clean_review:
-- CLEAN_ACCEPT -> Orchestrator may begin explicit exact-SHA Worktree fan-in to component/server
-- CLEAN_NEEDS_FIX or red CI -> route exact evidence to fixer
-- Server SRV-P7B4 remains blocked until fan-in CI and integration clean review
+next_gate_after_fix:
+- FIX_COMPLETE plus green exact-SHA CI -> repeated mandatory WT-P11 clean review
+- red CI -> fixer continues from exact diagnostics artifact
+- Server SRV-P7B4 remains blocked until WT-P11 CLEAN_ACCEPT and exact-SHA fan-in
