@@ -2,50 +2,42 @@
 
 component: server
 branch: component/server
-status: PROMPT_READY
+status: BLOCKED_BY_CONTRACT
 
 active_prompt: crates/haze-sync-server/control/prompt.md
 active_report: crates/haze-sync-server/control/report.md
-active_agent_role: fixer-worker
-assigned_chat_name: server — W1 SRV-P7B5 Manual Availability Fix
-prompt_revision: verified by Orchestrator after functional review found duplicated/racy Server manual-state mirror; formatting/style excluded from blocking scope
+active_agent_role: orchestrator-hold
+assigned_chat_name: none
 
 wave: W1
-phase: SRV-P7B5-MANUAL-AVAILABILITY-FIX
+phase: SRV-P7B5-WAIT-WT-MANUAL-STATUS
 
 implementation_status: SELF_ACCEPT
-fix_status: NOT_STARTED
+fix_status: FIX_BLOCKED_BY_CONTRACT
 clean_review_status: CLEAN_NEEDS_FIX
-architect_status: ARCHITECT_NOT_REQUIRED_UNLESS_OWNER_CONTRACT_PROVES_INSUFFICIENT
 ci_status: CI_GREEN_FOR_REVIEWED_SHA
-known_failed_checks: []
 
-reviewed_candidate:
-- code_bearing_sha: 78f4e4525327ff03fa1af1e8387e9e3ea07091d6
-- functional_review_report_commit: 8082bc6fdd65053f66945fba5ed9047b369442e1
-- functional_review_report_blob: 2f43f88adb950f59100aad80d860b268a54f4f73
-- review_status: CLEAN_NEEDS_FIX
+blocked_candidate:
+- server_code_bearing_sha: 78f4e4525327ff03fa1af1e8387e9e3ea07091d6
+- blocker_report_commit: d612196a33c56711e9102f09eaf1340ed7b696e0
+- blocker_report_blob: 1b4d3ee699aecb155e90916c6b52a5bd5d34644c
+- ci_run_id: 29283227887
+- ci_run_number: 1901
+- ci_conclusion: success
 
-substantive_blocker:
-- Server manual availability mirror is toggled around every poll
-- idle DryRun poll can report false Busy
-- older poll completion can overwrite a newer accepted request to Available
-- manual gate/accounting ownership is duplicated rather than projected
+contract_blocker:
+- accepted Worktree handle has no passive authoritative lifecycle/busy status
+- manual completion has no request identity/generation
+- Server-only projection is racy or duplicates gate ownership
 
-required_fix:
-- remove poll-based Busy/Available toggles
-- preserve Worktree as authoritative manual gate owner
-- implement race-safe request/completion projection or report precise owner-contract blocker
-- deterministic tests for idle DryRun, per-request Busy lifetime, stale completion race and lifecycle overrides
-- no public surface or new task/poller/runtime
+required_owner_extension:
+- preferred: cloneable passive Worktree manual status handle exposing lifecycle and busy only
+- acceptable: owner-assigned opaque generation carried through Accepted and Manual completion
+- no payload, path, token, cursor or backend details
+- no new task/poller/runtime
 
-completion_requirements:
-- real code-bearing fix commit or honest FIX_BLOCKED_BY_CONTRACT
-- exact final SHA recorded when code changes exist
-- authoritative DB-capable exact-SHA Component CI green or honest blocker
-- committed FIX report exists
-
-next_gate_after_fix:
-- FIX_COMPLETE plus green exact-SHA CI -> final focused manual-availability verification
-- FIX_BLOCKED_BY_CONTRACT -> route minimal Worktree owner extension
-- API-P8 remains blocked until SRV-P7B5 CLEAN_ACCEPT
+next_gate:
+- Worktree owner implementation and exact-SHA clean acceptance
+- exact-SHA fan-in to Server
+- resume narrow SRV-P7B5 manual projection fix
+- API-P8 remains blocked
