@@ -174,7 +174,10 @@ mod tests {
             Some(manual(WorktreeRuntimeLifecycle::Running, true)),
         );
         assert!(snapshot.is_ready());
-        assert_eq!(snapshot.manual_availability, ServerWorktreeManualAvailability::Busy);
+        assert_eq!(
+            snapshot.manual_availability,
+            ServerWorktreeManualAvailability::Busy
+        );
         assert_eq!(snapshot.cycles_failed, 9);
         assert_eq!(snapshot.pending_watcher_hints, 23);
     }
@@ -187,12 +190,24 @@ mod tests {
             Some(manual(WorktreeRuntimeLifecycle::Running, true)),
         );
         assert!(!failed.is_ready());
-        assert_eq!(failed.manual_availability, ServerWorktreeManualAvailability::Failed);
+        assert_eq!(
+            failed.manual_availability,
+            ServerWorktreeManualAvailability::Failed
+        );
 
         for (lifecycle, expected) in [
-            (WorktreeRuntimeLifecycle::Created, ServerWorktreeManualAvailability::NotStarted),
-            (WorktreeRuntimeLifecycle::Cancelling, ServerWorktreeManualAvailability::Cancelling),
-            (WorktreeRuntimeLifecycle::Shutdown, ServerWorktreeManualAvailability::Shutdown),
+            (
+                WorktreeRuntimeLifecycle::Created,
+                ServerWorktreeManualAvailability::NotStarted,
+            ),
+            (
+                WorktreeRuntimeLifecycle::Cancelling,
+                ServerWorktreeManualAvailability::Cancelling,
+            ),
+            (
+                WorktreeRuntimeLifecycle::Shutdown,
+                ServerWorktreeManualAvailability::Shutdown,
+            ),
         ] {
             let snapshot = ServerWorktreeStatusSnapshot::from_host(
                 WorktreeMode::DryRun,
@@ -210,6 +225,9 @@ mod tests {
             host(ServerWorktreeHostLifecycle::Running),
             Some(manual(WorktreeRuntimeLifecycle::Running, true)),
         );
-        assert_eq!(snapshot.manual_availability, ServerWorktreeManualAvailability::Unavailable);
+        assert_eq!(
+            snapshot.manual_availability,
+            ServerWorktreeManualAvailability::Unavailable
+        );
     }
 }
