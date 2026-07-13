@@ -3,8 +3,8 @@
 //! Startup loads explicit runtime configuration, connects to PostgreSQL, creates
 //! the local object-store root if needed, builds `ServerAppState`, and serves the
 //! existing Axum router until graceful shutdown. It also owns the explicit
-//! Worktree composition lifecycle, while real Worktree cycle execution remains
-//! deferred to SRV-P7B.
+//! Worktree composition lifecycle. The bounded cycle executor is available for a
+//! later accepted host phase, but startup does not schedule or invoke it here.
 
 use std::{error::Error, fmt, fs, future::Future, process::ExitCode};
 
@@ -24,6 +24,8 @@ pub mod http;
 pub mod readiness;
 pub mod routes;
 pub mod state;
+#[allow(dead_code)]
+mod worktree_executor;
 mod worktree_runtime;
 
 /// Human-readable crate role used by smoke checks and documentation.
