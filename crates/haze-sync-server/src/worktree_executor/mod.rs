@@ -16,15 +16,10 @@ use haze_sync_common::{AdapterId, Sha256};
 use haze_sync_worktree::{
     WorktreeCancellationToken, WorktreeConfig, WorktreeEchoGuardPolicy, WorktreeMode,
     WorktreeRuntimeCycle, WorktreeRuntimeCycleFailure, WorktreeRuntimeCycleFuture,
-    WorktreeRuntimeCycleRequest, WorktreeRuntimeCycleSummary, WorktreeStateSnapshot,
-    WorktreeTrashPolicy,
+    WorktreeRuntimeCycleRequest, WorktreeRuntimeCycleSummary, WorktreeTrashPolicy,
 };
 use sqlx::PgPool;
-use std::{
-    fmt,
-    path::PathBuf,
-    time::Duration,
-};
+use std::{fmt, path::PathBuf, time::Duration};
 
 use scan::run_scan_stage;
 
@@ -177,13 +172,7 @@ impl ServerWorktreeCycleExecutor {
             let max_import_actions = request.budget.max_import_actions;
             let dry_run = request.mode == WorktreeMode::DryRun;
             let stage = tokio::task::spawn_blocking(move || {
-                run_scan_stage(
-                    config,
-                    reconciliation,
-                    policy,
-                    max_import_actions,
-                    dry_run,
-                )
+                run_scan_stage(config, reconciliation, policy, max_import_actions, dry_run)
             })
             .await
             .map_err(|_| WorktreeRuntimeCycleFailure::Scan)??;
@@ -244,12 +233,8 @@ impl ServerWorktreeCycleExecutor {
                 &mut summary,
             )
             .await?;
-            self.submit_deletes(
-                &delete_candidates,
-                &mut applied_state,
-                &cancellation,
-            )
-            .await?;
+            self.submit_deletes(&delete_candidates, &mut applied_state, &cancellation)
+                .await?;
         }
 
         if request.export_enabled {
