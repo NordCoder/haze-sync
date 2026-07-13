@@ -156,7 +156,8 @@ impl ServerWorktreeCycleExecutor {
 
         // Metadata-only operations are acknowledged in sequence order but do not
         // fabricate a filesystem effect or durable path-state transition.
-        self.advance_cursor_only(expected_cursor, change.seq).await?;
+        self.advance_cursor_only(expected_cursor, change.seq)
+            .await?;
         Ok(false)
     }
 
