@@ -1,4 +1,8 @@
 use super::*;
+use crate::worktree_status::{
+    ServerWorktreeManualAvailability, ServerWorktreeReadinessCategory,
+    ServerWorktreeReadinessReason,
+};
 use haze_sync_worktree::{
     WorktreeCancellationToken, WorktreeRuntimeCycleCause, WorktreeRuntimeCycleFailure,
     WorktreeRuntimeCycleFuture, WorktreeRuntimeCycleSummary, WorktreeRuntimeManualOutcome,
@@ -87,9 +91,7 @@ impl WorktreeWatcher for FakeWatcher {
             return Err(WorktreeWatcherFailure::Poll);
         }
         if self.hint.swap(false, Ordering::AcqRel) {
-            Ok(WorktreeWatcherPoll::Hint(WorktreeWatcherHint {
-                sequence: 1,
-            }))
+            Ok(WorktreeWatcherPoll::Hint(WorktreeWatcherHint { sequence: 1 }))
         } else {
             Ok(WorktreeWatcherPoll::Idle)
         }
@@ -288,11 +290,17 @@ fn invalid_bounds_fail_closed() {
 }
 
 #[tokio::test]
-async fn disabled_host_is_inert_and_join_free() {
+async fn disabled_host_is_ready_inert_and_join_free() {
     let host = ServerWorktreeRuntimeHost::disabled(Duration::from_secs(1));
+    let snapshot = host.snapshot();
+    assert_eq!(snapshot.readiness, ServerWorktreeReadinessCategory::Ready);
     assert_eq!(
-        host.status().await.lifecycle,
-        ServerWorktreeHostLifecycle::Disabled
+        snapshot.readiness_reason,
+        ServerWorktreeReadinessReason::DisabledInert
+    );
+    assert_eq!(
+        snapshot.manual_availability,
+        ServerWorktreeManualAvailability::Unavailable
     );
     assert_eq!(
         host.shutdown().await.unwrap().lifecycle,
@@ -311,9 +319,12 @@ async fn enabled_start_acknowledges_running_and_joins_shutdown() {
     )
     .await
     .unwrap();
+    let snapshot = host.snapshot();
+    assert_eq!(snapshot.lifecycle, ServerWorktreeHostLifecycle::Running);
+    assert!(snapshot.is_ready());
     assert_eq!(
-        host.status().await.lifecycle,
-        ServerWorktreeHostLifecycle::Running
+        snapshot.manual_availability,
+        ServerWorktreeManualAvailability::Unavailable
     );
     let status = host.shutdown().await.unwrap();
     assert_eq!(status.lifecycle, ServerWorktreeHostLifecycle::Shutdown);
@@ -363,7 +374,7 @@ async fn host_drives_startup_periodic_and_watcher_cycles_without_overlap() {
 }
 
 #[tokio::test]
-async fn manual_boundary_reports_busy_and_completes_dry_run() {
+async fn manual_busy_snapshot_stays_ready_and_read_is_passive() {
     let (watcher, _, _) = FakeWatcher::healthy();
     let state = ExecutorState::new();
     state.block.store(true, Ordering::Release);
@@ -375,15 +386,31 @@ async fn manual_boundary_reports_busy_and_completes_dry_run() {
     )
     .await
     .unwrap();
+
+    let before = state.causes();
+    let available = host.snapshot();
+    assert_eq!(
+        available.manual_availability,
+        ServerWorktreeManualAvailability::Available
+    );
+    assert_eq!(state.causes(), before);
+
     let first = host.submit_manual(WorktreeRuntimeManualRequest::dry_run(budget()));
     let ticket = match first {
         WorktreeRuntimeManualSubmission::Accepted(ticket) => ticket,
         other => panic!("unexpected first submission: {other:?}"),
     };
+    let busy = host.snapshot();
+    assert!(busy.is_ready());
+    assert_eq!(
+        busy.manual_availability,
+        ServerWorktreeManualAvailability::Busy
+    );
     assert!(matches!(
         host.submit_manual(WorktreeRuntimeManualRequest::dry_run(budget())),
         WorktreeRuntimeManualSubmission::Busy
     ));
+
     state.block.store(false, Ordering::Release);
     state.release.notify_waiters();
     let outcome = wait_ticket(&ticket).await;
@@ -391,6 +418,16 @@ async fn manual_boundary_reports_busy_and_completes_dry_run() {
         matches!(outcome, WorktreeRuntimeManualOutcome::Completed(summary) if summary.full_scan_completed)
     );
     assert_eq!(state.causes(), vec![WorktreeRuntimeCycleCause::Manual]);
+    for _ in 0..100 {
+        if host.snapshot().manual_availability == ServerWorktreeManualAvailability::Available {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(2)).await;
+    }
+    assert_eq!(
+        host.snapshot().manual_availability,
+        ServerWorktreeManualAvailability::Available
+    );
     host.shutdown().await.unwrap();
 }
 
@@ -416,14 +453,16 @@ async fn shutdown_cancels_pending_cycle_and_mandatorily_joins() {
 }
 
 #[tokio::test]
-async fn bounded_shutdown_timeout_aborts_and_awaits_retained_task() {
-    let status = Arc::new(RwLock::new(ServerWorktreeHostStatus::starting()));
+async fn bounded_shutdown_timeout_publishes_failed_snapshot() {
+    let (status, _receiver) = watch::channel(ServerWorktreeHostStatus::starting());
     let join = tokio::spawn(async {
         std::future::pending::<()>().await;
         Ok(())
     });
     let host = ServerWorktreeRuntimeHost {
+        mode: WorktreeMode::DryRun,
         manual: None,
+        manual_gate: Arc::new(AtomicU8::new(MANUAL_AVAILABLE)),
         status: status.clone(),
         shutdown: None,
         join: Some(join),
@@ -433,18 +472,35 @@ async fn bounded_shutdown_timeout_aborts_and_awaits_retained_task() {
         host.shutdown().await,
         Err(ServerWorktreeHostError::ShutdownTimedOut)
     );
+    let snapshot = ServerWorktreeStatusSnapshot::from_host(
+        WorktreeMode::DryRun,
+        *status.borrow(),
+        ServerWorktreeManualGate::Available,
+    );
+    assert_eq!(snapshot.lifecycle, ServerWorktreeHostLifecycle::Failed);
+    assert!(!snapshot.is_ready());
     assert_eq!(
-        status.read().await.lifecycle,
-        ServerWorktreeHostLifecycle::Failed
+        snapshot.readiness_reason,
+        ServerWorktreeReadinessReason::Failed
     );
 }
 
 #[test]
 fn status_debug_and_errors_are_secret_safe() {
-    let status = ServerWorktreeHostStatus::starting();
-    let rendered = format!("{status:?} {}", ServerWorktreeHostError::BindingFailed);
-    assert!(!rendered.contains("postgres://"));
-    assert!(!rendered.contains("/srv/"));
-    assert!(!rendered.contains("fingerprint"));
-    assert!(!rendered.contains("payload"));
+    let snapshot = ServerWorktreeStatusSnapshot::from_host(
+        WorktreeMode::DryRun,
+        ServerWorktreeHostStatus::starting(),
+        ServerWorktreeManualGate::Available,
+    );
+    let rendered = format!("{snapshot:?} {}", ServerWorktreeHostError::BindingFailed);
+    for forbidden in [
+        "postgres://",
+        "/srv/",
+        "fingerprint",
+        "payload",
+        "token",
+        "idempotency",
+    ] {
+        assert!(!rendered.contains(forbidden));
+    }
 }
