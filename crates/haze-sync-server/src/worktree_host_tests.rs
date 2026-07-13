@@ -153,9 +153,7 @@ impl Drop for ActiveCycleGuard {
     fn drop(&mut self) {
         if !self.completed {
             self.state.active.fetch_sub(1, Ordering::AcqRel);
-            self.state
-                .cancelled_by_drop
-                .store(true, Ordering::Release);
+            self.state.cancelled_by_drop.store(true, Ordering::Release);
         }
     }
 }
@@ -207,7 +205,7 @@ fn config(mode: WorktreeMode, timeout: Duration) -> ServerWorktreeHostConfig {
     ServerWorktreeHostConfig::new(
         mode,
         Duration::from_millis(1),
-        Duration::from_millis(10),
+        Duration::from_millis(100),
         4,
         budget(),
         timeout,
@@ -224,9 +222,7 @@ async fn test_host(
 ) -> Result<ServerWorktreeRuntimeHost, ServerWorktreeHostError> {
     let service = WorktreeRuntimeService::new(
         mode,
-        config(mode, Duration::from_millis(100))
-            .policy()
-            .unwrap(),
+        config(mode, Duration::from_millis(100)).policy().unwrap(),
         clock,
         watcher,
         FakeExecutor(executor),
@@ -355,12 +351,12 @@ async fn host_drives_startup_periodic_and_watcher_cycles_without_overlap() {
     .await
     .unwrap();
     wait_for_cause(&state, WorktreeRuntimeCycleCause::Startup).await;
-    clock.set_millis(20);
+    clock.set_millis(120);
     wait_for_cause(&state, WorktreeRuntimeCycleCause::Periodic).await;
     hint.store(true, Ordering::Release);
-    clock.set_millis(30);
+    clock.set_millis(130);
     tokio::time::sleep(Duration::from_millis(5)).await;
-    clock.set_millis(40);
+    clock.set_millis(140);
     wait_for_cause(&state, WorktreeRuntimeCycleCause::WatcherHint).await;
     assert_eq!(state.max_active.load(Ordering::Acquire), 1);
     host.shutdown().await.unwrap();
