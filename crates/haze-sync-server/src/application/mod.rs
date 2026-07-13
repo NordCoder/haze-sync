@@ -8,11 +8,11 @@ mod changes;
 mod deletes;
 mod files;
 mod idempotency;
-mod worktree;
 #[cfg(test)]
 pub(crate) mod test_db;
 #[cfg(test)]
 mod tests;
+mod worktree;
 
 pub(crate) use changes::{
     AuthoritativeChange, AuthoritativeChangeBatch, AuthoritativeChangesQuery,
