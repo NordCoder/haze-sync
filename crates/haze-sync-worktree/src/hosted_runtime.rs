@@ -25,6 +25,51 @@ struct Gate {
     busy: AtomicBool,
 }
 
+impl Gate {
+    fn lifecycle(&self) -> WorktreeRuntimeLifecycle {
+        match self.lifecycle.load(Ordering::Acquire) {
+            CREATED => WorktreeRuntimeLifecycle::Created,
+            RUNNING => WorktreeRuntimeLifecycle::Running,
+            CANCELLING => WorktreeRuntimeLifecycle::Cancelling,
+            _ => WorktreeRuntimeLifecycle::Shutdown,
+        }
+    }
+
+    fn status(&self) -> WorktreeRuntimeManualStatus {
+        WorktreeRuntimeManualStatus {
+            lifecycle: self.lifecycle(),
+            busy: self.busy.load(Ordering::Acquire),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct WorktreeRuntimeManualStatus {
+    pub lifecycle: WorktreeRuntimeLifecycle,
+    pub busy: bool,
+}
+
+#[derive(Clone)]
+pub struct WorktreeRuntimeManualStatusHandle {
+    gate: Arc<Gate>,
+}
+
+impl WorktreeRuntimeManualStatusHandle {
+    #[must_use]
+    pub fn status(&self) -> WorktreeRuntimeManualStatus {
+        self.gate.status()
+    }
+}
+
+impl fmt::Debug for WorktreeRuntimeManualStatusHandle {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("WorktreeRuntimeManualStatusHandle")
+            .field("status", &self.status())
+            .finish()
+    }
+}
+
 struct HostedInFlightGuard {
     gate: Arc<Gate>,
     response: Option<SyncSender<WorktreeRuntimeManualOutcome>>,
@@ -83,17 +128,24 @@ pub struct WorktreeRuntimeManualHandle {
 }
 
 impl fmt::Debug for WorktreeRuntimeManualHandle {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("WorktreeRuntimeManualHandle")
-            .field("lifecycle", &self.lifecycle())
-            .field("busy", &self.gate.busy.load(Ordering::Acquire))
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("WorktreeRuntimeManualHandle")
+            .field("status", &self.gate.status())
             .finish()
     }
 }
 
 impl WorktreeRuntimeManualHandle {
+    #[must_use]
+    pub fn status_handle(&self) -> WorktreeRuntimeManualStatusHandle {
+        WorktreeRuntimeManualStatusHandle {
+            gate: self.gate.clone(),
+        }
+    }
+
     pub fn submit(&self, request: WorktreeRuntimeManualRequest) -> WorktreeRuntimeManualSubmission {
-        match self.lifecycle() {
+        match self.gate.lifecycle() {
             WorktreeRuntimeLifecycle::Created => {
                 return WorktreeRuntimeManualSubmission::NotStarted
             }
@@ -126,15 +178,6 @@ impl WorktreeRuntimeManualHandle {
             }
         }
     }
-
-    fn lifecycle(&self) -> WorktreeRuntimeLifecycle {
-        match self.gate.lifecycle.load(Ordering::Acquire) {
-            CREATED => WorktreeRuntimeLifecycle::Created,
-            RUNNING => WorktreeRuntimeLifecycle::Running,
-            CANCELLING => WorktreeRuntimeLifecycle::Cancelling,
-            _ => WorktreeRuntimeLifecycle::Shutdown,
-        }
-    }
 }
 
 pub enum WorktreeRuntimeManualSubmission {
@@ -146,8 +189,8 @@ pub enum WorktreeRuntimeManualSubmission {
 }
 
 impl fmt::Debug for WorktreeRuntimeManualSubmission {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
             Self::Accepted(_) => "Accepted",
             Self::Busy => "Busy",
             Self::NotStarted => "NotStarted",
@@ -214,6 +257,13 @@ where
             },
             handle,
         ))
+    }
+
+    #[must_use]
+    pub fn manual_status_handle(&self) -> WorktreeRuntimeManualStatusHandle {
+        WorktreeRuntimeManualStatusHandle {
+            gate: self.gate.clone(),
+        }
     }
 
     pub fn start(&mut self) -> Result<WorktreeRuntimeStartSummary, WorktreeRuntimeLifecycleError> {
@@ -283,8 +333,8 @@ pub enum WorktreeHostedRuntimeError {
 }
 
 impl fmt::Display for WorktreeHostedRuntimeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("worktree manual request capacity must be non-zero")
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("worktree manual request capacity must be non-zero")
     }
 }
 
