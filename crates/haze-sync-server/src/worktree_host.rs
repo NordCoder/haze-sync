@@ -7,9 +7,7 @@ use crate::{
         ServerWorktreeExecutorPolicy,
     },
     worktree_runtime::{map_adapter_mode, ServerWorktreeModeMapping},
-    worktree_status::{
-        ServerWorktreeManualGate, ServerWorktreeStatusSnapshot,
-    },
+    worktree_status::{ServerWorktreeManualGate, ServerWorktreeStatusSnapshot},
 };
 use haze_sync_common::{AdapterId, AdapterMode, Sha256};
 use haze_sync_storage::repositories::worktree_state::{
@@ -399,7 +397,8 @@ impl ServerWorktreeRuntimeHost {
                 manual.submit(request)
             });
         match submission {
-            WorktreeRuntimeManualSubmission::Accepted(_) | WorktreeRuntimeManualSubmission::Busy => {
+            WorktreeRuntimeManualSubmission::Accepted(_)
+            | WorktreeRuntimeManualSubmission::Busy => {
                 self.manual_gate.store(MANUAL_BUSY, Ordering::Release);
             }
             WorktreeRuntimeManualSubmission::NotStarted
