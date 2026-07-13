@@ -1,8 +1,9 @@
-use super::{ensure_not_cancelled, ServerWorktreeCycleExecutor};
 use super::scan::LocalObservation;
+use super::{ensure_not_cancelled, ServerWorktreeCycleExecutor};
 use crate::application::{
-    derive_worktree_delete_idempotency, derive_worktree_put_idempotency, ApplyDeleteCommand,
-    ApplyDeleteOutcome, ApplyFileCommand, ApplyFileOutcome, ApplicationActor, RevisionContentQuery,
+    derive_worktree_delete_idempotency, derive_worktree_put_idempotency, ApplicationActor,
+    ApplyDeleteCommand, ApplyDeleteOutcome, ApplyFileCommand, ApplyFileOutcome,
+    RevisionContentQuery,
 };
 use chrono::{DateTime, Utc};
 use haze_sync_common::{RevisionId, VaultPath};
@@ -32,16 +33,11 @@ impl ServerWorktreeCycleExecutor {
             self.policy.max_delete_ratio_basis_points,
         )
         .map_err(|_| WorktreeRuntimeCycleFailure::Plan)?;
-        let plan = WorktreeGuardedDeletePlan::evaluate(
-            scan,
-            policy,
-            WorktreeDeleteAuthorization::Guarded,
-        );
+        let plan =
+            WorktreeGuardedDeletePlan::evaluate(scan, policy, WorktreeDeleteAuthorization::Guarded);
         match plan.decision() {
             WorktreeDeleteGuardDecision::Allowed(_) => Ok(plan.candidates().to_vec()),
-            WorktreeDeleteGuardDecision::Blocked { .. } => {
-                Err(WorktreeRuntimeCycleFailure::Plan)
-            }
+            WorktreeDeleteGuardDecision::Blocked { .. } => Err(WorktreeRuntimeCycleFailure::Plan),
         }
     }
 
@@ -156,8 +152,8 @@ impl ServerWorktreeCycleExecutor {
         cancellation: &WorktreeCancellationToken,
     ) -> Result<(), WorktreeRuntimeCycleFailure> {
         let actor = ApplicationActor::new(self.adapter_id.clone());
-        let requested_delete_count = u32::try_from(candidates.len())
-            .map_err(|_| WorktreeRuntimeCycleFailure::Plan)?;
+        let requested_delete_count =
+            u32::try_from(candidates.len()).map_err(|_| WorktreeRuntimeCycleFailure::Plan)?;
         let mut accepted = Vec::new();
 
         for candidate in candidates {
