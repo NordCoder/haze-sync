@@ -2,59 +2,65 @@
 
 component: server
 branch: component/server
-status: BLOCKED_WAITING_OWNER
+status: PROMPT_READY
 
 active_prompt: crates/haze-sync-server/control/prompt.md
 active_report: crates/haze-sync-server/control/report.md
-active_agent_role: none
-assigned_chat_name: none
-prompt_revision: verified by Orchestrator after SRV-P7B4 feasibility audit found a concrete Worktree owner-contract defect
+active_agent_role: implementation-worker
+assigned_chat_name: server — W1 WT-P11 Exact-SHA Fan-In
+prompt_revision: verified by Orchestrator after WT-P11 CLEAN_ACCEPT on exact SHA and green CI
 
 wave: W1
-phase: SRV-P7B4-WAIT-WT-P11
+phase: SRV-WT-P11-FAN-IN
 
-implementation_status: BLOCKED_BY_CONTRACT
+implementation_status: NOT_STARTED
 fix_status: NOT_STARTED
 clean_review_status: NOT_STARTED
-architect_status: ARCHITECT_NOT_REQUIRED_OWNER_BOUNDARY_ALREADY_DECIDED
-ci_status: NOT_RUN_NO_PRODUCT_CHANGE
+architect_status: ARCHITECT_NOT_REQUIRED
+ci_status: NOT_RUN
 known_failed_checks: []
+
+accepted_worktree_source:
+- baseline_sha: 1942946331e8362f19907ab6ad4eb779da70fd57
+- accepted_code_bearing_sha: b38264ce2b09632a4c0bab0dd77319e1db239a3b
+- clean_report_commit: b76f88369d079a9cb264bb4cdb9b6c62e361a9bc
+- clean_report_blob: 84fb7a399d708088c3b545efd0e2adbaad3f909e
+- clean_status: CLEAN_ACCEPT
+- ci_run_id: 29272964159
+- ci_run_number: 1881
+- ci_run_attempt: 1
+- ci_conclusion: success
 
 accepted_server_baseline:
 - bounded_executor_sha: f8475af72b3e1795c5b11fa39f4625191eff59b1
 - bounded_executor_clean_report_commit: b9e22533091a9477876b91729c04682266a1b718
 - bounded_executor_clean_status: CLEAN_ACCEPT
 
-blocker_evidence:
-- server_blocker_report_commit: 03e15367e1363bc4718581ca2c8993be52c2231e
-- server_blocker_report_blob: 7172be029d2480eb151be2151f36718a985d089d
-- status: BLOCKED_BY_CONTRACT
-- owner_component: worktree
-- accepted_worktree_sha: 1942946331e8362f19907ab6ad4eb779da70fd57
-- missing_contract_1: production path-free WorktreeWatcher implementation or Worktree-owned watcher factory/channel boundary
-- missing_contract_2: scheduler-accounted manual-cycle entrypoint preserving lifecycle, counters, last-cycle state, cancellation and no-overlap
+phase_goal:
+- copy only exact WT-P11 Worktree product/dependency changes into component/server
+- preserve Server-owned work and unrelated accepted snapshots
+- do not copy Worktree control/log files
+- obtain DB-capable exact-SHA Server Component CI
+- prepare for functional integration review
 
-routing_decision:
-- architect pass not required because accepted architecture already assigns watcher/scheduler semantics to Worktree
-- activate bounded Worktree owner phase WT-P11
-- do not work around in Server
+allowed_scope:
+- exact accepted WT-P11 Worktree product files and required lockfile changes
+- Server control report
+- narrow conflict resolution required by prior accepted fan-in
 
-archived_completed_slot:
-- prompt_index: crates/haze-sync-server/control/log/20260713-160500Z-W1-SRV-P7B4-HOSTED-WORKTREE-RUNTIME-implementation-worker-prompt.md
-- report_index: crates/haze-sync-server/control/log/20260713-160500Z-W1-SRV-P7B4-HOSTED-WORKTREE-RUNTIME-implementation-worker-report.md
-- prompt_blob: 0c7893ba143f4dad7c23ca2c0b924a274d404c6c
-- report_blob: 7172be029d2480eb151be2151f36718a985d089d
-- report_commit: 03e15367e1363bc4718581ca2c8993be52c2231e
+protected_scope:
+- Server product semantics outside fan-in conflict resolution
+- Storage/Core/API/CLI/Deployment product files
+- migrations/workflows/sibling control files
 
-reactivation_requirements:
-- WT-P11 implementation SELF_ACCEPT and green exact-SHA CI
-- WT-P11 mandatory CLEAN_ACCEPT
-- explicit exact-SHA Worktree fan-in to component/server
-- Server integration CI and clean review
-- new executable SRV-P7B4 prompt from Orchestrator
+completion_requirements:
+- real code-bearing Server fan-in commit
+- exact source range and copied paths recorded
+- final Server code-bearing SHA recorded
+- authoritative DB-capable Component CI green or honest blocker
+- committed IMPLEMENTATION report exists
 
-blocked_downstream:
-- API-P8
-- SRV-P7B5
-- CLI-P6A
-- DEP-P5A
+next_gate_after_fan_in:
+- SELF_ACCEPT plus green exact-SHA CI -> focused functional integration review
+- CLEAN_ACCEPT after integration review -> reactivate SRV-P7B4 Hosted Worktree Runtime
+- formatting/style alone is non-blocking
