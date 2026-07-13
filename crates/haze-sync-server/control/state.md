@@ -6,83 +6,73 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-server/control/prompt.md
 active_report: crates/haze-sync-server/control/report.md
-active_agent_role: fixer-worker
-assigned_chat_name: server — W1 SRV-P7B3 Executor CI Fix
-prompt_revision: verified by Orchestrator after executor clean-review correction exact-SHA CI failure and diagnostics artifact publication
+active_agent_role: clean-code-reviewer
+assigned_chat_name: server — W1 SRV-P7B3 Executor Final Clean Review
+prompt_revision: verified by Orchestrator after artifact-proven rustfmt fix and green DB-capable exact-SHA Component CI
 
 wave: W1
-phase: SRV-P7B3-EXECUTOR-CI-FIX
+phase: SRV-P7B3-EXECUTOR-CLEAN-REVIEW
 
 implementation_status: SELF_ACCEPT
-fix_status: NOT_STARTED
-clean_review_status: CLEAN_ACCEPT_PENDING_CI_INVALIDATED_BY_FAILURE
+fix_status: FIX_COMPLETE
+clean_review_status: NOT_STARTED_AFTER_FIX
 architect_status: ARCHITECT_CHANGED_CONTRACTS
-ci_status: CI_RED_DIAGNOSTICS_AVAILABLE
-known_failed_checks:
-- diagnostics finalizer
+ci_status: CI_GREEN_DB_VERIFIED
+known_failed_checks: []
 
-failed_candidate:
-- implementation_candidate_sha: a08739cc8146b4f224475c83fa0652b60782db82
+final_executor_candidate:
+- original_implementation_sha: a08739cc8146b4f224475c83fa0652b60782db82
 - clean_review_correction_sha: 784a45f879f13914a1732b8ea071ea8f281d6721
-- clean_review_report_commit: c00f8d4c128f6770ad3062b6d753e7310299faf0
-- clean_review_report_blob: 9bafafc37d0fb789687aedb1920d8b4c52c2eb45
-- clean_review_report_status: CLEAN_ACCEPT_PENDING_CI
-- post_candidate_changes_before_rotation: report-only
-
-failed_ci_evidence:
-- workflow: Component CI
-- run_id: 29255656933
-- run_number: 1859
-- run_attempt: 1
-- head_sha: 784a45f879f13914a1732b8ea071ea8f281d6721
-- conclusion: failure
-- rust_workspace_job: failure
-- cargo_fmt: success
-- cargo_check: success
-- cargo_test: success
-- cargo_clippy: success
-- diagnostics_finalizer: failure
-- diagnostics_upload: success
-
-artifact_evidence:
-- artifact_id: 8281161500
-- artifact_name: ci-diag__component-server__wf-component-ci__run-29255656933__attempt-1
-- artifact_digest: sha256:b005e355fd1cef4f4df37ee0b13e5e6156964eaa79b6fdc46bbe9a8e3a1cc2dc
-- artifact_expired: false
-- artifact_expires_at: 2026-07-14T13:56:33Z
-- artifact_head_sha: 784a45f879f13914a1732b8ea071ea8f281d6721
+- final_fixed_code_bearing_sha: f8475af72b3e1795c5b11fa39f4625191eff59b1
+- fix_report_commit: 16c973093cde40625334591cec8d9ea96ef82998
+- fix_report_blob: 78b4e03e00a6a6fac00f1457602a445c2fa17d8e
+- fix_status: FIX_COMPLETE
+- post_fix_changes_before_rotation: report-only
 
 accepted_owner_shas:
 - worktree: 1942946331e8362f19907ab6ad4eb779da70fd57
 - storage: 66b6a1f554aae1d1b774cc88560d46dd140c7a54
 - server_application_services: 647dce7b624d67663632808906896cb6745ea7e7
 
-archived_completed_slot:
-- prompt_index: crates/haze-sync-server/control/log/20260713-140000Z-W1-SRV-P7B3-EXECUTOR-CLEAN-clean-code-reviewer-prompt.md
-- report_index: crates/haze-sync-server/control/log/20260713-140000Z-W1-SRV-P7B3-EXECUTOR-CLEAN-clean-code-reviewer-report.md
-- prompt_blob: d25ebd04062404cb49169b3f56ffc1f21951d61c
-- report_blob: 9bafafc37d0fb789687aedb1920d8b4c52c2eb45
-- report_commit: c00f8d4c128f6770ad3062b6d753e7310299faf0
+ci_evidence:
+- workflow: Component CI
+- run_id: 29257244778
+- run_number: 1860
+- run_attempt: 1
+- head_sha: f8475af72b3e1795c5b11fa39f4625191eff59b1
+- conclusion: success
+- rust_workspace_job: success
+- cargo_fmt: success
+- cargo_check: success
+- isolated_server_postgresql_tests: success
+- isolated_storage_postgresql_tests: success
+- remaining_workspace_tests: success
+- cargo_clippy: success
+- diagnostics_finalizer: success
 
-fix_requirements:
-- download exact diagnostics artifact 8281161500
-- read summary, manifest and every failed_checks log
-- identify exact root cause without wrapper-summary guessing
-- change only artifact-proven Server-owned scope
-- preserve accepted owner snapshots and clean-review validation intent
-- produce exact final code-bearing fix SHA
-- obtain authoritative DB-capable Component CI on exact fix SHA
-- write committed FIX report
+archived_completed_slot:
+- prompt_index: crates/haze-sync-server/control/log/20260713-142100Z-W1-SRV-P7B3-EXECUTOR-CI-FIX-fixer-worker-prompt.md
+- report_index: crates/haze-sync-server/control/log/20260713-142100Z-W1-SRV-P7B3-EXECUTOR-CI-FIX-fixer-worker-report.md
+- prompt_blob: 656961c3330e9761fa6559372dd0aa35a4ce1d65
+- report_blob: 78b4e03e00a6a6fac00f1457602a445c2fa17d8e
+- report_commit: 16c973093cde40625334591cec8d9ea96ef82998
+
+review_requirements:
+- review range 230a381dc37c300d6b2c17252f2c7ec163634be1..f8475af72b3e1795c5b11fa39f4625191eff59b1
+- revalidate boundedness, validation, cancellation, replay, transactions and secrecy
+- verify clean-review corrections and formatting fix preserve intent
+- verify owner snapshots/migrations/workflows unchanged
+- write committed CLEAN_CODE_REVIEW report
 
 completion_requirements:
 - committed crates/haze-sync-server/control/report.md exists
-- report phase SRV-P7B3-EXECUTOR-CI-FIX
-- report chat name server — W1 SRV-P7B3 Executor CI Fix
-- report records artifact evidence and diagnosed root cause
-- exact final code-bearing SHA and CI result are recorded
-- no later product/tooling commit invalidates the fix
+- report phase SRV-P7B3-EXECUTOR-CLEAN-REVIEW
+- report chat name server — W1 SRV-P7B3 Executor Final Clean Review
+- report reviews exact final candidate or newer justified correction
+- exact-SHA DB-capable CI green for any new code-bearing correction
+- no later product/tooling commit invalidates review
 
-next_gate_after_fix:
-- FIX_COMPLETE plus green exact-SHA CI -> Orchestrator rotates a new mandatory executor clean-code review
-- red CI -> continue fixer routing from the new exact diagnostics artifact
-- blocked artifact/contract/scope/tooling -> preserve SRV-P7B4 block and route exact evidence
+next_gate_after_clean_review:
+- CLEAN_ACCEPT -> Orchestrator may activate SRV-P7B4 Hosted Worktree Runtime
+- CLEAN_NEEDS_FIX or red CI -> route exact evidence to fixer
+- owner contract defect -> route to exact Worktree or Storage owner
