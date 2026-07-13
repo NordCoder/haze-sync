@@ -1,6 +1,9 @@
 //! Production filesystem watcher with path-free bounded hints.
 
-use crate::{WorktreeWatcher, WorktreeWatcherFailure, WorktreeWatcherHint, WorktreeWatcherPoll};
+use crate::{
+    WorktreeConfig, WorktreeWatcher, WorktreeWatcherFailure, WorktreeWatcherHint,
+    WorktreeWatcherPoll,
+};
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 use std::fmt;
 use std::path::PathBuf;
@@ -24,24 +27,30 @@ pub struct ProductionWorktreeWatcher {
     watcher: Option<RecommendedWatcher>,
     overflowed: Arc<AtomicBool>,
     backend_failed: Arc<AtomicBool>,
+    backend_closed: Arc<AtomicBool>,
     sequence: AtomicU64,
     state: ProductionWorktreeWatcherState,
+    #[cfg(test)]
+    test_sender: Option<SyncSender<()>>,
 }
 
 impl ProductionWorktreeWatcher {
-    pub fn new(root: PathBuf, capacity: usize) -> Result<Self, WorktreeWatcherFailure> {
-        if !root.is_absolute() || capacity == 0 {
+    pub fn new(config: &WorktreeConfig, capacity: usize) -> Result<Self, WorktreeWatcherFailure> {
+        if capacity == 0 {
             return Err(WorktreeWatcherFailure::Start);
         }
         Ok(Self {
-            root,
+            root: config.root_path().to_path_buf(),
             capacity,
             receiver: None,
             watcher: None,
             overflowed: Arc::new(AtomicBool::new(false)),
             backend_failed: Arc::new(AtomicBool::new(false)),
+            backend_closed: Arc::new(AtomicBool::new(false)),
             sequence: AtomicU64::new(0),
             state: ProductionWorktreeWatcherState::Created,
+            #[cfg(test)]
+            test_sender: None,
         })
     }
 
@@ -57,6 +66,23 @@ impl ProductionWorktreeWatcher {
                 .fetch_add(1, Ordering::AcqRel)
                 .saturating_add(1),
         })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn inject_test_event(&self) {
+        if let Some(sender) = self.test_sender.as_ref() {
+            send_hint(sender, &self.overflowed);
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn inject_test_failure(&self) {
+        self.backend_failed.store(true, Ordering::Release);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn inject_test_closure(&self) {
+        self.backend_closed.store(true, Ordering::Release);
     }
 }
 
@@ -78,11 +104,12 @@ impl WorktreeWatcher for ProductionWorktreeWatcher {
         }
 
         let (sender, receiver) = sync_channel(self.capacity);
+        let callback_sender = sender.clone();
         let overflowed = self.overflowed.clone();
         let backend_failed = self.backend_failed.clone();
         let mut watcher = RecommendedWatcher::new(
             move |result: notify::Result<notify::Event>| match result {
-                Ok(_) => send_hint(&sender, &overflowed),
+                Ok(_) => send_hint(&callback_sender, &overflowed),
                 Err(_) => backend_failed.store(true, Ordering::Release),
             },
             Config::default(),
@@ -95,6 +122,10 @@ impl WorktreeWatcher for ProductionWorktreeWatcher {
         self.receiver = Some(receiver);
         self.watcher = Some(watcher);
         self.state = ProductionWorktreeWatcherState::Running;
+        #[cfg(test)]
+        {
+            self.test_sender = Some(sender);
+        }
         Ok(())
     }
 
@@ -102,6 +133,10 @@ impl WorktreeWatcher for ProductionWorktreeWatcher {
         if self.backend_failed.swap(false, Ordering::AcqRel) {
             self.state = ProductionWorktreeWatcherState::Failed;
             return Err(WorktreeWatcherFailure::Poll);
+        }
+        if self.backend_closed.swap(false, Ordering::AcqRel) {
+            self.state = ProductionWorktreeWatcherState::Closed;
+            return Ok(WorktreeWatcherPoll::Closed);
         }
         if self.overflowed.swap(false, Ordering::AcqRel) {
             return Ok(self.next_hint());
@@ -135,6 +170,10 @@ impl WorktreeWatcher for ProductionWorktreeWatcher {
         }
         self.watcher.take();
         self.receiver.take();
+        #[cfg(test)]
+        {
+            self.test_sender.take();
+        }
         self.state = ProductionWorktreeWatcherState::Stopped;
         Ok(())
     }
@@ -144,6 +183,10 @@ impl Drop for ProductionWorktreeWatcher {
     fn drop(&mut self) {
         self.watcher.take();
         self.receiver.take();
+        #[cfg(test)]
+        {
+            self.test_sender.take();
+        }
         self.state = ProductionWorktreeWatcherState::Stopped;
     }
 }
