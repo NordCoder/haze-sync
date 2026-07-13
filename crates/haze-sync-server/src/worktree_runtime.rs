@@ -15,11 +15,11 @@ use std::path::PathBuf;
 pub(crate) enum ServerWorktreeModeMapping {
     /// The shared mode has a direct Worktree runtime equivalent.
     Supported(WorktreeMode),
-    /// Worktree has no accepted dry-run runtime contract.
+    /// Dry-run remains unavailable at the Server boundary until a manual host exists.
     UnsupportedDryRun,
 }
 
-/// Exhaustively map the shared adapter mode without inventing a DryRun meaning.
+/// Exhaustively map shared modes without activating a manual dry-run operation.
 #[must_use]
 pub(crate) const fn map_adapter_mode(mode: AdapterMode) -> ServerWorktreeModeMapping {
     match mode {
@@ -37,13 +37,9 @@ pub(crate) const fn map_adapter_mode(mode: AdapterMode) -> ServerWorktreeModeMap
 /// Server-visible lifecycle for the not-yet-hosted Worktree runtime.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum ServerWorktreeLifecycle {
-    /// Configuration is composed, but explicit startup has not happened.
     Created,
-    /// Disabled mode started as a completely inert boundary.
     Disabled,
-    /// Configuration requested runtime work that cannot yet be hosted honestly.
     Unavailable,
-    /// Explicit shutdown completed; implicit restart is forbidden.
     Shutdown,
 }
 
@@ -61,9 +57,7 @@ impl ServerWorktreeLifecycle {
 /// Safe reason an enabled Worktree runtime is unavailable in SRV-P7A.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum ServerWorktreeUnavailableReason {
-    /// Shared DryRun has no accepted Worktree runtime equivalent.
     UnsupportedDryRun,
-    /// A real Core/API/Storage-backed cycle executor is not wired yet.
     CycleExecutorNotWired,
 }
 
@@ -142,11 +136,8 @@ impl fmt::Display for ServerWorktreeStatus {
 /// Explicit lifecycle misuse at the Server composition boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum ServerWorktreeLifecycleError {
-    /// Startup was already performed.
     AlreadyStarted,
-    /// Shutdown completed and this boundary cannot restart implicitly.
     AlreadyShutdown,
-    /// Shutdown was requested before explicit startup.
     NotStarted,
 }
 
@@ -214,7 +205,8 @@ impl ServerWorktreeRuntime {
                 self.unavailable_reason =
                     Some(ServerWorktreeUnavailableReason::CycleExecutorNotWired);
             }
-            ServerWorktreeModeMapping::UnsupportedDryRun => {
+            ServerWorktreeModeMapping::Supported(WorktreeMode::DryRun)
+            | ServerWorktreeModeMapping::UnsupportedDryRun => {
                 self.lifecycle = ServerWorktreeLifecycle::Unavailable;
                 self.unavailable_reason = Some(ServerWorktreeUnavailableReason::UnsupportedDryRun);
             }
@@ -273,6 +265,7 @@ const fn worktree_mode_name(mode: WorktreeMode) -> &'static str {
         WorktreeMode::ImportOnly => "import_only",
         WorktreeMode::ExportOnly => "export_only",
         WorktreeMode::Bidirectional => "bidirectional",
+        WorktreeMode::DryRun => "dry_run",
     }
 }
 
@@ -317,7 +310,7 @@ mod tests {
     }
 
     #[test]
-    fn construction_is_explicit_and_does_not_start_or_touch_the_filesystem() {
+    fn construction_is_explicit_and_does_not_touch_the_filesystem() {
         let root = unique_missing_root("created");
         let runtime = ServerWorktreeRuntime::new(AdapterMode::Bidirectional, root.clone());
 
@@ -335,7 +328,6 @@ mod tests {
     fn disabled_mode_is_completely_inert() {
         let root = unique_missing_root("disabled");
         let mut runtime = ServerWorktreeRuntime::new(AdapterMode::Disabled, root.clone());
-
         let status = runtime.start().unwrap();
 
         assert_eq!(status.configured_mode(), AdapterMode::Disabled);
@@ -367,10 +359,9 @@ mod tests {
     }
 
     #[test]
-    fn dry_run_is_not_silently_mapped_to_another_worktree_mode() {
+    fn dry_run_remains_manual_and_unavailable() {
         let mut runtime =
             ServerWorktreeRuntime::new(AdapterMode::DryRun, PathBuf::from("./private-root"));
-
         let status = runtime.start().unwrap();
 
         assert_eq!(status.mapped_mode(), None);
@@ -379,6 +370,7 @@ mod tests {
             status.unavailable_reason(),
             Some(ServerWorktreeUnavailableReason::UnsupportedDryRun)
         );
+        assert_eq!(worktree_mode_name(WorktreeMode::DryRun), "dry_run");
     }
 
     #[test]
@@ -386,11 +378,11 @@ mod tests {
         let secret_root = PathBuf::from("/srv/private/token-like-worktree-root");
         let runtime = ServerWorktreeRuntime::new(AdapterMode::Bidirectional, secret_root.clone());
 
-        let debug = format!("{runtime:?}");
-        let status_debug = format!("{:?}", runtime.status());
-        let status_display = runtime.status().to_string();
-
-        for output in [debug, status_debug, status_display] {
+        for output in [
+            format!("{runtime:?}"),
+            format!("{:?}", runtime.status()),
+            runtime.status().to_string(),
+        ] {
             assert!(!output.contains(secret_root.to_string_lossy().as_ref()));
             assert!(!output.contains("/srv/private"));
             assert!(!output.contains("token-like"));
