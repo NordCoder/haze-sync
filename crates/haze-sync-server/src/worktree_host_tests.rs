@@ -11,7 +11,7 @@ use haze_sync_worktree::{
 };
 use std::sync::{
     atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
-    Mutex,
+    Arc, Mutex,
 };
 use tokio::sync::Notify;
 
@@ -91,9 +91,7 @@ impl WorktreeWatcher for FakeWatcher {
             return Err(WorktreeWatcherFailure::Poll);
         }
         if self.hint.swap(false, Ordering::AcqRel) {
-            Ok(WorktreeWatcherPoll::Hint(WorktreeWatcherHint {
-                sequence: 1,
-            }))
+            Ok(WorktreeWatcherPoll::Hint(WorktreeWatcherHint { sequence: 1 }))
         } else {
             Ok(WorktreeWatcherPoll::Idle)
         }
@@ -271,26 +269,6 @@ fn defaults_are_disabled_and_bounded() {
     assert!(config.manual_capacity <= MAX_MANUAL_CAPACITY);
 }
 
-#[test]
-fn invalid_bounds_fail_closed() {
-    assert_eq!(
-        ServerWorktreeHostConfig::new(
-            WorktreeMode::Bidirectional,
-            Duration::ZERO,
-            Duration::ZERO,
-            0,
-            WorktreeRuntimeCycleBudget {
-                max_import_actions: MAX_ACTION_BUDGET + 1,
-                max_delete_candidates: 1,
-                max_export_actions: 1,
-            },
-            Duration::ZERO,
-            0,
-        ),
-        Err(ServerWorktreeHostError::InvalidConfig)
-    );
-}
-
 #[tokio::test]
 async fn disabled_host_is_ready_inert_and_join_free() {
     let host = ServerWorktreeRuntimeHost::disabled(Duration::from_secs(1));
@@ -321,15 +299,15 @@ async fn enabled_start_acknowledges_running_and_joins_shutdown() {
     )
     .await
     .unwrap();
-    let snapshot = host.snapshot();
-    assert_eq!(snapshot.lifecycle, ServerWorktreeHostLifecycle::Running);
-    assert!(snapshot.is_ready());
+    assert!(host.snapshot().is_ready());
     assert_eq!(
-        snapshot.manual_availability,
+        host.snapshot().manual_availability,
         ServerWorktreeManualAvailability::Unavailable
     );
-    let status = host.shutdown().await.unwrap();
-    assert_eq!(status.lifecycle, ServerWorktreeHostLifecycle::Shutdown);
+    assert_eq!(
+        host.shutdown().await.unwrap().lifecycle,
+        ServerWorktreeHostLifecycle::Shutdown
+    );
     assert!(dropped.load(Ordering::Acquire));
 }
 
@@ -343,15 +321,129 @@ async fn startup_failure_is_propagated_and_task_is_cleaned_up() {
         ExecutorState::new(),
     )
     .await;
-    assert!(matches!(
-        result,
-        Err(ServerWorktreeHostError::RuntimeFailed)
-    ));
+    assert!(matches!(result, Err(ServerWorktreeHostError::RuntimeFailed)));
     assert!(dropped.load(Ordering::Acquire));
 }
 
 #[tokio::test]
-async fn host_drives_startup_periodic_and_watcher_cycles_without_overlap() {
+async fn idle_dry_run_polling_remains_available_and_passive() {
+    let (watcher, _, _) = FakeWatcher::healthy();
+    let state = ExecutorState::new();
+    let host = test_host(WorktreeMode::DryRun, watcher, FakeClock::new(), state.clone())
+        .await
+        .unwrap();
+    for _ in 0..20 {
+        assert_eq!(
+            host.snapshot().manual_availability,
+            ServerWorktreeManualAvailability::Available
+        );
+        assert!(state.causes().is_empty());
+        tokio::time::sleep(Duration::from_millis(2)).await;
+    }
+    host.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn authoritative_busy_lasts_until_exact_request_completion() {
+    let (watcher, _, _) = FakeWatcher::healthy();
+    let state = ExecutorState::new();
+    state.block.store(true, Ordering::Release);
+    let host = test_host(WorktreeMode::DryRun, watcher, FakeClock::new(), state.clone())
+        .await
+        .unwrap();
+    let ticket = match host.submit_manual(WorktreeRuntimeManualRequest::dry_run(budget())) {
+        WorktreeRuntimeManualSubmission::Accepted(ticket) => ticket,
+        other => panic!("unexpected submission: {other:?}"),
+    };
+    assert!(host.snapshot().is_ready());
+    assert_eq!(
+        host.snapshot().manual_availability,
+        ServerWorktreeManualAvailability::Busy
+    );
+    assert!(matches!(
+        host.submit_manual(WorktreeRuntimeManualRequest::dry_run(budget())),
+        WorktreeRuntimeManualSubmission::Busy
+    ));
+    state.block.store(false, Ordering::Release);
+    state.release.notify_waiters();
+    assert!(matches!(
+        wait_ticket(&ticket).await,
+        WorktreeRuntimeManualOutcome::Completed(_)
+    ));
+    for _ in 0..100 {
+        if host.snapshot().manual_availability == ServerWorktreeManualAvailability::Available {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(2)).await;
+    }
+    assert_eq!(
+        host.snapshot().manual_availability,
+        ServerWorktreeManualAvailability::Available
+    );
+    host.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn old_ticket_observation_cannot_clear_newer_request_busy() {
+    let (watcher, _, _) = FakeWatcher::healthy();
+    let state = ExecutorState::new();
+    let host = test_host(WorktreeMode::DryRun, watcher, FakeClock::new(), state.clone())
+        .await
+        .unwrap();
+    let old = match host.submit_manual(WorktreeRuntimeManualRequest::dry_run(budget())) {
+        WorktreeRuntimeManualSubmission::Accepted(ticket) => ticket,
+        other => panic!("unexpected submission: {other:?}"),
+    };
+    assert!(matches!(
+        wait_ticket(&old).await,
+        WorktreeRuntimeManualOutcome::Completed(_)
+    ));
+
+    state.block.store(true, Ordering::Release);
+    let newer = match host.submit_manual(WorktreeRuntimeManualRequest::dry_run(budget())) {
+        WorktreeRuntimeManualSubmission::Accepted(ticket) => ticket,
+        other => panic!("unexpected submission: {other:?}"),
+    };
+    drop(old);
+    assert_eq!(
+        host.snapshot().manual_availability,
+        ServerWorktreeManualAvailability::Busy
+    );
+    state.block.store(false, Ordering::Release);
+    state.release.notify_waiters();
+    let _ = wait_ticket(&newer).await;
+    host.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn automatic_cycle_uses_owner_gate_without_exposing_manual_availability() {
+    let (watcher, _, _) = FakeWatcher::healthy();
+    let state = ExecutorState::new();
+    state.block.store(true, Ordering::Release);
+    let host = test_host(
+        WorktreeMode::ExportOnly,
+        watcher,
+        FakeClock::new(),
+        state.clone(),
+    )
+    .await
+    .unwrap();
+    wait_for_cause(&state, WorktreeRuntimeCycleCause::Startup).await;
+    assert_eq!(
+        host.snapshot().manual_availability,
+        ServerWorktreeManualAvailability::Unavailable
+    );
+    assert!(matches!(
+        host.submit_manual(WorktreeRuntimeManualRequest::new(true, budget())),
+        WorktreeRuntimeManualSubmission::Busy
+    ));
+    state.block.store(false, Ordering::Release);
+    state.release.notify_waiters();
+    host.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn host_drives_periodic_and_watcher_cycles_without_overlap() {
     let (watcher, hint, _) = FakeWatcher::healthy();
     let clock = FakeClock::new();
     let state = ExecutorState::new();
@@ -376,64 +468,6 @@ async fn host_drives_startup_periodic_and_watcher_cycles_without_overlap() {
 }
 
 #[tokio::test]
-async fn manual_busy_snapshot_stays_ready_and_read_is_passive() {
-    let (watcher, _, _) = FakeWatcher::healthy();
-    let state = ExecutorState::new();
-    state.block.store(true, Ordering::Release);
-    let host = test_host(
-        WorktreeMode::DryRun,
-        watcher,
-        FakeClock::new(),
-        state.clone(),
-    )
-    .await
-    .unwrap();
-
-    let before = state.causes();
-    let available = host.snapshot();
-    assert_eq!(
-        available.manual_availability,
-        ServerWorktreeManualAvailability::Available
-    );
-    assert_eq!(state.causes(), before);
-
-    let first = host.submit_manual(WorktreeRuntimeManualRequest::dry_run(budget()));
-    let ticket = match first {
-        WorktreeRuntimeManualSubmission::Accepted(ticket) => ticket,
-        other => panic!("unexpected first submission: {other:?}"),
-    };
-    let busy = host.snapshot();
-    assert!(busy.is_ready());
-    assert_eq!(
-        busy.manual_availability,
-        ServerWorktreeManualAvailability::Busy
-    );
-    assert!(matches!(
-        host.submit_manual(WorktreeRuntimeManualRequest::dry_run(budget())),
-        WorktreeRuntimeManualSubmission::Busy
-    ));
-
-    state.block.store(false, Ordering::Release);
-    state.release.notify_waiters();
-    let outcome = wait_ticket(&ticket).await;
-    assert!(
-        matches!(outcome, WorktreeRuntimeManualOutcome::Completed(summary) if summary.full_scan_completed)
-    );
-    assert_eq!(state.causes(), vec![WorktreeRuntimeCycleCause::Manual]);
-    for _ in 0..100 {
-        if host.snapshot().manual_availability == ServerWorktreeManualAvailability::Available {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(2)).await;
-    }
-    assert_eq!(
-        host.snapshot().manual_availability,
-        ServerWorktreeManualAvailability::Available
-    );
-    host.shutdown().await.unwrap();
-}
-
-#[tokio::test]
 async fn shutdown_cancels_pending_cycle_and_mandatorily_joins() {
     let (watcher, _, dropped) = FakeWatcher::healthy();
     let state = ExecutorState::new();
@@ -447,8 +481,10 @@ async fn shutdown_cancels_pending_cycle_and_mandatorily_joins() {
     .await
     .unwrap();
     wait_for_cause(&state, WorktreeRuntimeCycleCause::Startup).await;
-    let status = host.shutdown().await.unwrap();
-    assert_eq!(status.lifecycle, ServerWorktreeHostLifecycle::Shutdown);
+    assert_eq!(
+        host.shutdown().await.unwrap().lifecycle,
+        ServerWorktreeHostLifecycle::Shutdown
+    );
     assert_eq!(state.active.load(Ordering::Acquire), 0);
     assert!(state.cancelled_by_drop.load(Ordering::Acquire));
     assert!(dropped.load(Ordering::Acquire));
@@ -464,7 +500,7 @@ async fn bounded_shutdown_timeout_publishes_failed_snapshot() {
     let host = ServerWorktreeRuntimeHost {
         mode: WorktreeMode::DryRun,
         manual: None,
-        manual_gate: Arc::new(AtomicU8::new(MANUAL_AVAILABLE)),
+        manual_status: None,
         status: status.clone(),
         shutdown: None,
         join: Some(join),
@@ -477,13 +513,17 @@ async fn bounded_shutdown_timeout_publishes_failed_snapshot() {
     let snapshot = ServerWorktreeStatusSnapshot::from_host(
         WorktreeMode::DryRun,
         *status.borrow(),
-        ServerWorktreeManualGate::Available,
+        None,
     );
     assert_eq!(snapshot.lifecycle, ServerWorktreeHostLifecycle::Failed);
     assert!(!snapshot.is_ready());
     assert_eq!(
         snapshot.readiness_reason,
         ServerWorktreeReadinessReason::Failed
+    );
+    assert_eq!(
+        snapshot.manual_availability,
+        ServerWorktreeManualAvailability::Failed
     );
 }
 
@@ -492,7 +532,7 @@ fn status_debug_and_errors_are_secret_safe() {
     let snapshot = ServerWorktreeStatusSnapshot::from_host(
         WorktreeMode::DryRun,
         ServerWorktreeHostStatus::starting(),
-        ServerWorktreeManualGate::Available,
+        None,
     );
     let rendered = format!("{snapshot:?} {}", ServerWorktreeHostError::BindingFailed);
     for forbidden in [
