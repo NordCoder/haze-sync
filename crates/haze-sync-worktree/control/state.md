@@ -6,49 +6,51 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-worktree/control/prompt.md
 active_report: crates/haze-sync-worktree/control/report.md
-active_agent_role: fixer-worker
-assigned_chat_name: worktree — W1 WT-P11 Cancellation Safety Fix
-prompt_revision: verified by Orchestrator after final functional review found one substantive cancellation-by-drop defect; formatting/style remain non-blocking
+active_agent_role: clean-code-reviewer
+assigned_chat_name: worktree — W1 WT-P11 Cancellation Verification
+prompt_revision: verified by Orchestrator after cancellation-by-drop fix and green exact-SHA CI; formatting/style excluded from blocking scope
 
 wave: W1
-phase: WT-P11-CANCELLATION-FIX
+phase: WT-P11-CANCELLATION-VERIFY
 
 implementation_status: SELF_ACCEPT_AFTER_FIX
-fix_status: NOT_STARTED
-clean_review_status: CLEAN_NEEDS_FIX
+fix_status: FIX_COMPLETE
+clean_review_status: NOT_STARTED_FINAL_FUNCTIONAL
 architect_status: ARCHITECT_NOT_REQUIRED
-ci_status: CI_GREEN_FOR_REVIEWED_SHA
+ci_status: CI_GREEN
 known_failed_checks: []
 
-reviewed_candidate:
-- code_bearing_sha: 9cce5f5a34597f13a506fadad49a7ab46972fa98
-- functional_review_report_commit: 7e761ccf1b3ba0036d10067a9d6e4bf395db4bf1
-- functional_review_report_blob: db35ddba7c77518f6c04216a52907634b451eeef
-- review_status: CLEAN_NEEDS_FIX
-- sole_blocker: cancellation-by-drop can wedge shared busy gate and close manual ticket without typed cancellation
-- post_candidate_product_or_tooling_changes: none
+final_candidate:
+- previous_code_bearing_sha: 9cce5f5a34597f13a506fadad49a7ab46972fa98
+- final_code_bearing_sha: b38264ce2b09632a4c0bab0dd77319e1db239a3b
+- fix_report_commit: 952d4d45066ed2fca58db53c20b0ae767ac31221
+- fix_report_blob: 30aa9425f0a7738acbe91e6d867e8c20215bec04
+- post_candidate_changes: report-only before rotation
 
 ci_evidence:
 - workflow: Component CI
-- run_id: 29269422217
-- run_number: 1876
-- head_sha: 9cce5f5a34597f13a506fadad49a7ab46972fa98
+- run_id: 29272964159
+- run_number: 1881
+- run_attempt: 1
+- head_sha: b38264ce2b09632a4c0bab0dd77319e1db239a3b
 - conclusion: success
+- cargo_fmt: success
+- cargo_check: success
+- cargo_test: success
+- cargo_clippy: success
+- diagnostics_finalizer: success
 
-required_fix:
-- RAII busy/in-flight guard releases gate on normal completion and Drop
-- dropped manual execution completes ticket with typed cancellation
-- dropped incomplete cycle does not commit completed-cycle accounting
-- deterministic pending manual and automatic drop tests
-- no stylistic or formatting-only work
+review_policy:
+- formatting, rustfmt, naming taste and style are non-blocking and out of scope
+- verify only cancellation, lifecycle, accounting, safety and scope invariants
 
 completion_requirements:
-- real code-bearing cancellation fix commit
-- exact final SHA recorded
-- exact-SHA Component CI green or honest blocker
-- committed FIX report exists
+- committed CLEAN_CODE_REVIEW report exists
+- report phase WT-P11-CANCELLATION-VERIFY
+- report chat name worktree — W1 WT-P11 Cancellation Verification
+- exact final SHA reviewed
+- no later product/tooling invalidation
 
-next_gate_after_fix:
-- FIX_COMPLETE plus green exact-SHA CI -> final lightweight functional verification, then exact-SHA Server fan-in
-- formatting/style does not block
-- Server SRV-P7B4 remains blocked until fan-in acceptance
+next_gate_after_review:
+- CLEAN_ACCEPT -> exact-SHA Worktree fan-in to component/server immediately
+- substantive defect -> focused fix only
