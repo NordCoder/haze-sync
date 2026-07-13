@@ -6,53 +6,46 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-server/control/prompt.md
 active_report: crates/haze-sync-server/control/report.md
-active_agent_role: clean-code-reviewer
-assigned_chat_name: server — W1 SRV-P7B5 Status Readiness Review
-prompt_revision: verified by Orchestrator after SELF_ACCEPT implementation and green DB-capable exact-SHA CI; formatting/style excluded from blocking scope
+active_agent_role: fixer-worker
+assigned_chat_name: server — W1 SRV-P7B5 Manual Availability Fix
+prompt_revision: verified by Orchestrator after functional review found duplicated/racy Server manual-state mirror; formatting/style excluded from blocking scope
 
 wave: W1
-phase: SRV-P7B5-FUNCTIONAL-REVIEW
+phase: SRV-P7B5-MANUAL-AVAILABILITY-FIX
 
 implementation_status: SELF_ACCEPT
 fix_status: NOT_STARTED
-clean_review_status: NOT_STARTED_FUNCTIONAL
-architect_status: ARCHITECT_NOT_REQUIRED
-ci_status: CI_GREEN_DB_VERIFIED
+clean_review_status: CLEAN_NEEDS_FIX
+architect_status: ARCHITECT_NOT_REQUIRED_UNLESS_OWNER_CONTRACT_PROVES_INSUFFICIENT
+ci_status: CI_GREEN_FOR_REVIEWED_SHA
 known_failed_checks: []
 
-candidate:
-- accepted_srv_p7b4_sha: 55ed0d6c6ab9b78a953b954fcf5a9a68a6a708fe
-- final_code_bearing_sha: 78f4e4525327ff03fa1af1e8387e9e3ea07091d6
-- implementation_report_commit: c70b789111aab2ea4eadc4bc9d7d06b21c6b6b4a
-- implementation_report_blob: 1f5d044b9625fe42e87f97fc2cf37743f079ade9
-- post_candidate_changes: report-only before rotation
+reviewed_candidate:
+- code_bearing_sha: 78f4e4525327ff03fa1af1e8387e9e3ea07091d6
+- functional_review_report_commit: 8082bc6fdd65053f66945fba5ed9047b369442e1
+- functional_review_report_blob: 2f43f88adb950f59100aad80d860b268a54f4f73
+- review_status: CLEAN_NEEDS_FIX
 
-ci_evidence:
-- workflow: Component CI
-- run_id: 29283227887
-- run_number: 1901
-- run_attempt: 1
-- head_sha: 78f4e4525327ff03fa1af1e8387e9e3ea07091d6
-- conclusion: success
-- db_capable: yes
-- cargo_fmt: success
-- cargo_check: success
-- cargo_test: success
-- cargo_clippy: success
-- diagnostics_finalizer: success
+substantive_blocker:
+- Server manual availability mirror is toggled around every poll
+- idle DryRun poll can report false Busy
+- older poll completion can overwrite a newer accepted request to Available
+- manual gate/accounting ownership is duplicated rather than projected
 
-review_policy:
-- formatting, rustfmt, naming taste and style are non-blocking and out of scope
-- verify only readiness semantics, passive read behavior, manual availability, transitions, secrecy, CI and protected scope
+required_fix:
+- remove poll-based Busy/Available toggles
+- preserve Worktree as authoritative manual gate owner
+- implement race-safe request/completion projection or report precise owner-contract blocker
+- deterministic tests for idle DryRun, per-request Busy lifetime, stale completion race and lifecycle overrides
+- no public surface or new task/poller/runtime
 
 completion_requirements:
-- committed CLEAN_CODE_REVIEW report exists
-- report phase SRV-P7B5-FUNCTIONAL-REVIEW
-- report chat name server — W1 SRV-P7B5 Status Readiness Review
-- exact final SHA reviewed
-- no later product/tooling invalidation
+- real code-bearing fix commit or honest FIX_BLOCKED_BY_CONTRACT
+- exact final SHA recorded when code changes exist
+- authoritative DB-capable exact-SHA Component CI green or honest blocker
+- committed FIX report exists
 
-next_gate_after_review:
-- CLEAN_ACCEPT -> begin API-P8 passive status/manual HTTP contract work
-- substantive defect -> focused fix only
-- CLI-P6A and Deployment remain blocked until API-P8 is accepted
+next_gate_after_fix:
+- FIX_COMPLETE plus green exact-SHA CI -> final focused manual-availability verification
+- FIX_BLOCKED_BY_CONTRACT -> route minimal Worktree owner extension
+- API-P8 remains blocked until SRV-P7B5 CLEAN_ACCEPT
