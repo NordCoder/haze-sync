@@ -49,9 +49,9 @@ impl ServerWorktreeHttpControl {
         };
         let snapshot = host.snapshot();
         submit_from_snapshot(snapshot.manual_availability, || {
-            map_submission(host.submit_manual(WorktreeRuntimeManualRequest::dry_run(
-                self.manual_budget,
-            )))
+            map_submission(
+                host.submit_manual(WorktreeRuntimeManualRequest::dry_run(self.manual_budget)),
+            )
         })
     }
 }
