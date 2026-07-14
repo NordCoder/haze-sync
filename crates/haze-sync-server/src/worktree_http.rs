@@ -64,9 +64,7 @@ impl ServerWorktreeHttpControl {
             ServerWorktreeManualAvailability::Shutdown => {
                 return ServerWorktreeSyncSubmission::Shutdown
             }
-            ServerWorktreeManualAvailability::Busy => {
-                return ServerWorktreeSyncSubmission::Busy
-            }
+            ServerWorktreeManualAvailability::Busy => return ServerWorktreeSyncSubmission::Busy,
             ServerWorktreeManualAvailability::Available => {}
         }
 
@@ -76,12 +74,8 @@ impl ServerWorktreeHttpControl {
                 ServerWorktreeSyncSubmission::Accepted
             }
             WorktreeRuntimeManualSubmission::Busy => ServerWorktreeSyncSubmission::Busy,
-            WorktreeRuntimeManualSubmission::NotStarted => {
-                ServerWorktreeSyncSubmission::NotStarted
-            }
-            WorktreeRuntimeManualSubmission::Cancelling => {
-                ServerWorktreeSyncSubmission::Cancelling
-            }
+            WorktreeRuntimeManualSubmission::NotStarted => ServerWorktreeSyncSubmission::NotStarted,
+            WorktreeRuntimeManualSubmission::Cancelling => ServerWorktreeSyncSubmission::Cancelling,
             WorktreeRuntimeManualSubmission::Shutdown => ServerWorktreeSyncSubmission::Shutdown,
         }
     }
