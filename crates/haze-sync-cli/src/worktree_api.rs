@@ -8,9 +8,9 @@ use crate::{
     output::CliOutput,
 };
 use haze_sync_api::dto::worktree::{
-    WorktreeConfiguredMode, WorktreeHostLifecycle, WorktreeManualAvailability,
-    WorktreeReadiness, WorktreeReadinessReason, WorktreeStatusResponse,
-    WorktreeSyncOnceRequest, WorktreeSyncOnceResponse, WorktreeSyncOnceSubmissionStatus,
+    WorktreeConfiguredMode, WorktreeHostLifecycle, WorktreeManualAvailability, WorktreeReadiness,
+    WorktreeReadinessReason, WorktreeStatusResponse, WorktreeSyncOnceRequest,
+    WorktreeSyncOnceResponse, WorktreeSyncOnceSubmissionStatus,
 };
 
 pub const WORKTREE_STATUS_PATH: &str = "/v1/admin/worktree/status";
@@ -21,36 +21,36 @@ pub struct WorktreeStatusRequest;
 
 impl WorktreeStatusRequest {
     #[must_use]
-    pub const fn method(self) -> &'static str { "GET" }
+    pub const fn method(self) -> &'static str {
+        "GET"
+    }
+
     #[must_use]
-    pub const fn path(self) -> &'static str { WORKTREE_STATUS_PATH }
+    pub const fn path(self) -> &'static str {
+        WORKTREE_STATUS_PATH
+    }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct WorktreeSyncRequest { pub body: WorktreeSyncOnceRequest }
-
-impl Default for WorktreeSyncRequest {
-    fn default() -> Self { Self { body: WorktreeSyncOnceRequest::default() } }
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct WorktreeSyncRequest {
+    pub body: WorktreeSyncOnceRequest,
 }
 
 impl WorktreeSyncRequest {
     #[must_use]
-    pub const fn method(self) -> &'static str { "POST" }
-    #[must_use]
-    pub const fn path(self) -> &'static str { WORKTREE_SYNC_ONCE_PATH }
-    #[must_use]
-    pub const fn body_json(self) -> &'static str { "{}" }
-}
+    pub const fn method(self) -> &'static str {
+        "POST"
+    }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum WorktreeHttpStatus {
-    Ok,
-    Accepted,
-    Unauthorized,
-    Forbidden,
-    Conflict,
-    ServiceUnavailable,
-    InternalServerError,
+    #[must_use]
+    pub const fn path(self) -> &'static str {
+        WORKTREE_SYNC_ONCE_PATH
+    }
+
+    #[must_use]
+    pub const fn body_json(self) -> &'static str {
+        "{}"
+    }
 }
 
 pub trait WorktreeClient {
@@ -58,13 +58,13 @@ pub trait WorktreeClient {
         &self,
         server_url: &ServerUrl,
         request: WorktreeStatusRequest,
-    ) -> Result<(WorktreeHttpStatus, WorktreeStatusResponse), WorktreeClientError>;
+    ) -> Result<(u16, WorktreeStatusResponse), WorktreeClientError>;
 
     fn submit_worktree_sync_once(
         &self,
         server_url: &ServerUrl,
         request: WorktreeSyncRequest,
-    ) -> Result<(WorktreeHttpStatus, WorktreeSyncOnceResponse), WorktreeClientError>;
+    ) -> Result<(u16, WorktreeSyncOnceResponse), WorktreeClientError>;
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -75,7 +75,7 @@ impl WorktreeClient for DeferredWorktreeClient {
         &self,
         _server_url: &ServerUrl,
         _request: WorktreeStatusRequest,
-    ) -> Result<(WorktreeHttpStatus, WorktreeStatusResponse), WorktreeClientError> {
+    ) -> Result<(u16, WorktreeStatusResponse), WorktreeClientError> {
         Err(WorktreeClientError::ServerUnavailable)
     }
 
@@ -83,7 +83,7 @@ impl WorktreeClient for DeferredWorktreeClient {
         &self,
         _server_url: &ServerUrl,
         _request: WorktreeSyncRequest,
-    ) -> Result<(WorktreeHttpStatus, WorktreeSyncOnceResponse), WorktreeClientError> {
+    ) -> Result<(u16, WorktreeSyncOnceResponse), WorktreeClientError> {
         Err(WorktreeClientError::ServerUnavailable)
     }
 }
@@ -94,27 +94,44 @@ pub enum WorktreeClientError {
     Unauthorized,
     Forbidden,
     Busy,
-    Unavailable,
     Failed,
     ServerUnavailable,
     InvalidResponse,
 }
 
 impl WorktreeClientError {
-    fn message(self) -> &'static str {
-        match self {
-            Self::NotConfigured => "not configured: set a server URL before running Worktree operator commands",
-            Self::Unauthorized => "auth error: admin token is missing or invalid; no token value was printed",
-            Self::Forbidden => "forbidden: configured token cannot operate the Worktree runtime",
-            Self::Busy => "worktree sync-once: busy; no additional cycle was submitted",
-            Self::Unavailable => "worktree sync-once: unavailable; the hosted runtime cannot accept a cycle",
-            Self::Failed => "worktree sync-once: failed; Server rejected the bounded cycle request",
-            Self::ServerUnavailable => "server unavailable: Worktree operator request could not be completed safely",
-            Self::InvalidResponse => "invalid response: Server Worktree response did not match the accepted contract",
+    fn from_error_http_status(status: u16) -> Option<Self> {
+        match status {
+            401 => Some(Self::Unauthorized),
+            403 => Some(Self::Forbidden),
+            500 | 503 => Some(Self::ServerUnavailable),
+            _ => None,
         }
     }
 
-    fn into_output(self) -> CliOutput { CliOutput::runtime_error(self.message()) }
+    fn message(self) -> &'static str {
+        match self {
+            Self::NotConfigured => {
+                "not configured: set a server URL before running Worktree operator commands"
+            }
+            Self::Unauthorized => {
+                "auth error: admin token is missing or invalid; no token value was printed"
+            }
+            Self::Forbidden => "forbidden: configured token cannot operate the Worktree runtime",
+            Self::Busy => "worktree sync-once: busy; no additional cycle was submitted",
+            Self::Failed => "worktree sync-once: failed; Server rejected the bounded cycle request",
+            Self::ServerUnavailable => {
+                "server unavailable: Worktree operator request could not be completed safely"
+            }
+            Self::InvalidResponse => {
+                "invalid response: Server Worktree response did not match the accepted contract"
+            }
+        }
+    }
+
+    fn into_output(self) -> CliOutput {
+        CliOutput::runtime_error(self.message())
+    }
 }
 
 #[must_use]
@@ -126,9 +143,13 @@ where
         return WorktreeClientError::NotConfigured.into_output();
     };
 
-    match client.fetch_worktree_status(server_url, WorktreeStatusRequest) {
-        Ok((WorktreeHttpStatus::Ok, response)) => CliOutput::success(render_status(response)),
-        Ok(_) => WorktreeClientError::InvalidResponse.into_output(),
+    let request = WorktreeStatusRequest;
+    let _request_contract = (request.method(), request.path());
+    match client.fetch_worktree_status(server_url, request) {
+        Ok((200, response)) => CliOutput::success(render_status(response)),
+        Ok((status, _)) => WorktreeClientError::from_error_http_status(status)
+            .unwrap_or(WorktreeClientError::InvalidResponse)
+            .into_output(),
         Err(error) => error.into_output(),
     }
 }
@@ -142,28 +163,32 @@ where
         return WorktreeClientError::NotConfigured.into_output();
     };
 
-    match client.submit_worktree_sync_once(server_url, WorktreeSyncRequest::default()) {
+    let request = WorktreeSyncRequest::default();
+    let _request_contract = (request.method(), request.path(), request.body_json());
+    match client.submit_worktree_sync_once(server_url, request) {
         Ok((status, response)) => classify_sync_response(status, response),
         Err(error) => error.into_output(),
     }
 }
 
-fn classify_sync_response(http_status: WorktreeHttpStatus, response: WorktreeSyncOnceResponse) -> CliOutput {
-    use WorktreeHttpStatus as Http;
+fn classify_sync_response(http_status: u16, response: WorktreeSyncOnceResponse) -> CliOutput {
     use WorktreeSyncOnceSubmissionStatus as Body;
 
     match (http_status, response.status) {
-        (Http::Accepted, Body::Accepted) => CliOutput::success(
+        (202, Body::Accepted) => CliOutput::success(
             "worktree sync-once: accepted\ncycle: submitted or queued\ncompletion: not awaited",
         ),
-        (Http::Conflict, Body::Busy) => WorktreeClientError::Busy.into_output(),
-        (Http::ServiceUnavailable, Body::NotStarted | Body::Cancelling | Body::Shutdown | Body::Unavailable) => {
+        (409, Body::Busy) => WorktreeClientError::Busy.into_output(),
+        (503, Body::NotStarted | Body::Cancelling | Body::Shutdown | Body::Unavailable) => {
             CliOutput::runtime_error(format!(
                 "worktree sync-once: {}\ncycle: not submitted",
                 submission_status(response.status)
             ))
         }
-        (Http::InternalServerError, Body::Failed) => WorktreeClientError::Failed.into_output(),
+        (500, Body::Failed) => WorktreeClientError::Failed.into_output(),
+        (401 | 403, _) => WorktreeClientError::from_error_http_status(http_status)
+            .expect("matched authentication status")
+            .into_output(),
         _ => WorktreeClientError::InvalidResponse.into_output(),
     }
 }
@@ -258,19 +283,33 @@ mod tests {
     use std::cell::RefCell;
 
     struct FakeClient {
-        status: Result<(WorktreeHttpStatus, WorktreeStatusResponse), WorktreeClientError>,
-        sync: Result<(WorktreeHttpStatus, WorktreeSyncOnceResponse), WorktreeClientError>,
+        status: Result<(u16, WorktreeStatusResponse), WorktreeClientError>,
+        sync: Result<(u16, WorktreeSyncOnceResponse), WorktreeClientError>,
         requests: RefCell<Vec<(&'static str, &'static str, &'static str)>>,
     }
 
     impl WorktreeClient for FakeClient {
-        fn fetch_worktree_status(&self, _server_url: &ServerUrl, request: WorktreeStatusRequest) -> Result<(WorktreeHttpStatus, WorktreeStatusResponse), WorktreeClientError> {
-            self.requests.borrow_mut().push((request.method(), request.path(), ""));
+        fn fetch_worktree_status(
+            &self,
+            _server_url: &ServerUrl,
+            request: WorktreeStatusRequest,
+        ) -> Result<(u16, WorktreeStatusResponse), WorktreeClientError> {
+            self.requests
+                .borrow_mut()
+                .push((request.method(), request.path(), ""));
             self.status
         }
 
-        fn submit_worktree_sync_once(&self, _server_url: &ServerUrl, request: WorktreeSyncRequest) -> Result<(WorktreeHttpStatus, WorktreeSyncOnceResponse), WorktreeClientError> {
-            self.requests.borrow_mut().push((request.method(), request.path(), request.body_json()));
+        fn submit_worktree_sync_once(
+            &self,
+            _server_url: &ServerUrl,
+            request: WorktreeSyncRequest,
+        ) -> Result<(u16, WorktreeSyncOnceResponse), WorktreeClientError> {
+            self.requests.borrow_mut().push((
+                request.method(),
+                request.path(),
+                request.body_json(),
+            ));
             self.sync
         }
     }
@@ -284,7 +323,11 @@ mod tests {
         )
     }
 
-    fn status(lifecycle: WorktreeHostLifecycle, readiness: WorktreeReadiness, manual: WorktreeManualAvailability) -> WorktreeStatusResponse {
+    fn status(
+        lifecycle: WorktreeHostLifecycle,
+        readiness: WorktreeReadiness,
+        manual: WorktreeManualAvailability,
+    ) -> WorktreeStatusResponse {
         WorktreeStatusResponse::from_safe_parts(WorktreeStatusSafeParts {
             configured_mode: WorktreeConfiguredMode::DryRun,
             host_lifecycle: lifecycle,
@@ -305,25 +348,55 @@ mod tests {
         })
     }
 
-    fn fake(status_result: Result<(WorktreeHttpStatus, WorktreeStatusResponse), WorktreeClientError>, sync_result: Result<(WorktreeHttpStatus, WorktreeSyncOnceResponse), WorktreeClientError>) -> FakeClient {
-        FakeClient { status: status_result, sync: sync_result, requests: RefCell::new(Vec::new()) }
+    fn fake(
+        status: Result<(u16, WorktreeStatusResponse), WorktreeClientError>,
+        sync: Result<(u16, WorktreeSyncOnceResponse), WorktreeClientError>,
+    ) -> FakeClient {
+        FakeClient {
+            status,
+            sync,
+            requests: RefCell::new(Vec::new()),
+        }
     }
 
     #[test]
     fn exact_requests_and_empty_body_are_used() {
         let client = fake(
-            Ok((WorktreeHttpStatus::Ok, status(WorktreeHostLifecycle::Disabled, WorktreeReadiness::Ready, WorktreeManualAvailability::Unavailable))),
-            Ok((WorktreeHttpStatus::Accepted, WorktreeSyncOnceResponse::submitted(WorktreeSyncOnceSubmissionStatus::Accepted))),
+            Ok((
+                200,
+                status(
+                    WorktreeHostLifecycle::Disabled,
+                    WorktreeReadiness::Ready,
+                    WorktreeManualAvailability::Unavailable,
+                ),
+            )),
+            Ok((
+                202,
+                WorktreeSyncOnceResponse::submitted(WorktreeSyncOnceSubmissionStatus::Accepted),
+            )),
         );
         let _ = render_worktree_status(&configured(), &client);
         let _ = render_worktree_sync_once(&configured(), &client);
-        assert_eq!(*client.requests.borrow(), vec![("GET", WORKTREE_STATUS_PATH, ""), ("POST", WORKTREE_SYNC_ONCE_PATH, "{}")]);
+        assert_eq!(
+            *client.requests.borrow(),
+            vec![
+                ("GET", WORKTREE_STATUS_PATH, ""),
+                ("POST", WORKTREE_SYNC_ONCE_PATH, "{}"),
+            ]
+        );
     }
 
     #[test]
     fn running_busy_remains_ready_and_extreme_counters_render() {
         let client = fake(
-            Ok((WorktreeHttpStatus::Ok, status(WorktreeHostLifecycle::Running, WorktreeReadiness::Ready, WorktreeManualAvailability::Busy))),
+            Ok((
+                200,
+                status(
+                    WorktreeHostLifecycle::Running,
+                    WorktreeReadiness::Ready,
+                    WorktreeManualAvailability::Busy,
+                ),
+            )),
             Err(WorktreeClientError::ServerUnavailable),
         );
         let output = render_worktree_status(&configured(), &client);
@@ -336,13 +409,13 @@ mod tests {
     #[test]
     fn every_sync_outcome_has_exact_exit_classification() {
         let cases = [
-            (WorktreeHttpStatus::Accepted, WorktreeSyncOnceSubmissionStatus::Accepted, CliExitCode::Success),
-            (WorktreeHttpStatus::Conflict, WorktreeSyncOnceSubmissionStatus::Busy, CliExitCode::RuntimeError),
-            (WorktreeHttpStatus::ServiceUnavailable, WorktreeSyncOnceSubmissionStatus::NotStarted, CliExitCode::RuntimeError),
-            (WorktreeHttpStatus::ServiceUnavailable, WorktreeSyncOnceSubmissionStatus::Cancelling, CliExitCode::RuntimeError),
-            (WorktreeHttpStatus::ServiceUnavailable, WorktreeSyncOnceSubmissionStatus::Shutdown, CliExitCode::RuntimeError),
-            (WorktreeHttpStatus::ServiceUnavailable, WorktreeSyncOnceSubmissionStatus::Unavailable, CliExitCode::RuntimeError),
-            (WorktreeHttpStatus::InternalServerError, WorktreeSyncOnceSubmissionStatus::Failed, CliExitCode::RuntimeError),
+            (202, WorktreeSyncOnceSubmissionStatus::Accepted, CliExitCode::Success),
+            (409, WorktreeSyncOnceSubmissionStatus::Busy, CliExitCode::RuntimeError),
+            (503, WorktreeSyncOnceSubmissionStatus::NotStarted, CliExitCode::RuntimeError),
+            (503, WorktreeSyncOnceSubmissionStatus::Cancelling, CliExitCode::RuntimeError),
+            (503, WorktreeSyncOnceSubmissionStatus::Shutdown, CliExitCode::RuntimeError),
+            (503, WorktreeSyncOnceSubmissionStatus::Unavailable, CliExitCode::RuntimeError),
+            (500, WorktreeSyncOnceSubmissionStatus::Failed, CliExitCode::RuntimeError),
         ];
         for (http, body, expected) in cases {
             let output = classify_sync_response(http, WorktreeSyncOnceResponse::submitted(body));
@@ -356,14 +429,20 @@ mod tests {
 
     #[test]
     fn mismatched_http_and_body_are_rejected() {
-        let output = classify_sync_response(WorktreeHttpStatus::Accepted, WorktreeSyncOnceResponse::submitted(WorktreeSyncOnceSubmissionStatus::Busy));
+        let output = classify_sync_response(
+            202,
+            WorktreeSyncOnceResponse::submitted(WorktreeSyncOnceSubmissionStatus::Busy),
+        );
         assert_eq!(output.exit_code, CliExitCode::RuntimeError);
         assert!(output.stderr.contains("invalid response"));
     }
 
     #[test]
     fn configuration_and_auth_errors_are_safe() {
-        let client = fake(Err(WorktreeClientError::Unauthorized), Err(WorktreeClientError::Forbidden));
+        let client = fake(
+            Err(WorktreeClientError::Unauthorized),
+            Err(WorktreeClientError::Forbidden),
+        );
         let missing = render_worktree_status(&CliConfig::default(), &client);
         let unauthorized = render_worktree_status(&configured(), &client);
         let forbidden = render_worktree_sync_once(&configured(), &client);
@@ -371,7 +450,15 @@ mod tests {
         assert!(unauthorized.stderr.contains("auth error"));
         assert!(forbidden.stderr.contains("forbidden"));
         for output in [missing, unauthorized, forbidden] {
-            for marker in ["bearer", "route_test_token", "token_hash", "postgres://", "/srv/", "ticket", "generation"] {
+            for marker in [
+                "bearer",
+                "route_test_token",
+                "token_hash",
+                "postgres://",
+                "/srv/",
+                "ticket",
+                "generation",
+            ] {
                 assert!(!output.stdout.to_lowercase().contains(marker));
                 assert!(!output.stderr.to_lowercase().contains(marker));
             }
