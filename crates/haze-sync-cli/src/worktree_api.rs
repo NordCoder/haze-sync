@@ -409,13 +409,41 @@ mod tests {
     #[test]
     fn every_sync_outcome_has_exact_exit_classification() {
         let cases = [
-            (202, WorktreeSyncOnceSubmissionStatus::Accepted, CliExitCode::Success),
-            (409, WorktreeSyncOnceSubmissionStatus::Busy, CliExitCode::RuntimeError),
-            (503, WorktreeSyncOnceSubmissionStatus::NotStarted, CliExitCode::RuntimeError),
-            (503, WorktreeSyncOnceSubmissionStatus::Cancelling, CliExitCode::RuntimeError),
-            (503, WorktreeSyncOnceSubmissionStatus::Shutdown, CliExitCode::RuntimeError),
-            (503, WorktreeSyncOnceSubmissionStatus::Unavailable, CliExitCode::RuntimeError),
-            (500, WorktreeSyncOnceSubmissionStatus::Failed, CliExitCode::RuntimeError),
+            (
+                202,
+                WorktreeSyncOnceSubmissionStatus::Accepted,
+                CliExitCode::Success,
+            ),
+            (
+                409,
+                WorktreeSyncOnceSubmissionStatus::Busy,
+                CliExitCode::RuntimeError,
+            ),
+            (
+                503,
+                WorktreeSyncOnceSubmissionStatus::NotStarted,
+                CliExitCode::RuntimeError,
+            ),
+            (
+                503,
+                WorktreeSyncOnceSubmissionStatus::Cancelling,
+                CliExitCode::RuntimeError,
+            ),
+            (
+                503,
+                WorktreeSyncOnceSubmissionStatus::Shutdown,
+                CliExitCode::RuntimeError,
+            ),
+            (
+                503,
+                WorktreeSyncOnceSubmissionStatus::Unavailable,
+                CliExitCode::RuntimeError,
+            ),
+            (
+                500,
+                WorktreeSyncOnceSubmissionStatus::Failed,
+                CliExitCode::RuntimeError,
+            ),
         ];
         for (http, body, expected) in cases {
             let output = classify_sync_response(http, WorktreeSyncOnceResponse::submitted(body));
