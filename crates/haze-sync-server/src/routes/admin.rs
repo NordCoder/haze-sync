@@ -25,8 +25,7 @@ use haze_sync_api::{
             PauseStatusSummary, ServerStatus, StatusSummaryResponse,
         },
         worktree::{
-            try_worktree_status_response, worktree_sync_once_response,
-            WorktreeAdminAuthRequirement,
+            try_worktree_status_response, worktree_sync_once_response, WorktreeAdminAuthRequirement,
         },
     },
 };
@@ -40,9 +39,9 @@ use crate::{
     state::ServerAppState,
     worktree_http::ServerWorktreeSyncSubmission,
     worktree_status::{
-        ServerWorktreeHostLifecycle, ServerWorktreeManualAvailability,
-        ServerWorktreeModeCategory, ServerWorktreeReadinessCategory,
-        ServerWorktreeReadinessReason, ServerWorktreeStatusSnapshot,
+        ServerWorktreeHostLifecycle, ServerWorktreeManualAvailability, ServerWorktreeModeCategory,
+        ServerWorktreeReadinessCategory, ServerWorktreeReadinessReason,
+        ServerWorktreeStatusSnapshot,
     },
 };
 
@@ -136,9 +135,7 @@ fn public_worktree_status(snapshot: ServerWorktreeStatusSnapshot) -> WorktreeSta
             ServerWorktreeReadinessCategory::NotReady => WorktreeReadiness::NotReady,
         },
         readiness_reason: match snapshot.readiness_reason {
-            ServerWorktreeReadinessReason::DisabledInert => {
-                WorktreeReadinessReason::DisabledInert
-            }
+            ServerWorktreeReadinessReason::DisabledInert => WorktreeReadinessReason::DisabledInert,
             ServerWorktreeReadinessReason::Running => WorktreeReadinessReason::Running,
             ServerWorktreeReadinessReason::Starting => WorktreeReadinessReason::Starting,
             ServerWorktreeReadinessReason::Cancelling => WorktreeReadinessReason::Cancelling,
@@ -152,12 +149,8 @@ fn public_worktree_status(snapshot: ServerWorktreeStatusSnapshot) -> WorktreeSta
         manual_availability: match snapshot.manual_availability {
             ServerWorktreeManualAvailability::Available => WorktreeManualAvailability::Available,
             ServerWorktreeManualAvailability::Busy => WorktreeManualAvailability::Busy,
-            ServerWorktreeManualAvailability::NotStarted => {
-                WorktreeManualAvailability::NotStarted
-            }
-            ServerWorktreeManualAvailability::Cancelling => {
-                WorktreeManualAvailability::Cancelling
-            }
+            ServerWorktreeManualAvailability::NotStarted => WorktreeManualAvailability::NotStarted,
+            ServerWorktreeManualAvailability::Cancelling => WorktreeManualAvailability::Cancelling,
             ServerWorktreeManualAvailability::Shutdown => WorktreeManualAvailability::Shutdown,
             ServerWorktreeManualAvailability::Unavailable => {
                 WorktreeManualAvailability::Unavailable
@@ -175,10 +168,9 @@ fn public_worktree_submission(
             StatusCode::ACCEPTED,
             WorktreeSyncOnceSubmissionStatus::Accepted,
         ),
-        ServerWorktreeSyncSubmission::Busy => (
-            StatusCode::CONFLICT,
-            WorktreeSyncOnceSubmissionStatus::Busy,
-        ),
+        ServerWorktreeSyncSubmission::Busy => {
+            (StatusCode::CONFLICT, WorktreeSyncOnceSubmissionStatus::Busy)
+        }
         ServerWorktreeSyncSubmission::NotStarted => (
             StatusCode::SERVICE_UNAVAILABLE,
             WorktreeSyncOnceSubmissionStatus::NotStarted,
