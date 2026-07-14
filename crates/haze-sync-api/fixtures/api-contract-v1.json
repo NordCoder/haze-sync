@@ -1,0 +1,450 @@
+{
+  "schema_version": 1,
+  "server_info": {
+    "server_id": "haze-sync-fixture",
+    "protocol_version": 1,
+    "max_upload_bytes": 52428800,
+    "capabilities": [
+      "sha256",
+      "operation_log",
+      "tombstones",
+      "conflicts",
+      "conflict_center",
+      "batch_changes"
+    ]
+  },
+  "file_metadata": {
+    "path": "Notes/fixture.md",
+    "revision_id": "rev_fixture_0001",
+    "content_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "size_bytes": 128,
+    "updated_by": "obsidian-plugin",
+    "updated_at": "2026-01-01T00:00:00Z"
+  },
+  "put_file_outcomes": [
+    {
+      "status": "accepted",
+      "path": "Notes/fixture.md",
+      "revision_id": "rev_fixture_0002",
+      "seq": 41
+    },
+    {
+      "status": "conflict_saved",
+      "path": "Notes/fixture.md",
+      "conflict_id": "conf_fixture_0001",
+      "materialized_path": "_haze_conflicts/open/Notes/fixture.conflict.gdrive.md",
+      "policy_applied": "preserve_both",
+      "seq": 42
+    },
+    {
+      "status": "ignored",
+      "reason": "same_content",
+      "path": "Notes/fixture.md"
+    },
+    {
+      "status": "rejected",
+      "reason": "stale_base_revision",
+      "path": "Notes/fixture.md"
+    }
+  ],
+  "changes_page": {
+    "from_seq": 40,
+    "to_seq": 43,
+    "has_more": false,
+    "changes": [
+      {
+        "seq": 41,
+        "kind": "upsert_file",
+        "path": "Notes/fixture.md",
+        "revision_id": "rev_fixture_0002",
+        "content_sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "size_bytes": 128,
+        "updated_by": "obsidian-plugin",
+        "updated_at": "2026-01-01T00:01:00Z"
+      },
+      {
+        "seq": 42,
+        "kind": "delete_file",
+        "path": "Notes/old-fixture.md",
+        "tombstone_id": "tmb_fixture_0001",
+        "updated_by": "worktree-adapter",
+        "updated_at": "2026-01-01T00:02:00Z"
+      },
+      {
+        "seq": 43,
+        "kind": "conflict_created",
+        "path": "Notes/fixture.md",
+        "conflict_id": "conf_fixture_0001",
+        "updated_by": "gdrive-adapter",
+        "updated_at": "2026-01-01T00:03:00Z"
+      }
+    ]
+  },
+  "conflict_list_query": {
+    "status": "open"
+  },
+  "conflict_list": {
+    "conflicts": [
+      {
+        "conflict_id": "conf_fixture_0001",
+        "original_path": "Notes/fixture.md",
+        "conflict_path": "_haze_conflicts/open/Notes/fixture.conflict.gdrive.md",
+        "current_revision_id": "rev_fixture_0002",
+        "conflict_revision_id": "rev_fixture_conflict",
+        "incoming_revision_id": "rev_fixture_incoming",
+        "source_adapter_id": "gdrive-adapter",
+        "policy_applied": "preserve_both",
+        "status": "open",
+        "created_at": "2026-01-01T00:03:00Z",
+        "updated_at": "2026-01-01T00:04:00Z"
+      }
+    ]
+  },
+  "conflict_resolutions": [
+    {
+      "path_conflict_id": "conf_fixture_0001",
+      "request": {
+        "resolution": "accept_current"
+      },
+      "response": {
+        "status": "resolved",
+        "conflict_id": "conf_fixture_0001",
+        "resolution": "accept_current",
+        "seq": 44
+      }
+    },
+    {
+      "path_conflict_id": "conf_fixture_0001",
+      "request": {
+        "resolution": "accept_conflict"
+      },
+      "response": {
+        "status": "resolved",
+        "conflict_id": "conf_fixture_0001",
+        "resolution": "accept_conflict",
+        "seq": 45
+      }
+    },
+    {
+      "path_conflict_id": "conf_fixture_0001",
+      "request": {
+        "resolution": "keep_both"
+      },
+      "response": {
+        "status": "resolved",
+        "conflict_id": "conf_fixture_0001",
+        "resolution": "keep_both",
+        "seq": 46
+      }
+    },
+    {
+      "path_conflict_id": "conf_fixture_0001",
+      "request": {
+        "resolution": "mark_resolved"
+      },
+      "response": {
+        "status": "resolved",
+        "conflict_id": "conf_fixture_0001",
+        "resolution": "mark_resolved",
+        "seq": 47
+      }
+    }
+  ],
+  "delete_file_outcomes": [
+    {
+      "status": "tombstoned",
+      "path": "Notes/old-fixture.md",
+      "tombstone_id": "tmb_fixture_0001",
+      "seq": 48,
+      "retention_until": "2026-02-01T00:00:00Z"
+    },
+    {
+      "status": "not_found",
+      "path": "Notes/missing-fixture.md"
+    },
+    {
+      "status": "rejected",
+      "reason": "unsafe_delete",
+      "path": "Notes/protected-fixture.md"
+    }
+  ],
+  "public_errors": [
+    {
+      "error": {
+        "code": "invalid_path",
+        "message": "Invalid vault path"
+      }
+    },
+    {
+      "error": {
+        "code": "validation_error",
+        "message": "validation failed",
+        "request_id": "req_fixture_0001",
+        "details": {
+          "path": [
+            "must be vault-relative"
+          ],
+          "X-Base-Revision-Id": [
+            "must be a revision id or literal null"
+          ]
+        }
+      }
+    },
+    {
+      "error": {
+        "code": "internal_error",
+        "message": "Request failed safely"
+      }
+    }
+  ],
+  "admin": {
+    "status_summary": {
+      "server_status": "degraded",
+      "db_readiness_state": "ready",
+      "object_store_readiness_state": "not_ready",
+      "last_operation_sequence": 48,
+      "adapter_count": 2,
+      "pause": {
+        "supported": true,
+        "active": false
+      }
+    },
+    "adapter_list": {
+      "total_count": 2,
+      "adapters": [
+        {
+          "adapter_id": "gdrive-adapter",
+          "role": "gdrive_adapter",
+          "mode": "import_only",
+          "enabled": true,
+          "last_seen_at": "2026-01-01T00:05:00Z",
+          "cursor": {
+            "last_core_seq": 48,
+            "last_success_at": "2026-01-01T00:05:00Z",
+            "has_external_cursor": true
+          }
+        },
+        {
+          "adapter_id": "obsidian-plugin",
+          "role": "obsidian_plugin",
+          "mode": "bidirectional",
+          "enabled": true,
+          "last_seen_at": null,
+          "cursor": null
+        }
+      ]
+    },
+    "doctor_statuses": [
+      {
+        "server_status": "degraded",
+        "checks": [
+          {
+            "check": "database",
+            "status": "passed",
+            "readiness_state": "ready",
+            "checked_at": "2026-01-01T00:06:00Z"
+          },
+          {
+            "check": "object_store",
+            "status": "failed",
+            "readiness_state": "not_ready",
+            "checked_at": "2026-01-01T00:06:01Z"
+          },
+          {
+            "check": "operation_log",
+            "status": "skipped",
+            "readiness_state": "unknown"
+          },
+          {
+            "check": "adapter_registry",
+            "status": "not_run",
+            "readiness_state": "unknown"
+          }
+        ]
+      },
+      {
+        "server_status": "not_ready",
+        "checks": [
+          {
+            "check": "database",
+            "status": "placeholder",
+            "readiness_state": "unknown"
+          },
+          {
+            "check": "object_store",
+            "status": "placeholder",
+            "readiness_state": "unknown"
+          },
+          {
+            "check": "operation_log",
+            "status": "placeholder",
+            "readiness_state": "unknown"
+          },
+          {
+            "check": "adapter_registry",
+            "status": "placeholder",
+            "readiness_state": "unknown"
+          }
+        ]
+      }
+    ],
+    "adapter_operational_summaries": [
+      {
+        "adapter": {
+          "adapter_id": "gdrive-adapter",
+          "role": "gdrive_adapter",
+          "mode": "import_only",
+          "enabled": true,
+          "last_seen_at": "2026-01-01T00:05:00Z",
+          "cursor": {
+            "last_core_seq": 48,
+            "last_success_at": "2026-01-01T00:05:00Z",
+            "has_external_cursor": true
+          }
+        },
+        "runtime": {
+          "observation_status": "passed",
+          "state": "running",
+          "pause": {
+            "supported": true,
+            "active": false
+          }
+        }
+      },
+      {
+        "adapter": {
+          "adapter_id": "obsidian-plugin",
+          "role": "obsidian_plugin",
+          "mode": "bidirectional",
+          "enabled": true,
+          "last_seen_at": null,
+          "cursor": null
+        },
+        "runtime": {
+          "observation_status": "placeholder",
+          "state": null,
+          "pause": {
+            "supported": false,
+            "active": null
+          }
+        }
+      }
+    ]
+  },
+  "vocabulary": {
+    "server_capabilities": [
+      "sha256",
+      "operation_log",
+      "tombstones",
+      "conflicts",
+      "conflict_center",
+      "batch_changes"
+    ],
+    "put_statuses": [
+      "accepted",
+      "conflict_saved",
+      "ignored",
+      "rejected"
+    ],
+    "put_ignored_reasons": [
+      "same_content"
+    ],
+    "put_rejected_reasons": [
+      "hash_mismatch",
+      "stale_base_revision",
+      "ignored_path",
+      "validation_error",
+      "idempotency_conflict"
+    ],
+    "operation_kinds": [
+      "upsert_file",
+      "delete_file",
+      "restore_file",
+      "conflict_created",
+      "conflict_resolved",
+      "backup_created"
+    ],
+    "conflict_policies": [
+      "preserve_both",
+      "current_wins_with_incoming_backup"
+    ],
+    "conflict_statuses": [
+      "open",
+      "resolved",
+      "ignored"
+    ],
+    "conflict_resolution_actions": [
+      "accept_current",
+      "accept_conflict",
+      "keep_both",
+      "mark_resolved"
+    ],
+    "conflict_resolve_statuses": [
+      "resolved"
+    ],
+    "delete_statuses": [
+      "tombstoned",
+      "not_found",
+      "rejected"
+    ],
+    "delete_rejected_reasons": [
+      "stale_base_revision",
+      "unsafe_delete",
+      "idempotency_conflict",
+      "validation_error"
+    ],
+    "public_error_codes": [
+      "invalid_request",
+      "invalid_path",
+      "validation_error",
+      "unauthorized",
+      "missing_token",
+      "invalid_token",
+      "forbidden_role",
+      "not_found",
+      "conflict",
+      "idempotency_conflict",
+      "payload_too_large",
+      "rate_limited",
+      "unsafe_delete",
+      "ignored_path",
+      "internal_error"
+    ],
+    "server_statuses": [
+      "not_ready",
+      "ready",
+      "degraded",
+      "maintenance"
+    ],
+    "dependency_readiness_states": [
+      "unknown",
+      "ready",
+      "not_ready"
+    ],
+    "operational_check_statuses": [
+      "passed",
+      "failed",
+      "skipped",
+      "not_run",
+      "placeholder"
+    ],
+    "doctor_check_kinds": [
+      "database",
+      "object_store",
+      "operation_log",
+      "adapter_registry"
+    ],
+    "cursor_presence_states": [
+      "unknown",
+      "absent",
+      "present"
+    ],
+    "adapter_runtime_states": [
+      "unknown",
+      "disabled",
+      "idle",
+      "running",
+      "degraded"
+    ]
+  }
+}

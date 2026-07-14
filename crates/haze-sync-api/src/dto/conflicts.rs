@@ -105,56 +105,107 @@ pub struct ResolveConflictResponse {
 mod tests {
     use super::*;
 
+    fn conflict_summary() -> ConflictSummaryDto {
+        ConflictSummaryDto {
+            conflict_id: ConflictIdDto::from("conf_01J"),
+            path: VaultPathDto::from("Projects/Haze/plan.md"),
+            current_revision_id: RevisionIdDto::from("rev_124"),
+            incoming_revision_id: RevisionIdDto::from("rev_125"),
+            incoming_adapter_id: AdapterIdDto::from("worktree-adapter"),
+            policy_applied: ConflictPolicyDto::PreserveBoth,
+            materialized_path: VaultPathDto::from(
+                "_haze_conflicts/open/Projects/Haze/plan.conflict.worktree.md",
+            ),
+            created_at: TimestampDto::from("2026-07-01T22:30:00Z"),
+            status: ConflictStatusDto::Open,
+        }
+    }
+
     #[test]
     fn conflict_list_roundtrips_contract_json() {
         let response = ConflictListResponse {
-            conflicts: vec![ConflictSummaryDto {
-                conflict_id: ConflictIdDto::from("conf_01J"),
-                path: VaultPathDto::from("Projects/Haze/plan.md"),
-                current_revision_id: RevisionIdDto::from("rev_124"),
-                incoming_revision_id: RevisionIdDto::from("rev_125"),
-                incoming_adapter_id: AdapterIdDto::from("worktree-adapter"),
-                policy_applied: ConflictPolicyDto::PreserveBoth,
-                materialized_path: VaultPathDto::from(
-                    "_haze_conflicts/open/Projects/Haze/plan.conflict.worktree.md",
-                ),
-                created_at: TimestampDto::from("2026-07-01T22:30:00Z"),
-                status: ConflictStatusDto::Open,
-            }],
+            conflicts: vec![conflict_summary()],
         };
 
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("preserve_both"));
         assert!(json.contains("\"open\""));
+        assert!(json.contains("Projects/Haze/plan.md"));
+        assert!(json.contains("rev_124"));
+        assert!(json.contains("rev_125"));
+        assert!(!json.contains("raw_bytes"));
+        assert!(!json.contains("content_sha256"));
+        assert!(!json.contains("token"));
 
         let decoded: ConflictListResponse = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded, response);
     }
 
     #[test]
-    fn resolve_conflict_request_and_response_roundtrip_json() {
-        let request = ResolveConflictRequest {
-            resolution: ConflictResolutionDto::AcceptCurrent,
-        };
-        let response = ResolveConflictResponse {
-            status: ConflictResolveStatusDto::Resolved,
-            conflict_id: ConflictIdDto::from("conf_01J"),
-            resolution: ConflictResolutionDto::AcceptCurrent,
-            seq: 12_390,
+    fn conflict_detail_roundtrips_safe_paths_and_revision_metadata() {
+        let detail = ConflictDetailSummaryDto {
+            conflict_id: ConflictIdDto::from("conf_01JDETAIL"),
+            original_path: VaultPathDto::from("Projects/Haze/plan.md"),
+            base_revision_id: None,
+            current_revision_id: RevisionIdDto::from("rev_current"),
+            incoming_revision_id: RevisionIdDto::from("rev_incoming"),
+            incoming_adapter_id: AdapterIdDto::from("obsidian-plugin"),
+            policy_applied: ConflictPolicyDto::CurrentWinsWithIncomingBackup,
+            materialized_path: VaultPathDto::from(
+                "_haze_conflicts/open/Projects/Haze/plan.conflict.obsidian.md",
+            ),
+            status: ConflictStatusDto::Open,
+            created_at: TimestampDto::from("2026-07-10T08:00:00Z"),
+            resolved_at: None,
+            resolved_by: None,
         };
 
-        let request_json = serde_json::to_string(&request).unwrap();
-        let response_json = serde_json::to_string(&response).unwrap();
+        let json = serde_json::to_string(&detail).unwrap();
+        assert!(json.contains("\"base_revision_id\":null"));
+        assert!(json.contains("rev_current"));
+        assert!(json.contains("rev_incoming"));
+        assert!(json.contains("_haze_conflicts/open/"));
+        assert!(!json.contains("resolved_at"));
+        assert!(!json.contains("resolved_by"));
+        assert!(!json.contains("content_sha256"));
+        assert!(!json.contains("raw_bytes"));
+        assert!(!json.contains("provider_payload"));
 
-        assert!(request_json.contains("accept_current"));
-        assert!(response_json.contains("resolved"));
-        assert_eq!(
-            serde_json::from_str::<ResolveConflictRequest>(&request_json).unwrap(),
-            request
-        );
-        assert_eq!(
-            serde_json::from_str::<ResolveConflictResponse>(&response_json).unwrap(),
-            response
-        );
+        let decoded: ConflictDetailSummaryDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded, detail);
+    }
+
+    #[test]
+    fn all_resolve_actions_roundtrip_in_request_and_response_json() {
+        for action in [
+            ConflictResolutionDto::AcceptCurrent,
+            ConflictResolutionDto::AcceptConflict,
+            ConflictResolutionDto::KeepBoth,
+            ConflictResolutionDto::MarkResolved,
+        ] {
+            let request = ResolveConflictRequest {
+                resolution: action.clone(),
+            };
+            let response = ResolveConflictResponse {
+                status: ConflictResolveStatusDto::Resolved,
+                conflict_id: ConflictIdDto::from("conf_01J"),
+                resolution: action,
+                seq: 12_390,
+            };
+
+            let request_json = serde_json::to_string(&request).unwrap();
+            let response_json = serde_json::to_string(&response).unwrap();
+
+            assert_eq!(
+                serde_json::from_str::<ResolveConflictRequest>(&request_json).unwrap(),
+                request
+            );
+            assert_eq!(
+                serde_json::from_str::<ResolveConflictResponse>(&response_json).unwrap(),
+                response
+            );
+            assert!(response_json.contains("resolved"));
+            assert!(!response_json.contains("raw_bytes"));
+        }
     }
 }
