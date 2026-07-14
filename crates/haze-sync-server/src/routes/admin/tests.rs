@@ -22,7 +22,10 @@ async fn dependency_free_admin_status_reports_checked_readiness() {
     let payload = status_from_state(&ServerAppState::dependency_free()).await;
     let json = serde_json::to_string(&payload).expect("status should serialize");
     assert_eq!(payload.server_status, ServerStatus::NotReady);
-    assert_eq!(payload.db_readiness_state, DependencyReadinessState::NotReady);
+    assert_eq!(
+        payload.db_readiness_state,
+        DependencyReadinessState::NotReady
+    );
     assert_eq!(
         payload.object_store_readiness_state,
         DependencyReadinessState::NotReady
@@ -41,7 +44,10 @@ async fn unavailable_database_keeps_admin_status_readable() {
     let payload = status_from_state(&state).await;
     let json = serde_json::to_string(&payload).expect("status should serialize");
     assert_eq!(payload.server_status, ServerStatus::NotReady);
-    assert_eq!(payload.db_readiness_state, DependencyReadinessState::NotReady);
+    assert_eq!(
+        payload.db_readiness_state,
+        DependencyReadinessState::NotReady
+    );
     assert_eq!(payload.last_operation_sequence, None);
     assert_eq!(payload.adapter_count, None);
     assert_no_sensitive_leaks(&json);
@@ -57,8 +63,8 @@ fn empty_adapter_list_payload_is_safe() {
 
 #[test]
 fn worktree_status_mapping_preserves_ready_busy_and_counts() {
-    let response = try_worktree_status_response(public_worktree_status(
-        ServerWorktreeStatusSnapshot {
+    let response =
+        try_worktree_status_response(public_worktree_status(ServerWorktreeStatusSnapshot {
             mode: ServerWorktreeModeCategory::DryRun,
             lifecycle: ServerWorktreeHostLifecycle::Running,
             readiness: ServerWorktreeReadinessCategory::Ready,
@@ -68,11 +74,13 @@ fn worktree_status_mapping_preserves_ready_busy_and_counts() {
             cycle_in_progress: true,
             pending_watcher_hints: 23,
             manual_availability: ServerWorktreeManualAvailability::Busy,
-        },
-    ))
-    .unwrap();
+        }))
+        .unwrap();
     assert!(response.is_ready());
-    assert_eq!(response.manual_availability, WorktreeManualAvailability::Busy);
+    assert_eq!(
+        response.manual_availability,
+        WorktreeManualAvailability::Busy
+    );
     assert_eq!(response.cycles_failed, 9);
     assert_eq!(response.pending_watcher_hints, 23);
     assert_no_sensitive_leaks(&serde_json::to_string(&response).unwrap());
@@ -81,8 +89,16 @@ fn worktree_status_mapping_preserves_ready_busy_and_counts() {
 #[test]
 fn every_sync_submission_has_exact_http_and_json_mapping() {
     for (internal, expected_status, expected_wire) in [
-        (ServerWorktreeSyncSubmission::Accepted, StatusCode::ACCEPTED, "accepted"),
-        (ServerWorktreeSyncSubmission::Busy, StatusCode::CONFLICT, "busy"),
+        (
+            ServerWorktreeSyncSubmission::Accepted,
+            StatusCode::ACCEPTED,
+            "accepted",
+        ),
+        (
+            ServerWorktreeSyncSubmission::Busy,
+            StatusCode::CONFLICT,
+            "busy",
+        ),
         (
             ServerWorktreeSyncSubmission::NotStarted,
             StatusCode::SERVICE_UNAVAILABLE,
@@ -122,7 +138,14 @@ async fn worktree_routes_require_admin_and_use_fixed_absent_control_responses() 
     let admin = principal_state(AdapterRole::Admin);
     let non_admin = principal_state(AdapterRole::WorktreeAdapter);
 
-    let (status, json) = request(admin.clone(), "GET", "/v1/admin/worktree/status", Body::empty(), true).await;
+    let (status, json) = request(
+        admin.clone(),
+        "GET",
+        "/v1/admin/worktree/status",
+        Body::empty(),
+        true,
+    )
+    .await;
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(json["error"]["code"], "internal_error");
 
@@ -170,7 +193,9 @@ async fn worktree_routes_require_admin_and_use_fixed_absent_control_responses() 
     .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert_eq!(json["error"]["code"], "missing_token");
-    assert_no_sensitive_leaks(&json.to_string());
+    let rendered = json.to_string();
+    assert!(!rendered.contains("request-body-secret"));
+    assert!(!rendered.contains("route_test_token"));
 }
 
 #[test]
