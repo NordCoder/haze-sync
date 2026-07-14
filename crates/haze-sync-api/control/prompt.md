@@ -1,5 +1,7 @@
 # W1-API-P8-PRE-SYNC — Synchronize API branch with current main
 
+> ACTIVE SLOT OVERRIDE: the previous `API-P8-BLOCKED-BY-SRV-P7B4` dependency hold is resolved. This prompt is executable now. Do not use an older control snapshot that says `BLOCKED_BY_DEPENDENCY`.
+
 Before starting, name this worker chat exactly:
 
 `api — W1 API-P8 Main Sync`
@@ -13,15 +15,20 @@ Phase: API-P8-PRE-SYNC
 
 Do not merge PR #44, change draft state, rewrite history, modify sibling branches, or begin API-P8 product work before synchronization is complete.
 
+## Resolved dependencies
+
+- SRV-P7B5 is `CLEAN_ACCEPT`;
+- accepted Server SHA: `1d1fc8ca62c97db041cca09dd8316370285dfba1`;
+- Server clean report commit: `23b49dff38c8b6997193b6224681feada3e09c1e`;
+- Server clean report blob: `2416d7280883761bf90117a7e3dbfc41147756b9`;
+- no dependency blocker remains for this pre-sync slot.
+
 ## Coordinates
 
-- current API branch head before sync: `c07c3d76990c12cac468bfda8c5dcb3637d97485`;
+- API branch head before orchestration updates: `c07c3d76990c12cac468bfda8c5dcb3637d97485`;
 - current main SHA: `c1e69a664388b0cba028170e8398b9088218957d`;
-- branch relation: diverged; API branch is behind main by 152 commits and has 12 API-local commits;
-- accepted API-P7C code-bearing SHA: `3109c0fd9b456ca5fd8db099cd83843dae44cef9`;
-- accepted Server SRV-P7B5 SHA: `1d1fc8ca62c97db041cca09dd8316370285dfba1`;
-- Server clean report commit: `23b49dff38c8b6997193b6224681feada3e09c1e`;
-- Server clean report blob: `2416d7280883761bf90117a7e3dbfc41147756b9`.
+- branch relation at assignment: diverged; API branch was behind main by 152 commits and had 12 API-local commits;
+- accepted API-P7C code-bearing SHA: `3109c0fd9b456ca5fd8db099cd83843dae44cef9`.
 
 ## Task
 
