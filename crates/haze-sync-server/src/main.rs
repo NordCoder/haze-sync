@@ -4,7 +4,7 @@
 //! object store, constructs one joined Worktree runtime host, and serves Axum
 //! until graceful shutdown. The Worktree host remains internal to Server.
 
-use std::{error::Error, fmt, fs, process::ExitCode};
+use std::{error::Error, fmt, fs, process::ExitCode, sync::Arc};
 
 use tokio::net::TcpListener;
 
@@ -13,6 +13,7 @@ use crate::{
     db::DbRuntimeError,
     state::ServerAppState,
     worktree_host::{ServerWorktreeHostConfig, ServerWorktreeHostError, ServerWorktreeRuntimeHost},
+    worktree_http::ServerWorktreeHttpControl,
 };
 
 mod application;
@@ -24,6 +25,7 @@ pub mod routes;
 pub mod state;
 mod worktree_executor;
 mod worktree_host;
+mod worktree_http;
 #[allow(dead_code)]
 mod worktree_runtime;
 mod worktree_status;
@@ -62,13 +64,19 @@ async fn run_with_config(config: ServerConfig) -> Result<(), StartupError> {
             ServerWorktreeHostError::RuntimeFailed,
         ))?;
     let host_config = ServerWorktreeHostConfig::from_adapter_mode(config.worktree.mode)?;
-    let worktree_host =
-        ServerWorktreeRuntimeHost::start(host_config, config.worktree.root.clone(), pool, services)
-            .await?;
-    let _manual_submission_boundary = ServerWorktreeRuntimeHost::submit_manual;
-    let _legacy_status_boundary = ServerWorktreeRuntimeHost::status;
-    let _status_snapshot_boundary = ServerWorktreeRuntimeHost::snapshot;
-    let _readiness_boundary = crate::worktree_status::ServerWorktreeStatusSnapshot::is_ready;
+    let manual_budget = host_config.action_budget;
+    let worktree_host = Arc::new(
+        ServerWorktreeRuntimeHost::start(
+            host_config,
+            config.worktree.root.clone(),
+            pool,
+            services,
+        )
+        .await?,
+    );
+    let worktree_control =
+        ServerWorktreeHttpControl::new(Arc::downgrade(&worktree_host), manual_budget);
+    let state = state.with_worktree_control(worktree_control);
 
     let listener = TcpListener::bind(listen_addr)
         .await
@@ -77,7 +85,10 @@ async fn run_with_config(config: ServerConfig) -> Result<(), StartupError> {
         .with_graceful_shutdown(shutdown_signal())
         .await
         .map_err(|_error| StartupError::ServeFailed);
-    let host_result = worktree_host.shutdown().await.map(|_| ());
+    let host_result = match Arc::try_unwrap(worktree_host) {
+        Ok(host) => host.shutdown().await.map(|_| ()),
+        Err(_host) => Err(ServerWorktreeHostError::TaskFailed),
+    };
 
     match (serve_result, host_result) {
         (Err(error), _) => Err(error),
