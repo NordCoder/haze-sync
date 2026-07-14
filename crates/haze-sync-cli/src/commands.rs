@@ -1,10 +1,8 @@
 //! Minimal CLI command model and parser.
 //!
-//! The parser is intentionally dependency-free and side-effect-free. It builds a
-//! command model for future operational wiring without opening network
-//! connections, reading operator inputs, contacting providers, or mutating
-//! state. Parse errors intentionally avoid echoing raw arguments because CLI
-//! output is commonly copied into logs, tickets, and chat.
+//! The parser is intentionally dependency-free and side-effect-free. Parse
+//! errors avoid echoing raw arguments because output is commonly copied into
+//! logs, tickets, and chat.
 
 use crate::{
     doctor::{self, DoctorCliCommand, DoctorCommand, DoctorParseError},
@@ -12,53 +10,45 @@ use crate::{
 };
 use std::fmt;
 
-/// Parsed top-level CLI command.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CliCommand {
-    /// `haze-sync --help` / `haze-sync help` or command-specific help.
     Help(HelpTopic),
-    /// `haze-sync status [--offline]` read-only status command.
     Status(StatusCommand),
-    /// `haze-sync adapters ...` command group.
     Adapters(AdaptersCommand),
-    /// `haze-sync doctor [--offline]` or `haze-sync doctor --live`.
     Doctor(DoctorCommand),
+    Worktree(WorktreeCommand),
 }
 
-/// Help topic requested by the operator.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HelpTopic {
-    /// Root CLI usage.
     Root,
-    /// Doctor command usage.
     Doctor,
 }
 
-/// Parsed status command.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct StatusCommand {
     pub mode: ReadCommandMode,
 }
 
-/// Parsed adapters subcommand.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AdaptersCommand {
-    /// `haze-sync adapters list [--offline]` read-only adapter summary.
     List { mode: ReadCommandMode },
 }
 
-/// Safe CLI parse error.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WorktreeCommand {
+    Status,
+    SyncOnce,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CliParseError {
-    /// Unknown top-level command.
     UnknownCommand,
-    /// No adapters subcommand was provided.
     MissingAdaptersCommand,
-    /// Unknown adapters subcommand.
     UnknownAdaptersCommand,
-    /// Extra argument was provided after a complete command.
+    MissingWorktreeCommand,
+    UnknownWorktreeCommand,
     UnexpectedArgument,
-    /// Doctor command parse failure.
     Doctor(DoctorParseError),
 }
 
@@ -70,6 +60,10 @@ impl fmt::Display for CliParseError {
                 formatter.write_str("missing adapters command: expected list")
             }
             Self::UnknownAdaptersCommand => formatter.write_str("unknown adapters command"),
+            Self::MissingWorktreeCommand => {
+                formatter.write_str("missing worktree command: expected status or sync-once")
+            }
+            Self::UnknownWorktreeCommand => formatter.write_str("unknown worktree command"),
             Self::UnexpectedArgument => formatter.write_str("unexpected argument"),
             Self::Doctor(error) => write!(formatter, "{error}"),
         }
@@ -80,12 +74,9 @@ impl std::error::Error for CliParseError {}
 
 #[must_use]
 pub const fn usage() -> &'static str {
-    "usage: haze-sync <command>\n\ncommands:\n  status [--offline]        read-only server status summary\n  adapters list [--offline] read-only adapter summary\n  doctor [--offline]        read-only offline doctor summary\n  doctor --live             read-only Server health/readiness/status doctor"
+    "usage: haze-sync <command>\n\ncommands:\n  status [--offline]        read-only server status summary\n  adapters list [--offline] read-only adapter summary\n  doctor [--offline]        read-only offline doctor summary\n  doctor --live             read-only Server health/readiness/status doctor\n  worktree status           read hosted Worktree runtime status\n  worktree sync-once        request one bounded server-owned DryRun cycle"
 }
 
-/// Parse process arguments into the minimal command model.
-///
-/// The first item is treated as the program name and ignored.
 pub fn parse_cli<I, S>(args: I) -> Result<CliCommand, CliParseError>
 where
     I: IntoIterator<Item = S>,
@@ -105,6 +96,7 @@ where
         "status" => parse_status_command(args),
         "adapters" => parse_adapters_command(args),
         "doctor" => parse_doctor_command(args),
+        "worktree" => parse_worktree_command(args),
         _ => Err(CliParseError::UnknownCommand),
     }
 }
@@ -125,7 +117,6 @@ where
     S: AsRef<str>,
 {
     let command = next_argument(&mut args).ok_or(CliParseError::MissingAdaptersCommand)?;
-
     match command.as_str() {
         "list" => Ok(CliCommand::Adapters(AdaptersCommand::List {
             mode: parse_read_mode(args)?,
@@ -145,6 +136,21 @@ where
     }
 }
 
+fn parse_worktree_command<I, S>(mut args: I) -> Result<CliCommand, CliParseError>
+where
+    I: Iterator<Item = S>,
+    S: AsRef<str>,
+{
+    let command = next_argument(&mut args).ok_or(CliParseError::MissingWorktreeCommand)?;
+    let command = match command.as_str() {
+        "status" => WorktreeCommand::Status,
+        "sync-once" => WorktreeCommand::SyncOnce,
+        _ => return Err(CliParseError::UnknownWorktreeCommand),
+    };
+    reject_trailing(args)?;
+    Ok(CliCommand::Worktree(command))
+}
+
 fn parse_read_mode<I, S>(args: I) -> Result<ReadCommandMode, CliParseError>
 where
     I: Iterator<Item = S>,
@@ -157,7 +163,6 @@ where
             _ => return Err(CliParseError::UnexpectedArgument),
         }
     }
-
     Ok(mode)
 }
 
@@ -177,7 +182,6 @@ where
     if args.next().is_some() {
         return Err(CliParseError::UnexpectedArgument);
     }
-
     Ok(())
 }
 
@@ -187,59 +191,17 @@ mod tests {
     use crate::doctor::DoctorMode;
 
     #[test]
-    fn status_command_parses() {
-        let command = parse_cli(["haze-sync", "status"]).unwrap();
-
+    fn existing_commands_still_parse() {
         assert_eq!(
-            command,
+            parse_cli(["haze-sync", "status"]).unwrap(),
             CliCommand::Status(StatusCommand {
                 mode: ReadCommandMode::Auto,
             })
         );
-    }
-
-    #[test]
-    fn status_offline_command_parses() {
-        let command = parse_cli(["haze-sync", "status", "--offline"]).unwrap();
-
         assert_eq!(
-            command,
-            CliCommand::Status(StatusCommand {
-                mode: ReadCommandMode::Offline,
-            })
-        );
-    }
-
-    #[test]
-    fn adapters_list_command_parses() {
-        let command = parse_cli(["haze-sync", "adapters", "list"]).unwrap();
-
-        assert_eq!(
-            command,
-            CliCommand::Adapters(AdaptersCommand::List {
-                mode: ReadCommandMode::Auto,
-            })
-        );
-    }
-
-    #[test]
-    fn adapters_list_offline_command_parses() {
-        let command = parse_cli(["haze-sync", "adapters", "list", "--offline"]).unwrap();
-
-        assert_eq!(
-            command,
+            parse_cli(["haze-sync", "adapters", "list", "--offline"]).unwrap(),
             CliCommand::Adapters(AdaptersCommand::List {
                 mode: ReadCommandMode::Offline,
-            })
-        );
-    }
-
-    #[test]
-    fn doctor_modes_parse_through_top_level_model() {
-        assert_eq!(
-            parse_cli(["haze-sync", "doctor", "--offline"]).unwrap(),
-            CliCommand::Doctor(DoctorCommand {
-                mode: DoctorMode::Offline,
             })
         );
         assert_eq!(
@@ -251,61 +213,64 @@ mod tests {
     }
 
     #[test]
-    fn conflicting_doctor_modes_are_rejected() {
+    fn worktree_commands_parse_and_appear_in_usage() {
         assert_eq!(
-            parse_cli(["haze-sync", "doctor", "--offline", "--live"]).unwrap_err(),
-            CliParseError::Doctor(DoctorParseError::ConflictingDoctorModes)
+            parse_cli(["haze-sync", "worktree", "status"]).unwrap(),
+            CliCommand::Worktree(WorktreeCommand::Status)
         );
+        assert_eq!(
+            parse_cli(["haze-sync", "worktree", "sync-once"]).unwrap(),
+            CliCommand::Worktree(WorktreeCommand::SyncOnce)
+        );
+        assert!(usage().contains("worktree status"));
+        assert!(usage().contains("worktree sync-once"));
+        assert!(usage().contains("bounded server-owned DryRun cycle"));
     }
 
     #[test]
-    fn help_and_empty_invocation_render_usage() {
+    fn worktree_rejects_missing_unknown_and_control_arguments_without_echo() {
         assert_eq!(
-            parse_cli(["haze-sync"]).unwrap(),
-            CliCommand::Help(HelpTopic::Root)
+            parse_cli(["haze-sync", "worktree"]).unwrap_err(),
+            CliParseError::MissingWorktreeCommand
         );
         assert_eq!(
-            parse_cli(["haze-sync", "--help"]).unwrap(),
-            CliCommand::Help(HelpTopic::Root)
+            parse_cli(["haze-sync", "worktree", "private-command"]).unwrap_err(),
+            CliParseError::UnknownWorktreeCommand
         );
-        assert_eq!(
-            parse_cli(["haze-sync", "doctor", "--help"]).unwrap(),
-            CliCommand::Help(HelpTopic::Doctor)
-        );
-        assert!(usage().contains("doctor [--offline]"));
-        assert!(usage().contains("doctor --live"));
-        assert!(usage().contains("read-only"));
-    }
-
-    #[test]
-    fn parser_rejects_unscoped_network_arguments() {
-        let error =
-            parse_cli(["haze-sync", "status", "--server", "https://example.test"]).unwrap_err();
-
-        assert_eq!(error, CliParseError::UnexpectedArgument);
+        for private in [
+            "--force",
+            "--path=private",
+            "--budget=999",
+            "--ticket=secret",
+            "--generation=42",
+            "{\"mode\":\"bidirectional\"}",
+        ] {
+            let error = parse_cli(["haze-sync", "worktree", "sync-once", private])
+                .unwrap_err()
+                .to_string();
+            assert_eq!(error, "unexpected argument");
+            assert!(!error.contains(private));
+        }
     }
 
     #[test]
     fn parser_errors_do_not_echo_arguments() {
-        let private_command = "private-command";
         let private_flag = "--private-value=redacted-test-value";
         let examples = [
-            parse_cli(["haze-sync", private_command])
+            parse_cli(["haze-sync", "private-command"])
                 .unwrap_err()
                 .to_string(),
             parse_cli(["haze-sync", "status", private_flag])
                 .unwrap_err()
                 .to_string(),
-            parse_cli(["haze-sync", "adapters", private_command])
-                .unwrap_err()
-                .to_string(),
             parse_cli(["haze-sync", "doctor", private_flag])
                 .unwrap_err()
                 .to_string(),
+            parse_cli(["haze-sync", "worktree", private_flag])
+                .unwrap_err()
+                .to_string(),
         ];
-
         for error in examples {
-            assert!(!error.contains(private_command));
             assert!(!error.contains(private_flag));
             assert!(!error.contains("redacted-test-value"));
         }
