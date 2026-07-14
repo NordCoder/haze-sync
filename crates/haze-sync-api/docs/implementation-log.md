@@ -24,6 +24,17 @@ Summary: Expanded API component planning from a T0 audit plus generic future-wor
 Status: ARCHITECT_ACCEPT_PENDING_REVIEW
 Follow-ups: Execute API-P2 through API-P7 through normal implementation -> clean-code -> CI -> fixer lifecycle when scheduled. Keep API passive and free of Axum route registration, SQLx/storage calls, provider SDKs, filesystem watcher/runtime ownership, and CLI command execution.
 
+### 2026-07-14 — W1/API-P8-WORKTREE-STATUS-CONTRACT
+
+Agent: Implementation Worker
+Branch: component/api
+Prompt: crates/haze-sync-api/control/prompt.md
+Report: crates/haze-sync-api/control/report.md
+Commit(s): API-P8 code, tests, fixture, and documentation commits on component/api; exact final code-bearing SHA is recorded in the control report
+Summary: Added a passive, secret-safe Worktree status DTO surface and an admin-only bodyless sync-once submission contract pinned to accepted Server SHA `1d1fc8ca62c97db041cca09dd8316370285dfba1`. Added closed mode/lifecycle/readiness/manual-availability/submission vocabularies, pure response and auth helpers, deterministic compatibility fixture coverage, and explicit Server-owned runtime boundaries. No route registration, filesystem behavior, runtime submission, polling, tickets, completion semantics, or sibling product changes were added.
+Status: SELF_ACCEPT_PENDING_CI
+Follow-ups: Obtain exact-final-SHA Component CI, then run the focused API-P8 functional clean-code review. Server HTTP fan-in and CLI-P6A remain separate Orchestrator phases.
+
 ---
 
 Use this format for future entries:
