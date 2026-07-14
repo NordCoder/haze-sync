@@ -244,7 +244,10 @@ mod tests {
             (WorktreeConfiguredMode::Bidirectional, "bidirectional"),
             (WorktreeConfiguredMode::DryRun, "dry_run"),
         ] {
-            assert_eq!(serde_json::to_string(&value).unwrap(), format!("\"{wire}\""));
+            assert_eq!(
+                serde_json::to_string(&value).unwrap(),
+                format!("\"{wire}\"")
+            );
             assert_roundtrip(value);
         }
 
@@ -376,7 +379,10 @@ mod tests {
         ] {
             let response = WorktreeSyncOnceResponse::submitted(status);
             assert_roundtrip(response);
-            assert_eq!(response.was_accepted(), status == WorktreeSyncOnceSubmissionStatus::Accepted);
+            assert_eq!(
+                response.was_accepted(),
+                status == WorktreeSyncOnceSubmissionStatus::Accepted
+            );
         }
     }
 
