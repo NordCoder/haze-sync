@@ -1,61 +1,57 @@
-# W1-CLI-P6A-FUNCTIONAL-REVIEW
+# W1-FIX-CLI-P6A-TEST-REGRESSION
 
 Before starting, name this worker chat exactly:
 
-`cli — W1 CLI-P6A Worktree Operator Review`
+`cli — W1 CLI-P6A Test Restoration Fix`
 
 Component: cli
 Path: crates/haze-sync-cli
 Branch: component/cli
 PR: #48
-Role: clean-code-reviewer
-Phase: CLI-P6A-FUNCTIONAL-REVIEW
+Role: fixer-worker
+Phase: FIX-CLI-P6A-TEST-REGRESSION
 
 Do not merge, change draft state, rewrite history, modify sibling branches, begin Deployment work, or perform unrelated cleanup.
 
 Candidate:
 - synchronized baseline `8a3012a20440066422e7ad6c4e52d1a859b1bd51`;
-- initial implementation `6c4c2ba4a66999e02542083512587d0d6ad8d437`;
-- final fixed SHA `70c3567f587a249a180eb8b9abb155065d197e5c`;
-- implementation report blob `5df1ebcc3696b1d61d514e005b2dbaebe4213622`;
-- fixer report blob `e55126c8d84d1aa568cd004eaff4503b617504e6`;
-- Component CI `29342522606`, run `1948`, success.
+- current code-bearing SHA `70c3567f587a249a180eb8b9abb155065d197e5c`;
+- review report blob `93327542ab208bd57521b6372e29ac14f253a616`;
+- current green CI run `29342522606`, number `1948`.
 
-Formatting, rustfmt, naming taste and style are non-blocking.
+Blocking defects:
+1. Pre-existing CLI P1-P5 regression tests were deleted from `commands.rs` and `main.rs`.
+2. Explicit successful Worktree status rendering assertions for Disabled and Failed lifecycle responses are missing.
 
-Review substantive correctness only:
+Required focused fix:
+- restore the deleted tests from exact synchronized baseline `8a3012a...` in `crates/haze-sync-cli/src/commands.rs` and `crates/haze-sync-cli/src/main.rs`;
+- adapt restored exhaustive matches only as narrowly required for the new Worktree command variant;
+- preserve all legacy expected behavior for global status, adapters, doctor, help, offline modes, placeholder annotation and safe parse errors;
+- add explicit tests proving valid HTTP 200 Disabled and Failed Worktree status bodies render with success exit classification and accepted fields;
+- keep the existing Running+Busy readiness `ready` assertion;
+- preserve all current Worktree command/outcome/secrecy tests;
+- do not change product behavior unless a restored test demonstrates a real defect;
+- keep all accepted API-P8 blobs byte-identical.
 
-1. Accepted API-P8 blobs remain byte-identical; no API control files or semantic edits.
-2. CLI uses accepted API DTOs directly without divergent public vocabulary.
-3. Exact commands exist: `haze-sync worktree status` and `haze-sync worktree sync-once`.
-4. Existing status/adapters/doctor behavior remains unchanged.
-5. Usage explains one bounded server-owned DryRun request.
-6. Unknown, trailing and forbidden control arguments are rejected without echo.
-7. Client cannot set path, budget, mode, force, JSON, ticket, generation or request id.
-8. Status request is exact GET `/v1/admin/worktree/status`.
-9. Sync request is exact POST `/v1/admin/worktree/sync-once` with strict `{}`.
-10. Deferred transport cannot return fake live success.
-11. No token CLI flags, secret persistence, DB/filesystem/provider access, local runtime or Worktree dependency.
-12. No retry, polling, wait, task, ticket or generation behavior.
-13. Valid 200 Worktree status renders success for Disabled, Running+Busy and Failed lifecycle facts.
-14. Running+Busy remains readiness `ready`; CLI does not derive readiness.
-15. Rendering exposes only accepted public fields and safe errors.
-16. Accepted/202 means queued/submitted, explicitly not completed.
-17. Busy/409, lifecycle-unavailable/503 and Failed/500 are non-zero.
-18. 401/403 map safely.
-19. HTTP/body mismatches are rejected; HTTP alone cannot imply success.
-20. No raw bodies, headers, credentials, paths, roots, fingerprints, DB URLs, provider data, tickets or generations are output.
-21. Tests cover parser, request contract, DTO vocabulary, status cases, all sync outcomes, mismatches, secrecy and legacy regressions.
-22. Fixer changed only `crates/haze-sync-cli/src/worktree_api.rs`; no check weakening.
-23. No Server/Worktree/Storage/Core/GDrive/Deployment, migration or workflow changes.
-24. Exact final SHA has green CI; later commits are control-only.
+Expected product scope is tests in:
+- `crates/haze-sync-cli/src/commands.rs`;
+- `crates/haze-sync-cli/src/main.rs`;
+- `crates/haze-sync-cli/src/worktree_api.rs` only for focused Disabled/Failed tests.
 
-Do not modify code unless a concrete functional, security, contract or scope defect remains.
+Forbidden:
+- API semantic edits;
+- Server/Worktree/Storage/Core/GDrive/Deployment changes;
+- migrations/workflows;
+- broad refactors;
+- lint/test suppression;
+- polling, retry, waits, tasks or fake-success transport.
+
+Create a real code-bearing commit without CI skip and obtain authoritative Component CI success on the exact final SHA.
 
 Write `crates/haze-sync-cli/control/report.md` with:
-- `REPORT_TYPE: CLEAN_CODE_REVIEW`;
-- `phase_id: CLI-P6A-FUNCTIONAL-REVIEW`;
-- `chat_name: cli — W1 CLI-P6A Worktree Operator Review`;
-- status `CLEAN_ACCEPT`, `CLEAN_NEEDS_FIX`, `CLEAN_BLOCKED_BY_CONTRACT`, `CLEAN_BLOCKED_BY_SCOPE`, or `CLEAN_BLOCKED_BY_TOOLING`.
+- `REPORT_TYPE: FIX`;
+- `phase_id: FIX-CLI-P6A-TEST-REGRESSION`;
+- `chat_name: cli — W1 CLI-P6A Test Restoration Fix`;
+- status `FIX_COMPLETE`, `FIX_NEEDS_MORE_WORK`, `FIX_BLOCKED_BY_SCOPE`, or `FIX_BLOCKED_BY_TOOLING`.
 
-If no substantive blocker remains, use `CLEAN_ACCEPT` and authorize Orchestrator to resolve the next development phase. Do not begin Deployment work or claim merge readiness.
+Record restored test groups, any narrow adaptations, Disabled/Failed assertions, changed paths, accepted API blob verification, final SHA and exact CI. Do not claim CLEAN_ACCEPT; a final focused review follows.
