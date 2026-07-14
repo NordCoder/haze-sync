@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "status": {
+    "configured_mode": "dry_run",
+    "host_lifecycle": "running",
+    "readiness": "ready",
+    "readiness_reason": "running",
+    "cycles_completed": 17,
+    "cycles_failed": 2,
+    "cycle_in_progress": true,
+    "pending_watcher_hints": 23,
+    "manual_availability": "busy"
+  },
+  "sync_once_request": {},
+  "sync_once_outcomes": [
+    { "status": "accepted" },
+    { "status": "busy" },
+    { "status": "not_started" },
+    { "status": "cancelling" },
+    { "status": "shutdown" },
+    { "status": "unavailable" },
+    { "status": "failed" }
+  ],
+  "vocabulary": {
+    "configured_modes": [
+      "disabled",
+      "read_only",
+      "import_only",
+      "export_only",
+      "bidirectional",
+      "dry_run"
+    ],
+    "host_lifecycles": [
+      "disabled",
+      "starting",
+      "running",
+      "cancelling",
+      "shutdown",
+      "failed"
+    ],
+    "readiness_categories": [
+      "ready",
+      "not_ready"
+    ],
+    "readiness_reasons": [
+      "disabled_inert",
+      "running",
+      "starting",
+      "cancelling",
+      "shutdown",
+      "failed"
+    ],
+    "manual_availability": [
+      "available",
+      "busy",
+      "not_started",
+      "cancelling",
+      "shutdown",
+      "unavailable",
+      "failed"
+    ],
+    "sync_once_submission_statuses": [
+      "accepted",
+      "busy",
+      "not_started",
+      "cancelling",
+      "shutdown",
+      "unavailable",
+      "failed"
+    ]
+  }
+}
