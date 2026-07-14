@@ -179,7 +179,9 @@ mod tests {
     fn doctor_help_writes_doctor_usage_to_stdout() {
         let output = run_from_args(["haze-sync", "doctor", "--help"]);
         assert_eq!(output.exit_code, CliExitCode::Success);
-        assert!(output.stdout.contains("usage: haze-sync doctor [--offline]"));
+        assert!(output
+            .stdout
+            .contains("usage: haze-sync doctor [--offline]"));
         assert!(output.stdout.contains("haze-sync doctor --live"));
         assert!(output.stderr.is_empty());
     }
