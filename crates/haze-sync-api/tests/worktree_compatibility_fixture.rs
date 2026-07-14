@@ -64,7 +64,11 @@ fn wire_value<T: Serialize>(value: &T) -> String {
 fn assert_complete_unique_wires<T: Serialize>(actual: &[String], expected: &[T]) {
     let actual_set = actual.iter().cloned().collect::<BTreeSet<_>>();
     let expected_set = expected.iter().map(wire_value).collect::<BTreeSet<_>>();
-    assert_eq!(actual.len(), actual_set.len(), "fixture values must be unique");
+    assert_eq!(
+        actual.len(),
+        actual_set.len(),
+        "fixture values must be unique"
+    );
     assert_eq!(actual_set, expected_set);
 }
 
@@ -148,8 +152,8 @@ fn status_fixture_roundtrips_and_preserves_server_supplied_semantics() {
     });
     assert!(!failed.is_ready());
 
-    let busy_with_different_counts = WorktreeStatusResponse::from_safe_parts(
-        WorktreeStatusSafeParts {
+    let busy_with_different_counts =
+        WorktreeStatusResponse::from_safe_parts(WorktreeStatusSafeParts {
             cycles_completed: 0,
             cycles_failed: u64::MAX,
             pending_watcher_hints: u64::MAX,
@@ -164,8 +168,7 @@ fn status_fixture_roundtrips_and_preserves_server_supplied_semantics() {
                 pending_watcher_hints: 23,
                 manual_availability: WorktreeManualAvailability::Busy,
             }
-        },
-    );
+        });
     assert!(busy_with_different_counts.is_ready());
 }
 
@@ -208,18 +211,14 @@ fn sync_once_fixture_is_bodyless_submission_only_and_complete() {
 #[test]
 fn sync_once_authorization_accepts_only_verified_admin_principals() {
     let admin = AdapterPrincipal::new("admin-fixture", AdapterRole::Admin).unwrap();
-    assert!(authorize_worktree_sync_once_request(
-        WorktreeSyncOnceRequest::default(),
-        Some(&admin)
-    )
-    .is_ok());
+    assert!(
+        authorize_worktree_sync_once_request(WorktreeSyncOnceRequest::default(), Some(&admin))
+            .is_ok()
+    );
 
     let adapter = AdapterPrincipal::new("worktree-fixture", AdapterRole::WorktreeAdapter).unwrap();
     assert_eq!(
-        authorize_worktree_sync_once_request(
-            WorktreeSyncOnceRequest::default(),
-            Some(&adapter)
-        ),
+        authorize_worktree_sync_once_request(WorktreeSyncOnceRequest::default(), Some(&adapter)),
         Err(WorktreeRouteError::ForbiddenRole)
     );
     assert_eq!(
