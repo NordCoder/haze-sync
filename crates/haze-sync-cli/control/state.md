@@ -3,46 +3,38 @@
 component: cli
 branch: component/cli
 status: PROMPT_READY
-
 active_prompt: crates/haze-sync-cli/control/prompt.md
 active_report: crates/haze-sync-cli/control/report.md
-active_agent_role: fixer-worker
-assigned_chat_name: cli — W1 CLI-P6A CI Diagnostics Fix
-prompt_revision: verified by Orchestrator after SELF_NEEDS_FIX; artifact-first diagnosis required
+active_agent_role: clean-code-reviewer
+assigned_chat_name: cli — W1 CLI-P6A Worktree Operator Review
 
 wave: W1
-phase: FIX-CLI-P6A-CI
-
-implementation_status: SELF_NEEDS_FIX
-fix_status: NOT_STARTED
+phase: CLI-P6A-FUNCTIONAL-REVIEW
+implementation_status: COMPLETE_AFTER_FIX
+fix_status: FIX_COMPLETE
 clean_review_status: NOT_STARTED
-ci_status: CI_RED_DIAGNOSTICS_AVAILABLE
-architect_status: ARCHITECT_ACCEPT_EXISTING_BOUNDARY
-known_failed_checks: [diagnostics finalizer; exact check pending artifact read]
+ci_status: CI_GREEN
+architect_status: ARCHITECT_ACCEPT
+known_failed_checks: []
 
 candidate:
-- code_bearing_sha: 6c4c2ba4a66999e02542083512587d0d6ad8d437
+- baseline: 8a3012a20440066422e7ad6c4e52d1a859b1bd51
+- initial_sha: 6c4c2ba4a66999e02542083512587d0d6ad8d437
+- final_sha: 70c3567f587a249a180eb8b9abb155065d197e5c
 - implementation_report_blob: 5df1ebcc3696b1d61d514e005b2dbaebe4213622
-- ci_run_id: 29331452103
-- ci_run_number: 1946
-- ci_run_attempt: 1
-- ci_conclusion: failure
+- fixer_report_blob: e55126c8d84d1aa568cd004eaff4503b617504e6
 
-artifact:
-- id: 8310157600
-- name: ci-diag__component-cli__wf-component-ci__run-29331452103__attempt-1
-- digest: sha256:49a5d411691f424fcd8aec8893086846674f4707e580f58f0302c10f1d4770d3
-- expires_at: 2026-07-15T12:11:04Z
-- summary_manifest_logs_required: yes
+ci:
+- run_id: 29342522606
+- run_number: 1948
+- conclusion: success
 
-protected_scope:
-- minimum artifact-proven CLI correction only
-- accepted API-P8 blobs must remain exact
-- no Server/Worktree/Storage/Core/GDrive/Deployment changes
-- no workflow weakening or diagnostic suppression
-- no unrelated cleanup
+review_scope:
+- command, parser, request, response, exit and secrecy semantics
+- exact API-P8 fan-in
+- no local runtime, fake success, polling, retry or wait
+- formatting and naming are non-blocking
 
 next_gate:
-- FIX_COMPLETE plus green exact-SHA CI -> focused CLI-P6A functional review
-- unresolved evidence -> honest blocked status
-- Deployment remains blocked until CLI-P6A CLEAN_ACCEPT
+- CLEAN_ACCEPT -> next phase
+- substantive defect -> focused CLI fixer
