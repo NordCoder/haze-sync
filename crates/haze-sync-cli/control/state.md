@@ -6,56 +6,43 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-cli/control/prompt.md
 active_report: crates/haze-sync-cli/control/report.md
-active_agent_role: implementation-worker
-assigned_chat_name: cli — W1 CLI-P6A Worktree Operator Commands
-prompt_revision: verified by Orchestrator after valid normal main sync and green exact-SHA CI; accepted API/Server contracts pinned
+active_agent_role: fixer-worker
+assigned_chat_name: cli — W1 CLI-P6A CI Diagnostics Fix
+prompt_revision: verified by Orchestrator after SELF_NEEDS_FIX; artifact-first diagnosis required
 
 wave: W1
-phase: CLI-P6A-WORKTREE-OPERATOR-COMMANDS
+phase: FIX-CLI-P6A-CI
 
-implementation_status: NOT_STARTED_PRODUCT
+implementation_status: SELF_NEEDS_FIX
+fix_status: NOT_STARTED
 clean_review_status: NOT_STARTED
-ci_status: NOT_RUN_PRODUCT
+ci_status: CI_RED_DIAGNOSTICS_AVAILABLE
 architect_status: ARCHITECT_ACCEPT_EXISTING_BOUNDARY
-known_failed_checks: []
+known_failed_checks: [diagnostics finalizer; exact check pending artifact read]
 
-synchronized_baseline:
-- post_sync_sha: 8a3012a20440066422e7ad6c4e52d1a859b1bd51
-- exact_main_sha: c1e69a664388b0cba028170e8398b9088218957d
-- pre_sync_ci_run_id: 29329332012
-- pre_sync_ci_run_number: 1941
-- pre_sync_ci_conclusion: success
+candidate:
+- code_bearing_sha: 6c4c2ba4a66999e02542083512587d0d6ad8d437
+- implementation_report_blob: 5df1ebcc3696b1d61d514e005b2dbaebe4213622
+- ci_run_id: 29331452103
+- ci_run_number: 1946
+- ci_run_attempt: 1
+- ci_conclusion: failure
 
-accepted_api_p8:
-- code_bearing_sha: 56ae94570441d68715f34b5d54381a0fc4d7c231
-- clean_report_blob: 401dc1c2fe9d5ce91a1aa248be8ed7d27a8275d7
-- exact_fan_in_required: yes
-
-accepted_server_http:
-- code_bearing_sha: 50461354c18ddc4d2e47202d9303b4358a27ee45
-- clean_report_blob: e3271abaf3d667f9ffd4f4ff0652e5d26892b9e5
-- ci_run_id: 29326558901
-- ci_run_number: 1940
-- db_capable: yes
-
-implementation_goal:
-- haze-sync worktree status
-- haze-sync worktree sync-once
-- exact accepted method/path/request/response vocabulary
-- deterministic client boundary and rendering
-- no concrete fake-success transport
-- no polling/retry/wait/ticket behavior
-- no local runtime, DB, filesystem or provider work
+artifact:
+- id: 8310157600
+- name: ci-diag__component-cli__wf-component-ci__run-29331452103__attempt-1
+- digest: sha256:49a5d411691f424fcd8aec8893086846674f4707e580f58f0302c10f1d4770d3
+- expires_at: 2026-07-15T12:11:04Z
+- summary_manifest_logs_required: yes
 
 protected_scope:
-- exact API-P8 product fan-in only outside CLI
-- no API semantic edits
-- no Server/Worktree/Storage/Core/GDrive/Deployment product changes
-- no migrations/workflows
-- no token CLI flags or secret output
+- minimum artifact-proven CLI correction only
+- accepted API-P8 blobs must remain exact
+- no Server/Worktree/Storage/Core/GDrive/Deployment changes
+- no workflow weakening or diagnostic suppression
 - no unrelated cleanup
 
 next_gate:
-- SELF_ACCEPT plus green exact-SHA CI -> focused CLI-P6A functional review
-- substantive defect -> focused CLI fixer
+- FIX_COMPLETE plus green exact-SHA CI -> focused CLI-P6A functional review
+- unresolved evidence -> honest blocked status
 - Deployment remains blocked until CLI-P6A CLEAN_ACCEPT
