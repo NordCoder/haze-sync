@@ -6,57 +6,56 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-api/control/prompt.md
 active_report: crates/haze-sync-api/control/report.md
-active_agent_role: implementation-worker
-assigned_chat_name: api — W1 API-P8 Worktree Status Contract
-prompt_revision: verified by Orchestrator after successful exact-main synchronization and SRV-P7B5 CLEAN_ACCEPT; formatting/style excluded from blocking scope
+active_agent_role: fixer-worker
+assigned_chat_name: api — W1 API-P8 CI Diagnostics Fix
+prompt_revision: verified by Orchestrator after API-P8 product completion with Rust checks green and diagnostics finalizer red; artifact-first fixer required
 
 wave: W1
-phase: API-P8-WORKTREE-STATUS-CONTRACT
+phase: FIX-API-P8-CI
 
-implementation_status: NOT_STARTED
+implementation_status: BLOCKED_BY_TOOLING
+fix_status: NOT_STARTED
 clean_review_status: NOT_STARTED
-ci_status: NOT_RUN
-architect_status: ARCHITECT_ACCEPT_EXISTING_PASSIVE_BOUNDARY
-known_failed_checks: []
+architect_status: ARCHITECT_NOT_REQUIRED
+ci_status: CI_RED_FINALIZER_ONLY
+known_failed_checks:
+- Finalize CI diagnostics
 
-accepted_api_sync:
-- merge_sha: d0e8ef0705b7c0456f2cb1359428ff30b90961b4
-- exact_main_sha: c1e69a664388b0cba028170e8398b9088218957d
-- sync_report_commit: 0a3efb21ed256f49b0ad92b445b55bbf7fdb28a0
-- sync_report_blob: 8de46f68c64532aad6fc983d4231f73563dcd9d5
-- ci_run_id: 29312597987
-- ci_run_number: 1913
-- ci_conclusion: success
+candidate:
+- final_code_bearing_sha: 8eb6e0ce44612e1e2f111415026297df8fb1d82b
+- implementation_report_commit: 8f430d8c05b5151b91039c280ea20cfe2b382f3e
+- implementation_report_blob: 390fa0b676b57a1796b840eb0d63f9ebae2599b4
+- product_scope_audit: allowed API DTO/routes/fixture/tests/docs only
 
-accepted_server_contract:
-- srv_p7b5_code_bearing_sha: 1d1fc8ca62c97db041cca09dd8316370285dfba1
-- clean_report_commit: 23b49dff38c8b6997193b6224681feada3e09c1e
-- clean_report_blob: 2416d7280883761bf90117a7e3dbfc41147756b9
-- clean_status: CLEAN_ACCEPT
+ci_evidence:
+- workflow: Component CI
+- run_id: 29313793376
+- run_number: 1922
+- attempts: 2
+- head_sha: 8eb6e0ce44612e1e2f111415026297df8fb1d82b
+- conclusion: failure
+- cargo_fmt: success
+- cargo_check: success
+- cargo_test: success
+- cargo_clippy: success
+- diagnostics_finalizer: failure
+- diagnostics_upload: success
 
-implementation_goal:
-- passive secret-safe Worktree status DTO matching accepted Server vocabulary
-- passive admin-only sync-once submission contract
-- submission outcomes only; no completion/ticket/runtime behavior
-- stable JSON vocabulary and compatibility fixtures
-- no Server dependency or route registration
+artifact:
+- id: 8303189576
+- name: ci-diag__component-api__wf-component-ci__run-29313793376__attempt-2
+- expired: false
+- expires_at: 2026-07-15T07:16:40Z
+- digest: sha256:03e85bcdf1b7d796eadb6415767bab60cf1399f4565440f397f7f585c03a00b6
 
-protected_scope:
-- no Axum/router/runtime wiring
-- no Server/Worktree/Storage/Core/CLI/Deployment product changes
-- no DB/object-store/provider/filesystem work
-- no task/poller/retry/wait loop
-- no raw paths/errors/payloads/tokens/cursors/idempotency/tickets
-- no migrations/workflows/unrelated cleanup
-
-completion_requirements:
-- real API code-bearing commit
-- exact final SHA recorded
-- authoritative exact-SHA Component CI green or honest blocker
-- committed IMPLEMENTATION report exists
+fix_policy:
+- artifact summary/manifest/failed logs are authoritative
+- no cause may be guessed before artifact inspection
+- preserve API-P8 product blobs unless diagnostics prove a product defect
+- no suppression or weakening of finalizer
+- exact post-fix Component CI success required
 
 next_gate:
-- SELF_ACCEPT plus green exact-SHA CI -> focused API-P8 functional review
-- substantive defect -> focused fixer
-- CLEAN_ACCEPT after review -> CLI-P6A may begin and Server HTTP fan-in can be scheduled
-- Deployment remains blocked until downstream acceptance
+- FIX_COMPLETE plus green exact-SHA CI -> focused API-P8 functional review
+- artifact insufficient -> FIX_BLOCKED_BY_LOGS
+- CLI-P6A, Server HTTP fan-in and Deployment remain blocked
