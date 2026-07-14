@@ -1,75 +1,61 @@
-# W1-FIX-SRV-API-P8-SUBMISSION-RACE — Use authoritative Worktree submit result
+# W1-SRV-API-P8-HTTP-FINAL-REVIEW — Verify authoritative sync-once fix
 
 Before starting, name this worker chat exactly:
 
-`server — W1 API-P8 Sync-Once Race Fix`
+`server — W1 API-P8 Worktree HTTP Final Review`
 
 Component: server
 Path: crates/haze-sync-server
 Branch: component/server
 PR: #45
-Role: fixer-worker
-Phase: FIX-SRV-API-P8-SUBMISSION-RACE
+Role: clean-code-reviewer
+Phase: SRV-API-P8-HTTP-FINAL-REVIEW
 
 Do not merge, change draft state, rewrite history, modify sibling branches, begin CLI-P6A, or perform unrelated cleanup.
 
-## Candidate and finding
+## Candidate
 
-- current code-bearing SHA: `be2b1c16fa6c4919d446b76b1f15dca5767b2482`;
-- implementation status: `SELF_ACCEPT`;
-- functional review status: `CLEAN_NEEDS_FIX`;
-- review report blob: `04ba2d51a041b57c677a2a742d56719a181eaf67`;
-- authoritative DB-capable CI run `29321038276`, number `1938`, success.
+- original HTTP fan-in SHA: `be2b1c16fa6c4919d446b76b1f15dca5767b2482`;
+- previous review: `CLEAN_NEEDS_FIX`;
+- previous review report blob: `04ba2d51a041b57c677a2a742d56719a181eaf67`;
+- fixed final code-bearing SHA: `50461354c18ddc4d2e47202d9303b4358a27ee45`;
+- fixer report blob: `a80e3c365d218d3228907c638cd23b70d6cc9b23`;
+- authoritative DB-capable Component CI run: `29326558901`, number `1940`, attempt `1`, success.
 
-Blocking defect:
+Formatting, rustfmt, naming taste and stylistic matters are out of scope and must not block acceptance.
 
-`ServerWorktreeHttpControl::submit_sync_once` reads a preliminary snapshot and returns `Busy`, `NotStarted`, `Cancelling`, or `Shutdown` without calling the authoritative Worktree manual submit API. Those observations may become stale before response and can bypass a valid typed submission result.
+## Focused review
 
-## Required fix
+Verify the fixed POST sync-once control flow and confirm prior accepted areas remain intact:
 
-1. Preserve snapshot precheck only for Server-only conditions that the Worktree typed submit boundary cannot express:
-   - host `Failed`;
-   - configured/manual mode `Unavailable`.
-2. For snapshot categories `Available`, `Busy`, `NotStarted`, `Cancelling`, and `Shutdown`, construct exactly one bounded `WorktreeRuntimeManualRequest::dry_run(...)` from the validated stored budget and call `submit_manual` exactly once.
-3. Map the authoritative typed result only:
-   - Accepted -> Accepted;
-   - Busy -> Busy;
-   - NotStarted -> NotStarted;
-   - Cancelling -> Cancelling;
-   - Shutdown -> Shutdown.
-4. Do not retry, poll, wait for completion, submit a probe, or add any task/runtime/watcher.
-5. Preserve weak host ownership, unique shutdown/join ownership, ticket-drop semantics and all accepted HTTP/auth/body mappings.
-6. Do not change API-P8 source blobs or public vocabulary.
-7. Add deterministic focused tests proving:
-   - a stale Busy snapshot cannot bypass a later authoritative Accepted result;
-   - a stale NotStarted/Cancelling/Shutdown observation cannot be returned without typed submit evaluation;
-   - authoritative Busy/Cancelling/Shutdown results still map correctly;
-   - submit is invoked exactly once;
-   - Failed and manual/mode Unavailable remain legitimate snapshot-only Server outcomes;
-   - no completion wait/poll/retry is introduced.
+1. Weak host upgrade occurs once and failed upgrade maps safely to Unavailable.
+2. Exactly one passive snapshot is read.
+3. Snapshot-only early return is limited to:
+   - host Failed;
+   - configured/manual Unavailable.
+4. Snapshot categories Available, Busy, NotStarted, Cancelling and Shutdown all proceed to exactly one authoritative `submit_manual` call.
+5. The bounded DryRun request uses the already validated stored action budget.
+6. Public result comes only from the typed Worktree submission result for submit-capable states.
+7. No retry, second submit, probe, polling, completion wait, task, watcher or runtime was introduced.
+8. Stale Busy can become authoritative Accepted; stale lifecycle observations cannot bypass submit.
+9. Authoritative Busy/NotStarted/Cancelling/Shutdown remain mapped correctly.
+10. Accepted ticket is dropped without cancelling queued work and without waiting for completion.
+11. Weak ownership and unique shutdown/join ownership remain unchanged.
+12. API-P8 product blobs and public vocabulary remain unchanged.
+13. GET status, Admin auth, strict body parsing, HTTP mappings, secrecy and absent-control behavior remain correct.
+14. Focused deterministic tests prove stale-snapshot resolution and exactly-once submission.
+15. No sibling product, migration or workflow changes occurred.
+16. Exact final SHA has green DB-capable CI and later commits before review are control-only.
 
-Use the smallest Server-only change, expected primarily in `crates/haze-sync-server/src/worktree_http.rs` and its focused tests.
+Do not modify code unless a concrete functional, concurrency, authorization, secrecy or scope defect remains. No formatting-only corrections.
 
-Forbidden:
-
-- Worktree runtime/gate/watcher/executor changes;
-- API semantic edits;
-- Storage/Core/CLI/Deployment product changes;
-- migrations/workflows;
-- broad app-state or route refactor;
-- formatting-only cleanup beyond touched lines.
-
-Formatting/style alone is non-blocking when exact-SHA CI is green.
-
-## Completion
-
-Create a real code-bearing commit without CI skip and obtain authoritative DB-capable Component CI on the exact final SHA.
+## Report
 
 Write `crates/haze-sync-server/control/report.md` with:
 
-- `REPORT_TYPE: FIX`;
-- `phase_id: FIX-SRV-API-P8-SUBMISSION-RACE`;
-- `chat_name: server — W1 API-P8 Sync-Once Race Fix`;
-- status `FIX_COMPLETE`, `FIX_NEEDS_MORE_WORK`, `FIX_BLOCKED_BY_CONTRACT`, `FIX_BLOCKED_BY_SCOPE`, or `FIX_BLOCKED_BY_TOOLING`.
+- `REPORT_TYPE: CLEAN_CODE_REVIEW`;
+- `phase_id: SRV-API-P8-HTTP-FINAL-REVIEW`;
+- `chat_name: server — W1 API-P8 Worktree HTTP Final Review`;
+- status `CLEAN_ACCEPT`, `CLEAN_NEEDS_FIX`, `CLEAN_BLOCKED_BY_CONTRACT`, `CLEAN_BLOCKED_BY_SCOPE`, or `CLEAN_BLOCKED_BY_TOOLING`.
 
-Record changed paths, exact authoritative-submit flow, focused race tests, final SHA and exact DB-capable CI evidence. Do not claim CLEAN_ACCEPT or begin CLI-P6A; a final focused review follows.
+If no substantive blocker remains, use `CLEAN_ACCEPT` and authorize CLI-P6A control-slot resolution. Do not implement CLI work or claim merge readiness.
