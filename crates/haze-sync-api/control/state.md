@@ -6,56 +6,60 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-api/control/prompt.md
 active_report: crates/haze-sync-api/control/report.md
-active_agent_role: fixer-worker
-assigned_chat_name: api — W1 API-P8 CI Diagnostics Fix
-prompt_revision: verified by Orchestrator after API-P8 product completion with Rust checks green and diagnostics finalizer red; artifact-first fixer required
+active_agent_role: clean-code-reviewer
+assigned_chat_name: api — W1 API-P8 Worktree Status Review
+prompt_revision: verified by Orchestrator after artifact-based rustfmt fix and green exact-SHA CI; formatting/style excluded from blocking scope
 
 wave: W1
-phase: FIX-API-P8-CI
+phase: API-P8-FUNCTIONAL-REVIEW
 
-implementation_status: BLOCKED_BY_TOOLING
-fix_status: NOT_STARTED
-clean_review_status: NOT_STARTED
+implementation_status: PRODUCT_COMPLETE
+fix_status: FIX_COMPLETE
+clean_review_status: NOT_STARTED_FUNCTIONAL
 architect_status: ARCHITECT_NOT_REQUIRED
-ci_status: CI_RED_FINALIZER_ONLY
-known_failed_checks:
-- Finalize CI diagnostics
+ci_status: CI_GREEN
+known_failed_checks: []
 
 candidate:
-- final_code_bearing_sha: 8eb6e0ce44612e1e2f111415026297df8fb1d82b
+- synchronized_api_baseline: d0e8ef0705b7c0456f2cb1359428ff30b90961b4
+- original_api_p8_sha: 8eb6e0ce44612e1e2f111415026297df8fb1d82b
+- final_code_bearing_sha: 56ae94570441d68715f34b5d54381a0fc4d7c231
 - implementation_report_commit: 8f430d8c05b5151b91039c280ea20cfe2b382f3e
 - implementation_report_blob: 390fa0b676b57a1796b840eb0d63f9ebae2599b4
-- product_scope_audit: allowed API DTO/routes/fixture/tests/docs only
+- fixer_report_commit: 59dea568b7bd5eed6dfb8b6edb1cdc6521cfc5b5
+- fixer_report_blob: 08ed3e218e38a93782d3898369293b723eabac00
+- post_candidate_changes_before_rotation: report/control only
 
 ci_evidence:
 - workflow: Component CI
-- run_id: 29313793376
-- run_number: 1922
-- attempts: 2
-- head_sha: 8eb6e0ce44612e1e2f111415026297df8fb1d82b
-- conclusion: failure
+- run_id: 29315949762
+- run_number: 1925
+- run_attempt: 1
+- head_sha: 56ae94570441d68715f34b5d54381a0fc4d7c231
+- conclusion: success
 - cargo_fmt: success
 - cargo_check: success
 - cargo_test: success
 - cargo_clippy: success
-- diagnostics_finalizer: failure
-- diagnostics_upload: success
+- diagnostics_finalizer: success
 
-artifact:
-- id: 8303189576
-- name: ci-diag__component-api__wf-component-ci__run-29313793376__attempt-2
-- expired: false
-- expires_at: 2026-07-15T07:16:40Z
-- digest: sha256:03e85bcdf1b7d796eadb6415767bab60cf1399f4565440f397f7f585c03a00b6
+accepted_server_contract:
+- srv_p7b5_code_bearing_sha: 1d1fc8ca62c97db041cca09dd8316370285dfba1
+- clean_report_commit: 23b49dff38c8b6997193b6224681feada3e09c1e
+- clean_report_blob: 2416d7280883761bf90117a7e3dbfc41147756b9
 
-fix_policy:
-- artifact summary/manifest/failed logs are authoritative
-- no cause may be guessed before artifact inspection
-- preserve API-P8 product blobs unless diagnostics prove a product defect
-- no suppression or weakening of finalizer
-- exact post-fix Component CI success required
+review_policy:
+- formatting, rustfmt, naming taste and style are non-blocking and out of scope
+- verify exact public vocabulary, Server semantic fidelity, admin authorization, submission-only meaning, compatibility fixture, passivity, secrecy and protected scope
+
+completion_requirements:
+- committed CLEAN_CODE_REVIEW report exists
+- report phase API-P8-FUNCTIONAL-REVIEW
+- report chat name api — W1 API-P8 Worktree Status Review
+- exact final SHA reviewed
+- no later product/tooling invalidation
 
 next_gate:
-- FIX_COMPLETE plus green exact-SHA CI -> focused API-P8 functional review
-- artifact insufficient -> FIX_BLOCKED_BY_LOGS
-- CLI-P6A, Server HTTP fan-in and Deployment remain blocked
+- CLEAN_ACCEPT -> authorize Server HTTP fan-in and CLI-P6A control-slot resolution
+- substantive defect -> focused API-P8 fixer only
+- Deployment remains blocked until downstream acceptance
