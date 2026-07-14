@@ -12,6 +12,7 @@ name = "haze-sync"
 path = "src/main.rs"
 
 [dependencies]
+haze-sync-api = { path = "../haze-sync-api" }
 haze-sync-core = { path = "../haze-sync-core" }
 
 [lints]
