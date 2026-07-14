@@ -9,3 +9,4 @@ pub mod changes;
 pub mod conflicts;
 pub mod delete;
 pub mod files;
+pub mod worktree;
