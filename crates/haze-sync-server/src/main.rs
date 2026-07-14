@@ -66,17 +66,14 @@ async fn run_with_config(config: ServerConfig) -> Result<(), StartupError> {
     let host_config = ServerWorktreeHostConfig::from_adapter_mode(config.worktree.mode)?;
     let manual_budget = host_config.action_budget;
     let worktree_host = Arc::new(
-        ServerWorktreeRuntimeHost::start(
-            host_config,
-            config.worktree.root.clone(),
-            pool,
-            services,
-        )
-        .await?,
+        ServerWorktreeRuntimeHost::start(host_config, config.worktree.root.clone(), pool, services)
+            .await?,
     );
     let worktree_control =
         ServerWorktreeHttpControl::new(Arc::downgrade(&worktree_host), manual_budget);
     let state = state.with_worktree_control(worktree_control);
+    let _legacy_status_boundary = ServerWorktreeRuntimeHost::status;
+    let _readiness_boundary = crate::worktree_status::ServerWorktreeStatusSnapshot::is_ready;
 
     let listener = TcpListener::bind(listen_addr)
         .await
