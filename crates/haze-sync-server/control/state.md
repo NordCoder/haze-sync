@@ -6,40 +6,48 @@ status: PROMPT_READY
 
 active_prompt: crates/haze-sync-server/control/prompt.md
 active_report: crates/haze-sync-server/control/report.md
-active_agent_role: fixer-worker
-assigned_chat_name: server — W1 API-P8 Sync-Once Race Fix
-prompt_revision: verified by Orchestrator after CLEAN_NEEDS_FIX; focused authoritative-submit correction only
+active_agent_role: clean-code-reviewer
+assigned_chat_name: server — W1 API-P8 Worktree HTTP Final Review
+prompt_revision: verified by Orchestrator after FIX_COMPLETE and green DB-capable exact-SHA CI; formatting/style excluded from blocking scope
 
 wave: W1
-phase: FIX-SRV-API-P8-SUBMISSION-RACE
+phase: SRV-API-P8-HTTP-FINAL-REVIEW
 
 implementation_status: SELF_ACCEPT
-fix_status: NOT_STARTED
-clean_review_status: CLEAN_NEEDS_FIX
+fix_status: FIX_COMPLETE
+clean_review_status: NOT_STARTED_FINAL
 architect_status: ARCHITECT_NOT_REQUIRED
-ci_status: CI_GREEN_BUT_FUNCTIONALLY_INSUFFICIENT
+ci_status: CI_GREEN_DB_VERIFIED
 known_failed_checks: []
 
 candidate:
-- current_code_bearing_sha: be2b1c16fa6c4919d446b76b1f15dca5767b2482
-- review_report_blob: 04ba2d51a041b57c677a2a742d56719a181eaf67
-- ci_run_id: 29321038276
-- ci_run_number: 1938
-- ci_conclusion: success
+- original_http_fan_in_sha: be2b1c16fa6c4919d446b76b1f15dca5767b2482
+- previous_review_report_blob: 04ba2d51a041b57c677a2a742d56719a181eaf67
+- final_code_bearing_sha: 50461354c18ddc4d2e47202d9303b4358a27ee45
+- fixer_report_blob: a80e3c365d218d3228907c638cd23b70d6cc9b23
+- post_candidate_changes_before_rotation: report/control only
+
+ci_evidence:
+- workflow: Component CI
+- run_id: 29326558901
+- run_number: 1940
+- run_attempt: 1
+- head_sha: 50461354c18ddc4d2e47202d9303b4358a27ee45
+- conclusion: success
 - db_capable: yes
+- cargo_fmt: success
+- cargo_check: success
+- cargo_test: success
+- cargo_clippy: success
+- diagnostics_finalizer: success
 
-blocking_finding:
-- preliminary snapshot returns Busy/NotStarted/Cancelling/Shutdown without authoritative submit
-- result may be stale and violate snapshot-to-submit race resolution
-
-required_fix:
-- snapshot-only precheck limited to Failed and manual/mode Unavailable
-- all other states call submit_manual exactly once
-- map typed Worktree submission result
-- add deterministic stale-snapshot and single-submit tests
-- preserve weak ownership, no-wait ticket semantics and API blobs
+review_policy:
+- snapshot-only precheck limited to Failed/Unavailable
+- all race-sensitive states must call authoritative submit exactly once
+- verify no retry/poll/wait/task and preserve ownership/API/HTTP/secrecy contracts
+- formatting, rustfmt, naming taste and style are non-blocking
 
 next_gate:
-- FIX_COMPLETE plus green DB-capable exact-SHA CI -> final focused Server review
-- CLEAN_ACCEPT after review -> CLI-P6A control-slot resolution
-- Deployment remains blocked
+- CLEAN_ACCEPT -> resolve and activate CLI-P6A control slot
+- substantive defect -> focused Server fixer only
+- Deployment remains blocked until CLI/downstream acceptance
