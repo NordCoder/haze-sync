@@ -87,9 +87,7 @@ pub fn authorize_worktree_sync_once_request(
 
 /// Build a status response from already-sanitized public values.
 #[must_use]
-pub const fn worktree_status_response(
-    parts: WorktreeStatusSafeParts,
-) -> WorktreeStatusResponse {
+pub const fn worktree_status_response(parts: WorktreeStatusSafeParts) -> WorktreeStatusResponse {
     WorktreeStatusResponse::from_safe_parts(parts)
 }
 
@@ -187,11 +185,9 @@ mod tests {
     #[test]
     fn admin_principal_is_accepted_without_runtime_submission() {
         let admin = principal(AdapterRole::Admin);
-        let authenticated = authorize_worktree_sync_once_request(
-            WorktreeSyncOnceRequest::default(),
-            Some(&admin),
-        )
-        .expect("admin principal should satisfy the passive contract");
+        let authenticated =
+            authorize_worktree_sync_once_request(WorktreeSyncOnceRequest::default(), Some(&admin))
+                .expect("admin principal should satisfy the passive contract");
 
         assert_eq!(authenticated.request(), WorktreeSyncOnceRequest::default());
         assert_eq!(authenticated.principal().role(), AdapterRole::Admin);
@@ -199,11 +195,9 @@ mod tests {
 
     #[test]
     fn missing_and_non_admin_principals_map_to_safe_existing_errors() {
-        let missing = authorize_worktree_sync_once_request(
-            WorktreeSyncOnceRequest::default(),
-            None,
-        )
-        .unwrap_err();
+        let missing =
+            authorize_worktree_sync_once_request(WorktreeSyncOnceRequest::default(), None)
+                .unwrap_err();
         assert_eq!(missing.http_status_code(), HTTP_STATUS_UNAUTHORIZED);
         assert_eq!(missing.public_code(), PublicErrorCode::MissingToken);
 
@@ -240,7 +234,10 @@ mod tests {
         });
 
         assert!(response.is_ready());
-        assert_eq!(response.manual_availability, WorktreeManualAvailability::Busy);
+        assert_eq!(
+            response.manual_availability,
+            WorktreeManualAvailability::Busy
+        );
         assert_eq!(response.cycles_failed, u64::MAX);
         assert_eq!(response.pending_watcher_hints, u64::MAX);
     }
