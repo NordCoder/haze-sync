@@ -48,35 +48,112 @@ impl ServerWorktreeHttpControl {
             return ServerWorktreeSyncSubmission::Unavailable;
         };
         let snapshot = host.snapshot();
-        match snapshot.manual_availability {
-            ServerWorktreeManualAvailability::Failed => {
-                return ServerWorktreeSyncSubmission::Failed
-            }
-            ServerWorktreeManualAvailability::Unavailable => {
-                return ServerWorktreeSyncSubmission::Unavailable
-            }
-            ServerWorktreeManualAvailability::NotStarted => {
-                return ServerWorktreeSyncSubmission::NotStarted
-            }
-            ServerWorktreeManualAvailability::Cancelling => {
-                return ServerWorktreeSyncSubmission::Cancelling
-            }
-            ServerWorktreeManualAvailability::Shutdown => {
-                return ServerWorktreeSyncSubmission::Shutdown
-            }
-            ServerWorktreeManualAvailability::Busy => return ServerWorktreeSyncSubmission::Busy,
-            ServerWorktreeManualAvailability::Available => {}
-        }
+        submit_from_snapshot(snapshot.manual_availability, || {
+            map_submission(host.submit_manual(WorktreeRuntimeManualRequest::dry_run(
+                self.manual_budget,
+            )))
+        })
+    }
+}
 
-        match host.submit_manual(WorktreeRuntimeManualRequest::dry_run(self.manual_budget)) {
-            WorktreeRuntimeManualSubmission::Accepted(ticket) => {
-                drop(ticket);
+fn submit_from_snapshot(
+    availability: ServerWorktreeManualAvailability,
+    submit: impl FnOnce() -> ServerWorktreeSyncSubmission,
+) -> ServerWorktreeSyncSubmission {
+    match availability {
+        ServerWorktreeManualAvailability::Failed => ServerWorktreeSyncSubmission::Failed,
+        ServerWorktreeManualAvailability::Unavailable => ServerWorktreeSyncSubmission::Unavailable,
+        ServerWorktreeManualAvailability::Available
+        | ServerWorktreeManualAvailability::Busy
+        | ServerWorktreeManualAvailability::NotStarted
+        | ServerWorktreeManualAvailability::Cancelling
+        | ServerWorktreeManualAvailability::Shutdown => submit(),
+    }
+}
+
+fn map_submission(submission: WorktreeRuntimeManualSubmission) -> ServerWorktreeSyncSubmission {
+    match submission {
+        WorktreeRuntimeManualSubmission::Accepted(ticket) => {
+            drop(ticket);
+            ServerWorktreeSyncSubmission::Accepted
+        }
+        WorktreeRuntimeManualSubmission::Busy => ServerWorktreeSyncSubmission::Busy,
+        WorktreeRuntimeManualSubmission::NotStarted => ServerWorktreeSyncSubmission::NotStarted,
+        WorktreeRuntimeManualSubmission::Cancelling => ServerWorktreeSyncSubmission::Cancelling,
+        WorktreeRuntimeManualSubmission::Shutdown => ServerWorktreeSyncSubmission::Shutdown,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+
+    use super::*;
+
+    #[test]
+    fn stale_busy_snapshot_uses_later_authoritative_accepted_result_once() {
+        let calls = Cell::new(0);
+        let result = submit_from_snapshot(ServerWorktreeManualAvailability::Busy, || {
+            calls.set(calls.get() + 1);
+            ServerWorktreeSyncSubmission::Accepted
+        });
+        assert_eq!(result, ServerWorktreeSyncSubmission::Accepted);
+        assert_eq!(calls.get(), 1);
+    }
+
+    #[test]
+    fn lifecycle_snapshots_do_not_bypass_typed_submission() {
+        for availability in [
+            ServerWorktreeManualAvailability::NotStarted,
+            ServerWorktreeManualAvailability::Cancelling,
+            ServerWorktreeManualAvailability::Shutdown,
+        ] {
+            let calls = Cell::new(0);
+            let result = submit_from_snapshot(availability, || {
+                calls.set(calls.get() + 1);
+                ServerWorktreeSyncSubmission::Busy
+            });
+            assert_eq!(result, ServerWorktreeSyncSubmission::Busy);
+            assert_eq!(calls.get(), 1);
+        }
+    }
+
+    #[test]
+    fn authoritative_outcomes_are_preserved_without_retry() {
+        for expected in [
+            ServerWorktreeSyncSubmission::Busy,
+            ServerWorktreeSyncSubmission::Cancelling,
+            ServerWorktreeSyncSubmission::Shutdown,
+        ] {
+            let calls = Cell::new(0);
+            let result = submit_from_snapshot(ServerWorktreeManualAvailability::Available, || {
+                calls.set(calls.get() + 1);
+                expected
+            });
+            assert_eq!(result, expected);
+            assert_eq!(calls.get(), 1);
+        }
+    }
+
+    #[test]
+    fn failed_and_unavailable_remain_snapshot_only() {
+        for (availability, expected) in [
+            (
+                ServerWorktreeManualAvailability::Failed,
+                ServerWorktreeSyncSubmission::Failed,
+            ),
+            (
+                ServerWorktreeManualAvailability::Unavailable,
+                ServerWorktreeSyncSubmission::Unavailable,
+            ),
+        ] {
+            let calls = Cell::new(0);
+            let result = submit_from_snapshot(availability, || {
+                calls.set(calls.get() + 1);
                 ServerWorktreeSyncSubmission::Accepted
-            }
-            WorktreeRuntimeManualSubmission::Busy => ServerWorktreeSyncSubmission::Busy,
-            WorktreeRuntimeManualSubmission::NotStarted => ServerWorktreeSyncSubmission::NotStarted,
-            WorktreeRuntimeManualSubmission::Cancelling => ServerWorktreeSyncSubmission::Cancelling,
-            WorktreeRuntimeManualSubmission::Shutdown => ServerWorktreeSyncSubmission::Shutdown,
+            });
+            assert_eq!(result, expected);
+            assert_eq!(calls.get(), 0);
         }
     }
 }
