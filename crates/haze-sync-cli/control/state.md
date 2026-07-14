@@ -5,36 +5,33 @@ branch: component/cli
 status: PROMPT_READY
 active_prompt: crates/haze-sync-cli/control/prompt.md
 active_report: crates/haze-sync-cli/control/report.md
-active_agent_role: clean-code-reviewer
-assigned_chat_name: cli — W1 CLI-P6A Worktree Operator Review
+active_agent_role: fixer-worker
+assigned_chat_name: cli — W1 CLI-P6A Test Restoration Fix
 
 wave: W1
-phase: CLI-P6A-FUNCTIONAL-REVIEW
+phase: FIX-CLI-P6A-TEST-REGRESSION
 implementation_status: COMPLETE_AFTER_FIX
-fix_status: FIX_COMPLETE
-clean_review_status: NOT_STARTED
-ci_status: CI_GREEN
+fix_status: NOT_STARTED_TEST_RESTORATION
+clean_review_status: CLEAN_NEEDS_FIX
+ci_status: CI_GREEN_BUT_REVIEW_DEFECT
 architect_status: ARCHITECT_ACCEPT
 known_failed_checks: []
 
 candidate:
 - baseline: 8a3012a20440066422e7ad6c4e52d1a859b1bd51
-- initial_sha: 6c4c2ba4a66999e02542083512587d0d6ad8d437
-- final_sha: 70c3567f587a249a180eb8b9abb155065d197e5c
-- implementation_report_blob: 5df1ebcc3696b1d61d514e005b2dbaebe4213622
-- fixer_report_blob: e55126c8d84d1aa568cd004eaff4503b617504e6
+- current_sha: 70c3567f587a249a180eb8b9abb155065d197e5c
+- review_report_blob: 93327542ab208bd57521b6372e29ac14f253a616
+- ci_run_id: 29342522606
+- ci_run_number: 1948
 
-ci:
-- run_id: 29342522606
-- run_number: 1948
-- conclusion: success
-
-review_scope:
-- command, parser, request, response, exit and secrecy semantics
-- exact API-P8 fan-in
-- no local runtime, fake success, polling, retry or wait
-- formatting and naming are non-blocking
+required_fix:
+- restore legacy commands.rs and main.rs tests from baseline
+- narrowly adapt for new Worktree variant
+- add explicit Disabled and Failed HTTP 200 success rendering tests
+- preserve Running+Busy and all current Worktree tests
+- keep API-P8 blobs exact
 
 next_gate:
-- CLEAN_ACCEPT -> next phase
-- substantive defect -> focused CLI fixer
+- FIX_COMPLETE plus green exact-SHA CI -> final CLI-P6A review
+- product defect exposed by restored test -> focused correction with evidence
+- Deployment remains blocked
