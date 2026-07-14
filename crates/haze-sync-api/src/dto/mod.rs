@@ -9,3 +9,7 @@ pub mod conflicts;
 pub mod files;
 pub mod primitives;
 pub mod server;
+pub mod worktree;
+
+#[cfg(test)]
+mod public_contract_tests;
