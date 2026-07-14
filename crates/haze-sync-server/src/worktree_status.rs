@@ -1,6 +1,7 @@
 //! Passive, secret-safe Server vocabulary for hosted Worktree status.
 
-use crate::worktree_host::{ServerWorktreeHostLifecycle, ServerWorktreeHostStatus};
+pub(crate) use crate::worktree_host::ServerWorktreeHostLifecycle;
+use crate::worktree_host::ServerWorktreeHostStatus;
 use haze_sync_worktree::{WorktreeMode, WorktreeRuntimeLifecycle, WorktreeRuntimeManualStatus};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
