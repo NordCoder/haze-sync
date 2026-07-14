@@ -94,11 +94,15 @@ fn write_output(output: &output::CliOutput) {
 mod tests {
     use super::*;
     use crate::output::CliExitCode;
+    use haze_sync_api::dto::worktree::{
+        WorktreeConfiguredMode, WorktreeHostLifecycle, WorktreeManualAvailability,
+        WorktreeReadiness, WorktreeReadinessReason, WorktreeStatusResponse,
+        WorktreeStatusSafeParts, WorktreeSyncOnceResponse,
+    };
 
     #[test]
     fn status_writes_not_configured_summary_to_stdout() {
         let output = run_from_args(["haze-sync", "status"]);
-
         assert_eq!(output.exit_code, CliExitCode::Success);
         assert!(output.stdout.contains("status command parsed"));
         assert!(output.stdout.contains("remain unavailable"));
@@ -111,7 +115,6 @@ mod tests {
     #[test]
     fn status_offline_writes_offline_summary_to_stdout() {
         let output = run_from_args(["haze-sync", "status", "--offline"]);
-
         assert_eq!(output.exit_code, CliExitCode::Success);
         assert!(output.stdout.contains("status: offline"));
         assert!(output.stdout.contains("live server calls: not attempted"));
@@ -127,14 +130,12 @@ mod tests {
             "status: not_configured",
             "status command parsed; live server calls remain unavailable",
         );
-
         assert_eq!(output.stdout, "server status: ready");
     }
 
     #[test]
     fn adapters_list_writes_not_configured_summary_to_stdout() {
         let output = run_from_args(["haze-sync", "adapters", "list"]);
-
         assert_eq!(output.exit_code, CliExitCode::Success);
         assert!(output.stdout.contains("adapters list command parsed"));
         assert!(output.stdout.contains("remain unavailable"));
@@ -147,7 +148,6 @@ mod tests {
     #[test]
     fn doctor_defaults_to_offline_summary() {
         let output = run_from_args(["haze-sync", "doctor"]);
-
         assert_eq!(output.exit_code, CliExitCode::Success);
         assert!(output.stdout.contains("doctor mode: offline"));
         assert!(output.stdout.contains("live server calls: not attempted"));
@@ -159,7 +159,6 @@ mod tests {
     #[test]
     fn live_doctor_without_config_is_not_run_and_non_zero() {
         let output = run_from_args(["haze-sync", "doctor", "--live"]);
-
         assert_eq!(output.exit_code, CliExitCode::RuntimeError);
         assert!(output.stdout.contains("doctor mode: live"));
         assert!(output.stdout.contains("live checks: not_run"));
@@ -170,7 +169,6 @@ mod tests {
     fn parse_errors_write_safe_message_to_stderr() {
         let sensitive_arg = concat!("--", "to", "ken", "=", "redacted-test-value");
         let output = run_from_args(["haze-sync", "status", sensitive_arg]);
-
         assert_eq!(output.exit_code, CliExitCode::UsageError);
         assert!(output.stdout.is_empty());
         assert_eq!(output.stderr, "unexpected argument");
@@ -180,11 +178,8 @@ mod tests {
     #[test]
     fn doctor_help_writes_doctor_usage_to_stdout() {
         let output = run_from_args(["haze-sync", "doctor", "--help"]);
-
         assert_eq!(output.exit_code, CliExitCode::Success);
-        assert!(output
-            .stdout
-            .contains("usage: haze-sync doctor [--offline]"));
+        assert!(output.stdout.contains("usage: haze-sync doctor [--offline]"));
         assert!(output.stdout.contains("haze-sync doctor --live"));
         assert!(output.stderr.is_empty());
     }
@@ -206,10 +201,84 @@ mod tests {
     fn worktree_parse_errors_do_not_echo_sensitive_arguments() {
         let sensitive_arg = "--token=redacted-test-value";
         let output = run_from_args(["haze-sync", "worktree", "sync-once", sensitive_arg]);
-
         assert_eq!(output.exit_code, CliExitCode::UsageError);
         assert!(output.stdout.is_empty());
         assert_eq!(output.stderr, "unexpected argument");
         assert!(!output.stderr.contains("redacted-test-value"));
+    }
+
+    struct StatusClient(WorktreeStatusResponse);
+
+    impl worktree_api::WorktreeClient for StatusClient {
+        fn fetch_worktree_status(
+            &self,
+            _server_url: &config::ServerUrl,
+            _request: worktree_api::WorktreeStatusRequest,
+        ) -> Result<(u16, WorktreeStatusResponse), worktree_api::WorktreeClientError> {
+            Ok((200, self.0))
+        }
+
+        fn submit_worktree_sync_once(
+            &self,
+            _server_url: &config::ServerUrl,
+            _request: worktree_api::WorktreeSyncRequest,
+        ) -> Result<(u16, WorktreeSyncOnceResponse), worktree_api::WorktreeClientError> {
+            Err(worktree_api::WorktreeClientError::ServerUnavailable)
+        }
+    }
+
+    fn worktree_status(
+        configured_mode: WorktreeConfiguredMode,
+        lifecycle: WorktreeHostLifecycle,
+        readiness: WorktreeReadiness,
+        readiness_reason: WorktreeReadinessReason,
+        manual_availability: WorktreeManualAvailability,
+    ) -> WorktreeStatusResponse {
+        WorktreeStatusResponse::from_safe_parts(WorktreeStatusSafeParts {
+            configured_mode,
+            host_lifecycle: lifecycle,
+            readiness,
+            readiness_reason,
+            cycles_completed: 3,
+            cycles_failed: 1,
+            cycle_in_progress: false,
+            pending_watcher_hints: 2,
+            manual_availability,
+        })
+    }
+
+    #[test]
+    fn disabled_and_failed_http_200_statuses_render_as_success() {
+        let config = config::CliConfig::new(
+            config::ProfileName::parse("ops").unwrap(),
+            Some(config::ServerUrl::parse("https://sync.example.test").unwrap()),
+            config::OutputFormat::Human,
+            config::TokenSource::None,
+        );
+        let cases = [
+            worktree_status(
+                WorktreeConfiguredMode::Disabled,
+                WorktreeHostLifecycle::Disabled,
+                WorktreeReadiness::Ready,
+                WorktreeReadinessReason::DisabledInert,
+                WorktreeManualAvailability::Unavailable,
+            ),
+            worktree_status(
+                WorktreeConfiguredMode::DryRun,
+                WorktreeHostLifecycle::Failed,
+                WorktreeReadiness::NotReady,
+                WorktreeReadinessReason::Failed,
+                WorktreeManualAvailability::Failed,
+            ),
+        ];
+
+        for response in cases {
+            let output = worktree_api::render_worktree_status(&config, &StatusClient(response));
+            assert_eq!(output.exit_code, CliExitCode::Success);
+            assert!(output.stderr.is_empty());
+            assert!(output.stdout.contains("worktree lifecycle:"));
+            assert!(output.stdout.contains("worktree readiness:"));
+            assert!(output.stdout.contains("manual availability:"));
+        }
     }
 }
