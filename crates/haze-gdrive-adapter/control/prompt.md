@@ -1,30 +1,69 @@
-# W1-GDA-COMPLETE-FAN-IN — GDrive Adapter component plan complete
+# W1-GDA-FAN-IN-PRE-SYNC
+
+Before starting, name this worker chat exactly:
+
+`gdrive-adapter — W1 GDA Fan-In Main Sync`
 
 Component: gdrive-adapter
 Path: crates/haze-gdrive-adapter
 Branch: component/gdrive-adapter
 PR: #50
-Role: none
+Role: implementation-worker
+Phase: GDA-FAN-IN-PRE-SYNC
 
-This is a hold notice, not an executable worker prompt.
+This is a synchronization-only phase. Do not begin GDrive cross-component fan-in or make architecture decisions.
 
-## Accepted state
+Do not merge PR #50, change draft state, rewrite history, rebase, squash, force-push, modify sibling branches, or perform unrelated cleanup.
 
-GDA-P8 implementation, GDA-P8C clean-code review, and the artifact-based formatting correction are complete. The final code-bearing source/test head is green.
+## Coordinates
 
-- code_bearing_sha: `06a7051a7e14c1da45de8cf96a78658b59cb823e`
-- workflow: `Component CI`
-- workflow_run_id: `29145248883`
-- run_number: `1658`
-- workflow_run_attempt: `1`
-- conclusion: `success`
+- accepted component-local code-bearing SHA: `06a7051a7e14c1da45de8cf96a78658b59cb823e`;
+- accepted Component CI run: `29145248883`, number `1658`, success;
+- historical branch head observed before this control slot: `2be620c20712916a08620febea4fee07ed90272f`;
+- exact current main: `c1e69a664388b0cba028170e8398b9088218957d`;
+- merge base: `9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2`;
+- branch and main are diverged; exact main is not yet an ancestor.
 
-Accepted delete-candidate behavior remains conservative: authoritative scan evidence, distinct later confirmation, current-state revalidation, Core delete arbitration, dry-run immutability, identity-aware recovery/retirement, stable operation identifiers, and mass-delete safety are preserved.
+At worker start, fetch the actual current branch head because Orchestrator control-only commits follow the historical head above.
 
-## Hold reason
+## Task
 
-The component-local implementation plan is complete. Remaining work is cross-component fan-in: durable candidate/mapping persistence with transactional consistency, concrete Core/API transport, audited operator controls, live provider/OAuth lifecycle, scheduling, shutdown, status/doctor hosting, deployment configuration, and E2E validation.
+1. Normally merge exact main SHA `c1e69a664388b0cba028170e8398b9088218957d` into the actual current `component/gdrive-adapter` head.
+2. Preserve the accepted GDrive product history and all later control-only commits.
+3. Do not rebase, squash, force-push, or rewrite history.
+4. Resolve conflicts minimally, preserving exact accepted main behavior and accepted GDrive behavior.
+5. Do not implement any of the following in this phase:
+   - concrete Server/API transport;
+   - direct Storage/DB persistence;
+   - live Google/OAuth provider client;
+   - scheduling or long-running sync loop;
+   - status/doctor hosting;
+   - manual operator controls;
+   - Deployment service/configuration;
+   - E2E integration.
+6. Create a real merge/code-bearing commit without CI skip.
+7. Obtain authoritative Component CI success on the exact post-sync SHA.
 
-## Unblock condition
+## Verification
 
-Only an explicit Orchestrator fan-in/integration prompt within GDrive Adapter ownership may reactivate this component. Do not launch a worker from this hold notice.
+Confirm:
+
+- exact main is an ancestor of the post-sync SHA;
+- actual pre-sync GDrive head is also an ancestor;
+- accepted code-bearing SHA `06a7051...` remains in history;
+- no product/fan-in/architecture work occurred beyond minimal conflict resolution;
+- PR #50 remains open, draft and unmerged;
+- exact post-sync CI is green.
+
+## Report
+
+Write `crates/haze-gdrive-adapter/control/report.md` with:
+
+- `REPORT_TYPE: IMPLEMENTATION`;
+- `phase_id: GDA-FAN-IN-PRE-SYNC`;
+- `chat_name: gdrive-adapter — W1 GDA Fan-In Main Sync`;
+- status `SELF_ACCEPT`, `NEEDS_FIX`, `BLOCKED_BY_SCOPE`, or `BLOCKED_BY_TOOLING`.
+
+Record actual pre-sync head, exact main SHA, merge SHA and parents/ancestry, conflicts, history-preservation evidence, absence of fan-in work, PR state, and exact CI.
+
+Do not claim the GDrive fan-in architecture is decided. After successful sync, Orchestrator will open a separate architect-reviewer slot before any implementation worker receives product work.
