@@ -11,48 +11,41 @@ default_branch_control_is_active: no
 
 active_prompt: crates/haze-sync-storage/control/prompt.md
 active_report: crates/haze-sync-storage/control/report.md
-active_agent_role: implementation-worker
-assigned_chat_name: storage — W1 STOR-GDA-P11 GDrive Durable State
+active_agent_role: fixer-worker
+assigned_chat_name: storage — W1 FIX-STOR-GDA-P1 Rust Workspace CI
 
 wave: W1
-phase: STOR-GDA-P1-DURABLE-STATE
-implementation_status: NOT_STARTED
+phase: FIX-STOR-GDA-P1-RUST-WORKSPACE-CI
+implementation_status: SELF_NEEDS_FIX
 fix_status: NOT_STARTED
 clean_review_status: NOT_STARTED
 architect_status: ARCHITECT_ACCEPT_GDRIVE_FAN_IN
-ci_status: NOT_RUN
-known_failed_checks: []
+ci_status: CI_RED
+known_failed_checks:
+- Rust workspace job 87373222668
 
-accepted_storage_baseline:
-- code_bearing_sha: 66b6a1f554aae1d1b774cc88560d46dd140c7a54
-- prior_ci_run_id: 29185466870
-- prior_ci_run_number: 1833
-- prior_ci_conclusion: success
-- exact_main_ancestor: c1e69a664388b0cba028170e8398b9088218957d
-- branch_head_before_slot: 30b04154523165900be568875fff6e1a69216022
+failing_candidate:
+- code_bearing_sha: 4f539e32ae8768aeeb9cda11f388745c3771496c
+- implementation_report_blob: b3a0113b6db03e8ac410e9ca0708a38ae4f22d5c
+- ci_run_id: 29421594032
+- ci_run_number: 1987
+- ci_run_attempt: 1
+- postgres_verification: success
+- rust_workspace: failure
 
-architecture_input:
-- report_blob: 14c427880e1201d851cdc9ee04b9cd0e83334de4
-- persistence_owner: Storage
-- delivery: Server/API-mediated
-- direct_adapter_db_access: forbidden
-- transaction_owner: later Server caller
-- first_phase: STOR-GDA-P1-DURABLE-STATE
-
-required_surface:
-- versioned adapter-scoped GDrive runtime state
-- Drive cursor and Core export checkpoint
-- mapping/echo/delete-candidate/operation compare-and-commit
-- minimum contiguous migration
-- unit and real PostgreSQL evidence
-- redacted passive Storage contracts
+diagnostics:
+- artifact_id: 8345471214
+- artifact_name: ci-diag__component-storage__wf-component-ci__run-29421594032__attempt-1
+- primary_log_source: artifact
+- raw_job_logs_fallback_only: yes
 
 protected_scope:
-- no API/Server/GDrive/Deployment product changes
-- no provider/OAuth/scheduling work
-- no Core or delete-unlock policy
-- no real secrets or workflow changes
+- fix only artifact-proven Rust workspace failure
+- preserve migration 0011 and durable-state contracts
+- no sibling component or workflow changes
+- no new Storage product phase
 
 next_gate:
-- SELF_ACCEPT plus exact-SHA DB-green CI -> focused Storage clean/DB review
-- implementation or CI defect -> focused Storage fixer
+- FIX_COMPLETE plus full exact-SHA CI green -> Storage clean/DB review
+- artifact unavailable -> FIX_BLOCKED_BY_LOGS
+- contract issue -> FIX_BLOCKED_BY_CONTRACT
