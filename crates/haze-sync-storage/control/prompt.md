@@ -4,25 +4,45 @@ Before starting, name this worker chat exactly:
 
 `storage — W1 STOR-GDA-P11 GDrive Durable State`
 
-Component: storage
-Path: crates/haze-sync-storage
-Branch: component/storage
+## Authoritative repository and control slot
+
+```text
+repository: NordCoder/haze-sync
+component: storage
+component path: crates/haze-sync-storage
+branch/ref to read and write: component/storage
 PR: #47
-Role: implementation-worker
-Phase: STOR-GDA-P1-DURABLE-STATE
+base branch: main
+role: implementation-worker
+phase: STOR-GDA-P1-DURABLE-STATE
+```
+
+`NordCoder/haze-sync` is the correct current repository. Repository access is verified. There is no migrated-repository lookup or migration audit in this phase.
+
+Read `control/state.md` and `control/prompt.md` explicitly from `component/storage`. Do not use the default-branch control files, project handoff text, cached snippets, or historical `ACCEPTED_HOLD` files as the active slot.
+
+The authoritative active state is:
+
+```text
+status: PROMPT_READY
+active_agent_role: implementation-worker
+assigned_chat_name: storage — W1 STOR-GDA-P11 GDrive Durable State
+phase: STOR-GDA-P1-DURABLE-STATE
+```
+
+If a different state is observed, first re-fetch the exact files from `ref=component/storage`. Do not replace this task with a migrated-repository audit.
+
+Fetch the actual branch head before editing because Orchestrator control-only commits follow the earlier observed head.
 
 Do not merge, change draft state, rewrite history, rebase, force-push, modify sibling branches, or perform unrelated cleanup.
 
 ## Accepted baseline
 
 - previous accepted Storage code-bearing SHA: `66b6a1f554aae1d1b774cc88560d46dd140c7a54`;
-- current Storage branch head observed before this slot: `30b04154523165900be568875fff6e1a69216022`;
 - exact main ancestor: `c1e69a664388b0cba028170e8398b9088218957d`;
 - PR #47 is open, draft, mergeable and unmerged;
 - GDrive fan-in architecture report blob: `14c427880e1201d851cdc9ee04b9cd0e83334de4`;
 - GDrive synchronized baseline: `f9a2da6eb9ac6f59b1ec18ae4d85eb51964f3cbe`.
-
-Fetch the actual Storage head at worker start because Orchestrator control-only commits may follow the observed head.
 
 ## Fixed architecture
 
@@ -94,11 +114,9 @@ The migration must:
 - avoid storing OAuth tokens, bearer tokens, raw provider payloads or file contents;
 - fail safely on incompatible pre-existing structures rather than silently deleting or rewriting data.
 
-Do not change an already accepted migration unless a concrete migration defect makes the new migration impossible. Report such a case as blocked instead of rewriting accepted history.
+Do not change an already accepted migration unless a concrete migration defect makes the new migration impossible. Report such a case as `BLOCKED_BY_CONTRACT` instead of rewriting accepted history.
 
-## Expected paths
-
-Allowed product scope:
+## Allowed product scope
 
 - `crates/haze-sync-storage/src/models/**`;
 - `crates/haze-sync-storage/src/repositories/**`;
@@ -106,17 +124,17 @@ Allowed product scope:
 - one minimum new file under `migrations/**`;
 - focused Storage PostgreSQL/unit tests;
 - focused `crates/haze-sync-storage/docs/**` updates;
-- Storage control report.
+- `crates/haze-sync-storage/control/report.md`.
 
-A focused new repository module such as `gdrive_state.rs` is allowed. Extend `gdrive_mapping.rs` only where doing so preserves a clear single responsibility; do not force all runtime state into the existing mapping repository.
+A focused repository module such as `gdrive_state.rs` is allowed. Extend `gdrive_mapping.rs` only if its single responsibility remains clear.
 
 ## Required tests
 
-Add unit and real PostgreSQL coverage for at least:
+Add unit and real PostgreSQL evidence for at least:
 
-1. fresh migration creates the accepted durable state surface;
-2. migration from the accepted current pre-state succeeds without data loss;
-3. incompatible legacy/pre-existing state fails before destructive mutation;
+1. fresh migration creates the durable-state surface;
+2. migration from accepted current pre-state succeeds without data loss;
+3. incompatible pre-existing state fails before destructive mutation;
 4. empty initial adapter snapshot;
 5. bounded deterministic snapshot containing mapping/cursor/checkpoint/candidate facts;
 6. successful expected-version compare-and-commit;
@@ -124,13 +142,13 @@ Add unit and real PostgreSQL coverage for at least:
 8. cursor regression rejects atomically;
 9. cursor generation/gap mismatch rejects safely;
 10. Core export checkpoint regression rejects atomically;
-11. mapping plus echo state commit succeeds atomically;
-12. delete-candidate validation plus transition succeeds atomically;
-13. transaction rollback preserves all prior state;
+11. mapping plus echo state commits atomically;
+12. delete-candidate validation plus transition commits atomically;
+13. transaction rollback preserves prior state;
 14. duplicate operation replay is deterministic;
 15. same operation identity with different facts conflicts;
 16. adapter identity isolation;
-17. Debug/Display/errors do not reveal raw cursor, Drive payload, secret, database URL or sensitive absolute path;
+17. Debug/Display/errors reveal no raw cursor, Drive payload, secret, database URL or sensitive absolute path;
 18. existing Storage tests, including STOR-P10 strict PostgreSQL evidence, remain green.
 
 Use synthetic identifiers and provider facts only. No live Google credentials or provider calls.
@@ -174,31 +192,35 @@ Required evidence on the exact final code-bearing SHA:
 - `cargo fmt --all --check`;
 - Storage check/test/clippy through Component CI;
 - mandatory DB-capable Storage PostgreSQL verification;
-- fresh migration evidence;
-- accepted pre-state/current migration evidence;
+- fresh and accepted pre-state migration evidence;
 - compare-and-commit rollback/replay evidence;
 - PR #47 remains open, draft and unmerged.
 
-If DB tooling or authoritative CI cannot run, report `BLOCKED_BY_TOOLING`; do not claim acceptance from unit tests alone.
+If DB tooling or authoritative CI cannot run, use `BLOCKED_BY_TOOLING`; do not claim acceptance from unit tests alone.
 
 ## Report
 
-Write `crates/haze-sync-storage/control/report.md` with:
+Write only `crates/haze-sync-storage/control/report.md` using the project report template.
 
-- `REPORT_TYPE: IMPLEMENTATION`;
-- `phase_id: STOR-GDA-P1-DURABLE-STATE`;
-- `chat_name: storage — W1 STOR-GDA-P11 GDrive Durable State`;
-- status `SELF_ACCEPT`, `NEEDS_FIX`, `BLOCKED_BY_CONTRACT`, `BLOCKED_BY_SCOPE`, or `BLOCKED_BY_TOOLING`.
+Set:
 
-Record:
+```text
+REPORT_TYPE: IMPLEMENTATION
+phase_id: STOR-GDA-P1-DURABLE-STATE
+chat_name: storage — W1 STOR-GDA-P11 GDrive Durable State
+```
 
-- exact changed paths;
-- migration number and schema surface;
-- repository/model contracts;
-- transaction/version/cursor/idempotency invariants;
-- PostgreSQL and migration evidence;
-- redaction/secrecy evidence;
-- final code-bearing SHA and exact CI run;
-- downstream contracts unblocked.
+Allowed statuses:
 
-Do not claim CLEAN_ACCEPT or merge readiness. A focused Storage clean/DB review follows.
+- `SELF_ACCEPT`;
+- `SELF_ACCEPT_PENDING_CI`;
+- `SELF_NEEDS_FIX`;
+- `BLOCKED_BY_CONTRACT`;
+- `BLOCKED_BY_DEPENDENCY`;
+- `BLOCKED_BY_TOOLING`.
+
+Do not invent `BLOCKED_BY_MIGRATED_REPOSITORY_ACCESS`: repository access and coordinates are already verified for this slot.
+
+Record exact changed paths, migration number/schema, repository contracts, transaction/version/cursor/idempotency invariants, PostgreSQL evidence, secrecy evidence, final code-bearing SHA, exact CI, and downstream contracts unblocked.
+
+Do not claim `CLEAN_ACCEPT` or merge readiness. A focused Storage clean/DB review follows.
