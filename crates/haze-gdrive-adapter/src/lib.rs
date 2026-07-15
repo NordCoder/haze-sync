@@ -5,9 +5,10 @@
 //! cursor state, dependency-free content hashing, full-scan import planning,
 //! change-feed reconciliation, Core-to-Drive export planning/apply boundaries,
 //! conservative delete-candidate guardrails, and process lifecycle scaffolding.
-//! Concrete HTTP, OAuth, persistence, and background runtime wiring remain
+//! Concrete provider transport, persistence, and background runtime wiring remain
 //! deferred.
 
+pub mod auth;
 pub mod change_feed;
 pub mod config;
 pub mod delete_guard;
@@ -19,6 +20,11 @@ pub mod runtime;
 pub mod scan;
 pub mod state;
 
+pub use auth::{
+    preflight, AccessToken, AuthError, AuthErrorCategory, FakeGoogleProviderClient,
+    FakeTokenEndpoint, GoogleAuthClient, GoogleCredentials, GoogleProviderClient, PreflightReport,
+    TokenEndpoint, TokenRefreshRequest,
+};
 pub use change_feed::{
     classify_drive_changes, run_change_feed_cycle, ChangeFeedCycleInput, ChangeFeedCycleOutcome,
     ChangeFeedError, ChangeFeedModelError, ChangePollDebouncer, ChangePollTrigger,
