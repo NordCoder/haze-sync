@@ -10,33 +10,33 @@ default_branch_control_is_active: no
 
 active_prompt: crates/haze-gdrive-adapter/control/prompt.md
 active_report: crates/haze-gdrive-adapter/control/report.md
-active_agent_role: fixer-worker
-assigned_chat_name: gdrive-adapter — W1 FIX-GDA-GDA-P3 CI
+active_agent_role: clean-code-reviewer
+assigned_chat_name: gdrive-adapter — W1 GDA-GDA-P3 OAuth Security Review
 
 wave: W1
-phase: FIX-GDA-GDA-P3-CI
-implementation_status: SELF_ACCEPT_PENDING_CI
-fix_status: NOT_STARTED
+phase: GDA-GDA-P3-CLEAN-REVIEW
+implementation_status: COMPLETE_AFTER_CI_FIX
+fix_status: FIX_COMPLETE
 clean_review_status: NOT_STARTED
-ci_status: CI_RED_FINALIZER_ONLY
+ci_status: CI_GREEN
 architect_status: ARCHITECT_ACCEPT_GDRIVE_FAN_IN
 
-failing_candidate:
-- code_bearing_sha: 6044c6d2cb160250a890415c0ff0d2785be6a981
+review_candidate:
+- code_bearing_sha: cf86aba890df6dcfb95f1d285677ceacf96a7772
 - implementation_report_blob: 5f0aea2859eba8575f3c8e302b72a09ca7aa24fc
-- ci_run_id: 29446145224
-- ci_run_number: 2022
-- ci_attempt: 1
-- artifact_id: 8355565313
-- artifact_name: ci-diag__component-gdrive-adapter__wf-component-ci__run-29446145224__attempt-1
+- fixer_report_blob: e33d265a28c2f56fff60d5e528c4f7dfd6a0e2a8
+- ci_run_id: 29456659157
+- ci_run_number: 2026
+- ci_conclusion: success
 
-protected_scope:
-- artifact-proven fix only
-- preserve OAuth/credential/auth boundaries and redaction
-- no next GDrive product phase
-- no Server/API/Storage/scheduler/Deployment/sibling/workflow changes
+required_review:
+- credential parsing and read-only lifecycle
+- memory-only refresh and expiry handling
+- safe auth/scope/provider categories
+- observation-only preflight
+- comprehensive redaction and fake-only tests
+- no cross-component/runtime expansion
 
 next_gate:
-- FIX_COMPLETE plus full exact-SHA green CI -> focused OAuth/security clean review
-- artifact unavailable -> FIX_BLOCKED_BY_LOGS
-- unresolved contract issue -> FIX_BLOCKED_BY_CONTRACT
+- CLEAN_ACCEPT -> next sequential GDrive owner phase
+- CLEAN_NEEDS_FIX -> focused GDrive fixer loop
