@@ -31,11 +31,7 @@ pub struct AuthError {
 }
 
 impl AuthError {
-    pub const fn new(
-        category: AuthErrorCategory,
-        retryable: bool,
-        message: &'static str,
-    ) -> Self {
+    pub const fn new(category: AuthErrorCategory, retryable: bool, message: &'static str) -> Self {
         Self {
             category,
             retryable,
