@@ -91,8 +91,8 @@ pub fn parse_authenticated_get_gdrive_state_request(
     let principal = principal
         .cloned()
         .ok_or(GDriveStateRouteError::Unauthorized)?;
-    let adapter_id =
-        AdapterId::parse(parts.adapter_id).map_err(|_| GDriveStateRouteError::ValidationError)?;
+    let adapter_id = AdapterId::parse(parts.adapter_id)
+        .map_err(|_| GDriveStateRouteError::ValidationError)?;
     let access = match principal.role() {
         AdapterRole::Admin => GDriveStateReadAccess::AdminSanitized,
         AdapterRole::GdriveAdapter if principal.adapter_id() == adapter_id.as_str() => {
@@ -119,11 +119,22 @@ pub fn parse_authenticated_get_gdrive_state_request(
     })
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct GDriveStateCommitRouteParts<'a> {
     pub adapter_id: &'a str,
     pub idempotency_key: Option<&'a str>,
     pub body: GDriveStateCommitRequest,
+}
+
+impl fmt::Debug for GDriveStateCommitRouteParts<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("GDriveStateCommitRouteParts")
+            .field("adapter_id", &self.adapter_id)
+            .field("idempotency_key", &"<redacted>")
+            .field("body", &"<private-gdrive-state-commit-redacted>")
+            .finish()
+    }
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -162,8 +173,8 @@ impl fmt::Debug for AuthenticatedGDriveStateCommitRequest {
             .debug_struct("AuthenticatedGDriveStateCommitRequest")
             .field("adapter_id", &self.adapter_id)
             .field("principal", &self.principal)
-            .field("idempotency_key", &self.idempotency_key)
-            .field("body", &self.body)
+            .field("idempotency_key", &"<redacted>")
+            .field("body", &"<private-gdrive-state-commit-redacted>")
             .finish()
     }
 }
@@ -175,8 +186,8 @@ pub fn parse_authenticated_gdrive_state_commit_request(
     let principal = principal
         .cloned()
         .ok_or(GDriveStateRouteError::Unauthorized)?;
-    let adapter_id =
-        AdapterId::parse(parts.adapter_id).map_err(|_| GDriveStateRouteError::ValidationError)?;
+    let adapter_id = AdapterId::parse(parts.adapter_id)
+        .map_err(|_| GDriveStateRouteError::ValidationError)?;
     if principal.role() != AdapterRole::GdriveAdapter
         || principal.adapter_id() != adapter_id.as_str()
     {
@@ -223,7 +234,8 @@ pub fn validate_private_snapshot(
     .into_iter()
     .flatten()
     {
-        OperationId::try_from(operation_id).map_err(|_| GDriveStateRouteError::ValidationError)?;
+        OperationId::try_from(operation_id)
+            .map_err(|_| GDriveStateRouteError::ValidationError)?;
     }
     Ok(())
 }
@@ -329,7 +341,8 @@ fn validate_mapping(mapping: &GDriveMappingFactsDto) -> Result<(), GDriveStateRo
         }
     }
     if let Some(revision_id) = mapping.core_revision_id.as_ref() {
-        RevisionId::try_from(revision_id).map_err(|_| GDriveStateRouteError::ValidationError)?;
+        RevisionId::try_from(revision_id)
+            .map_err(|_| GDriveStateRouteError::ValidationError)?;
     }
     if let Some(core_seq) = mapping.core_seq {
         validate_storage_number(core_seq)?;
@@ -356,7 +369,8 @@ fn validate_mapping(mapping: &GDriveMappingFactsDto) -> Result<(), GDriveStateRo
         }
     }
     if let Some(operation_id) = mapping.echo.operation_id.as_ref() {
-        OperationId::try_from(operation_id).map_err(|_| GDriveStateRouteError::ValidationError)?;
+        OperationId::try_from(operation_id)
+            .map_err(|_| GDriveStateRouteError::ValidationError)?;
     }
     if let Some(candidate) = mapping.delete_candidate.as_ref() {
         validate_storage_number(candidate.generation)?;
@@ -522,8 +536,8 @@ impl Error for GDriveStateRouteError {}
 mod tests {
     use crate::dto::{
         gdrive::{
-            GDriveCursorCommitDto, GDriveFactsFingerprintDto, GDriveOperationFactsDto,
-            GDriveOperationKindDto,
+            GDriveCursorAdvanceDto, GDriveCursorCommitDto, GDriveFactsFingerprintDto,
+            GDriveOperationFactsDto, GDriveOperationKindDto, GDriveRawCursorDto,
         },
         primitives::OperationIdDto,
     };
@@ -614,11 +628,39 @@ mod tests {
     }
 
     #[test]
+    fn commit_route_debug_redacts_idempotency_and_private_body() {
+        let idempotency = "sentinel-idempotency-key";
+        let cursor = "sentinel-private-raw-cursor";
+        let mut body = minimal_commit();
+        body.cursor.advance = Some(GDriveCursorAdvanceDto {
+            next_generation: 4,
+            cursor: GDriveRawCursorDto::parse(cursor).unwrap(),
+        });
+        let parts = GDriveStateCommitRouteParts {
+            adapter_id: "gdrive-main",
+            idempotency_key: Some(idempotency),
+            body,
+        };
+        let parts_debug = format!("{parts:?}");
+        assert!(!parts_debug.contains(idempotency));
+        assert!(!parts_debug.contains(cursor));
+        assert!(parts_debug.contains("<private-gdrive-state-commit-redacted>"));
+
+        let adapter = principal("gdrive-main", AdapterRole::GdriveAdapter);
+        let authenticated =
+            parse_authenticated_gdrive_state_commit_request(parts, Some(&adapter)).unwrap();
+        let authenticated_debug = format!("{authenticated:?}");
+        assert!(!authenticated_debug.contains(idempotency));
+        assert!(!authenticated_debug.contains(cursor));
+        assert!(authenticated_debug.contains("<private-gdrive-state-commit-redacted>"));
+    }
+
+    #[test]
     fn cursor_transition_must_be_exactly_contiguous() {
         let mut request = minimal_commit();
-        request.cursor.advance = Some(crate::dto::gdrive::GDriveCursorAdvanceDto {
+        request.cursor.advance = Some(GDriveCursorAdvanceDto {
             next_generation: 5,
-            cursor: crate::dto::gdrive::GDriveRawCursorDto::parse("cursor-fixture").unwrap(),
+            cursor: GDriveRawCursorDto::parse("cursor-fixture").unwrap(),
         });
         assert_eq!(
             validate_commit_body(&request).unwrap_err(),
