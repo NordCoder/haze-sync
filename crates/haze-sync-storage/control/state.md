@@ -2,57 +2,51 @@
 
 component: storage
 branch: component/storage
-status: ACCEPTED_HOLD
-
+status: PROMPT_READY
 active_prompt: crates/haze-sync-storage/control/prompt.md
 active_report: crates/haze-sync-storage/control/report.md
-active_agent_role: none
-assigned_chat_name: none
-prompt_revision: verified by Orchestrator after committed STOR-P10 cross-branch CLEAN_ACCEPT
+active_agent_role: implementation-worker
+assigned_chat_name: storage — W1 STOR-GDA-P11 GDrive Durable State
 
 wave: W1
-phase: STOR-P10-ACCEPTED-HOLD
-
-implementation_status: SELF_ACCEPT
-fix_status: FIX_COMPLETE
-clean_review_status: CLEAN_ACCEPT
-architect_status: ARCHITECT_CHANGED_CONTRACTS
-ci_status: CI_GREEN_DB_VERIFIED
-accepted_code_bearing_sha: 66b6a1f554aae1d1b774cc88560d46dd140c7a54
-ci_run_id: 29185466870
-ci_run_number: 1833
-ci_run_attempt: 1
+phase: STOR-GDA-P1-DURABLE-STATE
+implementation_status: NOT_STARTED
+fix_status: NOT_STARTED
+clean_review_status: NOT_STARTED
+architect_status: ARCHITECT_ACCEPT_GDRIVE_FAN_IN
+ci_status: NOT_RUN
 known_failed_checks: []
 
-accepted_report:
-- commit 13a0c80123061848235676b2a7dc7c3a3c644dee
-- type CLEAN_CODE_REVIEW
-- phase STOR-P10-CROSS-BRANCH-CONFIRM
-- status CLEAN_ACCEPT
+accepted_storage_baseline:
+- code_bearing_sha: 66b6a1f554aae1d1b774cc88560d46dd140c7a54
+- prior_ci_run_id: 29185466870
+- prior_ci_run_number: 1833
+- prior_ci_conclusion: success
+- exact_main_ancestor: c1e69a664388b0cba028170e8398b9088218957d
+- branch_head_before_slot: 30b04154523165900be568875fff6e1a69216022
 
-accepted_contracts:
-- migration 0010 fail-before-destructive behavior
-- direct savepoint-backed non-empty legacy migration guard
-- versioned Worktree instance binding and per-adapter path state
-- passive caller-owned transaction repositories
-- exact contiguous locked cursor advancement
-- bounded deterministic snapshots
-- redacted roots, fingerprints, cursors, database errors and test URLs
-- all five strict PostgreSQL evidence checks
+architecture_input:
+- report_blob: 14c427880e1201d851cdc9ee04b9cd0e83334de4
+- persistence_owner: Storage
+- delivery: Server/API-mediated
+- direct_adapter_db_access: forbidden
+- transaction_owner: later Server caller
+- first_phase: STOR-GDA-P1-DURABLE-STATE
 
-accepted_dependencies:
-- WT-P10 CLEAN_ACCEPT at 1942946331e8362f19907ab6ad4eb779da70fd57
-- SRV-P7B2 CLEAN_ACCEPT at 647dce7b624d67663632808906896cb6745ea7e7
-- Server Storage dependency gating explicitly accepted
+required_surface:
+- versioned adapter-scoped GDrive runtime state
+- Drive cursor and Core export checkpoint
+- mapping/echo/delete-candidate/operation compare-and-commit
+- minimum contiguous migration
+- unit and real PostgreSQL evidence
+- redacted passive Storage contracts
 
-integration_status:
-- component/server does not yet contain the exact accepted Storage product snapshot
-- Server exact-SHA fan-in is required before SRV-P7B3
+protected_scope:
+- no API/Server/GDrive/Deployment product changes
+- no provider/OAuth/scheduling work
+- no Core or delete-unlock policy
+- no real secrets or workflow changes
 
-blocked_downstream:
-- SRV-P7B3 waits for exact accepted WT-P10 and STOR-P10 product fan-in into Server, green CI and integration clean review
-- Deployment Worktree migration/runtime fan-in waits for later SRV-P7B4 and SRV-P7B5
-
-unblock_condition:
-- explicit Storage-owned integration defect or contract change only
-- otherwise remain held while Server performs exact-SHA fan-in
+next_gate:
+- SELF_ACCEPT plus exact-SHA DB-green CI -> focused Storage clean/DB review
+- implementation or CI defect -> focused Storage fixer
