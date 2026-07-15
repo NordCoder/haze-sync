@@ -1,73 +1,53 @@
-# W1-GDA-GDA-P3-LIVE-GOOGLE-OAUTH
+# W1-FIX-GDA-GDA-P3-CI
 
 Before starting, name this worker chat exactly:
 
-`gdrive-adapter — W1 GDA-GDA-P3 Live Google OAuth`
+`gdrive-adapter — W1 FIX-GDA-GDA-P3 CI`
 
 Repository: `NordCoder/haze-sync`
 Component: gdrive-adapter
 Path: `crates/haze-gdrive-adapter`
 Branch/ref: `component/gdrive-adapter`
 PR: #50
-Role: implementation-worker
-Phase: `GDA-GDA-P3-LIVE-GOOGLE-OAUTH`
+Role: fixer-worker
+Phase: `FIX-GDA-GDA-P3-CI`
 
-This is the only active GDrive phase. Do not begin HTTP durable-state transport or long-running runtime work in parallel inside this component.
+This is the artifact-first fixer loop for the existing `GDA-GDA-P3-LIVE-GOOGLE-OAUTH` phase. Do not repeat implementation or begin another GDrive product phase.
 
-Accepted inputs:
-- config/mode normalization SHA: `fcc04afd1fe9808656d9bc2effbfff7160efe9fc`;
-- clean-review report blob: `d9bc16c1a50755ccaecd1b51add231bf52e7e35f`;
-- architecture report blob: `14c427880e1201d851cdc9ee04b9cd0e83334de4`;
-- exact main ancestor: `c1e69a664388b0cba028170e8398b9088218957d`.
+Failing candidate:
+- code-bearing SHA: `6044c6d2cb160250a890415c0ff0d2785be6a981`;
+- Component CI run: `29446145224`, run number `2022`, attempt `1`;
+- cargo fmt/check/test/clippy: success;
+- diagnostics finalizer: failure;
+- artifact id: `8355565313`;
+- artifact name: `ci-diag__component-gdrive-adapter__wf-component-ci__run-29446145224__attempt-1`;
+- implementation report blob: `5f0aea2859eba8575f3c8e302b72a09ca7aa24fc`.
 
-## Fixed architecture
+Diagnostics protocol:
+1. Download artifact `8355565313`.
+2. Read `summary.md`, `manifest.json`, every failure marker and every log named by `failed_checks`.
+3. Raw job logs are fallback-only if the artifact is unavailable, malformed, expired or incomplete.
+4. Do not infer the cause from the finalizer step alone.
+5. If evidence cannot be read, report `FIX_BLOCKED_BY_LOGS`.
 
-1. GDrive Adapter owns Google client construction, credential loading and access-token refresh.
-2. Deployment/operator owns initial authorization and placement/rotation of the credential file outside the repository.
-3. V1 credential file is read-only to the service. Refreshed access tokens remain in memory; the adapter does not rewrite the file.
-4. Corrupt or incomplete credentials fail startup closed.
-5. Revoked authorization or insufficient scope stops mutations and produces safe categorized state; no secret/provider body is exposed.
-6. Ordinary CI uses fakes and synthetic fixtures only. No real Google credentials or network calls are required.
-7. Adapter remains database-independent and does not call Server/API in this phase.
+Fix only the artifact-proven cause. Preserve:
+- read-only versioned credential-file boundary;
+- Google auth/client construction and in-memory refresh lifecycle;
+- fakeable token/provider abstractions;
+- safe auth/scope/provider categories and retryability;
+- observation-only preflight;
+- credential/token/request/path/provider-body redaction;
+- fake-only deterministic tests;
+- no credential rewriting, live-network CI, Server/API, Storage, scheduler, Deployment or sibling behavior.
 
-## Required deliverables
+Do not weaken tests, alter workflows, add real credentials, broaden product behavior, merge, rebase, force-push or change PR draft state.
 
-- bounded versioned credential-file model and strict parser;
-- absolute configured secret-path validation without displaying the path;
-- provider client abstraction suitable for fake and live implementations;
-- concrete Google authentication/client construction boundary;
-- in-memory access-token refresh lifecycle with bounded expiry handling;
-- safe typed categories for not configured, invalid, revoked, insufficient scope, refresh unavailable and provider unavailable;
-- startup preflight for required scopes/root configuration without provider mutation;
-- Debug/Display/error redaction for credentials, authorization metadata, provider bodies and secret paths;
-- deterministic fake-based tests for valid load, malformed file, missing fields, expired access refresh, revoked authorization, insufficient scope, safe retry classification and redaction;
-- minimal docs/implementation-log alignment.
-
-## Allowed scope
-
-- focused new or existing modules under `crates/haze-gdrive-adapter/src/**` for credentials, auth and provider-client construction;
-- `Cargo.toml`/lockfile only for minimum approved Google/OAuth/HTTP dependencies;
-- focused tests and synthetic fixtures;
-- GDrive docs and control report.
-
-## Forbidden
-
-- real credentials or live-provider CI;
-- writing or rotating the configured credential file;
-- Server/API HTTP client or Storage access;
-- import/export/change-feed execution expansion;
-- long-running scheduler, polling loop or deployment wiring;
-- public status/operator contracts;
-- sibling component or workflow changes;
-- logging raw tokens, client secrets, authorization headers, provider bodies or absolute secret paths;
-- merge, rebase, force-push or PR draft-state changes.
-
-Create product/test changes without CI skip. Obtain full exact-SHA Component CI with fmt/check/test/clippy and diagnostics finalization green.
+Create code/test fixes without CI skip. Obtain a new full exact-SHA Component CI with fmt/check/test/clippy and diagnostics finalization green.
 
 Write only `crates/haze-gdrive-adapter/control/report.md` with:
-- `REPORT_TYPE: IMPLEMENTATION`;
-- `phase_id: GDA-GDA-P3-LIVE-GOOGLE-OAUTH`;
-- `chat_name: gdrive-adapter — W1 GDA-GDA-P3 Live Google OAuth`;
-- status `SELF_ACCEPT`, `SELF_ACCEPT_PENDING_CI`, `SELF_NEEDS_FIX`, `BLOCKED_BY_CONTRACT`, `BLOCKED_BY_DEPENDENCY`, or `BLOCKED_BY_TOOLING`.
+- `REPORT_TYPE: FIX`;
+- `phase_id: FIX-GDA-GDA-P3-CI`;
+- `chat_name: gdrive-adapter — W1 FIX-GDA-GDA-P3 CI`;
+- status `FIX_COMPLETE`, `FIX_NEEDS_MORE`, `FIX_BLOCKED_BY_LOGS`, `FIX_BLOCKED_BY_CONTRACT`, or `FIX_BLOCKED_BY_TOOLING`.
 
-Do not claim CLEAN_ACCEPT or deployment readiness.
+Record artifact files read, exact cause, minimum changed paths, final code-bearing SHA and exact CI. Do not claim CLEAN_ACCEPT.
