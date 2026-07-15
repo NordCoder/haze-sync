@@ -90,6 +90,10 @@ pub async fn compare_and_commit_gdrive_state(
     {
         if replay.facts_hash == input.operation.facts_fingerprint.as_str()
             && replay.operation_kind == input.operation.kind.as_str()
+            && replay.mapping_path.as_deref()
+                == input.operation.mapping_path.map(VaultPath::as_str)
+            && replay.core_seq == input.operation.core_seq
+            && replay.drive_version.as_deref() == input.operation.drive_version
         {
             return Ok(GDriveCommitOutcome::Replayed { operation: replay });
         }
