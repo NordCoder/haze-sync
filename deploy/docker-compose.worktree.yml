@@ -1,0 +1,17 @@
+# Opt-in Worktree host bind for the existing server service.
+#
+# Use only with deploy/docker-compose.yml. The host path is mandatory, the
+# adapter remains disabled by default, and the bind remains read-only by default.
+# Real paths and any write-capable approval belong in an untracked .env or
+# operator environment.
+
+services:
+  server:
+    environment:
+      HAZE_SYNC_WORKTREE_PATH: /var/lib/haze-sync/worktree
+      HAZE_SYNC_WORKTREE_ADAPTER_MODE: ${HAZE_SYNC_WORKTREE_ADAPTER_MODE:-disabled}
+    volumes:
+      - type: bind
+        source: ${HAZE_SYNC_WORKTREE_HOST_PATH:?set HAZE_SYNC_WORKTREE_HOST_PATH in an untracked .env or operator environment}
+        target: /var/lib/haze-sync/worktree
+        read_only: ${HAZE_SYNC_WORKTREE_BIND_READ_ONLY:-true}
