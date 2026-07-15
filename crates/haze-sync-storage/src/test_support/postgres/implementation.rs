@@ -101,51 +101,27 @@ pub struct TestMigration {
     pub sql: &'static str,
 }
 
+macro_rules! migration {
+    ($name:literal) => {
+        TestMigration {
+            name: $name,
+            sql: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../migrations/", $name)),
+        }
+    };
+}
+
 pub const STORAGE_TEST_MIGRATIONS: &[TestMigration] = &[
-    TestMigration {
-        name: "0001_sync_adapters.sql",
-        sql: include_str!("../../../../migrations/0001_sync_adapters.sql"),
-    },
-    TestMigration {
-        name: "0002_content_blobs.sql",
-        sql: include_str!("../../../../migrations/0002_content_blobs.sql"),
-    },
-    TestMigration {
-        name: "0003_sync_objects_file_revisions.sql",
-        sql: include_str!("../../../../migrations/0003_sync_objects_file_revisions.sql"),
-    },
-    TestMigration {
-        name: "0004_operation_log.sql",
-        sql: include_str!("../../../../migrations/0004_operation_log.sql"),
-    },
-    TestMigration {
-        name: "0005_tombstones_conflicts.sql",
-        sql: include_str!("../../../../migrations/0005_tombstones_conflicts.sql"),
-    },
-    TestMigration {
-        name: "0006_cursors_idempotency.sql",
-        sql: include_str!("../../../../migrations/0006_cursors_idempotency.sql"),
-    },
-    TestMigration {
-        name: "0007_gdrive_mapping.sql",
-        sql: include_str!("../../../../migrations/0007_gdrive_mapping.sql"),
-    },
-    TestMigration {
-        name: "0008_worktree_state.sql",
-        sql: include_str!("../../../../migrations/0008_worktree_state.sql"),
-    },
-    TestMigration {
-        name: "0009_audit_events.sql",
-        sql: include_str!("../../../../migrations/0009_audit_events.sql"),
-    },
-    TestMigration {
-        name: "0010_worktree_durable_state.sql",
-        sql: include_str!("../../../../migrations/0010_worktree_durable_state.sql"),
-    },
-    TestMigration {
-        name: "0011_gdrive_durable_state.sql",
-        sql: include_str!("../../../../migrations/0011_gdrive_durable_state.sql"),
-    },
+    migration!("0001_sync_adapters.sql"),
+    migration!("0002_content_blobs.sql"),
+    migration!("0003_sync_objects_file_revisions.sql"),
+    migration!("0004_operation_log.sql"),
+    migration!("0005_tombstones_conflicts.sql"),
+    migration!("0006_cursors_idempotency.sql"),
+    migration!("0007_gdrive_mapping.sql"),
+    migration!("0008_worktree_state.sql"),
+    migration!("0009_audit_events.sql"),
+    migration!("0010_worktree_durable_state.sql"),
+    migration!("0011_gdrive_durable_state.sql"),
 ];
 
 pub struct PostgresTestContext {
@@ -179,11 +155,10 @@ impl PostgresTestContext {
             .connect(url.as_sensitive_str())
             .await
             .map_err(|_| TestSupportError::DatabaseOperationFailed)?;
-        let namespace = TestNamespace::new("storage-pg");
         Ok(Self {
             url,
             pool,
-            namespace,
+            namespace: TestNamespace::new("storage-pg"),
         })
     }
 
@@ -202,13 +177,10 @@ impl PostgresTestContext {
         &self.namespace
     }
 
-    /// Prepare a fresh, exact pre-STOR-P10, exact pre-STOR-GDA-P1, or exact
-    /// current schema.
     pub async fn apply_migrations(&self) -> PostgresTestResult<()> {
         apply_storage_migrations(&self.pool).await
     }
 
-    /// Destructive exclusive-harness cleanup for the exact current schema.
     pub async fn clean_storage_tables(&self) -> PostgresTestResult<()> {
         clean_storage_tables(&self.pool).await
     }
@@ -480,7 +452,7 @@ fn same_table_set(actual: &[String], expected: &[&str]) -> bool {
 }
 
 fn owned_storage_table_names_sql() -> String {
-    let table_names = table_names::ALL
+    let names = table_names::ALL
         .iter()
         .map(|table_name| format!("'{table_name}'"))
         .collect::<Vec<_>>()
@@ -489,7 +461,7 @@ fn owned_storage_table_names_sql() -> String {
         "select table_name from information_schema.tables \
          where table_schema = current_schema() \
            and table_type = 'BASE TABLE' \
-           and table_name in ({table_names}) \
+           and table_name in ({names}) \
          order by table_name"
     )
 }
