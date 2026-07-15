@@ -50,7 +50,10 @@ impl fmt::Display for GDriveValueError {
             }
             Self::InvalidCharacter => formatter.write_str("value contains an invalid character"),
             Self::InvalidHex { expected_bytes } => {
-                write!(formatter, "value must contain exactly {expected_bytes} hexadecimal bytes")
+                write!(
+                    formatter,
+                    "value must contain exactly {expected_bytes} hexadecimal bytes"
+                )
             }
         }
     }
@@ -443,10 +446,19 @@ mod tests {
         let provider_id = GDriveProviderIdentifierDto::parse("drive-file-fixture-01").unwrap();
         let fingerprint = GDriveFactsFingerprintDto::parse("a".repeat(64)).unwrap();
 
-        assert_eq!(serde_json::to_string(&cursor).unwrap(), "\"cursor-fixture-01\"");
+        assert_eq!(
+            serde_json::to_string(&cursor).unwrap(),
+            "\"cursor-fixture-01\""
+        );
         assert_eq!(format!("{cursor:?}"), "GDriveRawCursorDto(<redacted>)");
-        assert_eq!(format!("{provider_id:?}"), "GDriveProviderIdentifierDto(<redacted>)");
-        assert_eq!(format!("{fingerprint:?}"), "GDriveFactsFingerprintDto(<redacted>)");
+        assert_eq!(
+            format!("{provider_id:?}"),
+            "GDriveProviderIdentifierDto(<redacted>)"
+        );
+        assert_eq!(
+            format!("{fingerprint:?}"),
+            "GDriveFactsFingerprintDto(<redacted>)"
+        );
     }
 
     #[test]
