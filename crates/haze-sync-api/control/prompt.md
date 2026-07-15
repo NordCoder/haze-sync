@@ -1,89 +1,66 @@
-# W1-API-GDA-P1-CONTRACTS
+# W1-FIX-API-GDA-P1-CI
 
 Before starting, name this worker chat exactly:
 
-`api — W1 API-GDA-P1 GDrive Contracts`
+`api — W1 FIX-API-GDA-P1 CI`
 
 Repository: `NordCoder/haze-sync`
 Component: api
 Path: `crates/haze-sync-api`
 Branch/ref: `component/api`
 PR: #44
-Role: implementation-worker
-Phase: `API-GDA-P1-CONTRACTS`
+Role: fixer-worker
+Phase: `FIX-API-GDA-P1-CI`
 
-This is the only active API phase.
+This is the fixer loop for the existing `API-GDA-P1-CONTRACTS` phase. Do not begin another API product phase.
 
-## Accepted inputs
+## Failing candidate
 
-- accepted API baseline SHA: `56ae94570441d68715f34b5d54381a0fc4d7c231`;
-- accepted Storage GDrive durable-state SHA: `3617bd1cf947fdd394f1ab29d4b992f7b8859a84`;
-- Storage clean-review blob: `4584b8705221d3cd2aa43b5776674b3a1ec9a0f4`;
-- GDrive architecture report blob: `14c427880e1201d851cdc9ee04b9cd0e83334de4`;
-- exact main ancestor: `c1e69a664388b0cba028170e8398b9088218957d`.
+- exact code-bearing SHA: `8354b7d0b9bb9152e5609d36814222741b70d14e`;
+- Component CI run: `29437624209`, run number `2009`, attempt `2`;
+- visible cargo fmt/check/test/clippy steps: success;
+- diagnostics finalizer: failure;
+- artifact id: `8352138123`;
+- artifact name: `ci-diag__component-api__wf-component-ci__run-29437624209__attempt-2`;
+- implementation report blob: `490921fb423bb0c6119bb966cab49f72d6f0e619`.
 
-Fetch the actual branch head before editing.
+## Required diagnostics protocol
 
-## Fixed public contract
+Download artifact `8352138123` and read:
 
-Add passive authenticated API contracts for:
+- `summary.md`;
+- `manifest.json`;
+- every failure marker and log named by `failed_checks`.
 
-1. `GET /v1/adapters/{adapter_id}/gdrive/state`
-   - bounded adapter-scoped durable-state snapshot;
-   - state version, cursor generation/presence, Core export checkpoint, mapping/echo/delete-candidate/operation summaries required for restart;
-   - no OAuth values, token hashes, database errors or unrestricted provider payloads.
+Use raw job logs only if the artifact is missing, expired, malformed or incomplete. Do not infer the cause from the finalizer step alone. If evidence cannot be read, report `FIX_BLOCKED_BY_LOGS`.
 
-2. `POST /v1/adapters/{adapter_id}/gdrive/state/commit`
-   - expected state version and expected cursor generation;
-   - exactly one cursor generation transition where supplied;
-   - non-regressing Core checkpoint;
-   - typed mapping, echo, delete-candidate and operation facts;
-   - mandatory idempotency metadata;
-   - safe outcomes for stale state, cursor regression/gap, mapping conflict, idempotency conflict and validation failure.
+## Task
 
-Keep API passive: DTOs, parsing, validation, serde and route metadata only. Server owns auth lookup, transactions and execution. Storage owns persistence. Adapter never receives DB access.
+Fix only the artifact-proven cause. Preserve the implemented passive API surface:
 
-## Required deliverables
+- bounded private GDrive state snapshot DTOs;
+- sanitized admin summary;
+- strict compare-and-commit request and outcomes;
+- matching-adapter authorization metadata and admin read-only behavior;
+- mandatory redacted idempotency metadata;
+- state/cursor/mapping/idempotency error vocabulary;
+- private raw-cursor boundary and Debug/Display/error redaction;
+- deterministic compatibility fixture;
+- no Axum registration, Server execution, Storage calls, Core policy, provider/OAuth or scheduler behavior.
 
-- typed request/response DTOs with bounded collections;
-- adapter identity and role-compatible route helpers;
-- stable public error vocabulary mapped from the accepted architecture;
-- raw cursor allowed only in the authenticated private commit contract where correctness requires it, always redacted from Debug/Display/errors/fixtures;
-- deterministic serde and validation tests;
-- compatibility fixtures for later Server and GDrive client work;
-- minimal API docs/log alignment.
-
-## Allowed scope
-
-- `crates/haze-sync-api/src/dto/**`;
-- `crates/haze-sync-api/src/routes/**`;
-- `crates/haze-sync-api/src/contracts/**` only for focused safe error vocabulary;
-- API fixtures/tests/docs/control report.
-
-## Forbidden
-
-- Axum route registration or Server behavior;
-- Storage/SQLx calls;
-- Core policy;
-- GDrive provider/OAuth/scheduler behavior;
-- status ingestion/operator controls beyond these first state contracts;
-- sibling component or workflow changes;
-- raw secrets/provider bodies/database internals;
-- merge, draft-state change, rebase or force-push.
-
-If the accepted Storage model cannot be represented safely without a contract decision, report `BLOCKED_BY_CONTRACT`; do not redesign Storage.
+Do not weaken tests, alter workflows, edit sibling components, redesign accepted Storage semantics, add status/operator contracts, merge, rebase, force-push or change PR draft state.
 
 ## Validation
 
-Create product/test commits without CI skip. Required exact-SHA Component CI: fmt, check, test and clippy green. PR #44 remains open, draft and unmerged.
+Create any code/test fix without CI skip. Obtain a new full exact-SHA Component CI run with fmt, check, test, clippy and diagnostics finalization green. PR #44 remains open, draft and unmerged.
 
 ## Report
 
 Write only `crates/haze-sync-api/control/report.md` with:
 
-- `REPORT_TYPE: IMPLEMENTATION`;
-- `phase_id: API-GDA-P1-CONTRACTS`;
-- `chat_name: api — W1 API-GDA-P1 GDrive Contracts`;
-- status `SELF_ACCEPT`, `SELF_ACCEPT_PENDING_CI`, `SELF_NEEDS_FIX`, `BLOCKED_BY_CONTRACT`, `BLOCKED_BY_DEPENDENCY`, or `BLOCKED_BY_TOOLING`.
+- `REPORT_TYPE: FIX`;
+- `phase_id: FIX-API-GDA-P1-CI`;
+- `chat_name: api — W1 FIX-API-GDA-P1 CI`;
+- status `FIX_COMPLETE`, `FIX_NEEDS_MORE`, `FIX_BLOCKED_BY_LOGS`, `FIX_BLOCKED_BY_CONTRACT`, or `FIX_BLOCKED_BY_TOOLING`.
 
-Record exact DTO/route/error/fixture changes, secrecy rules, final code-bearing SHA and exact CI. Do not claim CLEAN_ACCEPT or merge readiness.
+Record artifact files read, exact cause, minimum changed paths, final code-bearing SHA and full exact-SHA CI evidence. Do not claim CLEAN_ACCEPT or merge readiness.
