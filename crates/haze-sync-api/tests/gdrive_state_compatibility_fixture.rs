@@ -3,9 +3,9 @@ use std::collections::BTreeSet;
 use haze_sync_api::{
     auth::{AdapterPrincipal, AdapterRole},
     dto::gdrive::{
-        GDriveCursorAdvanceDto, GDriveEchoStateDto, GDriveOperationKindDto,
-        GDriveRawCursorDto, GDriveStateAdminSummaryResponse, GDriveStateCommitRequest,
-        GDriveStateCommitResponse, GDriveStateErrorCode, GDriveStateSnapshotResponse,
+        GDriveCursorAdvanceDto, GDriveEchoStateDto, GDriveOperationKindDto, GDriveRawCursorDto,
+        GDriveStateAdminSummaryResponse, GDriveStateCommitRequest, GDriveStateCommitResponse,
+        GDriveStateErrorCode, GDriveStateSnapshotResponse,
     },
     routes::gdrive::{
         parse_authenticated_gdrive_state_commit_request,
@@ -64,7 +64,11 @@ fn wire_string<T: Serialize>(value: &T) -> String {
 
 fn assert_complete_unique(actual: &[String], expected: BTreeSet<String>) {
     let actual_set = actual.iter().cloned().collect::<BTreeSet<_>>();
-    assert_eq!(actual.len(), actual_set.len(), "fixture values must be unique");
+    assert_eq!(
+        actual.len(),
+        actual_set.len(),
+        "fixture values must be unique"
+    );
     assert_eq!(actual_set, expected);
 }
 
@@ -113,7 +117,10 @@ fn snapshot_and_admin_summary_roundtrip_and_sanitize_deterministically() {
     let expected_admin: GDriveStateAdminSummaryResponse = assert_roundtrip(&fixture.admin_summary);
 
     validate_private_snapshot(&snapshot).unwrap();
-    assert_eq!(sanitize_snapshot_for_admin(&snapshot).unwrap(), expected_admin);
+    assert_eq!(
+        sanitize_snapshot_for_admin(&snapshot).unwrap(),
+        expected_admin
+    );
     assert!(serde_json::to_string(&expected_admin)
         .unwrap()
         .contains("\"mapping_count\":1"));
@@ -133,7 +140,10 @@ fn read_route_allows_matching_adapter_and_sanitized_admin_only() {
         Some(&adapter),
     )
     .unwrap();
-    assert_eq!(adapter_request.access(), GDriveStateReadAccess::AdapterPrivate);
+    assert_eq!(
+        adapter_request.access(),
+        GDriveStateReadAccess::AdapterPrivate
+    );
 
     let admin = AdapterPrincipal::new("admin-main", AdapterRole::Admin).unwrap();
     let admin_request = parse_authenticated_get_gdrive_state_request(
@@ -145,7 +155,10 @@ fn read_route_allows_matching_adapter_and_sanitized_admin_only() {
         Some(&admin),
     )
     .unwrap();
-    assert_eq!(admin_request.access(), GDriveStateReadAccess::AdminSanitized);
+    assert_eq!(
+        admin_request.access(),
+        GDriveStateReadAccess::AdminSanitized
+    );
 
     let wrong_adapter = AdapterPrincipal::new("gdrive-other", AdapterRole::GdriveAdapter).unwrap();
     assert!(parse_authenticated_get_gdrive_state_request(
