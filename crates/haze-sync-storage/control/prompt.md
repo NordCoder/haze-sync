@@ -1,43 +1,32 @@
-# W1-STOR-GDA-P1-CLEAN-DB-REVIEW
+# W1-STOR-GDA-P1-ACCEPTED-HOLD
 
-Before starting, name this reviewer chat exactly:
-
-`storage — W1 STOR-GDA-P1 Clean DB Review`
-
-Repository: `NordCoder/haze-sync`
 Component: storage
-Path: `crates/haze-sync-storage`
-Branch/ref: `component/storage`
+Path: crates/haze-sync-storage
+Branch: component/storage
 PR: #47
-Role: clean-code-reviewer
-Phase: `STOR-GDA-P1-CLEAN-DB-REVIEW`
+Role: orchestrator-hold
+Phase: STOR-GDA-P1-ACCEPTED-HOLD
 
-Review only the accepted candidate `3617bd1cf947fdd394f1ab29d4b992f7b8859a84` for the completed `STOR-GDA-P1-DURABLE-STATE` phase.
+This is a hold notice, not an executable worker prompt.
 
-Authoritative CI: Component CI run `29431806776`, run number `1992`, success. Rust workspace and Storage PostgreSQL verification are green.
+Accepted Storage GDrive durable-state candidate:
+- code-bearing SHA: `3617bd1cf947fdd394f1ab29d4b992f7b8859a84`;
+- clean-review report blob: `4584b8705221d3cd2aa43b5776674b3a1ec9a0f4`;
+- Component CI run: `29431806776`, run number `1992`, success;
+- Rust workspace: success;
+- Storage PostgreSQL verification: success.
 
-Read the project clean-code reviewer instructions, manifest, report template, Storage contract/plan/log/dependency map, migration `0011_gdrive_durable_state.sql`, all changed GDrive durable-state repository/test files, and archived implementation/fixer reports pinned by blobs `b3a0113b6db03e8ac410e9ca0708a38ae4f22d5c` and `26c2298ec9b16128d62df353254dea361d81104b`.
+Accepted surface:
+- migration `0011_gdrive_durable_state.sql`;
+- caller-owned transaction repositories;
+- exact state-version compare-and-commit;
+- contiguous cursor advancement and non-regressing Core checkpoint;
+- atomic mapping, echo, delete-candidate and operation facts;
+- deterministic replay/conflict handling;
+- adapter isolation, bounded snapshots and redaction.
 
-Review for:
+Downstream authorization:
+- API-GDA-P1 may consume the accepted contract;
+- Server GDrive application/transaction work may consume it only after API-GDA-P1 receives CLEAN_ACCEPT.
 
-- migration safety and contiguous schema evolution;
-- caller-owned transaction boundaries;
-- state-version CAS correctness;
-- cursor generation/contiguity and checkpoint non-regression;
-- atomic mapping/echo/delete-candidate/operation commits;
-- deterministic replay and idempotency conflicts;
-- rollback, adapter isolation and bounded snapshots;
-- redaction and safe errors;
-- absence of provider/Core/Server policy or direct Adapter DB ownership;
-- test quality, no weakening, and exact-SHA CI evidence.
-
-Do not implement product changes. If defects exist, report them precisely for a fixer. Do not merge, change draft state, modify sibling branches, workflows or history.
-
-Write only `crates/haze-sync-storage/control/report.md` with:
-
-- `REPORT_TYPE: CLEAN_CODE_REVIEW`;
-- `phase_id: STOR-GDA-P1-CLEAN-DB-REVIEW`;
-- `chat_name: storage — W1 STOR-GDA-P1 Clean DB Review`;
-- status `CLEAN_ACCEPT`, `CLEAN_NEEDS_FIX`, `CLEAN_BLOCKED_BY_CONTRACT`, or `CLEAN_BLOCKED_BY_TOOLING`.
-
-Pin reviewed SHA, changed paths, findings, DB/migration evidence and CI run. Do not claim merge readiness beyond this component phase.
+Do not implement, merge, change draft state, rewrite history, modify sibling branches, workflows or product files. Wait for an explicit Orchestrator assignment.
