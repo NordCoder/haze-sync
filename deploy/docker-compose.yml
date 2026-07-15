@@ -2,9 +2,10 @@
 #
 # This file starts local dependencies and the local haze-sync-server process for
 # developer/operator smoke workflows. It is not production deployment: no GDrive
-# adapter, Worktree runtime, reverse proxy, TLS, provider credentials, production
+# adapter, Worktree host bind, reverse proxy, TLS, provider credentials, production
 # secrets, migration runner, backup jobs, or remote deployment automation are
-# configured here.
+# configured here. Worktree hosting is available only through the explicit
+# deploy/docker-compose.worktree.yml override and remains disabled by default.
 
 services:
   postgres:
@@ -61,9 +62,9 @@ services:
   # Future phases will add haze-gdrive-adapter service wiring only after its
   # startup/config/secret contracts are stable.
   #
-  # Worktree runtime bind mounts remain intentionally deferred; the server service
-  # keeps the Worktree adapter mode disabled until Server/Worktree fan-in accepts
-  # runtime hosting behavior.
+  # The base file intentionally has no Worktree host bind and keeps the adapter
+  # disabled. Operators may opt in with deploy/docker-compose.worktree.yml only
+  # after supplying an untracked host path and reviewing permissions and mode.
 
 volumes:
   postgres_data:
