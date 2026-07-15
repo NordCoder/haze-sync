@@ -291,8 +291,6 @@ pub struct AdapterConfig {
     pub drive_root_folder_id: String,
     pub oauth_token_path: SecretPath,
     pub mode: AdapterMode,
-    /// Derived compatibility view. Runtime authorization must use `mode`.
-    pub dry_run: bool,
     pub intervals: RuntimeIntervals,
     pub delete_safety: DeleteSafetyConfig,
 }
@@ -300,6 +298,10 @@ pub struct AdapterConfig {
 impl AdapterConfig {
     pub fn load_from_env() -> Result<Self, ConfigError> {
         Self::load_from_source(&EnvConfigSource)
+    }
+
+    pub const fn is_dry_run(&self) -> bool {
+        self.mode.is_dry_run_mode()
     }
 
     pub fn load_from_source(source: &impl ConfigSource) -> Result<Self, ConfigError> {
@@ -347,7 +349,6 @@ impl AdapterConfig {
             drive_root_folder_id,
             oauth_token_path,
             mode,
-            dry_run: mode.is_dry_run_mode(),
             intervals,
             delete_safety,
         })
@@ -565,7 +566,7 @@ mod tests {
         let source = MemoryConfigSource::with_required_values();
         let config = AdapterConfig::load_from_source(&source).expect("config should load");
         assert_eq!(config.mode, AdapterMode::DryRun);
-        assert!(config.dry_run);
+        assert!(config.is_dry_run());
         assert_eq!(config.intervals.poll_interval_seconds(), 60);
         assert_eq!(config.intervals.full_scan_interval_seconds(), 3_600);
     }
@@ -585,7 +586,7 @@ mod tests {
             source.insert(ENV_ADAPTER_MODE, raw);
             let config = AdapterConfig::load_from_source(&source).expect("valid mode");
             assert_eq!(config.mode, expected);
-            assert_eq!(config.dry_run, expected == AdapterMode::DryRun);
+            assert_eq!(config.is_dry_run(), expected == AdapterMode::DryRun);
         }
     }
 
