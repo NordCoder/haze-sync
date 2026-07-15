@@ -1,22 +1,24 @@
-# W1-SRV-API-P8-HTTP-ACCEPTED-HOLD — Await CLI-P6A
+# W1-SRV-GDRIVE-FAN-IN-BLOCKED-HOLD
 
 Component: server
 Path: crates/haze-sync-server
 Branch: component/server
 PR: #45
 Role: orchestrator-hold
-Phase: SRV-API-P8-HTTP-ACCEPTED-HOLD
+Phase: SRV-GDRIVE-FAN-IN-BLOCKED-HOLD
 
-Do not implement, merge, change draft state, rewrite history, modify sibling branches, or change product files.
+This is a hold notice, not an executable worker prompt.
 
-The API-P8 Worktree HTTP integration is accepted at exact code-bearing SHA `50461354c18ddc4d2e47202d9303b4358a27ee45`.
+Accepted Server baseline:
+- code-bearing SHA: `50461354c18ddc4d2e47202d9303b4358a27ee45`;
+- clean-review report blob: `e3271abaf3d667f9ffd4f4ff0652e5d26892b9e5`;
+- DB-capable Component CI run: `29326558901`, run number `1940`, success.
 
-Evidence:
+Current GDrive fan-in gate:
+- accepted Storage GDrive durable-state SHA: `3617bd1cf947fdd394f1ab29d4b992f7b8859a84`;
+- API-GDA-P1 is still inside its implementation/review/fixer phase;
+- Server GDrive application, authentication, transaction and route wiring must not start until API-GDA-P1 receives CLEAN_ACCEPT and Orchestrator supplies the exact accepted API SHA/report evidence.
 
-- final clean review report blob `e3271abaf3d667f9ffd4f4ff0652e5d26892b9e5`;
-- DB-capable Component CI run `29326558901`, number `1940`, success;
-- authoritative sync-once race fix verified CLEAN_ACCEPT.
+The earlier Worktree CLI authorization remains historical and does not authorize GDrive Server work.
 
-CLI-P6A status and explicit sync-once client work is authorized after explicit synchronization of `component/cli` with current `main`.
-
-Wait for Orchestrator assignment. Do not implement CLI work from this branch.
+Do not implement, merge, change draft state, rewrite history, modify sibling branches, workflows or product files. Wait for an explicit Orchestrator `PROMPT_READY` assignment.
