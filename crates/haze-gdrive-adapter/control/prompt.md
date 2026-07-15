@@ -1,46 +1,73 @@
-# W1-GDA-GDA-P1-CLEAN-REVIEW-RERUN
+# W1-GDA-GDA-P3-LIVE-GOOGLE-OAUTH
 
 Before starting, name this worker chat exactly:
 
-`gdrive-adapter — W1 GDA-GDA-P1 Clean Review Rerun`
+`gdrive-adapter — W1 GDA-GDA-P3 Live Google OAuth`
 
 Repository: `NordCoder/haze-sync`
 Component: gdrive-adapter
 Path: `crates/haze-gdrive-adapter`
 Branch/ref: `component/gdrive-adapter`
 PR: #50
-Role: clean-code-reviewer
-Phase: `GDA-GDA-P1-CLEAN-REVIEW-RERUN`
+Role: implementation-worker
+Phase: `GDA-GDA-P3-LIVE-GOOGLE-OAUTH`
 
-Review exact code-bearing SHA `fcc04afd1fe9808656d9bc2effbfff7160efe9fc`.
+This is the only active GDrive phase. Do not begin HTTP durable-state transport or long-running runtime work in parallel inside this component.
 
-Authoritative evidence:
+Accepted inputs:
+- config/mode normalization SHA: `fcc04afd1fe9808656d9bc2effbfff7160efe9fc`;
+- clean-review report blob: `d9bc16c1a50755ccaecd1b51add231bf52e7e35f`;
+- architecture report blob: `14c427880e1201d851cdc9ee04b9cd0e83334de4`;
+- exact main ancestor: `c1e69a664388b0cba028170e8398b9088218957d`.
 
-- original implementation report blob: `7090b1b71ebca300847f1a2310ae4dd761c00a52`;
-- CI fixer report blob: `c9e94d5acb59d844951f9ba461eca64b50babf2c`;
-- prior clean-review report blob: `59d01050a4b2a59ce47c392b6fb3711a873a1574`;
-- review-fixer report blob: `e8b6a5235df04c90e3ac5d816ff95fa7c3429c8e`;
-- Component CI run `29440275057`, run number `2012`, success.
+## Fixed architecture
 
-Repeat the focused review of `GDA-GDA-P1-CONFIG-MODE-NORMALIZATION` and specifically verify the prior high-severity finding is closed:
+1. GDrive Adapter owns Google client construction, credential loading and access-token refresh.
+2. Deployment/operator owns initial authorization and placement/rotation of the credential file outside the repository.
+3. V1 credential file is read-only to the service. Refreshed access tokens remain in memory; the adapter does not rewrite the file.
+4. Corrupt or incomplete credentials fail startup closed.
+5. Revoked authorization or insufficient scope stops mutations and produces safe categorized state; no secret/provider body is exposed.
+6. Ordinary CI uses fakes and synthetic fixtures only. No real Google credentials or network calls are required.
+7. Adapter remains database-independent and does not call Server/API in this phase.
 
-1. `AdapterMode` is the only stored mode authority;
-2. `AdapterConfig` has no independently assignable stored `dry_run` state;
-3. `StartupStatus` has no independently assignable stored `dry_run` state;
-4. every dry-run accessor/display is derived solely from the mode;
-5. contradictory direct construction is impossible or rejected and tests no longer bless it;
-6. legacy `HAZE_GDRIVE_DRY_RUN` exists only as fail-closed boundary-validation input;
-7. exactly six accepted modes and the capability matrix remain correct;
-8. aliases, contradictory environment combinations and output redaction remain safe;
-9. no OAuth, provider, HTTP, persistence, scheduler, public status, Deployment, sibling or workflow behavior was added.
+## Required deliverables
 
-Do not change product code. Do not broaden the review, merge, rebase, force-push or change PR draft state.
+- bounded versioned credential-file model and strict parser;
+- absolute configured secret-path validation without displaying the path;
+- provider client abstraction suitable for fake and live implementations;
+- concrete Google authentication/client construction boundary;
+- in-memory access-token refresh lifecycle with bounded expiry handling;
+- safe typed categories for not configured, invalid, revoked, insufficient scope, refresh unavailable and provider unavailable;
+- startup preflight for required scopes/root configuration without provider mutation;
+- Debug/Display/error redaction for credentials, authorization metadata, provider bodies and secret paths;
+- deterministic fake-based tests for valid load, malformed file, missing fields, expired access refresh, revoked authorization, insufficient scope, safe retry classification and redaction;
+- minimal docs/implementation-log alignment.
+
+## Allowed scope
+
+- focused new or existing modules under `crates/haze-gdrive-adapter/src/**` for credentials, auth and provider-client construction;
+- `Cargo.toml`/lockfile only for minimum approved Google/OAuth/HTTP dependencies;
+- focused tests and synthetic fixtures;
+- GDrive docs and control report.
+
+## Forbidden
+
+- real credentials or live-provider CI;
+- writing or rotating the configured credential file;
+- Server/API HTTP client or Storage access;
+- import/export/change-feed execution expansion;
+- long-running scheduler, polling loop or deployment wiring;
+- public status/operator contracts;
+- sibling component or workflow changes;
+- logging raw tokens, client secrets, authorization headers, provider bodies or absolute secret paths;
+- merge, rebase, force-push or PR draft-state changes.
+
+Create product/test changes without CI skip. Obtain full exact-SHA Component CI with fmt/check/test/clippy and diagnostics finalization green.
 
 Write only `crates/haze-gdrive-adapter/control/report.md` with:
+- `REPORT_TYPE: IMPLEMENTATION`;
+- `phase_id: GDA-GDA-P3-LIVE-GOOGLE-OAUTH`;
+- `chat_name: gdrive-adapter — W1 GDA-GDA-P3 Live Google OAuth`;
+- status `SELF_ACCEPT`, `SELF_ACCEPT_PENDING_CI`, `SELF_NEEDS_FIX`, `BLOCKED_BY_CONTRACT`, `BLOCKED_BY_DEPENDENCY`, or `BLOCKED_BY_TOOLING`.
 
-- `REPORT_TYPE: CLEAN_CODE_REVIEW`;
-- `phase_id: GDA-GDA-P1-CLEAN-REVIEW-RERUN`;
-- `chat_name: gdrive-adapter — W1 GDA-GDA-P1 Clean Review Rerun`;
-- status `CLEAN_ACCEPT` or `CLEAN_NEEDS_FIX`.
-
-Record reviewed SHA, closure of the duplicate-authority finding, remaining findings and exact CI evidence. Do not claim merge readiness. `CLEAN_ACCEPT` closes GDA-GDA-P1 and permits the next sequential GDrive owner phase.
+Do not claim CLEAN_ACCEPT or deployment readiness.
