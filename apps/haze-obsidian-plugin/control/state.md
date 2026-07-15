@@ -10,25 +10,35 @@ default_branch_control_is_active: no
 
 active_prompt: apps/haze-obsidian-plugin/control/prompt.md
 active_report: apps/haze-obsidian-plugin/control/report.md
-active_agent_role: clean-code-reviewer
-assigned_chat_name: obsidian-plugin — W1 OBS-FAN-IN-P1 Clean Integration Review
+active_agent_role: fixer-worker
+assigned_chat_name: obsidian-plugin — W1 FIX-OBS-FAN-IN-P1 Review
 
 wave: W1
-phase: OBS-FAN-IN-P1-CLEAN-REVIEW
-implementation_status: COMPLETE_AFTER_FIX
-fix_status: FIX_COMPLETE
-clean_review_status: NOT_STARTED
-ci_status: CI_GREEN
+phase: FIX-OBS-FAN-IN-P1-REVIEW
+implementation_status: COMPLETE_AFTER_CI_FIX
+fix_status: REVIEW_FIX_NOT_STARTED
+clean_review_status: CLEAN_NEEDS_FIX
+ci_status: CI_GREEN_ON_REVIEWED_SHA
 architect_status: ARCHITECT_ACCEPT_COMPONENT_COMPLETE
 
 review_candidate:
 - code_bearing_sha: 2f03dc49e7fdff8cfd0e4685c07ffc0ba75602ce
-- implementation_report_blob: ffdc199c2e92e5f5a3be8bdb6666f5a9bd8ee5e3
-- fixer_report_blob: c7dae6d9bf7f92584083ad0bc2206f35be69c57d
+- clean_review_report_blob: aa4fe184ec398168d805412a9d709e4dcca464b7
 - ci_run_id: 29434935575
 - ci_run_number: 2000
-- ci_conclusion: success
+
+required_fix:
+- complete absolute local-path redaction across common platform forms
+- correct fake download hash/body pairing
+- exercise production hash verification success and mismatch-before-mutation paths
+- preserve synthetic fixtures and loopback-only optional smoke
+
+protected_scope:
+- no new Obsidian product or release phase
+- no sibling, route, DTO or workflow changes
+- no external-network-required CI, private data or credentials
+- no test weakening
 
 next_gate:
-- CLEAN_ACCEPT -> accepted fan-in hold
-- CLEAN_NEEDS_FIX -> focused fixer loop
+- FIX_COMPLETE plus full exact-SHA green CI -> repeat focused Obsidian clean integration review
+- unresolved secrecy/hash defect -> FIX_NEEDS_MORE
