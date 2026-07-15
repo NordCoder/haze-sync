@@ -10,35 +10,36 @@ default_branch_control_is_active: no
 
 active_prompt: apps/haze-obsidian-plugin/control/prompt.md
 active_report: apps/haze-obsidian-plugin/control/report.md
-active_agent_role: fixer-worker
-assigned_chat_name: obsidian-plugin — W1 FIX-OBS-FAN-IN-P1 Review
+active_agent_role: clean-code-reviewer
+assigned_chat_name: obsidian-plugin — W1 OBS-FAN-IN-P1 Clean Review Rerun
 
 wave: W1
-phase: FIX-OBS-FAN-IN-P1-REVIEW
-implementation_status: COMPLETE_AFTER_CI_FIX
-fix_status: REVIEW_FIX_NOT_STARTED
-clean_review_status: CLEAN_NEEDS_FIX
-ci_status: CI_GREEN_ON_REVIEWED_SHA
+phase: OBS-FAN-IN-P1-CLEAN-REVIEW-RERUN
+implementation_status: COMPLETE_AFTER_REVIEW_FIX
+fix_status: FIX_COMPLETE
+clean_review_status: RERUN_NOT_STARTED
+ci_status: CI_GREEN
 architect_status: ARCHITECT_ACCEPT_COMPONENT_COMPLETE
+known_failed_checks: []
 
 review_candidate:
-- code_bearing_sha: 2f03dc49e7fdff8cfd0e4685c07ffc0ba75602ce
-- clean_review_report_blob: aa4fe184ec398168d805412a9d709e4dcca464b7
-- ci_run_id: 29434935575
-- ci_run_number: 2000
+- code_bearing_sha: 457f1e4904456f5ddf766791e5250e36a0fd23e6
+- prior_clean_review_report_blob: aa4fe184ec398168d805412a9d709e4dcca464b7
+- review_fixer_report_blob: 4238dd11aee8d6c99d749053e4361543c412c8af
+- ci_run_id: 29440659397
+- ci_run_number: 2019
+- ci_conclusion: success
 
-required_fix:
-- complete absolute local-path redaction across common platform forms
-- correct fake download hash/body pairing
-- exercise production hash verification success and mismatch-before-mutation paths
-- preserve synthetic fixtures and loopback-only optional smoke
+required_review:
+- complete common absolute-path redaction without erasing safe route text
+- valid fake hash/body pairing
+- production hash verification success and mismatch-before-mutation evidence
+- isolated test-only runtime support and synthetic-only fixtures
 
 protected_scope:
-- no new Obsidian product or release phase
-- no sibling, route, DTO or workflow changes
-- no external-network-required CI, private data or credentials
-- no test weakening
+- no new Obsidian product/release phase
+- no product, sibling, route/DTO or workflow changes by reviewer
 
 next_gate:
-- FIX_COMPLETE plus full exact-SHA green CI -> repeat focused Obsidian clean integration review
-- unresolved secrecy/hash defect -> FIX_NEEDS_MORE
+- CLEAN_ACCEPT -> accepted Obsidian fan-in hold
+- CLEAN_NEEDS_FIX -> focused fixer loop
