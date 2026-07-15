@@ -1,35 +1,30 @@
-# W1-FIX-OBS-FAN-IN-P1-CI
+# W1-OBS-FAN-IN-P1-CLEAN-REVIEW
 
 Before starting, name this worker chat exactly:
 
-`obsidian-plugin — W1 FIX-OBS-FAN-IN-P1 CI`
+`obsidian-plugin — W1 OBS-FAN-IN-P1 Clean Integration Review`
 
 Repository: `NordCoder/haze-sync`
 Component: obsidian-plugin
 Branch/ref: `component/obsidian-plugin`
 PR: #51
-Role: fixer-worker
-Phase: `FIX-OBS-FAN-IN-P1-CI`
+Role: clean-code-reviewer
+Phase: `OBS-FAN-IN-P1-CLEAN-REVIEW`
 
-Fix only the diagnostics-artifact-proven failure for code-bearing SHA `517b8cd77dc7c24eec78ae6c2f1ab55e7a8aeb3a`.
+Review exact code-bearing SHA `2f03dc49e7fdff8cfd0e4685c07ffc0ba75602ce`.
 
-Authoritative failing run:
-- Component CI run `29434046014`, run number `1999`;
-- Node job `87416059909` failed only at diagnostics finalization after npm install, tests, typecheck and build succeeded;
-- Rust workspace job `87416059992` succeeded;
-- diagnostics artifact id `8350606040`;
-- artifact name `ci-diag__component-obsidian-plugin__wf-component-ci__run-29434046014__attempt-1`.
+Authoritative CI: Component CI run `29434935575`, run number `2000`, success.
 
-Download the artifact and read `summary.md`, `manifest.json`, and every failed-check log before editing. Raw job logs are fallback-only. If artifact evidence is unavailable, report `FIX_BLOCKED_BY_LOGS`.
+Review only the completed Server compatibility/E2E fan-in:
+- deterministic fake HTTP integration through the production API client;
+- accepted server-info, changes, upload, download, delete and conflict semantics;
+- optional loopback-only read-only smoke path with honest skip behavior;
+- synthetic-only fixtures;
+- token, request metadata, raw body and absolute-path redaction;
+- no route/DTO invention, sibling changes, external-network CI, provider/DB behavior or release packaging.
 
-Preserve the implemented fan-in surface: deterministic fake HTTP compatibility harness, loopback-only optional smoke, accepted endpoint/header semantics, synthetic fixtures, public error/path redaction, no sibling changes. Do not add routes, DTOs, production behavior, external-network CI, credentials, release packaging or workflow changes. Do not weaken tests.
+Inspect implementation and tests, plus implementation/fixer reports pinned by blobs `ffdc199c2e92e5f5a3be8bdb6666f5a9bd8ee5e3` and `c7dae6d9bf7f92584083ad0bc2206f35be69c57d`.
 
-Apply only the proven minimum correction and obtain a new full exact-SHA green Component CI with Node validation and Rust workspace green. PR #51 remains open, draft and unmerged.
+Do not change product code. Report `CLEAN_ACCEPT` or `CLEAN_NEEDS_FIX`.
 
-Write only `apps/haze-obsidian-plugin/control/report.md` with:
-- `REPORT_TYPE: FIX`;
-- `phase_id: FIX-OBS-FAN-IN-P1-CI`;
-- `chat_name: obsidian-plugin — W1 FIX-OBS-FAN-IN-P1 CI`;
-- status `FIX_COMPLETE`, `FIX_NEEDS_MORE`, `FIX_BLOCKED_BY_LOGS`, `FIX_BLOCKED_BY_CONTRACT`, or `FIX_BLOCKED_BY_TOOLING`.
-
-Record artifact files read, exact cause, minimal changed paths, final code-bearing SHA and full CI evidence. Do not claim CLEAN_ACCEPT.
+Write only `apps/haze-obsidian-plugin/control/report.md` with `REPORT_TYPE: CLEAN_CODE_REVIEW`, phase/chat, reviewed SHA, findings and CI evidence. Do not claim merge readiness.
