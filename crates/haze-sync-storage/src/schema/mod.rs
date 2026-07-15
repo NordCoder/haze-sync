@@ -1,4 +1,4 @@
-//! Schema metadata for Haze Sync storage tables.
+//! Stable names and migration metadata for Haze Sync storage tables.
 //!
 //! This module exposes stable table-name constants for repository code. It does
 //! not implement SQL execution, connections, transactions, or Core policy.
@@ -23,8 +23,14 @@ pub mod table_names {
     pub const ADAPTER_CURSORS: &str = "adapter_cursors";
     /// Retry-safety records keyed by adapter and idempotency key.
     pub const IDEMPOTENCY_RECORDS: &str = "idempotency_records";
-    /// Google Drive file mapping and echo/delete-candidate metadata.
+    /// Historical path-scoped Google Drive mapping facts.
     pub const GDRIVE_MAPPING: &str = "gdrive_mapping";
+    /// Versioned adapter-scoped Google Drive progress facts.
+    pub const GDRIVE_ADAPTER_STATE: &str = "gdrive_adapter_state";
+    /// Adapter-scoped Google Drive mapping, echo, and delete-candidate facts.
+    pub const GDRIVE_DURABLE_ITEMS: &str = "gdrive_durable_items";
+    /// Retry-safe Google Drive operation outcomes.
+    pub const GDRIVE_OPERATIONS: &str = "gdrive_operations";
     /// Versioned Worktree runtime-instance bindings.
     pub const WORKTREE_INSTANCES: &str = "worktree_instances";
     /// Per-instance Worktree last-applied path state.
@@ -34,6 +40,26 @@ pub mod table_names {
 
     /// Ordered table list for the accepted current storage schema.
     pub const ALL: &[&str] = &[
+        SYNC_ADAPTERS,
+        CONTENT_BLOBS,
+        SYNC_OBJECTS,
+        FILE_REVISIONS,
+        OPERATION_LOG,
+        TOMBSTONES,
+        CONFLICTS,
+        ADAPTER_CURSORS,
+        IDEMPOTENCY_RECORDS,
+        GDRIVE_MAPPING,
+        GDRIVE_ADAPTER_STATE,
+        GDRIVE_DURABLE_ITEMS,
+        GDRIVE_OPERATIONS,
+        WORKTREE_INSTANCES,
+        WORKTREE_STATE,
+        AUDIT_EVENTS,
+    ];
+
+    /// Exact accepted pre-STOR-GDA-P1 table set migrated by 0011.
+    pub const PRE_STOR_GDA_P11: &[&str] = &[
         SYNC_ADAPTERS,
         CONTENT_BLOBS,
         SYNC_OBJECTS,
@@ -80,6 +106,7 @@ pub const INITIAL_MIGRATIONS: &[&str] = &[
     "0008_worktree_state.sql",
     "0009_audit_events.sql",
     "0010_worktree_durable_state.sql",
+    "0011_gdrive_durable_state.sql",
 ];
 
 #[cfg(test)]
@@ -127,12 +154,15 @@ mod tests {
             "0010_worktree_durable_state.sql",
             include_str!("../../../../migrations/0010_worktree_durable_state.sql"),
         ),
+        (
+            "0011_gdrive_durable_state.sql",
+            include_str!("../../../../migrations/0011_gdrive_durable_state.sql"),
+        ),
     ];
 
     #[test]
     fn migration_metadata_matches_actual_files() {
         assert_eq!(INITIAL_MIGRATIONS.len(), MIGRATION_CONTENTS.len());
-
         for (metadata_name, (actual_name, contents)) in
             INITIAL_MIGRATIONS.iter().zip(MIGRATION_CONTENTS)
         {
@@ -146,7 +176,6 @@ mod tests {
         for pair in INITIAL_MIGRATIONS.windows(2) {
             let previous = migration_prefix(pair[0]);
             let next = migration_prefix(pair[1]);
-
             assert!(
                 previous < next,
                 "migration filenames must be strictly ordered"
@@ -160,13 +189,23 @@ mod tests {
         let mut actual = final_created_tables();
         expected.sort_unstable();
         actual.sort_unstable();
-
         assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn accepted_pre_gdrive_table_set_excludes_only_0011_tables() {
+        for table in [
+            table_names::GDRIVE_ADAPTER_STATE,
+            table_names::GDRIVE_DURABLE_ITEMS,
+            table_names::GDRIVE_OPERATIONS,
+        ] {
+            assert!(!table_names::PRE_STOR_GDA_P11.contains(&table));
+            assert!(table_names::ALL.contains(&table));
+        }
     }
 
     fn final_created_tables() -> Vec<&'static str> {
         let mut tables = Vec::new();
-
         for (_, contents) in MIGRATION_CONTENTS {
             for line in contents.lines().map(str::trim) {
                 if let Some(table_name) = line
@@ -175,7 +214,6 @@ mod tests {
                 {
                     tables.retain(|candidate| *candidate != table_name.trim_end_matches(';'));
                 }
-
                 if let Some(table_name) = line
                     .strip_prefix("create table ")
                     .and_then(|rest| rest.split_whitespace().next())
@@ -187,7 +225,6 @@ mod tests {
                 }
             }
         }
-
         tables
     }
 
