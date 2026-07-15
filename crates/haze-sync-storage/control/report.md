@@ -1,10 +1,12 @@
-REPORT_TYPE: IMPLEMENTATION
+REPORT_TYPE:
+IMPLEMENTATION
 
-STATUS: SELF_NEEDS_FIX
+STATUS:
+SELF_NEEDS_FIX
 
 AGENT:
 role: implementation-worker
-agent_execution_id: storage-w1-stor-gda-p11-20260715
+agent_execution_id: W1-STOR-GDA-P1-DURABLE-STATE-storage-implementation
 chat_name: storage — W1 STOR-GDA-P11 GDrive Durable State
 
 COMPONENT:
@@ -20,21 +22,21 @@ control_report_path: crates/haze-sync-storage/control/report.md
 WAVE:
 id: W1
 phase_id: STOR-GDA-P1-DURABLE-STATE
-dependency_status: accepted GDrive fan-in architecture input available; no cross-component implementation dependency added
+dependency_status: active control state and prompt were fetched from ref component/storage; PROMPT_READY, implementation-worker role, assigned chat name, phase and repository-access fields matched
 
 SUMMARY:
-Implemented the Storage-owned, versioned, adapter-scoped Google Drive durable-state boundary on component/storage. Added migration 0011, passive compare-and-commit repository types and queries, deterministic snapshots, cursor/checkpoint/version validation, mapping/echo/delete-candidate and retry-safe operation facts, real PostgreSQL evidence, direct migration guard evidence, schema/test-support integration, and focused Storage documentation. Product implementation compiles and tests through the observed CI steps, but the exact-head Component CI run is red because the Storage PostgreSQL diagnostics finalizer failed; the implementation worker did not read diagnostics artifacts.
+Implemented versioned adapter-scoped Google Drive durable state inside Storage scope. Added migration 0011, caller-owned transaction repositories, deterministic bounded snapshots, exact aggregate compare-and-commit, contiguous opaque cursor generation advancement, monotonic Core export checkpoints, mapping/echo/delete-candidate persistence, retry-safe operation replay, adapter isolation, safe errors, redacted output, migration evidence, rollback/replay evidence and concurrent stale-loser PostgreSQL evidence. Exact code-bearing SHA 4f539e32ae8768aeeb9cda11f388745c3771496c has a green Storage PostgreSQL verification job and a red Rust workspace job. The implementation-worker role did not read the diagnostics artifact, so no acceptance or merge-readiness claim is made.
 
 CHANGED_FILES:
 - migrations/0011_gdrive_durable_state.sql
+- crates/haze-sync-storage/src/schema/mod.rs
+- crates/haze-sync-storage/src/repositories/mod.rs
 - crates/haze-sync-storage/src/repositories/gdrive_state.rs
 - crates/haze-sync-storage/src/repositories/gdrive_state/types.rs
-- crates/haze-sync-storage/src/repositories/gdrive_state/validation.rs
 - crates/haze-sync-storage/src/repositories/gdrive_state/repository.rs
+- crates/haze-sync-storage/src/repositories/gdrive_state/validation.rs
 - crates/haze-sync-storage/src/repositories/gdrive_state/tests.rs
-- crates/haze-sync-storage/src/repositories/gdrive_state/postgres_tests.rs
-- crates/haze-sync-storage/src/repositories/mod.rs
-- crates/haze-sync-storage/src/schema/mod.rs
+- crates/haze-sync-storage/src/repositories/gdrive_state/postgres_contract_tests.rs
 - crates/haze-sync-storage/src/test_support/postgres.rs
 - crates/haze-sync-storage/src/test_support/postgres/implementation.rs
 - crates/haze-sync-storage/src/test_support/postgres/tests.rs
@@ -46,14 +48,14 @@ BRANCH_AND_CONTROL:
 current_branch: component/storage
 base_branch: main
 base_sha: c1e69a664388b0cba028170e8398b9088218957d
-head_sha: d6753d9744d03231c1f538d294d82f85fec03329
+head_sha: 4f539e32ae8768aeeb9cda11f388745c3771496c before this report-only commit
 default_branch_modified: no
 sibling_branch_modified: no
-control_prompt_read: yes, explicitly from ref component/storage
-control_report_written: yes
+control_prompt_read: crates/haze-sync-storage/control/prompt.md from ref component/storage
+control_report_written: crates/haze-sync-storage/control/report.md
 control_files_archived_by_worker: no
-ci_skip_used: yes
-ci_skip_reason: final report-only commit uses [skip ci]; all product/migration/test commits were created without CI skip
+ci_skip_used: yes; only control/report-only commits
+ci_skip_reason: accidental temporary report probe was removed by f89e20a9394fc908402c4f2fd30e18d09dab2fd1 with [skip ci], and this final report-only commit uses [skip ci]. The temporary creation ef3207c04f5b63b146d1a420ea06d5f0d57a3d74 was immediately reverted. No product, migration, test, dependency, workflow or implementation-document commit used CI skip.
 
 SCOPE:
 allowed_files_only: yes
@@ -64,71 +66,64 @@ forbidden_files_touched: none
 
 CONTRACT:
 contract_read: yes
-contract_satisfied: yes for implemented Storage scope; CI acceptance remains unresolved
+contract_satisfied: implemented Storage contract and DB evidence satisfy the assigned boundary; lifecycle acceptance is withheld because workspace CI is red
 contract_changes_requested: none
 contract_change_rationale: none
-affected_components: downstream Server/API-mediated GDrive runtime phases consume this Storage boundary; no direct adapter DB ownership is introduced
+affected_components: later Server/API fan-in may consume the repository through caller-owned transactions; GDrive Adapter remains database-independent
 
 IMPLEMENTATION_OR_REVIEW:
-completed:
-- added contiguous migration 0011 for versioned adapter-scoped GDrive durable state
-- added caller-owned transaction compare-and-commit repository surface
-- added deterministic bounded snapshot support
-- added Drive cursor generation/position and Core export checkpoint validation
-- added mapping, echo, delete-candidate and operation replay facts
-- added unit, PostgreSQL and direct migration guard tests
-- integrated migration metadata and test-support schema validation
-- documented Storage ownership, Server transaction choreography and secrecy boundaries
+completed: product implementation complete; CI remediation incomplete
 main_changes:
-- optimistic state_version compare-and-commit rejects stale mutations
-- Drive cursor cannot regress or skip generation/position transitions
-- Core export checkpoint cannot regress
-- operation identity replay is deterministic and conflicting facts fail safely
-- rollback leaves state unchanged because all mutation helpers use caller-owned transactions
-behavior_changes: new passive durable-state persistence surface only
-bugs_found: exact-head CI diagnostics finalizer failure; root cause not inspected by implementation-worker
-bugs_fixed: none after CI failure because diagnostics artifact is fixer-worker input
-cleanups_made: split GDrive state into focused types, validation, repository and test modules; split PostgreSQL test-support implementation/tests
-non_goals_preserved:
-- no API or Server changes
-- no GDrive Adapter product or provider/OAuth changes
-- no scheduling or Deployment changes
-- no direct database access from GDrive Adapter
-- no Core/delete-unlock policy
-- no workflow changes
-- no merge, rebase, force-push or draft-state changes
-deferred_work: fixer diagnosis of CI diagnostics finalizer; focused Storage clean/DB review after green exact-SHA CI
+- migration 0011 creates versioned gdrive_adapter_state, gdrive_durable_items and gdrive_operations without rewriting accepted gdrive_mapping data
+- all initialization and mutation helpers require caller-owned PostgreSQL transactions
+- state_version CAS, cursor expected-generation plus exactly-one advancement, checkpoint non-regression and checked overflow fail closed
+- mapping, echo, delete-candidate and typed operation outcomes commit atomically
+- identical operations replay deterministically; changed fingerprints or typed facts conflict safely
+- snapshots are adapter-scoped, path-ordered, bounded by limit plus one and cursor-exclusive
+- cursor, operation fingerprint and internal row Debug/Display output is redacted
+- test-support handles fresh, pre-STOR-P10, accepted pre-0011 and current schema preparation
+behavior_changes: Storage can persist caller-confirmed GDrive progress and reconciliation facts without owning provider, scheduling, Core or deletion policy
+bugs_found:
+- split test-support migration paths initially depended on nested source location
+- initialization initially admitted a generic executor
+- replay initially compared fewer typed facts
+bugs_fixed:
+- embedded migration paths now use CARGO_MANIFEST_DIR
+- all GDrive state mutations are transaction-only
+- replay compares fingerprint, kind, mapping path, Core sequence and provider version
+cleanups_made: focused repository/type/validation/test modules; superseded PostgreSQL test module removed
+non_goals_preserved: no API, Server, GDrive Adapter product, OAuth/provider, scheduling, Deployment, workflow, Core policy, delete-unlock, merge, rebase, force-push or PR draft-state changes
+deferred_work: artifact-grounded Rust workspace CI fix, new full exact-SHA CI, then clean-code review
 
 TESTS_AND_CHECKS:
 checks_run:
-- Component CI run 29420919054 on exact code-bearing SHA d6753d9744d03231c1f538d294d82f85fec03329
-- Rust workspace cargo fmt: success
-- Rust workspace cargo check: success
-- Rust workspace cargo test: success
-- Storage PostgreSQL strict test command: success
-- mandatory STOR-P10 evidence-name verification: success
+- Component CI run 29421594032, run number 1987, exact SHA 4f539e32ae8768aeeb9cda11f388745c3771496c
+- Storage PostgreSQL verification job: success
+- PostgreSQL readiness: success
+- strict cargo test -p haze-sync-storage --features test-support -- --ignored wrapper and diagnostics finalizer: success
+- mandatory historical STOR-P10 evidence-name validation: success
+- new strict command includes fresh migration, accepted pre-state migration, direct 0011 guard, compare-and-commit, rollback/replay/isolation and concurrent-loser evidence tests
 checks_not_run:
-- local shell commands unavailable in this connector-only execution
-- Rust workspace clippy was cancelled after the other job failed
-ci_status: CI_RED
+- local cargo/rustfmt because no local repository/toolchain was available and shell network access was unavailable
+- diagnostics artifact contents because implementation-worker role prohibits reading them
+ci_status: CI_RED; Storage PostgreSQL verification green, Rust workspace red
 workflow_urls:
-- Component CI run id 29420919054, run number 1980
+- Component CI run 29421594032, run number 1987
 known_failures:
-- Storage PostgreSQL verification diagnostics finalizer failed
-- Rust workspace job concluded cancelled while clippy was running
+- Rust workspace job 87373222668 failed at Finalize CI diagnostics after the fmt/check/test/clippy wrapper steps; exact failed check remains artifact-only
 
 CI_DIAGNOSTICS:
-artifact_based_logs: not read; implementation-worker role forbids CI diagnostics analysis
-artifact_name: not inspected
-artifact_id: not inspected
-workflow_run_id: 29420919054
-workflow_run_attempt: not inspected
-artifact_status: diagnostics artifact upload step succeeded
+artifact_based_logs: no
+artifact_name: ci-diag__component-storage__wf-component-ci__run-29421594032__attempt-1
+artifact_id: 8345471214
+workflow_run_id: 29421594032
+workflow_run_attempt: 1
+artifact_status: published and unexpired; metadata observed only
 summary_read: no
 manifest_read: no
-logs_read: no
+logs_read: none
 raw_job_logs_used: no
-diagnostics_failure: Storage PostgreSQL verification finalizer failed after the strict DB test command and mandatory STOR-P10 evidence step succeeded
+diagnostics_failure: exact Rust workspace failure cause must be read by a Fixer Worker from the named artifact
 
 SAFETY_AND_SECRECY:
 secrets_committed: no
@@ -139,18 +134,17 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- Exact-head authoritative CI is not green.
-- The failed diagnostics finalizer requires artifact-based fixer analysis before any acceptance claim.
+- authoritative Rust workspace CI remains red on the exact final code-bearing SHA
+- PostgreSQL/migration/strict ignored-test tooling is available and green, so it is not the blocker
 
 BLOCKERS:
-- CI diagnostics root cause is intentionally unresolved in implementation-worker role.
-- Full clippy evidence is absent because the workspace job was cancelled.
+- artifact-grounded workspace CI remediation is required before SELF_ACCEPT or clean review
 
 NEXT_RECOMMENDED_AGENT:
 fixer-worker
 
 FINAL_VERDICT:
-SELF_NEEDS_FIX. Product implementation is present on code-bearing SHA d6753d9744d03231c1f538d294d82f85fec03329, but exact-SHA CI is red. A fixer worker must read the diagnostics artifact for run 29420919054, apply only artifact-proven corrections, and obtain a new complete green Component CI run before clean-code review.
+SELF_NEEDS_FIX. Product implementation is present at code-bearing SHA 4f539e32ae8768aeeb9cda11f388745c3771496c and authoritative PostgreSQL verification is green. Rust workspace CI is red. The Fixer Worker must read artifact 8345471214 for run 29421594032 attempt 1, correct only the proven failure, and obtain a new full exact-SHA green run.
 
 PUSHED:
 yes
