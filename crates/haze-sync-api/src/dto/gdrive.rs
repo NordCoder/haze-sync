@@ -224,7 +224,7 @@ pub struct GDriveCursorSummaryDto {
     pub present: bool,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct GDriveLastOperationsSummaryDto {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -235,7 +235,7 @@ pub struct GDriveLastOperationsSummaryDto {
     pub provider_mutation: Option<OperationIdDto>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct GDriveEchoFactsDto {
     pub state: GDriveEchoStateDto,
@@ -245,7 +245,7 @@ pub struct GDriveEchoFactsDto {
     pub provider_version: Option<GDriveProviderIdentifierDto>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct GDriveDeleteCandidateFactsDto {
     pub first_seen_at: TimestampDto,
@@ -256,7 +256,7 @@ pub struct GDriveDeleteCandidateFactsDto {
     pub confirmation_audit_id: Option<GDriveProviderIdentifierDto>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct GDriveMappingFactsDto {
     pub path: VaultPathDto,
@@ -293,7 +293,7 @@ pub struct GDriveMappingFactsDto {
     pub last_seen_at: Option<TimestampDto>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct GDriveStateSnapshotResponse {
     pub adapter_id: AdapterIdDto,
@@ -345,14 +345,14 @@ pub struct GDriveLastOperationPresenceDto {
     pub provider_mutation: bool,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct GDriveCursorAdvanceDto {
     pub next_generation: u64,
     pub cursor: GDriveRawCursorDto,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct GDriveCursorCommitDto {
     pub expected_generation: u64,
@@ -360,7 +360,7 @@ pub struct GDriveCursorCommitDto {
     pub advance: Option<GDriveCursorAdvanceDto>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct GDriveOperationFactsDto {
     pub operation_id: OperationIdDto,
@@ -374,7 +374,7 @@ pub struct GDriveOperationFactsDto {
     pub drive_version: Option<GDriveProviderIdentifierDto>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct GDriveStateCommitRequest {
     pub expected_state_version: u64,
@@ -385,6 +385,30 @@ pub struct GDriveStateCommitRequest {
     pub mapping: Option<GDriveMappingFactsDto>,
     pub operation: GDriveOperationFactsDto,
 }
+
+macro_rules! redacted_private_debug {
+    ($($type:ty => $name:literal),+ $(,)?) => {
+        $(
+            impl fmt::Debug for $type {
+                fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    formatter.write_str(concat!($name, "(<redacted>)"))
+                }
+            }
+        )+
+    };
+}
+
+redacted_private_debug!(
+    GDriveLastOperationsSummaryDto => "GDriveLastOperationsSummaryDto",
+    GDriveEchoFactsDto => "GDriveEchoFactsDto",
+    GDriveDeleteCandidateFactsDto => "GDriveDeleteCandidateFactsDto",
+    GDriveMappingFactsDto => "GDriveMappingFactsDto",
+    GDriveStateSnapshotResponse => "GDriveStateSnapshotResponse",
+    GDriveCursorAdvanceDto => "GDriveCursorAdvanceDto",
+    GDriveCursorCommitDto => "GDriveCursorCommitDto",
+    GDriveOperationFactsDto => "GDriveOperationFactsDto",
+    GDriveStateCommitRequest => "GDriveStateCommitRequest",
+);
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
@@ -459,6 +483,84 @@ mod tests {
             format!("{fingerprint:?}"),
             "GDriveFactsFingerprintDto(<redacted>)"
         );
+    }
+
+    #[test]
+    fn private_fact_dtos_never_debug_format_sentinel_values() {
+        let json = serde_json::json!({
+            "expected_state_version": 7,
+            "cursor": {
+                "expected_generation": 3,
+                "advance": {
+                    "next_generation": 4,
+                    "cursor": "sentinel-raw-cursor"
+                }
+            },
+            "core_export_checkpoint": 19,
+            "mapping": {
+                "path": "Sentinel/private-path.md",
+                "drive_file_id": "sentinel-drive-file-id",
+                "drive_parent_id": "sentinel-drive-parent-id",
+                "drive_name": "sentinel-drive-name.md",
+                "mime_type": "application/x-sentinel-mime",
+                "md5_checksum": "0123456789abcdef0123456789abcdef",
+                "head_revision_id": "sentinel-head-revision",
+                "drive_version": "sentinel-drive-version",
+                "drive_modified_time": "2099-01-01T00:00:01Z",
+                "core_object_id": "sentinel-core-object-id",
+                "core_revision_id": "sentinel-core-revision-id",
+                "core_seq": 19,
+                "echo": {
+                    "state": "confirmed",
+                    "operation_id": "sentinel-echo-operation-id",
+                    "provider_version": "sentinel-echo-provider-version"
+                },
+                "delete_candidate": {
+                    "first_seen_at": "2099-01-01T00:00:02Z",
+                    "last_seen_at": "2099-01-01T00:00:03Z",
+                    "generation": 2,
+                    "blocked": true,
+                    "confirmation_audit_id": "sentinel-confirmation-audit-id"
+                },
+                "last_imported_at": "2099-01-01T00:00:04Z",
+                "last_exported_at": "2099-01-01T00:00:05Z",
+                "last_seen_at": "2099-01-01T00:00:06Z"
+            },
+            "operation": {
+                "operation_id": "sentinel-commit-operation-id",
+                "kind": "export",
+                "facts_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "mapping_path": "Sentinel/private-path.md",
+                "core_seq": 19,
+                "drive_version": "sentinel-operation-drive-version"
+            }
+        });
+        let request: GDriveStateCommitRequest = serde_json::from_value(json).unwrap();
+        let debug = format!("{request:?}");
+
+        assert_eq!(debug, "GDriveStateCommitRequest(<redacted>)");
+        for sentinel in [
+            "sentinel-raw-cursor",
+            "Sentinel/private-path.md",
+            "sentinel-drive-file-id",
+            "sentinel-drive-parent-id",
+            "sentinel-drive-name.md",
+            "application/x-sentinel-mime",
+            "0123456789abcdef0123456789abcdef",
+            "sentinel-head-revision",
+            "sentinel-drive-version",
+            "2099-01-01T00:00:01Z",
+            "sentinel-core-object-id",
+            "sentinel-core-revision-id",
+            "sentinel-echo-operation-id",
+            "sentinel-echo-provider-version",
+            "sentinel-confirmation-audit-id",
+            "sentinel-commit-operation-id",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "sentinel-operation-drive-version",
+        ] {
+            assert!(!debug.contains(sentinel));
+        }
     }
 
     #[test]
