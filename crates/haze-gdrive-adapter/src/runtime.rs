@@ -18,7 +18,6 @@ pub enum RuntimeState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StartupStatus {
     pub mode: AdapterMode,
-    pub dry_run: bool,
     pub poll_interval_seconds: u64,
     pub full_scan_interval_seconds: u64,
     pub max_deletes_per_run: u32,
@@ -29,12 +28,15 @@ impl StartupStatus {
     pub fn from_config(config: &AdapterConfig) -> Self {
         Self {
             mode: config.mode,
-            dry_run: config.dry_run,
             poll_interval_seconds: config.intervals.poll_interval_seconds(),
             full_scan_interval_seconds: config.intervals.full_scan_interval_seconds(),
             max_deletes_per_run: config.delete_safety.max_deletes_per_run,
             max_delete_ratio_percent: config.delete_safety.max_delete_ratio_percent,
         }
+    }
+
+    pub const fn is_dry_run(&self) -> bool {
+        self.mode.is_dry_run_mode()
     }
 }
 
@@ -44,7 +46,7 @@ impl fmt::Display for StartupStatus {
             formatter,
             "mode={}, dry_run={}, poll_interval_seconds={}, full_scan_interval_seconds={}, max_deletes_per_run={}, max_delete_ratio_percent={}",
             self.mode,
-            self.dry_run,
+            self.is_dry_run(),
             self.poll_interval_seconds,
             self.full_scan_interval_seconds,
             self.max_deletes_per_run,
@@ -110,7 +112,6 @@ mod tests {
             oauth_token_path: SecretPath::from_raw("test", "/run/secrets/oauth.json")
                 .expect("secret path"),
             mode: AdapterMode::ImportOnly,
-            dry_run: true,
             intervals: RuntimeIntervals::new(Duration::from_secs(30), Duration::from_secs(300))
                 .expect("intervals"),
             delete_safety: DeleteSafetyConfig::new(5, 20).expect("delete safety"),
@@ -125,7 +126,7 @@ mod tests {
 
         assert_eq!(runtime.state(), RuntimeState::Running);
         assert_eq!(status.mode, AdapterMode::ImportOnly);
-        assert!(status.dry_run);
+        assert!(!status.is_dry_run());
         assert_eq!(status.poll_interval_seconds, 30);
         assert_eq!(status.full_scan_interval_seconds, 300);
         assert_eq!(status.max_deletes_per_run, 5);
@@ -133,9 +134,21 @@ mod tests {
     }
 
     #[test]
+    fn startup_status_derives_dry_run_only_from_mode() {
+        let mut config = config();
+        let import_status = StartupStatus::from_config(&config);
+        assert!(!import_status.is_dry_run());
+        assert!(import_status.to_string().contains("dry_run=false"));
+
+        config.mode = AdapterMode::DryRun;
+        let dry_run_status = StartupStatus::from_config(&config);
+        assert!(dry_run_status.is_dry_run());
+        assert!(dry_run_status.to_string().contains("dry_run=true"));
+    }
+
+    #[test]
     fn runtime_shutdown_is_explicit() {
         let mut runtime = AdapterRuntime::new(config());
-
         runtime.start().expect("runtime should start");
         runtime.request_shutdown();
         assert_eq!(runtime.state(), RuntimeState::ShutdownRequested);
@@ -153,5 +166,6 @@ mod tests {
         assert!(!rendered.contains("adapter-token"));
         assert!(!rendered.contains("/run/secrets"));
         assert!(rendered.contains("mode=import_only"));
+        assert!(rendered.contains("dry_run=false"));
     }
 }
