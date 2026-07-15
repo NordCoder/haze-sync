@@ -55,7 +55,7 @@ contract_read: yes
 contract_satisfied: no; secrecy and required hash-verification integration coverage remain incomplete
 contract_changes_requested: none
 contract_change_rationale: none; both findings are fixable inside obsidian-plugin
- affected_components: obsidian-plugin only
+affected_components: obsidian-plugin only
 
 IMPLEMENTATION_OR_REVIEW:
 completed: yes
