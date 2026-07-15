@@ -10,37 +10,33 @@ default_branch_control_is_active: no
 
 active_prompt: crates/haze-gdrive-adapter/control/prompt.md
 active_report: crates/haze-gdrive-adapter/control/report.md
-active_agent_role: implementation-worker
-assigned_chat_name: gdrive-adapter — W1 GDA-GDA-P3 Live Google OAuth
+active_agent_role: fixer-worker
+assigned_chat_name: gdrive-adapter — W1 FIX-GDA-GDA-P3 CI
 
 wave: W1
-phase: GDA-GDA-P3-LIVE-GOOGLE-OAUTH
-implementation_status: NOT_STARTED
+phase: FIX-GDA-GDA-P3-CI
+implementation_status: SELF_ACCEPT_PENDING_CI
 fix_status: NOT_STARTED
 clean_review_status: NOT_STARTED
-ci_status: NOT_RUN
+ci_status: CI_RED_FINALIZER_ONLY
 architect_status: ARCHITECT_ACCEPT_GDRIVE_FAN_IN
 
-accepted_inputs:
-- config_mode_sha: fcc04afd1fe9808656d9bc2effbfff7160efe9fc
-- config_clean_report_blob: d9bc16c1a50755ccaecd1b51add231bf52e7e35f
-- architecture_report_blob: 14c427880e1201d851cdc9ee04b9cd0e83334de4
-
-required_surface:
-- read-only versioned credential-file contract
-- Google client and in-memory refresh boundary
-- fakeable provider client abstraction
-- safe auth/scope/provider categories
-- startup preflight and comprehensive redaction
-- synthetic fake-based tests only
+failing_candidate:
+- code_bearing_sha: 6044c6d2cb160250a890415c0ff0d2785be6a981
+- implementation_report_blob: 5f0aea2859eba8575f3c8e302b72a09ca7aa24fc
+- ci_run_id: 29446145224
+- ci_run_number: 2022
+- ci_attempt: 1
+- artifact_id: 8355565313
+- artifact_name: ci-diag__component-gdrive-adapter__wf-component-ci__run-29446145224__attempt-1
 
 protected_scope:
-- one active GDrive phase only
-- no Server/API HTTP or Storage integration
-- no scheduler or deployment wiring
-- no real credentials or live-network CI
-- no sibling or workflow changes
+- artifact-proven fix only
+- preserve OAuth/credential/auth boundaries and redaction
+- no next GDrive product phase
+- no Server/API/Storage/scheduler/Deployment/sibling/workflow changes
 
 next_gate:
-- SELF_ACCEPT plus exact-SHA green CI -> focused OAuth/security clean review
-- implementation or CI defect -> fixer loop
+- FIX_COMPLETE plus full exact-SHA green CI -> focused OAuth/security clean review
+- artifact unavailable -> FIX_BLOCKED_BY_LOGS
+- unresolved contract issue -> FIX_BLOCKED_BY_CONTRACT
