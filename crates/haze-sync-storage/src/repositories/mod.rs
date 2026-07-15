@@ -2,12 +2,13 @@
 //!
 //! Repository helpers execute caller-requested SQL against caller-owned
 //! executors or transactions. They do not create pools, run production migration
-//! policy, resolve conflicts, or implement Core/Worktree semantics.
+//! policy, resolve conflicts, or implement Core/Worktree/provider semantics.
 
 pub mod adapter_cursors;
 pub mod conflicts;
 pub mod content_blobs;
 pub mod gdrive_mapping;
+pub mod gdrive_state;
 pub mod idempotency;
 pub mod objects;
 pub mod operation_log;
@@ -38,9 +39,7 @@ pub type RepositoryResult<T> = Result<T, RepositoryError>;
 #[non_exhaustive]
 pub enum RepositoryError {
     InvalidSequence,
-    InvalidLimit {
-        max: u32,
-    },
+    InvalidLimit { max: u32 },
     InvalidPath,
     InvalidIdentifier,
     InvalidHash,
@@ -65,6 +64,20 @@ pub enum RepositoryError {
     InvalidWorktreeStateKind,
     /// Reconciliation observation fields are incomplete or inconsistent.
     InvalidWorktreeObservation,
+    /// A GDrive aggregate row uses an unsupported durable-state version.
+    UnsupportedGDriveStateVersion,
+    /// GDrive compare-and-commit was requested before aggregate initialization.
+    GDriveStateMissing,
+    /// The caller's expected GDrive state version is stale.
+    GDriveStateStaleExpected,
+    /// The caller's expected Drive cursor generation is stale.
+    GDriveCursorGenerationMismatch,
+    /// The requested Core export checkpoint would move backwards.
+    CheckpointRegression,
+    /// One GDrive operation identity was reused with different persisted facts.
+    GDriveOperationConflict,
+    /// Optimistic aggregate state version cannot be advanced safely.
+    StateVersionOverflow,
     DatabaseOperationFailed,
     InvalidSizeBytes,
 }
@@ -90,6 +103,13 @@ impl RepositoryError {
             Self::WorktreeInstanceBindingMismatch => "worktree_instance_binding_mismatch",
             Self::InvalidWorktreeStateKind => "invalid_worktree_state_kind",
             Self::InvalidWorktreeObservation => "invalid_worktree_observation",
+            Self::UnsupportedGDriveStateVersion => "unsupported_gdrive_state_version",
+            Self::GDriveStateMissing => "gdrive_state_missing",
+            Self::GDriveStateStaleExpected => "gdrive_state_stale_expected",
+            Self::GDriveCursorGenerationMismatch => "gdrive_cursor_generation_mismatch",
+            Self::CheckpointRegression => "checkpoint_regression",
+            Self::GDriveOperationConflict => "gdrive_operation_conflict",
+            Self::StateVersionOverflow => "state_version_overflow",
             Self::DatabaseOperationFailed => "storage_database_operation_failed",
             Self::InvalidSizeBytes => "invalid_size_bytes",
         }
@@ -119,6 +139,17 @@ impl RepositoryError {
             }
             Self::InvalidWorktreeStateKind => "worktree path-state kind is invalid",
             Self::InvalidWorktreeObservation => "worktree reconciliation observation is invalid",
+            Self::UnsupportedGDriveStateVersion => {
+                "gdrive durable-state version is not supported"
+            }
+            Self::GDriveStateMissing => "gdrive durable state must be initialized",
+            Self::GDriveStateStaleExpected => "gdrive expected state version is stale",
+            Self::GDriveCursorGenerationMismatch => "gdrive cursor generation is stale",
+            Self::CheckpointRegression => "checkpoint update would move backwards",
+            Self::GDriveOperationConflict => {
+                "gdrive operation identity conflicts with persisted facts"
+            }
+            Self::StateVersionOverflow => "state version cannot be advanced safely",
             Self::DatabaseOperationFailed => "storage database operation failed",
             Self::InvalidSizeBytes => "size is outside the supported storage range",
         }
@@ -175,6 +206,8 @@ mod tests {
         "stack backtrace",
         "root_fingerprint",
         "external_cursor_json",
+        "drive_cursor",
+        "provider payload",
     ];
 
     #[test]
@@ -234,6 +267,13 @@ mod tests {
             RepositoryError::WorktreeInstanceBindingMismatch,
             RepositoryError::InvalidWorktreeStateKind,
             RepositoryError::InvalidWorktreeObservation,
+            RepositoryError::UnsupportedGDriveStateVersion,
+            RepositoryError::GDriveStateMissing,
+            RepositoryError::GDriveStateStaleExpected,
+            RepositoryError::GDriveCursorGenerationMismatch,
+            RepositoryError::CheckpointRegression,
+            RepositoryError::GDriveOperationConflict,
+            RepositoryError::StateVersionOverflow,
             RepositoryError::DatabaseOperationFailed,
             RepositoryError::InvalidSizeBytes,
         ];
@@ -253,7 +293,6 @@ mod tests {
             "postgres://user:secret@db/prod select * from tokens /srv/prod Idempotency-Key",
         ));
         let error = map_sqlx_error(raw);
-
         assert_eq!(error, RepositoryError::DatabaseOperationFailed);
         assert_safe_error_text(&error.to_string());
         assert!(std::error::Error::source(&error).is_none());
