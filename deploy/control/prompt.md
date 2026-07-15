@@ -1,53 +1,92 @@
-# W1-DEP-P5A-PRE-SYNC
+# W1-DEP-P5A-MIGRATION-OWNERSHIP-REVIEW
 
 Before starting, name this worker chat exactly:
 
-`deployment — W1 DEP-P5A Main Sync`
+`deployment — W1 DEP-P5A Migration Ownership Review`
 
 Component: deployment
 Path: deploy
 Branch: component/deployment
 PR: #52
-Role: implementation-worker
-Phase: DEP-P5A-PRE-SYNC
+Role: architect-reviewer
+Phase: DEP-P5A-MIGRATION-OWNERSHIP-REVIEW
 
-This is a synchronization-only phase. Do not begin DEP-P5A product/config/runbook work yet.
+This is an architecture/operations policy gate, not DEP-P5A implementation.
 
-Do not merge PR #52, change draft state, rewrite history, rebase, modify sibling branches, or perform unrelated cleanup.
+Do not merge, change draft state, rewrite history, modify sibling branches, add services, change runtime configuration, run migrations, add secrets, or begin Worktree deployment fan-in.
 
-Current coordinates:
-- deployment pre-sync head `5f6e58c60d5bd02cffd32933b9f013bc10b4e261`;
-- exact current main `c1e69a664388b0cba028170e8398b9088218957d`;
-- merge base `1a82bea5c87953db378e5e03429326df38320ee8`;
-- deployment branch is 129 commits behind main and has 7 deployment-local commits;
-- PR #52 is open, draft, mergeable and unmerged.
+## Synchronized baseline
 
-Accepted downstream evidence:
-- Storage migration/runtime-state contract remains accepted;
-- Server Worktree HTTP integration CLEAN_ACCEPT at `50461354c18ddc4d2e47202d9303b4358a27ee45`;
-- API-P8 CLEAN_ACCEPT at `56ae94570441d68715f34b5d54381a0fc4d7c231`;
-- CLI-P6A CLEAN_ACCEPT at `d33fa105398d9731bfc1b7927e98d5d085c6fe59`.
+- exact main ancestor: `c1e69a664388b0cba028170e8398b9088218957d`;
+- deployment post-sync SHA: `54e0b8b84e06e7475dc99ea25b22ddd248bb98c2`;
+- pre-sync report blob: `ad4156e26fae85bfa1049e71ea9738640b92a715`;
+- Component CI run `29400618638`, number `1954`, success;
+- PR #52 remains open, draft and unmerged.
 
-Task:
-1. Normally merge exact main SHA `c1e69a664388b0cba028170e8398b9088218957d` into `component/deployment`.
-2. Preserve all deployment-local history.
-3. Do not rebase, squash, force-push, or rewrite history.
-4. Resolve conflicts minimally, preserving accepted main and existing deployment behavior.
-5. Do not implement runtime/config fan-in, migration policy, paths, permissions, secrets, service changes, backup/rollback, or staged rollout in this phase.
-6. Create a real merge/code-bearing commit without CI skip.
-7. Obtain authoritative Component CI success on the exact post-sync SHA.
+Accepted dependencies:
+- Storage migration/runtime-state contract accepted;
+- Server Worktree runtime and HTTP operator surface accepted;
+- API-P8 accepted;
+- CLI-P6A accepted.
+
+## Policy source to review
+
+Primary source:
+- `deploy/docs/migrations-backup-restore.md`.
+
+Relevant contract:
+- `deploy/docs/component-contract.md`.
+
+Current documented policy states:
+- Storage owns migration contents and schema design;
+- the Server binary/Compose service does not auto-run migrations;
+- the operator runs SQLx migrations explicitly;
+- Deployment owns sequencing around stopping writers, coordinated PostgreSQL/object-store backup, migration, startup and verification;
+- writers remain stopped or quiesced during backup/migration/restore;
+- automatic migration in Compose/Dockerfile is forbidden until separately accepted;
+- production secrets and database URLs remain operator-local and untracked.
+
+## Review questions
+
+Decide whether the existing policy is explicit and sufficient to unblock DEP-P5A.
 
 Verify:
-- exact main is a parent/ancestor;
-- local history remains present;
-- no product/config/runbook work occurred beyond conflict resolution;
-- PR #52 remains open, draft and unmerged;
-- exact post-sync CI is green.
+1. Exactly one execution owner exists: the human/operator invoking the documented manual SQLx command.
+2. Storage owns migration contents/schema, not execution timing.
+3. Deployment owns operational sequencing and documentation, not schema or Server internals.
+4. Server startup does not implicitly migrate and failure to migrate cannot be mistaken for successful rollout.
+5. All current and future writers, including hosted Worktree runtime/adapters, must be stopped or quiesced before the coordinated backup/migration window.
+6. PostgreSQL metadata and object-store content are treated as one recovery window.
+7. Backup occurs before migration; startup occurs only after successful migration.
+8. Verification distinguishes process health, readiness and actual migration/rollout success.
+9. Rollback is restore-based/operator-approved; no automatic down migration, reset, drop, cleanup or destructive fallback is implied.
+10. Credentials, URLs, dumps and archives remain outside tracked files and public reports.
+11. Local Compose guidance is not represented as production readiness proof.
+12. DEP-P5A may consume this policy without inventing automatic migration behavior or direct database ownership.
+13. Any ambiguity that could permit two owners, startup-time migration, concurrent writers, mismatched backup windows or automatic destructive recovery is blocking.
+
+## Allowed action
+
+Prefer review-only. Do not edit files if the existing contract is sufficient.
+
+If a narrowly scoped wording defect prevents a clear architecture verdict, do not silently rewrite policy. Report `ARCHITECT_NEEDS_DECISION` or `ARCHITECT_NEEDS_POLICY_FIX` with the exact ambiguity and proposed boundary.
+
+## Report
 
 Write `deploy/control/report.md` with:
-- `REPORT_TYPE: IMPLEMENTATION`;
-- `phase_id: DEP-P5A-PRE-SYNC`;
-- `chat_name: deployment — W1 DEP-P5A Main Sync`;
-- status `SELF_ACCEPT`, `NEEDS_FIX`, `BLOCKED_BY_SCOPE`, or `BLOCKED_BY_TOOLING`.
+- `REPORT_TYPE: ARCHITECTURE_REVIEW`;
+- `phase_id: DEP-P5A-MIGRATION-OWNERSHIP-REVIEW`;
+- `chat_name: deployment — W1 DEP-P5A Migration Ownership Review`;
+- status `ARCHITECT_ACCEPT`, `ARCHITECT_NEEDS_DECISION`, `ARCHITECT_NEEDS_POLICY_FIX`, `ARCHITECT_BLOCKED_BY_CONTRACT`, or `ARCHITECT_BLOCKED_BY_TOOLING`.
 
-Record pre-sync head, exact main SHA, merge SHA/parents, conflicts, history-preservation evidence, absence of DEP-P5A product work, and exact CI. Do not claim DEP-P5A is unblocked: explicit migration execution and operational ownership policy still requires a separate Orchestrator slot after synchronization.
+For `ARCHITECT_ACCEPT`, explicitly pin:
+- migration execution owner;
+- schema owner;
+- operational sequence owner;
+- writer-quiescence rule;
+- backup consistency rule;
+- rollback rule;
+- secret handling rule;
+- whether DEP-P5A product/config/runbook work is now authorized.
+
+Do not implement DEP-P5A, modify product/config/runbook files, or claim merge readiness.
