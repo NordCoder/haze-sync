@@ -91,8 +91,8 @@ pub fn parse_authenticated_get_gdrive_state_request(
     let principal = principal
         .cloned()
         .ok_or(GDriveStateRouteError::Unauthorized)?;
-    let adapter_id = AdapterId::parse(parts.adapter_id)
-        .map_err(|_| GDriveStateRouteError::ValidationError)?;
+    let adapter_id =
+        AdapterId::parse(parts.adapter_id).map_err(|_| GDriveStateRouteError::ValidationError)?;
     let access = match principal.role() {
         AdapterRole::Admin => GDriveStateReadAccess::AdminSanitized,
         AdapterRole::GdriveAdapter if principal.adapter_id() == adapter_id.as_str() => {
@@ -186,8 +186,8 @@ pub fn parse_authenticated_gdrive_state_commit_request(
     let principal = principal
         .cloned()
         .ok_or(GDriveStateRouteError::Unauthorized)?;
-    let adapter_id = AdapterId::parse(parts.adapter_id)
-        .map_err(|_| GDriveStateRouteError::ValidationError)?;
+    let adapter_id =
+        AdapterId::parse(parts.adapter_id).map_err(|_| GDriveStateRouteError::ValidationError)?;
     if principal.role() != AdapterRole::GdriveAdapter
         || principal.adapter_id() != adapter_id.as_str()
     {
@@ -234,8 +234,7 @@ pub fn validate_private_snapshot(
     .into_iter()
     .flatten()
     {
-        OperationId::try_from(operation_id)
-            .map_err(|_| GDriveStateRouteError::ValidationError)?;
+        OperationId::try_from(operation_id).map_err(|_| GDriveStateRouteError::ValidationError)?;
     }
     Ok(())
 }
@@ -341,8 +340,7 @@ fn validate_mapping(mapping: &GDriveMappingFactsDto) -> Result<(), GDriveStateRo
         }
     }
     if let Some(revision_id) = mapping.core_revision_id.as_ref() {
-        RevisionId::try_from(revision_id)
-            .map_err(|_| GDriveStateRouteError::ValidationError)?;
+        RevisionId::try_from(revision_id).map_err(|_| GDriveStateRouteError::ValidationError)?;
     }
     if let Some(core_seq) = mapping.core_seq {
         validate_storage_number(core_seq)?;
@@ -369,8 +367,7 @@ fn validate_mapping(mapping: &GDriveMappingFactsDto) -> Result<(), GDriveStateRo
         }
     }
     if let Some(operation_id) = mapping.echo.operation_id.as_ref() {
-        OperationId::try_from(operation_id)
-            .map_err(|_| GDriveStateRouteError::ValidationError)?;
+        OperationId::try_from(operation_id).map_err(|_| GDriveStateRouteError::ValidationError)?;
     }
     if let Some(candidate) = mapping.delete_candidate.as_ref() {
         validate_storage_number(candidate.generation)?;
