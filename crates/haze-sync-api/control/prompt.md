@@ -1,50 +1,39 @@
-# W1-FIX-API-GDA-P1-DEBUG-REDACTION
+# W1-API-GDA-P1-CLEAN-REVIEW-RERUN
 
 Before starting, name this worker chat exactly:
 
-`api — W1 FIX-API-GDA-P1 Debug Redaction`
+`api — W1 API-GDA-P1 Clean Review Rerun`
 
 Repository: `NordCoder/haze-sync`
 Component: api
 Path: `crates/haze-sync-api`
 Branch/ref: `component/api`
 PR: #44
-Role: fixer-worker
-Phase: `FIX-API-GDA-P1-DEBUG-REDACTION`
+Role: clean-code-reviewer
+Phase: `API-GDA-P1-CLEAN-REVIEW-RERUN`
 
-This is a focused review-fixer for the existing API-GDA-P1 phase. Do not begin another API product phase.
+Review exact code-bearing SHA `c60c3976696da1970d539e5cff6e9f74a61fc10e`.
 
-Review target:
-- code-bearing SHA: `77945118a37c6e8efec04ecd054e0e5a5e4435ba`;
-- clean-review report blob: `bcd51da350f8d7bdb7dec19a7a9f6757addff3e3`;
-- green CI run: `29440533856`, number `2017`.
+Authoritative evidence:
+- implementation report blob: `490921fb423bb0c6119bb966cab49f72d6f0e619`;
+- CI fixer report blob: `5b91145a8c0e8746476e3bd5b058e2fcb437f517`;
+- prior clean-review report blob: `bcd51da350f8d7bdb7dec19a7a9f6757addff3e3`;
+- debug-redaction fixer report blob: `928f80600d7db1a5e700551167202236cec79ce7`;
+- Component CI run `29446546229`, run number `2025`, success;
+- accepted Storage GDrive durable-state SHA: `3617bd1cf947fdd394f1ab29d4b992f7b8859a84`.
 
-Required fix:
-1. Remove unsafe derived Debug exposure from private GDrive mapping, snapshot and commit DTOs.
-2. Ensure authenticated commit request Debug does not recursively format the private body.
-3. Use explicit redacted markers or safe summaries only.
-4. Add sentinel tests proving path, drive name, MIME, checksum, Core IDs, timestamps, provider facts, raw cursor and idempotency values never appear in Debug output.
-5. Preserve all serde wire shapes, compatibility fixture JSON, authorization metadata, CAS/cursor/checkpoint semantics, safe errors and API passivity.
+Repeat the focused API-GDA-P1 review and verify the blocking secrecy finding is closed:
+1. private mapping, snapshot, cursor and commit DTO Debug output uses only fixed redacted markers or safe summaries;
+2. authenticated commit request and route parts do not recursively expose body or Idempotency-Key;
+3. sentinel tests cover paths, provider facts, Drive names, MIME/checksum, Core IDs, timestamps, cursor, fingerprint and idempotency values;
+4. serde wire shapes, fixture JSON, authorization, CAS/cursor/checkpoint semantics and safe error vocabulary are unchanged;
+5. API remains passive with no Server registration, Storage/Core/provider/OAuth/scheduler/status-control behavior;
+6. no sibling or workflow changes were introduced.
 
-Allowed scope:
-- `crates/haze-sync-api/src/dto/gdrive.rs`;
-- `crates/haze-sync-api/src/routes/gdrive.rs`;
-- focused API tests/docs only if needed;
-- control report.
+Do not change product code. Write only `crates/haze-sync-api/control/report.md` with:
+- `REPORT_TYPE: CLEAN_CODE_REVIEW`;
+- `phase_id: API-GDA-P1-CLEAN-REVIEW-RERUN`;
+- `chat_name: api — W1 API-GDA-P1 Clean Review Rerun`;
+- status `CLEAN_ACCEPT` or `CLEAN_NEEDS_FIX`.
 
-Forbidden:
-- Server/runtime registration;
-- Storage/Core/provider/OAuth/scheduler/status-control work;
-- sibling or workflow changes;
-- fixture vocabulary changes unrelated to secrecy;
-- test weakening, merge, rebase, force-push or draft-state changes.
-
-Create code/test changes without CI skip. Obtain a new full exact-SHA Component CI run with fmt/check/test/clippy and diagnostics finalization green.
-
-Write only `crates/haze-sync-api/control/report.md` with:
-- `REPORT_TYPE: FIX`;
-- `phase_id: FIX-API-GDA-P1-DEBUG-REDACTION`;
-- `chat_name: api — W1 FIX-API-GDA-P1 Debug Redaction`;
-- status `FIX_COMPLETE`, `FIX_NEEDS_MORE`, `FIX_BLOCKED_BY_CONTRACT`, or `FIX_BLOCKED_BY_TOOLING`.
-
-Do not claim CLEAN_ACCEPT. A repeat clean review follows.
+Record reviewed SHA, closure of the secrecy finding and exact CI evidence. `CLEAN_ACCEPT` unblocks the Server GDrive application/transaction phase.
