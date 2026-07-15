@@ -9,7 +9,7 @@ control_ref_source: component/storage
 default_branch_control_is_active: no
 
 active_prompt: crates/haze-sync-storage/control/prompt.md
-active_report: crates/haze-sync-storage/control/report.md
+active_report: none
 active_agent_role: orchestrator-hold
 assigned_chat_name: none
 
@@ -30,6 +30,6 @@ accepted_candidate:
 - storage_postgresql: success
 
 next_gate:
-- API-GDA-P1 contract phase authorized
-- later Server GDrive application/transaction phase consumes accepted Storage contract
+- API-GDA-P1 consumes the accepted Storage contract
+- Server GDrive application/transaction phase waits for API-GDA-P1 CLEAN_ACCEPT
 - no new Storage product work until explicit Orchestrator assignment
