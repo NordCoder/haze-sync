@@ -8,7 +8,7 @@
 use super::{map_sqlx_error, validate_limit, validate_sequence, RepositoryError, RepositoryResult};
 use chrono::{DateTime, Utc};
 use haze_sync_common::{AdapterId, OperationId, RevisionId, VaultPath};
-use sqlx::{postgres::PgRow, Executor, Postgres, Row, Transaction};
+use sqlx::{postgres::PgRow, Postgres, Row, Transaction};
 use std::fmt;
 
 pub const GDRIVE_STATE_FORMAT_VERSION: i32 = 1;
