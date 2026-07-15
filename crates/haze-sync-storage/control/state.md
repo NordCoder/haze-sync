@@ -1,8 +1,14 @@
 # Control State
 
 component: storage
+repository: NordCoder/haze-sync
 branch: component/storage
 status: PROMPT_READY
+repository_access_verified: yes
+migrated_repository_lookup_required: no
+control_ref_source: component/storage
+default_branch_control_is_active: no
+
 active_prompt: crates/haze-sync-storage/control/prompt.md
 active_report: crates/haze-sync-storage/control/report.md
 active_agent_role: implementation-worker
