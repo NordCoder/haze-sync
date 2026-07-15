@@ -26,4 +26,5 @@ include!("gdrive_state/validation.rs");
 mod tests;
 
 #[cfg(all(test, feature = "test-support"))]
+#[path = "gdrive_state/postgres_contract_tests.rs"]
 mod postgres_tests;
