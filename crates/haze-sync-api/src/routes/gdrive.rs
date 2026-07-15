@@ -16,8 +16,8 @@ use crate::{
             GDriveDeleteCandidateCountSummaryDto, GDriveEchoCountSummaryDto, GDriveEchoStateDto,
             GDriveLastOperationPresenceDto, GDriveMappingFactsDto, GDriveStateAdminSummaryResponse,
             GDriveStateCommitRequest, GDriveStateErrorCode, GDriveStateErrorResponse,
-            GDriveStatePublicError, GDriveStateSnapshotResponse, MAX_GDRIVE_STATE_ITEMS,
-            MAX_GDRIVE_TEXT_BYTES, GDRIVE_MD5_HEX_BYTES,
+            GDriveStatePublicError, GDriveStateSnapshotResponse, GDRIVE_MD5_HEX_BYTES,
+            MAX_GDRIVE_STATE_ITEMS, MAX_GDRIVE_TEXT_BYTES,
         },
         primitives::AdapterIdDto,
     },
@@ -91,8 +91,8 @@ pub fn parse_authenticated_get_gdrive_state_request(
     let principal = principal
         .cloned()
         .ok_or(GDriveStateRouteError::Unauthorized)?;
-    let adapter_id = AdapterId::parse(parts.adapter_id)
-        .map_err(|_| GDriveStateRouteError::ValidationError)?;
+    let adapter_id =
+        AdapterId::parse(parts.adapter_id).map_err(|_| GDriveStateRouteError::ValidationError)?;
     let access = match principal.role() {
         AdapterRole::Admin => GDriveStateReadAccess::AdminSanitized,
         AdapterRole::GdriveAdapter if principal.adapter_id() == adapter_id.as_str() => {
@@ -175,8 +175,8 @@ pub fn parse_authenticated_gdrive_state_commit_request(
     let principal = principal
         .cloned()
         .ok_or(GDriveStateRouteError::Unauthorized)?;
-    let adapter_id = AdapterId::parse(parts.adapter_id)
-        .map_err(|_| GDriveStateRouteError::ValidationError)?;
+    let adapter_id =
+        AdapterId::parse(parts.adapter_id).map_err(|_| GDriveStateRouteError::ValidationError)?;
     if principal.role() != AdapterRole::GdriveAdapter
         || principal.adapter_id() != adapter_id.as_str()
     {
@@ -223,8 +223,7 @@ pub fn validate_private_snapshot(
     .into_iter()
     .flatten()
     {
-        OperationId::try_from(operation_id)
-            .map_err(|_| GDriveStateRouteError::ValidationError)?;
+        OperationId::try_from(operation_id).map_err(|_| GDriveStateRouteError::ValidationError)?;
     }
     Ok(())
 }
@@ -330,8 +329,7 @@ fn validate_mapping(mapping: &GDriveMappingFactsDto) -> Result<(), GDriveStateRo
         }
     }
     if let Some(revision_id) = mapping.core_revision_id.as_ref() {
-        RevisionId::try_from(revision_id)
-            .map_err(|_| GDriveStateRouteError::ValidationError)?;
+        RevisionId::try_from(revision_id).map_err(|_| GDriveStateRouteError::ValidationError)?;
     }
     if let Some(core_seq) = mapping.core_seq {
         validate_storage_number(core_seq)?;
@@ -358,8 +356,7 @@ fn validate_mapping(mapping: &GDriveMappingFactsDto) -> Result<(), GDriveStateRo
         }
     }
     if let Some(operation_id) = mapping.echo.operation_id.as_ref() {
-        OperationId::try_from(operation_id)
-            .map_err(|_| GDriveStateRouteError::ValidationError)?;
+        OperationId::try_from(operation_id).map_err(|_| GDriveStateRouteError::ValidationError)?;
     }
     if let Some(candidate) = mapping.delete_candidate.as_ref() {
         validate_storage_number(candidate.generation)?;
@@ -597,7 +594,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(request.adapter_id().as_str(), "gdrive-main");
-        assert_eq!(request.idempotency_key().as_str(), "gdrive-commit-fixture-01");
+        assert_eq!(
+            request.idempotency_key().as_str(),
+            "gdrive-commit-fixture-01"
+        );
 
         assert_eq!(
             parse_authenticated_gdrive_state_commit_request(
@@ -630,7 +630,10 @@ mod tests {
     fn errors_are_stable_and_secret_safe() {
         let error = GDriveStateRouteError::IdempotencyConflict;
         assert_eq!(error.http_status_code(), HTTP_STATUS_CONFLICT);
-        assert_eq!(error.public_code(), GDriveStateErrorCode::IdempotencyConflict);
+        assert_eq!(
+            error.public_code(),
+            GDriveStateErrorCode::IdempotencyConflict
+        );
         assert_eq!(
             serde_json::to_string(&error.to_error_response()).unwrap(),
             "{\"error\":{\"code\":\"idempotency_conflict\",\"message\":\"Idempotency metadata conflicts with a prior operation\"}}"
