@@ -89,7 +89,7 @@ export function createConfigurationError(message: string, endpoint?: string): Ap
   return new ApiClientError({
     category: "configuration",
     endpoint,
-    message: sanitizeStatusMessage(message),
+    message: sanitizeApiErrorMessage(message),
   });
 }
 
@@ -111,7 +111,7 @@ export function createOfflineError(endpoint: string): ApiClientError {
 
 function safeErrorMessage(status: number, payload: unknown, secrets: readonly string[]): string {
   if (isErrorResponseDto(payload)) {
-    return sanitizeStatusMessage(payload.error.message, secrets);
+    return sanitizeApiErrorMessage(payload.error.message, secrets);
   }
 
   switch (mapHttpStatusToCategory(status)) {
@@ -136,4 +136,10 @@ function safeErrorMessage(status: number, payload: unknown, secrets: readonly st
     case "internal":
       return "Haze Sync request failed.";
   }
+}
+
+function sanitizeApiErrorMessage(message: string, secrets: readonly string[] = []): string {
+  return sanitizeStatusMessage(message, secrets)
+    .replace(/\b[A-Za-z]:\\(?:[^\\\s]+\\)*[^\\\s]*/gu, "[local path redacted]")
+    .replace(/(^|[\s(])\/(?:Users|home|var|tmp|private|srv)\/(?:[^\s),;]+\/?)+/gu, "$1[local path redacted]");
 }
