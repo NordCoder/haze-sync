@@ -138,8 +138,37 @@ function safeErrorMessage(status: number, payload: unknown, secrets: readonly st
   }
 }
 
+const LOCAL_PATH_REPLACEMENT = "[local path redacted]";
+const ABSOLUTE_PATH_ROOTS = "Users|home|mnt|Volumes|storage|var|tmp|private|srv";
+const QUOTED_ABSOLUTE_PATH_PATTERN = new RegExp(
+  `(["'\x60])((?:[A-Za-z]:[\\\\/]|\\\\\\\\[^\\\\/\\r\\n]+[\\\\/][^\\\\/\\r\\n]+[\\\\/]|/(?:${ABSOLUTE_PATH_ROOTS})/)[^"'\x60\\r\\n]+)\\1`,
+  "gu",
+);
+const ABSOLUTE_FILE_PATH_PATTERN = new RegExp(
+  `(^|[\\s(=:\\[])((?:[A-Za-z]:[\\\\/]|\\\\\\\\[^\\\\/\\r\\n]+[\\\\/][^\\\\/\\r\\n]+[\\\\/]|/(?:${ABSOLUTE_PATH_ROOTS})/)[^\\r\\n,;)\\]}]*?\\.[A-Za-z0-9_-]{1,16})(?=$|[\\s,;:)\\]}])`,
+  "gu",
+);
+const ABSOLUTE_PATH_TOKEN_PATTERN = new RegExp(
+  `(^|[\\s(=:\\[])(?:[A-Za-z]:[\\\\/]|\\\\\\\\[^\\\\/\\s]+[\\\\/][^\\\\/\\s]+[\\\\/]|/(?:${ABSOLUTE_PATH_ROOTS})/)[^\\s,;)\\]}]+`,
+  "gu",
+);
+
 function sanitizeApiErrorMessage(message: string, secrets: readonly string[] = []): string {
-  return sanitizeStatusMessage(message, secrets)
-    .replace(/\b[A-Za-z]:\\(?:[^\\\s]+\\)*[^\\\s]*/gu, "[local path redacted]")
-    .replace(/(^|[\s(])\/(?:Users|home|var|tmp|private|srv)\/(?:[^\s),;]+\/?)+/gu, "$1[local path redacted]");
+  return sanitizeStatusMessage(redactAbsoluteLocalPaths(message), secrets);
+}
+
+function redactAbsoluteLocalPaths(message: string): string {
+  return message
+    .replace(
+      QUOTED_ABSOLUTE_PATH_PATTERN,
+      (_match: string, quote: string) => `${quote}${LOCAL_PATH_REPLACEMENT}${quote}`,
+    )
+    .replace(
+      ABSOLUTE_FILE_PATH_PATTERN,
+      (_match: string, prefix: string) => `${prefix}${LOCAL_PATH_REPLACEMENT}`,
+    )
+    .replace(
+      ABSOLUTE_PATH_TOKEN_PATTERN,
+      (_match: string, prefix: string) => `${prefix}${LOCAL_PATH_REPLACEMENT}`,
+    );
 }
