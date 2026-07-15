@@ -1,14 +1,11 @@
-pub async fn initialize_gdrive_adapter_state<'executor, E>(
-    executor: E,
+pub async fn initialize_gdrive_adapter_state(
+    transaction: &mut Transaction<'_, Postgres>,
     adapter_id: &AdapterId,
-) -> RepositoryResult<GDriveAdapterStateRow>
-where
-    E: Executor<'executor, Database = Postgres>,
-{
+) -> RepositoryResult<GDriveAdapterStateRow> {
     let row = sqlx::query(INITIALIZE_STATE_SQL)
         .bind(adapter_id.as_str())
         .bind(GDRIVE_STATE_FORMAT_VERSION)
-        .fetch_one(executor)
+        .fetch_one(&mut **transaction)
         .await
         .map_err(map_sqlx_error)?;
     gdrive_state_from_pg(&row)
