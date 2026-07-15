@@ -25,7 +25,7 @@ phase_id: OBS-FAN-IN-P1-SERVER-COMPAT-E2E
 dependency_status: accepted API and Server SHAs supplied by Orchestrator; no missing contract found
 
 SUMMARY:
-Implemented a component-owned deterministic Server compatibility E2E harness for the existing production API client, added a localhost-only optional read-only Server smoke command, and hardened public API error sanitization for Windows and Unix absolute local paths. No sibling component, workflow, route, DTO vocabulary, provider behavior, packaging, or production sync policy was changed. Exact final code-bearing SHA is 517b8cd77dc7c24eec78ae6c2f1ab55e7a8aeb3a. Component CI has not yet appeared for that SHA, so the phase is pending CI.
+Implemented a component-owned deterministic Server compatibility E2E harness for the existing production API client, added a localhost-only optional read-only Server smoke command, and hardened public API error sanitization for Windows and Unix absolute local paths. No sibling component, workflow, route, DTO vocabulary, provider behavior, packaging, or production sync policy was changed. Exact final code-bearing SHA is 517b8cd77dc7c24eec78ae6c2f1ab55e7a8aeb3a. Component CI run 29434046014 (run number 1999) is in progress, so the phase remains pending CI.
 
 CHANGED_FILES:
 - apps/haze-obsidian-plugin/src/api-client/errors.ts
@@ -41,14 +41,14 @@ BRANCH_AND_CONTROL:
 current_branch: component/obsidian-plugin
 base_branch: main
 base_sha: c1e69a664388b0cba028170e8398b9088218957d
-head_sha: 517b8cd77dc7c24eec78ae6c2f1ab55e7a8aeb3a before report-only commit
+head_sha: 517b8cd77dc7c24eec78ae6c2f1ab55e7a8aeb3a before report-only commits
 default_branch_modified: no
 sibling_branch_modified: no
 control_prompt_read: yes, explicitly with ref=component/obsidian-plugin
 control_report_written: yes
 control_files_archived_by_worker: no
-ci_skip_used: yes, report-only commit only
-ci_skip_reason: control/report-only update after code-bearing implementation; not CI evidence
+ci_skip_used: yes, report-only commits only
+ci_skip_reason: control/report-only updates after code-bearing implementation; skipped runs are not CI evidence
 
 SCOPE:
 allowed_files_only: yes
@@ -88,31 +88,31 @@ non_goals_preserved:
 - no generated release bundle or marketplace claim
 - no mobile/background guarantee claim
 deferred_work:
-- Component CI for exact code-bearing SHA
+- exact-SHA Component CI completion
 - optional loopback smoke execution requires operator-provided synthetic local Server URL and token
 - focused clean/integration review after green CI
 
 TESTS_AND_CHECKS:
 checks_run:
-- GitHub connector verified PR #51 remains open, draft, unmerged and head reached exact code-bearing SHA 517b8cd77dc7c24eec78ae6c2f1ab55e7a8aeb3a before report commit
+- GitHub connector verified PR #51 remains open, draft and unmerged
+- GitHub connector verified exact code-bearing SHA 517b8cd77dc7c24eec78ae6c2f1ab55e7a8aeb3a
+- Component CI run 29434046014, run number 1999, observed in_progress for the exact code-bearing SHA
 checks_not_run:
-- npm ci: no shell execution available in connector-only worker environment
-- npm test --workspace haze-obsidian-plugin: pending Component CI
-- npm run typecheck --workspace haze-obsidian-plugin: pending Component CI
-- npm run build --workspace haze-obsidian-plugin: pending Component CI
-- Rust workspace checks: pending Component CI
+- local npm ci: no shell execution available in connector-only worker environment
+- local plugin tests/typecheck/build: pending Component CI result
+- local Rust workspace checks: pending Component CI result
 - optional loopback Server smoke: skipped because no operator-provided synthetic local Server configuration was supplied
 ci_status: CI_PENDING
-workflow_urls: none observed yet for exact code-bearing SHA
-known_failures: none observed; no green claim made
+workflow_urls: Component CI run 29434046014
+known_failures: none observed; in-progress CI is not reported as green
 
 CI_DIAGNOSTICS:
 artifact_based_logs: not applicable to implementation-worker
 artifact_name: none
 artifact_id: none
-workflow_run_id: none
-workflow_run_attempt: none
-artifact_status: not requested
+workflow_run_id: 29434046014
+workflow_run_attempt: 1
+artifact_status: not applicable while CI is in progress
 summary_read: no
 manifest_read: no
 logs_read: none
@@ -128,7 +128,7 @@ hard_delete_added: no
 background_jobs_added: no
 
 ISSUES_FOUND:
-- Current Component CI run/status had not appeared for exact code-bearing SHA at report time.
+- Exact-SHA Component CI is still in progress.
 
 BLOCKERS:
 - Green exact-SHA Component CI evidence is required before SELF_ACCEPT can be claimed.
@@ -137,7 +137,7 @@ NEXT_RECOMMENDED_AGENT:
 orchestrator
 
 FINAL_VERDICT:
-SELF_ACCEPT_PENDING_CI — implementation complete within component scope; exact code-bearing SHA 517b8cd77dc7c24eec78ae6c2f1ab55e7a8aeb3a awaits Component CI. Optional loopback smoke was honestly skipped because configuration was absent.
+SELF_ACCEPT_PENDING_CI — implementation complete within component scope; exact code-bearing SHA 517b8cd77dc7c24eec78ae6c2f1ab55e7a8aeb3a is under Component CI run 29434046014. Optional loopback smoke was honestly skipped because configuration was absent.
 
 PUSHED:
 yes
