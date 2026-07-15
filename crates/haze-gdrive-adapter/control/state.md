@@ -10,34 +10,36 @@ default_branch_control_is_active: no
 
 active_prompt: crates/haze-gdrive-adapter/control/prompt.md
 active_report: crates/haze-gdrive-adapter/control/report.md
-active_agent_role: fixer-worker
-assigned_chat_name: gdrive-adapter — W1 FIX-GDA-GDA-P1 Review
+active_agent_role: clean-code-reviewer
+assigned_chat_name: gdrive-adapter — W1 GDA-GDA-P1 Clean Review Rerun
 
 wave: W1
-phase: FIX-GDA-GDA-P1-REVIEW
-implementation_status: COMPLETE_AFTER_CI_FIX
-fix_status: REVIEW_FIX_NOT_STARTED
-clean_review_status: CLEAN_NEEDS_FIX
-ci_status: CI_GREEN_ON_REVIEWED_SHA
+phase: GDA-GDA-P1-CLEAN-REVIEW-RERUN
+implementation_status: COMPLETE_AFTER_REVIEW_FIX
+fix_status: FIX_COMPLETE
+clean_review_status: RERUN_NOT_STARTED
+ci_status: CI_GREEN
 architect_status: ARCHITECT_ACCEPT_GDRIVE_FAN_IN
+known_failed_checks: []
 
 review_candidate:
-- code_bearing_sha: 9bbbe6a3b6d3ea9935cb2b64390af042b4837c05
-- clean_review_report_blob: 59d01050a4b2a59ce47c392b6fb3711a873a1574
-- ci_run_id: 29435042810
-- ci_run_number: 2001
+- code_bearing_sha: fcc04afd1fe9808656d9bc2effbfff7160efe9fc
+- prior_clean_review_report_blob: 59d01050a4b2a59ce47c392b6fb3711a873a1574
+- review_fixer_report_blob: e8b6a5235df04c90e3ac5d816ff95fa7c3429c8e
+- ci_run_id: 29440275057
+- ci_run_number: 2012
+- ci_conclusion: success
 
-required_fix:
-- eliminate independent stored dry_run authority
-- derive dry-run compatibility view only from AdapterMode
-- remove contradictory StartupStatus state and test expectations
-- preserve six modes, capabilities, fail-closed legacy input and redaction
+required_review:
+- AdapterMode is the only stored authority
+- dry-run state/accessors/status derive only from mode
+- contradiction tests close the prior finding
+- six modes, capabilities, legacy fail-closed input and redaction remain intact
 
 protected_scope:
 - no next GDrive product phase
-- no OAuth, provider, HTTP, persistence, scheduler, status API, Deployment or sibling changes
-- no workflow changes or test weakening
+- no product or sibling/workflow changes by reviewer
 
 next_gate:
-- FIX_COMPLETE plus full exact-SHA green CI -> repeat focused GDrive clean review
-- unresolved invariant -> FIX_NEEDS_MORE
+- CLEAN_ACCEPT -> next sequential GDrive owner phase
+- CLEAN_NEEDS_FIX -> focused fixer loop
