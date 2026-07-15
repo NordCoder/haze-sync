@@ -39,7 +39,9 @@ pub type RepositoryResult<T> = Result<T, RepositoryError>;
 #[non_exhaustive]
 pub enum RepositoryError {
     InvalidSequence,
-    InvalidLimit { max: u32 },
+    InvalidLimit {
+        max: u32,
+    },
     InvalidPath,
     InvalidIdentifier,
     InvalidHash,
@@ -139,9 +141,7 @@ impl RepositoryError {
             }
             Self::InvalidWorktreeStateKind => "worktree path-state kind is invalid",
             Self::InvalidWorktreeObservation => "worktree reconciliation observation is invalid",
-            Self::UnsupportedGDriveStateVersion => {
-                "gdrive durable-state version is not supported"
-            }
+            Self::UnsupportedGDriveStateVersion => "gdrive durable-state version is not supported",
             Self::GDriveStateMissing => "gdrive durable state must be initialized",
             Self::GDriveStateStaleExpected => "gdrive expected state version is stale",
             Self::GDriveCursorGenerationMismatch => "gdrive cursor generation is stale",
@@ -206,7 +206,6 @@ mod tests {
         "stack backtrace",
         "root_fingerprint",
         "external_cursor_json",
-        "drive_cursor",
         "provider payload",
     ];
 
