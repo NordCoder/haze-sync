@@ -357,7 +357,7 @@ test("absolute local paths are fully redacted while safe public route text remai
         assert.equal(error.category, "rejected");
         assert.ok(error.message.includes("[local path redacted]"));
         assert.ok(error.message.includes("public route /v1/files remains"));
-        assert.ok(!error.message.includes(localPath.replaceAll('"', "")));
+        assert.ok(!error.message.includes(localPath.replace(/"/gu, "")));
         return true;
       },
     );
