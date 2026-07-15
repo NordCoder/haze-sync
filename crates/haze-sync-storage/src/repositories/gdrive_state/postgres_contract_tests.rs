@@ -362,10 +362,7 @@ async fn concurrent_loser_observes_stale_expected_after_winner_commits() {
     cleanup.commit().await.unwrap();
 }
 
-async fn insert_test_adapter(
-    transaction: &mut Transaction<'_, Postgres>,
-    adapter_id: &AdapterId,
-) {
+async fn insert_test_adapter(transaction: &mut Transaction<'_, Postgres>, adapter_id: &AdapterId) {
     sqlx::query(
         "insert into sync_adapters (adapter_id, display_name, role, token_hash) \
          values ($1, $2, 'gdrive_adapter', 'synthetic-test-token-hash')",
