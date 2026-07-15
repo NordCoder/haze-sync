@@ -1,74 +1,46 @@
-# W1-FIX-OBS-FAN-IN-P1-REVIEW
+# W1-OBS-FAN-IN-P1-CLEAN-REVIEW-RERUN
 
 Before starting, name this worker chat exactly:
 
-`obsidian-plugin — W1 FIX-OBS-FAN-IN-P1 Review`
+`obsidian-plugin — W1 OBS-FAN-IN-P1 Clean Review Rerun`
 
 Repository: `NordCoder/haze-sync`
 Component: obsidian-plugin
 Path: `apps/haze-obsidian-plugin`
 Branch/ref: `component/obsidian-plugin`
 PR: #51
-Role: fixer-worker
-Phase: `FIX-OBS-FAN-IN-P1-REVIEW`
+Role: clean-code-reviewer
+Phase: `OBS-FAN-IN-P1-CLEAN-REVIEW-RERUN`
 
-This is a focused fixer for the existing `OBS-FAN-IN-P1-SERVER-COMPAT-E2E` phase. Do not begin another Obsidian product or release phase.
+Review exact code-bearing SHA `457f1e4904456f5ddf766791e5250e36a0fd23e6`.
 
-## Review target and findings
+Authoritative evidence:
 
-- reviewed code-bearing SHA: `2f03dc49e7fdff8cfd0e4685c07ffc0ba75602ce`;
-- clean-review report blob: `aa4fe184ec398168d805412a9d709e4dcca464b7`;
-- authoritative green CI before review findings: run `29434935575`, number `2000`.
+- implementation report blob: `ffdc199c2e92e5f5a3be8bdb6666f5a9bd8ee5e3`;
+- CI fixer report blob: `c7dae6d9bf7f92584083ad0bc2206f35be69c57d`;
+- prior clean-review report blob: `aa4fe184ec398168d805412a9d709e4dcca464b7`;
+- review-fixer report blob: `4238dd11aee8d6c99d749053e4361543c412c8af`;
+- Component CI run `29440659397`, run number `2019`, success.
 
-The review found two component-local defects:
+Repeat the focused clean/integration review and verify both prior findings are closed:
 
-1. Absolute-path redaction is incomplete for valid common forms, including paths with spaces, Windows forward-slash paths, UNC paths, `/mnt`, `/Volumes`, and Android-style `/storage` roots.
-2. The deterministic download fixture returns bytes whose advertised SHA-256 does not match, and the test does not exercise the production remote-materializer hash verifier.
+1. public API errors redact complete recognizable absolute local paths for common Windows drive, Windows forward-slash, UNC, Linux, macOS and Android-style roots, including paths with spaces and quoted directories;
+2. safe non-path public text and API routes such as `/v1/files` are not indiscriminately erased;
+3. deterministic fake download advertises the actual SHA-256 of its bytes;
+4. the integration test invokes production `materializeRemoteChange` or the exact production verifier path;
+5. matching metadata/body materializes successfully and advances only the expected cursor/base state;
+6. mismatched metadata/body fails before any vault mutation, cursor advancement or base revision update;
+7. test-only Obsidian runtime support is isolated, generated/untracked and does not change production behavior;
+8. synthetic-only fixtures, loopback-only optional smoke and accepted API endpoint/header semantics remain intact;
+9. no route/DTO, sibling, workflow, provider/DB, release packaging or external-network-required CI behavior was added.
 
-## Required fix
-
-1. Harden the API-client public-error sanitizer so complete recognizable absolute local paths are removed without exposing suffixes for supported Windows, UNC, Linux, macOS and Android-style forms, including whitespace-containing paths.
-2. Add focused positive and negative redaction tests. Preserve safe non-path public text where practical; do not simply erase every slash-containing string.
-3. Correct the successful fake download hash/body pairing.
-4. Exercise the production hash-verification boundary directly through `materializeRemoteChange` or the actual production-equivalent entrypoint:
-   - matching metadata/body succeeds;
-   - mismatched metadata/body fails safely before vault mutation;
-   - no cursor/base revision is advanced on mismatch.
-5. Preserve deterministic fake transport, loopback-only optional smoke behavior, synthetic-only fixtures and existing endpoint/header semantics.
-
-## Scope
-
-Allowed only where necessary:
-
-- `apps/haze-obsidian-plugin/src/api-client/errors.ts`;
-- production remote materializer or its test-facing adapter only if required to invoke the existing verifier without redesign;
-- `apps/haze-obsidian-plugin/tests/**`;
-- minimal test/docs alignment;
-- control report.
-
-Forbidden:
-
-- API, Server or sibling component changes;
-- route/DTO invention;
-- workflow changes;
-- external-network-required CI;
-- real vault data or credentials;
-- weakening existing tests;
-- release packaging or marketplace work;
-- unrelated production refactors;
-- merge, rebase, force-push or PR draft-state change.
-
-## Validation
-
-Create code/test changes without CI skip. Obtain a new full exact-SHA Component CI run with npm install, plugin tests, typecheck, build, Node diagnostics finalization and Rust workspace green. Optional loopback smoke may remain honestly skipped without local synthetic configuration. PR #51 remains open, draft and unmerged.
-
-## Report
+Do not change product code. Do not expand scope, merge, rebase, force-push or change PR draft state.
 
 Write only `apps/haze-obsidian-plugin/control/report.md` with:
 
-- `REPORT_TYPE: FIX`;
-- `phase_id: FIX-OBS-FAN-IN-P1-REVIEW`;
-- `chat_name: obsidian-plugin — W1 FIX-OBS-FAN-IN-P1 Review`;
-- status `FIX_COMPLETE`, `FIX_NEEDS_MORE`, `FIX_BLOCKED_BY_CONTRACT`, or `FIX_BLOCKED_BY_TOOLING`.
+- `REPORT_TYPE: CLEAN_CODE_REVIEW`;
+- `phase_id: OBS-FAN-IN-P1-CLEAN-REVIEW-RERUN`;
+- `chat_name: obsidian-plugin — W1 OBS-FAN-IN-P1 Clean Review Rerun`;
+- status `CLEAN_ACCEPT` or `CLEAN_NEEDS_FIX`.
 
-Record exact changed paths, redaction cases covered, production hash-verifier scenarios, final code-bearing SHA and exact CI. Do not claim CLEAN_ACCEPT; a repeat clean integration review follows.
+Record reviewed SHA, closure of both findings, secrecy/hash-boundary evidence and exact CI. Do not claim merge readiness. `CLEAN_ACCEPT` places the Obsidian fan-in phase into accepted hold.
