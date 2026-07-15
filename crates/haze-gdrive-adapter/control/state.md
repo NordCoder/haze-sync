@@ -5,40 +5,42 @@ branch: component/gdrive-adapter
 status: PROMPT_READY
 active_prompt: crates/haze-gdrive-adapter/control/prompt.md
 active_report: crates/haze-gdrive-adapter/control/report.md
-active_agent_role: implementation-worker
-assigned_chat_name: gdrive-adapter — W1 GDA Fan-In Main Sync
+active_agent_role: architect-reviewer
+assigned_chat_name: gdrive-adapter — W1 GDA Fan-In Architecture Review
 
 wave: W1
-phase: GDA-FAN-IN-PRE-SYNC
-implementation_status: NOT_STARTED_SYNC
+phase: GDA-FAN-IN-ARCHITECTURE-REVIEW
+implementation_status: SYNC_ACCEPTED
 clean_review_status: CLEAN_ACCEPT_COMPONENT_LOCAL
-ci_status: NOT_RUN_POST_SYNC
-architect_status: ARCHITECT_REVIEW_REQUIRED_AFTER_SYNC
+ci_status: CI_GREEN_POST_SYNC
+architect_status: NOT_STARTED_FAN_IN_REVIEW
 known_failed_checks: []
 
-accepted_component_local:
-- code_bearing_sha: 06a7051a7e14c1da45de8cf96a78658b59cb823e
-- ci_run_id: 29145248883
-- ci_run_number: 1658
+synchronized_baseline:
+- accepted_product_sha: 06a7051a7e14c1da45de8cf96a78658b59cb823e
+- post_sync_sha: f9a2da6eb9ac6f59b1ec18ae4d85eb51964f3cbe
+- exact_main_sha: c1e69a664388b0cba028170e8398b9088218957d
+- pre_sync_report_blob: 5609c422a4a7a7046bc6537a1dc90d58559bb071
+- ci_run_id: 29409560791
+- ci_run_number: 1962
 - ci_conclusion: success
 
-branch_state:
-- historical_head_before_slot: 2be620c20712916a08620febea4fee07ed90272f
-- exact_main_sha: c1e69a664388b0cba028170e8398b9088218957d
-- merge_base: 9ee3ced989bf60a71d0d7b37ff046118b0b2d1a2
-- normal_merge_required: yes
-- actual_head_must_be_fetched_at_worker_start: yes
-- rebase_or_history_rewrite_forbidden: yes
+architecture_questions:
+- standalone process and lifecycle ownership
+- concrete Server/API transport
+- durable mapping/cursor/delete persistence
+- live OAuth/provider token lifecycle
+- scheduling, cursor and shutdown semantics
+- mode consistency and staged rollout
+- status/doctor/audited controls
+- Deployment readiness gate
 
 protected_scope:
-- synchronization only
-- no Server/API transport
-- no direct Storage/DB persistence
-- no live provider/OAuth lifecycle
-- no scheduling/status/doctor/operator controls
-- no Deployment service wiring
-- no architecture decisions
+- architecture review only
+- no product, deployment, migration or workflow changes
+- no direct DB ownership assumption
+- no skeleton service packaging
 
 next_gate:
-- SELF_ACCEPT plus green exact post-sync CI -> separate GDrive fan-in architecture review
-- sync defect -> focused fixer
+- ARCHITECT_ACCEPT -> first explicitly scoped fan-in implementation phase
+- unresolved boundary -> focused architecture/policy decision
