@@ -1,22 +1,33 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import type { Vault } from "obsidian";
+
 import {
   ApiClientError,
   HazeSyncApiClient,
   type HttpTransport,
 } from "../src/api-client";
+import { createDefaultBaseRevisionState } from "../src/base-revision-store";
+import { materializeRemoteChange } from "../src/remote-materializer";
+import { createDefaultRemoteSyncState } from "../src/remote-sync-state";
 
 const TOKEN = "synthetic-e2e-token";
 const PUT_KEY = "synthetic-put-key";
 const DELETE_KEY = "synthetic-delete-key";
 const RESOLVE_KEY = "synthetic-resolve-key";
-const HASH = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const HASH = "sha256:76ebc8ee2673d4c79bf5d9809c02a163d6b57ab0f35194433b7d90205b5c19bd";
+const MISMATCH_HASH = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const CONTENT = new TextEncoder().encode("synthetic note\n");
 
 interface RecordedRequest {
   url: URL;
   init: RequestInit;
+}
+
+interface SyntheticVaultMutation {
+  path: string;
+  data: string;
 }
 
 class DeterministicFakeServer {
@@ -146,6 +157,16 @@ function createClient(server: DeterministicFakeServer): HazeSyncApiClient {
   });
 }
 
+function createEmptySyntheticVault(mutations: SyntheticVaultMutation[]): Vault {
+  return {
+    getAbstractFileByPath: () => null,
+    create: async (path: string, data: string) => {
+      mutations.push({ path, data });
+      return undefined;
+    },
+  } as unknown as Vault;
+}
+
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {
     status,
@@ -182,6 +203,22 @@ test("deterministic fake Server exercises the accepted public sync surface", asy
   assert.equal(file.metadata.size_bytes, CONTENT.byteLength);
   assert.deepEqual(new Uint8Array(file.body), CONTENT);
 
+  const change = changes.changes[0];
+  assert.ok(change);
+  const mutations: SyntheticVaultMutation[] = [];
+  const materialized = await materializeRemoteChange({
+    vault: createEmptySyntheticVault(mutations),
+    change,
+    download: file,
+    baseRevisionState: createDefaultBaseRevisionState(),
+    remoteSyncState: createDefaultRemoteSyncState(),
+    observedAt: "2026-01-01T00:01:01Z",
+  });
+  assert.equal(materialized.status, "applied");
+  assert.deepEqual(mutations, [{ path: "Synthetic/note.md", data: "synthetic note\n" }]);
+  assert.equal(materialized.remoteSyncState.changeCursor, 41);
+  assert.equal(materialized.baseRevisionState.byPath["Synthetic/note.md"]?.revisionId, "rev_synthetic_0002");
+
   const deleted = await client.deleteFile({
     path: "Synthetic/note.md",
     baseRevisionId: "rev_synthetic_0002",
@@ -201,6 +238,42 @@ test("deterministic fake Server exercises the accepted public sync surface", asy
   assert.equal(server.requests.length, 7);
 });
 
+test("production materializer rejects a mismatched download before vault mutation or cursor advancement", async () => {
+  const mutations: SyntheticVaultMutation[] = [];
+  const result = await materializeRemoteChange({
+    vault: createEmptySyntheticVault(mutations),
+    change: {
+      seq: 99,
+      kind: "upsert_file",
+      path: "Synthetic/mismatch.md",
+      revision_id: "rev_synthetic_mismatch",
+      content_sha256: MISMATCH_HASH,
+      size_bytes: CONTENT.byteLength,
+      updated_by: "synthetic-adapter",
+      updated_at: "2026-01-01T00:09:00Z",
+    },
+    download: {
+      metadata: {
+        path: "Synthetic/mismatch.md",
+        revision_id: "rev_synthetic_mismatch",
+        content_sha256: MISMATCH_HASH,
+        size_bytes: CONTENT.byteLength,
+      },
+      body: CONTENT.slice().buffer,
+      contentType: "application/octet-stream",
+    },
+    baseRevisionState: createDefaultBaseRevisionState(),
+    remoteSyncState: createDefaultRemoteSyncState(),
+    observedAt: "2026-01-01T00:09:01Z",
+  });
+
+  assert.equal(result.status, "conflict_queued");
+  assert.equal(result.reason, "hash_mismatch");
+  assert.deepEqual(mutations, []);
+  assert.equal(result.remoteSyncState.changeCursor, null);
+  assert.equal(result.baseRevisionState.byPath["Synthetic/mismatch.md"], undefined);
+});
+
 test("public authorization, conflict, unavailable and validation failures stay categorized and redacted", async () => {
   const cases = [
     { status: 401, category: "unauthorized" },
@@ -215,7 +288,7 @@ test("public authorization, conflict, unavailable and validation failures stay c
         {
           error: {
             code: item.status === 422 ? "validation_error" : "internal_error",
-            message: `Bearer ${TOKEN} ${PUT_KEY} C:\\Users\\Synthetic\\vault\\note.md /home/synthetic/vault/note.md`,
+            message: `Bearer ${TOKEN} ${PUT_KEY} C:\\Users\\Synthetic\\vault\\note.md`,
           },
         },
         item.status,
@@ -242,8 +315,49 @@ test("public authorization, conflict, unavailable and validation failures stay c
         assert.ok(!error.message.includes(TOKEN));
         assert.ok(!error.message.includes(PUT_KEY));
         assert.ok(!error.message.includes("C:\\Users"));
-        assert.ok(!error.message.includes("/home/synthetic"));
         assert.ok(!error.message.includes("synthetic note"));
+        return true;
+      },
+    );
+  }
+});
+
+test("absolute local paths are fully redacted while safe public route text remains", async () => {
+  const paths = [
+    "C:\\Users\\John Doe\\vault\\note.md",
+    "C:/Users/John/vault/note.md",
+    "\\\\server\\share\\note.md",
+    "/home/john doe/vault/note.md",
+    "/mnt/data/note.md",
+    "/Volumes/My Vault/note.md",
+    "/storage/emulated/0/Notes/note.md",
+    '"/Volumes/My Vault/folder"',
+  ];
+
+  for (const localPath of paths) {
+    const transport: HttpTransport = async () =>
+      jsonResponse(
+        {
+          error: {
+            code: "validation_error",
+            message: `Failed at ${localPath}; public route /v1/files remains.`,
+          },
+        },
+        422,
+      );
+    const client = new HazeSyncApiClient({
+      config: { serverUrl: "https://sync.example.test", authToken: TOKEN },
+      transport,
+    });
+
+    await assert.rejects(
+      () => client.getChanges({ since: 0, limit: 1 }),
+      (error: unknown) => {
+        assert.ok(error instanceof ApiClientError);
+        assert.equal(error.category, "rejected");
+        assert.ok(error.message.includes("[local path redacted]"));
+        assert.ok(error.message.includes("public route /v1/files remains"));
+        assert.ok(!error.message.includes(localPath.replaceAll('"', "")));
         return true;
       },
     );
