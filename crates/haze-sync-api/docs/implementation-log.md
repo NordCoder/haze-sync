@@ -35,6 +35,17 @@ Summary: Added a passive, secret-safe Worktree status DTO surface and an admin-o
 Status: SELF_ACCEPT_PENDING_CI
 Follow-ups: Obtain exact-final-SHA Component CI, then run the focused API-P8 functional clean-code review. Server HTTP fan-in and CLI-P6A remain separate Orchestrator phases.
 
+### 2026-07-15 — W1/API-GDA-P1-CONTRACTS
+
+Agent: Implementation Worker
+Branch: component/api
+Prompt: crates/haze-sync-api/control/prompt.md
+Report: crates/haze-sync-api/control/report.md
+Commit(s): GDrive state DTO, passive route helper, fixture, verifier, and documentation commits on component/api; exact final code-bearing SHA is recorded in the control report
+Summary: Added passive authenticated contracts for bounded Google Drive durable-state reads and transactional compare-and-commit submission. The surface includes matching-adapter and sanitized-admin read access, exact state/cursor expectations, strict one-generation cursor transitions, typed mapping/echo/delete/operation facts, mandatory idempotency metadata, stable safe outcomes/errors, raw-cursor redaction, and deterministic compatibility evidence. No Server registration, Storage/SQLx access, provider/OAuth behavior, scheduler, status ingestion, sibling product or workflow changes were added.
+Status: SELF_ACCEPT_PENDING_CI
+Follow-ups: Obtain exact-final-SHA Component CI and then run focused API-GDA-P1 clean review. Server/Storage fan-in and standalone GDrive client work require separate verified control slots.
+
 ---
 
 Use this format for future entries:
