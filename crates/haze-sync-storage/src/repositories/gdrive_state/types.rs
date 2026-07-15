@@ -143,8 +143,6 @@ const ITEM_COLUMNS: &str = "adapter_id, path, drive_file_id, drive_parent_id, dr
      echo_provider_version, delete_candidate_first_seen_at, delete_candidate_last_seen_at, \
      delete_candidate_generation, delete_candidate_blocked, delete_confirmation_audit_id, \
      last_imported_at, last_exported_at, last_seen_at, created_at, updated_at";
-const OPERATION_COLUMNS: &str = "adapter_id, operation_id, operation_kind, facts_hash, \
-     outcome_kind, committed_state_version, mapping_path, core_seq, drive_version, created_at";
 
 const INITIALIZE_STATE_SQL: &str = "insert into gdrive_adapter_state (adapter_id, state_format_version) \
      values ($1, $2) on conflict (adapter_id) do update \
@@ -227,7 +225,7 @@ impl GDriveCursor {
     }
 
     #[must_use]
-    pub fn as_str(&self) -> &str {
+    fn as_str(&self) -> &str {
         &self.0
     }
 }
@@ -257,7 +255,7 @@ impl GDriveOperationFingerprint {
     }
 
     #[must_use]
-    pub fn as_str(&self) -> &str {
+    fn as_str(&self) -> &str {
         &self.0
     }
 }
