@@ -10,36 +10,37 @@ default_branch_control_is_active: no
 
 active_prompt: crates/haze-gdrive-adapter/control/prompt.md
 active_report: crates/haze-gdrive-adapter/control/report.md
-active_agent_role: clean-code-reviewer
-assigned_chat_name: gdrive-adapter — W1 GDA-GDA-P1 Clean Review Rerun
+active_agent_role: implementation-worker
+assigned_chat_name: gdrive-adapter — W1 GDA-GDA-P3 Live Google OAuth
 
 wave: W1
-phase: GDA-GDA-P1-CLEAN-REVIEW-RERUN
-implementation_status: COMPLETE_AFTER_REVIEW_FIX
-fix_status: FIX_COMPLETE
-clean_review_status: RERUN_NOT_STARTED
-ci_status: CI_GREEN
+phase: GDA-GDA-P3-LIVE-GOOGLE-OAUTH
+implementation_status: NOT_STARTED
+fix_status: NOT_STARTED
+clean_review_status: NOT_STARTED
+ci_status: NOT_RUN
 architect_status: ARCHITECT_ACCEPT_GDRIVE_FAN_IN
-known_failed_checks: []
 
-review_candidate:
-- code_bearing_sha: fcc04afd1fe9808656d9bc2effbfff7160efe9fc
-- prior_clean_review_report_blob: 59d01050a4b2a59ce47c392b6fb3711a873a1574
-- review_fixer_report_blob: e8b6a5235df04c90e3ac5d816ff95fa7c3429c8e
-- ci_run_id: 29440275057
-- ci_run_number: 2012
-- ci_conclusion: success
+accepted_inputs:
+- config_mode_sha: fcc04afd1fe9808656d9bc2effbfff7160efe9fc
+- config_clean_report_blob: d9bc16c1a50755ccaecd1b51add231bf52e7e35f
+- architecture_report_blob: 14c427880e1201d851cdc9ee04b9cd0e83334de4
 
-required_review:
-- AdapterMode is the only stored authority
-- dry-run state/accessors/status derive only from mode
-- contradiction tests close the prior finding
-- six modes, capabilities, legacy fail-closed input and redaction remain intact
+required_surface:
+- read-only versioned credential-file contract
+- Google client and in-memory refresh boundary
+- fakeable provider client abstraction
+- safe auth/scope/provider categories
+- startup preflight and comprehensive redaction
+- synthetic fake-based tests only
 
 protected_scope:
-- no next GDrive product phase
-- no product or sibling/workflow changes by reviewer
+- one active GDrive phase only
+- no Server/API HTTP or Storage integration
+- no scheduler or deployment wiring
+- no real credentials or live-network CI
+- no sibling or workflow changes
 
 next_gate:
-- CLEAN_ACCEPT -> next sequential GDrive owner phase
-- CLEAN_NEEDS_FIX -> focused fixer loop
+- SELF_ACCEPT plus exact-SHA green CI -> focused OAuth/security clean review
+- implementation or CI defect -> fixer loop
