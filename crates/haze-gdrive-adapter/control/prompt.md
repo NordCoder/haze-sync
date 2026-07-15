@@ -1,33 +1,32 @@
-# W1-FIX-GDA-GDA-P1-CI
+# W1-GDA-GDA-P1-CLEAN-REVIEW
 
 Before starting, name this worker chat exactly:
 
-`gdrive-adapter — W1 FIX-GDA-GDA-P1 CI`
+`gdrive-adapter — W1 GDA-GDA-P1 Clean Review`
 
 Repository: `NordCoder/haze-sync`
 Component: gdrive-adapter
 Branch/ref: `component/gdrive-adapter`
 PR: #50
-Role: fixer-worker
-Phase: `FIX-GDA-GDA-P1-CI`
+Role: clean-code-reviewer
+Phase: `GDA-GDA-P1-CLEAN-REVIEW`
 
-Fix only the diagnostics-artifact-proven failure for code-bearing SHA `afd263d621723952f11ecd0c16c09e209710feac`.
+Review exact code-bearing SHA `9bbbe6a3b6d3ea9935cb2b64390af042b4837c05`.
 
-Authoritative failing run:
-- Component CI run `29431493842`;
-- artifact id `8349581571`;
-- artifact name `ci-diag__component-gdrive-adapter__wf-component-ci__run-29431493842__attempt-1`.
+Authoritative CI: Component CI run `29435042810`, run number `2001`, success.
 
-Download the artifact and read `summary.md`, `manifest.json`, and every failed-check log before editing. Raw job logs are fallback-only. If the artifact cannot be read, report `FIX_BLOCKED_BY_LOGS`.
+Review only the completed config/mode normalization:
+- `HAZE_GDRIVE_MODE` is the sole authority;
+- exactly six accepted modes;
+- legacy `HAZE_GDRIVE_DRY_RUN` is fail-closed compatibility input;
+- capability matrix matches the accepted architecture;
+- no duplicate boolean authority remains;
+- invalid aliases and contradictory combinations fail safely;
+- config/debug/error output is redacted;
+- no OAuth, provider, HTTP, persistence, scheduler, status, Deployment or sibling behavior was introduced.
 
-Preserve the implemented contract: authoritative `HAZE_GDRIVE_MODE`, six accepted modes, fail-closed legacy `HAZE_GDRIVE_DRY_RUN`, capability matrix, strict aliases and redaction. Do not add OAuth, provider, HTTP, persistence, scheduler, status, Deployment, sibling or workflow work. Do not weaken tests.
+Inspect implementation and tests, plus the implementation/fixer reports pinned by blobs `7090b1b71ebca300847f1a2310ae4dd761c00a52` and `c9e94d5acb59d844951f9ba461eca64b50babf2c`.
 
-Make the minimum proven fix and obtain a new full exact-SHA green Component CI. PR #50 must remain open, draft and unmerged.
+Do not change product code. If a defect exists, report `CLEAN_NEEDS_FIX`. Otherwise report `CLEAN_ACCEPT`.
 
-Write only `crates/haze-gdrive-adapter/control/report.md` with:
-- `REPORT_TYPE: FIX`;
-- `phase_id: FIX-GDA-GDA-P1-CI`;
-- `chat_name: gdrive-adapter — W1 FIX-GDA-GDA-P1 CI`;
-- status `FIX_COMPLETE`, `FIX_NEEDS_MORE`, `FIX_BLOCKED_BY_LOGS`, `FIX_BLOCKED_BY_CONTRACT`, or `FIX_BLOCKED_BY_TOOLING`.
-
-Record artifact files read, exact failure cause, minimal changed paths, final code-bearing SHA and full CI evidence. Do not claim CLEAN_ACCEPT.
+Write only `crates/haze-gdrive-adapter/control/report.md` with `REPORT_TYPE: CLEAN_CODE_REVIEW`, phase and exact chat name, reviewed SHA, findings and CI evidence. Do not claim merge readiness.
