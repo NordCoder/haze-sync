@@ -270,7 +270,7 @@ test("production materializer rejects a mismatched download before vault mutatio
   assert.equal(result.status, "conflict_queued");
   assert.equal(result.reason, "hash_mismatch");
   assert.deepEqual(mutations, []);
-  assert.equal(result.remoteSyncState.changeCursor, null);
+  assert.equal(result.remoteSyncState.changeCursor, undefined);
   assert.equal(result.baseRevisionState.byPath["Synthetic/mismatch.md"], undefined);
 });
 
