@@ -10,24 +10,25 @@ default_branch_control_is_active: no
 
 active_prompt: crates/haze-gdrive-adapter/control/prompt.md
 active_report: crates/haze-gdrive-adapter/control/report.md
-active_agent_role: fixer-worker
-assigned_chat_name: gdrive-adapter — W1 FIX-GDA-GDA-P1 CI
+active_agent_role: clean-code-reviewer
+assigned_chat_name: gdrive-adapter — W1 GDA-GDA-P1 Clean Review
 
 wave: W1
-phase: FIX-GDA-GDA-P1-CI
-implementation_status: SELF_ACCEPT_PENDING_CI
-fix_status: NOT_STARTED
+phase: GDA-GDA-P1-CLEAN-REVIEW
+implementation_status: COMPLETE_AFTER_FIX
+fix_status: FIX_COMPLETE
 clean_review_status: NOT_STARTED
-ci_status: CI_RED_FINALIZER_ONLY
+ci_status: CI_GREEN
 architect_status: ARCHITECT_ACCEPT_GDRIVE_FAN_IN
 
-failing_candidate:
-- code_bearing_sha: afd263d621723952f11ecd0c16c09e209710feac
+review_candidate:
+- code_bearing_sha: 9bbbe6a3b6d3ea9935cb2b64390af042b4837c05
 - implementation_report_blob: 7090b1b71ebca300847f1a2310ae4dd761c00a52
-- ci_run_id: 29431493842
-- artifact_id: 8349581571
-- artifact_name: ci-diag__component-gdrive-adapter__wf-component-ci__run-29431493842__attempt-1
+- fixer_report_blob: c9e94d5acb59d844951f9ba461eca64b50babf2c
+- ci_run_id: 29435042810
+- ci_run_number: 2001
+- ci_conclusion: success
 
 next_gate:
-- FIX_COMPLETE plus full exact-SHA green CI -> focused GDrive clean review
-- artifact unavailable -> FIX_BLOCKED_BY_LOGS
+- CLEAN_ACCEPT -> next sequential GDrive owner phase
+- CLEAN_NEEDS_FIX -> focused fixer loop
