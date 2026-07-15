@@ -10,27 +10,25 @@ default_branch_control_is_active: no
 
 active_prompt: apps/haze-obsidian-plugin/control/prompt.md
 active_report: apps/haze-obsidian-plugin/control/report.md
-active_agent_role: fixer-worker
-assigned_chat_name: obsidian-plugin — W1 FIX-OBS-FAN-IN-P1 CI
+active_agent_role: clean-code-reviewer
+assigned_chat_name: obsidian-plugin — W1 OBS-FAN-IN-P1 Clean Integration Review
 
 wave: W1
-phase: FIX-OBS-FAN-IN-P1-CI
-implementation_status: SELF_ACCEPT_PENDING_CI
-fix_status: NOT_STARTED
+phase: OBS-FAN-IN-P1-CLEAN-REVIEW
+implementation_status: COMPLETE_AFTER_FIX
+fix_status: FIX_COMPLETE
 clean_review_status: NOT_STARTED
-ci_status: CI_RED_FINALIZER_ONLY
+ci_status: CI_GREEN
 architect_status: ARCHITECT_ACCEPT_COMPONENT_COMPLETE
 
-failing_candidate:
-- code_bearing_sha: 517b8cd77dc7c24eec78ae6c2f1ab55e7a8aeb3a
+review_candidate:
+- code_bearing_sha: 2f03dc49e7fdff8cfd0e4685c07ffc0ba75602ce
 - implementation_report_blob: ffdc199c2e92e5f5a3be8bdb6666f5a9bd8ee5e3
-- ci_run_id: 29434046014
-- ci_run_number: 1999
-- node_job_id: 87416059909
-- rust_workspace_job_id: 87416059992
-- artifact_id: 8350606040
-- artifact_name: ci-diag__component-obsidian-plugin__wf-component-ci__run-29434046014__attempt-1
+- fixer_report_blob: c7dae6d9bf7f92584083ad0bc2206f35be69c57d
+- ci_run_id: 29434935575
+- ci_run_number: 2000
+- ci_conclusion: success
 
 next_gate:
-- FIX_COMPLETE plus full exact-SHA green CI -> focused Obsidian clean/integration review
-- artifact unavailable -> FIX_BLOCKED_BY_LOGS
+- CLEAN_ACCEPT -> accepted fan-in hold
+- CLEAN_NEEDS_FIX -> focused fixer loop
