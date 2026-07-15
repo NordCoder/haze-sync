@@ -60,7 +60,10 @@ fn cursor_generation_requires_exact_contiguous_transition() {
         validate_progress_transition(&current, &commit(9, 11)),
         Err(RepositoryError::CursorGap)
     );
-    assert_eq!(validate_progress_transition(&current, &commit(9, 10)), Ok(()));
+    assert_eq!(
+        validate_progress_transition(&current, &commit(9, 10)),
+        Ok(())
+    );
 }
 
 #[test]
