@@ -58,6 +58,34 @@ Run npm install/typecheck/build in CI or an environment with shell access. Then 
 
 ---
 
+### 2026-07-15 — W1/OBS-FAN-IN-P1-SERVER-COMPAT-E2E
+
+Agent:
+Implementation Worker
+
+Branch:
+component/obsidian-plugin
+
+Prompt:
+apps/haze-obsidian-plugin/control/prompt.md — Server compatibility E2E fan-in phase.
+
+Report:
+apps/haze-obsidian-plugin/control/report.md
+
+Commit(s):
+28763eaf239a4e561099e290c22698fc651c4049 through this implementation-log commit.
+
+Summary:
+Added a deterministic fake HTTP integration harness covering the accepted Server/API client surface, an opt-in localhost-only read-only Server smoke command, and focused documentation. Hardened API error sanitization so server-provided Windows and Unix absolute local paths are removed in addition to tokens and mutation keys. Production sync behavior, routes, DTO vocabulary, Server components, workflows, packaging, and provider behavior were not changed.
+
+Status:
+SELF_ACCEPT_PENDING_CI
+
+Follow-ups:
+Use Component CI evidence for the exact final code-bearing SHA, then run focused Obsidian clean/integration review. The optional loopback smoke remains honestly skipped unless an operator supplies synthetic local Server configuration.
+
+---
+
 Use this format for future entries:
 
 ~~~text
