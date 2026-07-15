@@ -10,39 +10,24 @@ default_branch_control_is_active: no
 
 active_prompt: crates/haze-gdrive-adapter/control/prompt.md
 active_report: crates/haze-gdrive-adapter/control/report.md
-active_agent_role: implementation-worker
-assigned_chat_name: gdrive-adapter — W1 GDA-GDA-P1 Config Mode Normalization
+active_agent_role: fixer-worker
+assigned_chat_name: gdrive-adapter — W1 FIX-GDA-GDA-P1 CI
 
 wave: W1
-phase: GDA-GDA-P1-CONFIG-MODE-NORMALIZATION
-implementation_status: NOT_STARTED
+phase: FIX-GDA-GDA-P1-CI
+implementation_status: SELF_ACCEPT_PENDING_CI
 fix_status: NOT_STARTED
 clean_review_status: NOT_STARTED
-ci_status: NOT_RUN
+ci_status: CI_RED_FINALIZER_ONLY
 architect_status: ARCHITECT_ACCEPT_GDRIVE_FAN_IN
-known_failed_checks: []
 
-accepted_baseline:
-- component_local_product_sha: 06a7051a7e14c1da45de8cf96a78658b59cb823e
-- synchronized_sha: f9a2da6eb9ac6f59b1ec18ae4d85eb51964f3cbe
-- exact_main_ancestor: c1e69a664388b0cba028170e8398b9088218957d
-- architecture_report_blob: 14c427880e1201d851cdc9ee04b9cd0e83334de4
-
-required_surface:
-- authoritative HAZE_GDRIVE_MODE
-- fail-closed legacy HAZE_GDRIVE_DRY_RUN compatibility
-- explicit mode capability matrix
-- safe redacted config/status output
-- exhaustive mode and contradiction tests
-
-protected_scope:
-- one active GDrive phase only
-- no OAuth/provider client
-- no HTTP/Storage integration
-- no scheduler or long-running loop
-- no status API or Deployment wiring
-- no sibling component or workflow changes
+failing_candidate:
+- code_bearing_sha: afd263d621723952f11ecd0c16c09e209710feac
+- implementation_report_blob: 7090b1b71ebca300847f1a2310ae4dd761c00a52
+- ci_run_id: 29431493842
+- artifact_id: 8349581571
+- artifact_name: ci-diag__component-gdrive-adapter__wf-component-ci__run-29431493842__attempt-1
 
 next_gate:
-- SELF_ACCEPT plus exact-SHA green CI -> focused GDrive clean review
-- implementation or CI defect -> fixer loop
+- FIX_COMPLETE plus full exact-SHA green CI -> focused GDrive clean review
+- artifact unavailable -> FIX_BLOCKED_BY_LOGS
