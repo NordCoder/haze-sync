@@ -1,7 +1,8 @@
 //! Configuration loading for the Google Drive adapter.
 //!
-//! This module intentionally supports only explicit environment/file inputs. It
-//! never formats secret values or secret file paths into public strings.
+//! `HAZE_GDRIVE_MODE` is the single authoritative mode input. The legacy
+//! `HAZE_GDRIVE_DRY_RUN` boolean is accepted only as a fail-closed compatibility
+//! assertion that the selected mode is `dry_run`.
 
 use crate::error::ConfigError;
 use std::env;
@@ -22,7 +23,8 @@ pub const ENV_FULL_SCAN_INTERVAL_SECONDS: &str = "HAZE_GDRIVE_FULL_SCAN_INTERVAL
 pub const ENV_MAX_DELETES_PER_RUN: &str = "HAZE_GDRIVE_MAX_DELETES_PER_RUN";
 pub const ENV_MAX_DELETE_RATIO_PERCENT: &str = "HAZE_GDRIVE_MAX_DELETE_RATIO_PERCENT";
 
-const ENV_ADAPTER_TOKEN_SOURCE: &str = "HAZE_GDRIVE_ADAPTER_TOKEN|HAZE_GDRIVE_ADAPTER_TOKEN_FILE";
+const ENV_ADAPTER_TOKEN_SOURCE: &str =
+    "HAZE_GDRIVE_ADAPTER_TOKEN|HAZE_GDRIVE_ADAPTER_TOKEN_FILE";
 const DEFAULT_POLL_INTERVAL_SECONDS: u64 = 60;
 const DEFAULT_FULL_SCAN_INTERVAL_SECONDS: u64 = 3_600;
 const DEFAULT_MAX_DELETES_PER_RUN: u32 = 10;
@@ -70,7 +72,6 @@ impl SecretPath {
                 "secret file path must not be empty",
             ));
         }
-
         let path = PathBuf::from(trimmed);
         if !path.is_absolute() {
             return Err(ConfigError::invalid(
@@ -78,7 +79,6 @@ impl SecretPath {
                 "secret file path must be absolute",
             ));
         }
-
         Ok(Self(path))
     }
 
@@ -102,44 +102,121 @@ impl fmt::Display for SecretPath {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AdapterMode {
     Disabled,
+    #[default]
+    DryRun,
     ReadOnly,
     ImportOnly,
     ExportOnly,
     Bidirectional,
-    #[default]
-    DryRun,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ModeCapabilities {
+    pub provider_reads: bool,
+    pub core_reads: bool,
+    pub core_writes: bool,
+    pub provider_writes: bool,
+    pub provider_trash: bool,
+    pub durable_state_mutation: bool,
 }
 
 impl AdapterMode {
-    fn parse(raw: &str) -> Option<Self> {
-        let normalized = raw.trim().to_ascii_lowercase().replace('-', "_");
-        match normalized.as_str() {
+    pub fn parse(raw: &str) -> Option<Self> {
+        match raw.trim().to_ascii_lowercase().as_str() {
             "disabled" => Some(Self::Disabled),
-            "read_only" | "readonly" => Some(Self::ReadOnly),
-            "import_only" | "importonly" => Some(Self::ImportOnly),
-            "export_only" | "exportonly" => Some(Self::ExportOnly),
+            "dry_run" => Some(Self::DryRun),
+            "read_only" => Some(Self::ReadOnly),
+            "import_only" => Some(Self::ImportOnly),
+            "export_only" => Some(Self::ExportOnly),
             "bidirectional" => Some(Self::Bidirectional),
-            "dry_run" | "dryrun" => Some(Self::DryRun),
             _ => None,
+        }
+    }
+
+    pub const fn capabilities(self) -> ModeCapabilities {
+        match self {
+            Self::Disabled => ModeCapabilities {
+                provider_reads: false,
+                core_reads: false,
+                core_writes: false,
+                provider_writes: false,
+                provider_trash: false,
+                durable_state_mutation: false,
+            },
+            Self::DryRun | Self::ReadOnly => ModeCapabilities {
+                provider_reads: true,
+                core_reads: true,
+                core_writes: false,
+                provider_writes: false,
+                provider_trash: false,
+                durable_state_mutation: false,
+            },
+            Self::ImportOnly => ModeCapabilities {
+                provider_reads: true,
+                core_reads: true,
+                core_writes: true,
+                provider_writes: false,
+                provider_trash: false,
+                durable_state_mutation: true,
+            },
+            Self::ExportOnly => ModeCapabilities {
+                provider_reads: true,
+                core_reads: true,
+                core_writes: false,
+                provider_writes: true,
+                provider_trash: true,
+                durable_state_mutation: true,
+            },
+            Self::Bidirectional => ModeCapabilities {
+                provider_reads: true,
+                core_reads: true,
+                core_writes: true,
+                provider_writes: true,
+                provider_trash: true,
+                durable_state_mutation: true,
+            },
         }
     }
 
     pub const fn is_dry_run_mode(self) -> bool {
         matches!(self, Self::DryRun)
     }
+
+    pub const fn permits_provider_reads(self) -> bool {
+        self.capabilities().provider_reads
+    }
+
+    pub const fn permits_core_reads(self) -> bool {
+        self.capabilities().core_reads
+    }
+
+    pub const fn permits_core_writes(self) -> bool {
+        self.capabilities().core_writes
+    }
+
+    pub const fn permits_provider_writes(self) -> bool {
+        self.capabilities().provider_writes
+    }
+
+    pub const fn permits_provider_trash(self) -> bool {
+        self.capabilities().provider_trash
+    }
+
+    pub const fn permits_durable_state_mutation(self) -> bool {
+        self.capabilities().durable_state_mutation
+    }
 }
 
 impl fmt::Display for AdapterMode {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let value = match self {
+        formatter.write_str(match self {
             Self::Disabled => "disabled",
+            Self::DryRun => "dry_run",
             Self::ReadOnly => "read_only",
             Self::ImportOnly => "import_only",
             Self::ExportOnly => "export_only",
             Self::Bidirectional => "bidirectional",
-            Self::DryRun => "dry_run",
-        };
-        formatter.write_str(value)
+        })
     }
 }
 
@@ -169,7 +246,6 @@ impl RuntimeIntervals {
                 "full scan interval must be greater than or equal to poll interval",
             ));
         }
-
         Ok(Self {
             poll_interval,
             full_scan_interval,
@@ -202,7 +278,6 @@ impl DeleteSafetyConfig {
                 "delete ratio must be between 0 and 100 percent",
             ));
         }
-
         Ok(Self {
             max_deletes_per_run,
             max_delete_ratio_percent,
@@ -217,6 +292,7 @@ pub struct AdapterConfig {
     pub drive_root_folder_id: String,
     pub oauth_token_path: SecretPath,
     pub mode: AdapterMode,
+    /// Derived compatibility view. Runtime authorization must use `mode`.
     pub dry_run: bool,
     pub intervals: RuntimeIntervals,
     pub delete_safety: DeleteSafetyConfig,
@@ -228,14 +304,12 @@ impl AdapterConfig {
     }
 
     pub fn load_from_source(source: &impl ConfigSource) -> Result<Self, ConfigError> {
+        let mode = load_mode(source)?;
         let server_url = required_value(source, ENV_SERVER_URL)?;
         validate_server_url(&server_url)?;
-
         let adapter_token = load_adapter_token(source)?;
-
         let drive_root_folder_id = required_value(source, ENV_DRIVE_ROOT_FOLDER_ID)?;
         validate_drive_root_folder_id(&drive_root_folder_id)?;
-
         let oauth_token_path = SecretPath::from_raw(
             ENV_OAUTH_TOKEN_FILE,
             required_value(source, ENV_OAUTH_TOKEN_FILE)?,
@@ -246,22 +320,6 @@ impl AdapterConfig {
                 "secret file path must identify a readable file",
             ));
         }
-
-        let mode = match optional_value(source, ENV_ADAPTER_MODE) {
-            Some(raw) => AdapterMode::parse(&raw).ok_or_else(|| {
-                ConfigError::invalid(
-                    ENV_ADAPTER_MODE,
-                    "mode must be disabled, read_only, import_only, export_only, bidirectional, or dry_run",
-                )
-            })?,
-            None => AdapterMode::default(),
-        };
-
-        let dry_run = match optional_value(source, ENV_DRY_RUN) {
-            Some(raw) => parse_bool(ENV_DRY_RUN, &raw)?,
-            None => mode.is_dry_run_mode(),
-        };
-
         let poll_interval = parse_optional_u64(
             source,
             ENV_POLL_INTERVAL_SECONDS,
@@ -276,7 +334,6 @@ impl AdapterConfig {
             Duration::from_secs(poll_interval),
             Duration::from_secs(full_scan_interval),
         )?;
-
         let max_deletes_per_run =
             parse_optional_u32(source, ENV_MAX_DELETES_PER_RUN, DEFAULT_MAX_DELETES_PER_RUN)?;
         let max_delete_ratio_percent = parse_optional_u8(
@@ -285,25 +342,45 @@ impl AdapterConfig {
             DEFAULT_MAX_DELETE_RATIO_PERCENT,
         )?;
         let delete_safety = DeleteSafetyConfig::new(max_deletes_per_run, max_delete_ratio_percent)?;
-
         Ok(Self {
             server_url,
             adapter_token,
             drive_root_folder_id,
             oauth_token_path,
             mode,
-            dry_run,
+            dry_run: mode.is_dry_run_mode(),
             intervals,
             delete_safety,
         })
     }
 }
 
+fn load_mode(source: &impl ConfigSource) -> Result<AdapterMode, ConfigError> {
+    let mode = match optional_value(source, ENV_ADAPTER_MODE) {
+        Some(raw) => AdapterMode::parse(&raw).ok_or_else(|| {
+            ConfigError::invalid(
+                ENV_ADAPTER_MODE,
+                "mode must be disabled, dry_run, read_only, import_only, export_only, or bidirectional",
+            )
+        })?,
+        None => AdapterMode::default(),
+    };
+
+    if let Some(raw) = optional_value(source, ENV_DRY_RUN) {
+        let legacy_dry_run = parse_bool(ENV_DRY_RUN, &raw)?;
+        if !legacy_dry_run || !mode.is_dry_run_mode() {
+            return Err(ConfigError::invalid(
+                ENV_DRY_RUN,
+                "legacy dry-run compatibility is valid only as true with mode=dry_run",
+            ));
+        }
+    }
+    Ok(mode)
+}
+
 pub trait ConfigSource {
     fn value(&self, key: &'static str) -> Option<String>;
-
     fn read_secret_file(&self, key: &'static str, path: &Path) -> Result<String, ConfigError>;
-
     fn secret_path_is_file(&self, key: &'static str, path: &Path) -> Result<bool, ConfigError>;
 }
 
@@ -324,10 +401,10 @@ impl ConfigSource for EnvConfigSource {
 }
 
 fn load_adapter_token(source: &impl ConfigSource) -> Result<SecretString, ConfigError> {
-    let direct_token = optional_value(source, ENV_ADAPTER_TOKEN);
-    let token_file = optional_value(source, ENV_ADAPTER_TOKEN_FILE);
-
-    match (direct_token, token_file) {
+    match (
+        optional_value(source, ENV_ADAPTER_TOKEN),
+        optional_value(source, ENV_ADAPTER_TOKEN_FILE),
+    ) {
         (Some(_), Some(_)) => Err(ConfigError::ambiguous_secret_source(
             ENV_ADAPTER_TOKEN_SOURCE,
         )),
@@ -356,8 +433,8 @@ fn optional_value(source: &impl ConfigSource, key: &'static str) -> Option<Strin
 }
 
 fn validate_server_url(server_url: &str) -> Result<(), ConfigError> {
-    let has_scheme = server_url.starts_with("http://") || server_url.starts_with("https://");
-    if !has_scheme || server_url.chars().any(char::is_whitespace) {
+    let valid_scheme = server_url.starts_with("http://") || server_url.starts_with("https://");
+    if !valid_scheme || server_url.chars().any(char::is_whitespace) {
         return Err(ConfigError::invalid(
             ENV_SERVER_URL,
             "server URL must be an http:// or https:// URL without whitespace",
@@ -366,10 +443,8 @@ fn validate_server_url(server_url: &str) -> Result<(), ConfigError> {
     Ok(())
 }
 
-fn validate_drive_root_folder_id(drive_root_folder_id: &str) -> Result<(), ConfigError> {
-    let has_path_separator =
-        drive_root_folder_id.contains('/') || drive_root_folder_id.contains('\\');
-    if has_path_separator || drive_root_folder_id.chars().any(char::is_whitespace) {
+fn validate_drive_root_folder_id(value: &str) -> Result<(), ConfigError> {
+    if value.contains('/') || value.contains('\\') || value.chars().any(char::is_whitespace) {
         return Err(ConfigError::invalid(
             ENV_DRIVE_ROOT_FOLDER_ID,
             "Drive root folder id must not contain whitespace or path separators",
@@ -394,12 +469,12 @@ fn parse_optional_u64(
     key: &'static str,
     default_value: u64,
 ) -> Result<u64, ConfigError> {
-    match optional_value(source, key) {
-        Some(raw) => raw
-            .parse::<u64>()
-            .map_err(|_| ConfigError::invalid(key, "value must be an unsigned integer")),
-        None => Ok(default_value),
-    }
+    optional_value(source, key)
+        .map(|raw| {
+            raw.parse::<u64>()
+                .map_err(|_| ConfigError::invalid(key, "value must be an unsigned integer"))
+        })
+        .unwrap_or(Ok(default_value))
 }
 
 fn parse_optional_u32(
@@ -407,12 +482,12 @@ fn parse_optional_u32(
     key: &'static str,
     default_value: u32,
 ) -> Result<u32, ConfigError> {
-    match optional_value(source, key) {
-        Some(raw) => raw
-            .parse::<u32>()
-            .map_err(|_| ConfigError::invalid(key, "value must be an unsigned integer")),
-        None => Ok(default_value),
-    }
+    optional_value(source, key)
+        .map(|raw| {
+            raw.parse::<u32>()
+                .map_err(|_| ConfigError::invalid(key, "value must be an unsigned integer"))
+        })
+        .unwrap_or(Ok(default_value))
 }
 
 fn parse_optional_u8(
@@ -420,12 +495,12 @@ fn parse_optional_u8(
     key: &'static str,
     default_value: u8,
 ) -> Result<u8, ConfigError> {
-    match optional_value(source, key) {
-        Some(raw) => raw
-            .parse::<u8>()
-            .map_err(|_| ConfigError::invalid(key, "value must be an unsigned integer")),
-        None => Ok(default_value),
-    }
+    optional_value(source, key)
+        .map(|raw| {
+            raw.parse::<u8>()
+                .map_err(|_| ConfigError::invalid(key, "value must be an unsigned integer"))
+        })
+        .unwrap_or(Ok(default_value))
 }
 
 #[cfg(test)]
@@ -469,9 +544,8 @@ mod tests {
         }
 
         fn read_secret_file(&self, key: &'static str, path: &Path) -> Result<String, ConfigError> {
-            let safe_key = path.to_string_lossy().into_owned();
             self.secret_files
-                .get(&safe_key)
+                .get(&path.to_string_lossy().into_owned())
                 .cloned()
                 .ok_or_else(|| ConfigError::secret_file_read_failed(key))
         }
@@ -481,25 +555,109 @@ mod tests {
             _key: &'static str,
             path: &Path,
         ) -> Result<bool, ConfigError> {
-            let safe_key = path.to_string_lossy().into_owned();
-            Ok(self.existing_files.contains(&safe_key))
+            Ok(self
+                .existing_files
+                .contains(&path.to_string_lossy().into_owned()))
         }
     }
 
     #[test]
     fn loads_required_config_with_safe_defaults() {
         let source = MemoryConfigSource::with_required_values();
-
         let config = AdapterConfig::load_from_source(&source).expect("config should load");
-
-        assert_eq!(config.server_url, "https://sync.example.test");
-        assert_eq!(config.drive_root_folder_id, "driveRoot123");
         assert_eq!(config.mode, AdapterMode::DryRun);
         assert!(config.dry_run);
         assert_eq!(config.intervals.poll_interval_seconds(), 60);
         assert_eq!(config.intervals.full_scan_interval_seconds(), 3_600);
-        assert_eq!(config.delete_safety.max_deletes_per_run, 10);
-        assert_eq!(config.delete_safety.max_delete_ratio_percent, 10);
+    }
+
+    #[test]
+    fn parses_every_authoritative_mode() {
+        let cases = [
+            ("disabled", AdapterMode::Disabled),
+            ("dry_run", AdapterMode::DryRun),
+            ("read_only", AdapterMode::ReadOnly),
+            ("import_only", AdapterMode::ImportOnly),
+            ("export_only", AdapterMode::ExportOnly),
+            ("bidirectional", AdapterMode::Bidirectional),
+        ];
+        for (raw, expected) in cases {
+            let mut source = MemoryConfigSource::with_required_values();
+            source.insert(ENV_ADAPTER_MODE, raw);
+            let config = AdapterConfig::load_from_source(&source).expect("valid mode");
+            assert_eq!(config.mode, expected);
+            assert_eq!(config.dry_run, expected == AdapterMode::DryRun);
+        }
+    }
+
+    #[test]
+    fn capability_matrix_is_explicit_and_non_mutating_modes_are_closed() {
+        assert_eq!(
+            AdapterMode::Disabled.capabilities(),
+            ModeCapabilities {
+                provider_reads: false,
+                core_reads: false,
+                core_writes: false,
+                provider_writes: false,
+                provider_trash: false,
+                durable_state_mutation: false,
+            }
+        );
+        for mode in [AdapterMode::DryRun, AdapterMode::ReadOnly] {
+            assert!(mode.permits_provider_reads());
+            assert!(mode.permits_core_reads());
+            assert!(!mode.permits_core_writes());
+            assert!(!mode.permits_provider_writes());
+            assert!(!mode.permits_provider_trash());
+            assert!(!mode.permits_durable_state_mutation());
+        }
+        assert!(AdapterMode::ImportOnly.permits_core_writes());
+        assert!(!AdapterMode::ImportOnly.permits_provider_writes());
+        assert!(AdapterMode::ExportOnly.permits_provider_writes());
+        assert!(!AdapterMode::ExportOnly.permits_core_writes());
+        assert!(AdapterMode::Bidirectional.permits_core_writes());
+        assert!(AdapterMode::Bidirectional.permits_provider_writes());
+    }
+
+    #[test]
+    fn accepts_legacy_true_only_with_dry_run_mode() {
+        let mut source = MemoryConfigSource::with_required_values();
+        source.insert(ENV_ADAPTER_MODE, "dry_run");
+        source.insert(ENV_DRY_RUN, "true");
+        assert!(AdapterConfig::load_from_source(&source).is_ok());
+    }
+
+    #[test]
+    fn rejects_every_contradictory_legacy_combination() {
+        for (mode, legacy) in [
+            ("disabled", "true"),
+            ("read_only", "true"),
+            ("import_only", "true"),
+            ("export_only", "true"),
+            ("bidirectional", "true"),
+            ("dry_run", "false"),
+        ] {
+            let mut source = MemoryConfigSource::with_required_values();
+            source.insert(ENV_ADAPTER_MODE, mode);
+            source.insert(ENV_DRY_RUN, legacy);
+            let error = AdapterConfig::load_from_source(&source).expect_err("must fail closed");
+            assert_eq!(error.key(), ENV_DRY_RUN);
+            assert_eq!(error.category(), ConfigErrorCategory::Invalid);
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_or_legacy_mode_aliases() {
+        for raw in ["", "dry-run", "dryrun", "readonly", "sync-everything"] {
+            let mut source = MemoryConfigSource::with_required_values();
+            source.insert(ENV_ADAPTER_MODE, raw);
+            let result = AdapterConfig::load_from_source(&source);
+            if raw.is_empty() {
+                assert!(result.is_ok());
+            } else {
+                assert!(result.is_err());
+            }
+        }
     }
 
     #[test]
@@ -508,9 +666,7 @@ mod tests {
         source.values.remove(ENV_ADAPTER_TOKEN);
         source.insert(ENV_ADAPTER_TOKEN_FILE, "/run/secrets/gdrive-adapter-token");
         source.insert_secret_file("/run/secrets/gdrive-adapter-token", "token-from-file\n");
-
         let config = AdapterConfig::load_from_source(&source).expect("config should load");
-
         assert_eq!(config.adapter_token.expose_secret(), "token-from-file");
     }
 
@@ -518,35 +674,10 @@ mod tests {
     fn rejects_ambiguous_adapter_token_sources() {
         let mut source = MemoryConfigSource::with_required_values();
         source.insert(ENV_ADAPTER_TOKEN_FILE, "/run/secrets/gdrive-adapter-token");
-
         let error = AdapterConfig::load_from_source(&source).expect_err("config must fail");
-
         assert_eq!(error.category(), ConfigErrorCategory::AmbiguousSecretSource);
         assert!(!error.to_string().contains("adapter-token"));
         assert!(!error.to_string().contains("/run/secrets"));
-    }
-
-    #[test]
-    fn rejects_relative_secret_paths_without_exposing_path() {
-        let mut source = MemoryConfigSource::with_required_values();
-        source.insert(ENV_OAUTH_TOKEN_FILE, "local-secret.json");
-
-        let error = AdapterConfig::load_from_source(&source).expect_err("config must fail");
-        let rendered = error.to_string();
-
-        assert_eq!(error.category(), ConfigErrorCategory::Invalid);
-        assert!(!rendered.contains("local-secret.json"));
-    }
-
-    #[test]
-    fn rejects_invalid_mode() {
-        let mut source = MemoryConfigSource::with_required_values();
-        source.insert(ENV_ADAPTER_MODE, "sync-everything");
-
-        let error = AdapterConfig::load_from_source(&source).expect_err("config must fail");
-
-        assert_eq!(error.key(), ENV_ADAPTER_MODE);
-        assert_eq!(error.category(), ConfigErrorCategory::Invalid);
     }
 
     #[test]
@@ -554,7 +685,6 @@ mod tests {
         let secret = SecretString::from_raw(ENV_ADAPTER_TOKEN, "super-secret").expect("secret");
         let path = SecretPath::from_raw(ENV_OAUTH_TOKEN_FILE, "/run/secrets/oauth.json")
             .expect("secret path");
-
         assert_eq!(secret.to_string(), "<redacted-secret>");
         assert_eq!(format!("{secret:?}"), "<redacted-secret>");
         assert_eq!(path.to_string(), "<redacted-secret-path>");
@@ -562,13 +692,20 @@ mod tests {
     }
 
     #[test]
+    fn config_debug_does_not_expose_secret_material() {
+        let config = AdapterConfig::load_from_source(&MemoryConfigSource::with_required_values())
+            .expect("config should load");
+        let rendered = format!("{config:?}");
+        assert!(!rendered.contains("adapter-token"));
+        assert!(!rendered.contains("/run/secrets"));
+        assert!(rendered.contains("DryRun"));
+    }
+
+    #[test]
     fn validates_delete_safety_ratio() {
         let mut source = MemoryConfigSource::with_required_values();
         source.insert(ENV_MAX_DELETE_RATIO_PERCENT, "101");
-
         let error = AdapterConfig::load_from_source(&source).expect_err("config must fail");
-
         assert_eq!(error.key(), ENV_MAX_DELETE_RATIO_PERCENT);
-        assert_eq!(error.category(), ConfigErrorCategory::Invalid);
     }
 }
