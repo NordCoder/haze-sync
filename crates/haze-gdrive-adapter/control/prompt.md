@@ -1,32 +1,74 @@
-# W1-GDA-GDA-P1-CLEAN-REVIEW
+# W1-FIX-GDA-GDA-P1-REVIEW
 
 Before starting, name this worker chat exactly:
 
-`gdrive-adapter — W1 GDA-GDA-P1 Clean Review`
+`gdrive-adapter — W1 FIX-GDA-GDA-P1 Review`
 
 Repository: `NordCoder/haze-sync`
 Component: gdrive-adapter
+Path: `crates/haze-gdrive-adapter`
 Branch/ref: `component/gdrive-adapter`
 PR: #50
-Role: clean-code-reviewer
-Phase: `GDA-GDA-P1-CLEAN-REVIEW`
+Role: fixer-worker
+Phase: `FIX-GDA-GDA-P1-REVIEW`
 
-Review exact code-bearing SHA `9bbbe6a3b6d3ea9935cb2b64390af042b4837c05`.
+This is a focused fixer for the existing `GDA-GDA-P1-CONFIG-MODE-NORMALIZATION` phase. Do not start the next GDrive product phase.
 
-Authoritative CI: Component CI run `29435042810`, run number `2001`, success.
+## Review target and finding
 
-Review only the completed config/mode normalization:
-- `HAZE_GDRIVE_MODE` is the sole authority;
-- exactly six accepted modes;
-- legacy `HAZE_GDRIVE_DRY_RUN` is fail-closed compatibility input;
-- capability matrix matches the accepted architecture;
-- no duplicate boolean authority remains;
-- invalid aliases and contradictory combinations fail safely;
-- config/debug/error output is redacted;
-- no OAuth, provider, HTTP, persistence, scheduler, status, Deployment or sibling behavior was introduced.
+- reviewed code-bearing SHA: `9bbbe6a3b6d3ea9935cb2b64390af042b4837c05`;
+- clean-review report blob: `59d01050a4b2a59ce47c392b6fb3711a873a1574`;
+- authoritative green CI before review finding: run `29435042810`, number `2001`.
 
-Inspect implementation and tests, plus the implementation/fixer reports pinned by blobs `7090b1b71ebca300847f1a2310ae4dd761c00a52` and `c9e94d5acb59d844951f9ba461eca64b50babf2c`.
+The review found one high-severity invariant defect:
 
-Do not change product code. If a defect exists, report `CLEAN_NEEDS_FIX`. Otherwise report `CLEAN_ACCEPT`.
+- `AdapterConfig` stores public `mode` and independent public `dry_run` values;
+- `StartupStatus` copies/displays `dry_run` independently;
+- direct construction can create `ImportOnly + dry_run=true`;
+- an existing runtime test currently blesses that contradiction.
 
-Write only `crates/haze-gdrive-adapter/control/report.md` with `REPORT_TYPE: CLEAN_CODE_REVIEW`, phase and exact chat name, reviewed SHA, findings and CI evidence. Do not claim merge readiness.
+## Required fix
+
+Eliminate the second mutable mode authority.
+
+Accepted outcome:
+
+1. `AdapterMode` remains the only stored authority.
+2. Legacy `HAZE_GDRIVE_DRY_RUN` remains only a boundary-validation compatibility input.
+3. Any dry-run view is derived from `mode.is_dry_run_mode()` or equivalent and cannot be assigned independently.
+4. `StartupStatus` must not store a contradictory independent boolean; derive any compatibility display/accessor solely from its mode.
+5. Tests must reject or make impossible contradictory direct construction and must no longer expect `ImportOnly` to report dry-run behavior.
+6. Preserve all six modes, capability matrix, strict aliases, fail-closed environment validation and redaction.
+
+## Scope
+
+Allowed only where necessary:
+
+- `crates/haze-gdrive-adapter/src/config.rs`;
+- `crates/haze-gdrive-adapter/src/runtime.rs`;
+- focused existing/new GDrive tests;
+- minimal docs only if the public internal contract wording changes;
+- control report.
+
+Forbidden:
+
+- OAuth/provider client, HTTP, Storage/persistence, scheduler expansion, public status API, Deployment or sibling work;
+- workflow changes;
+- weakening tests;
+- unrelated refactors;
+- merge, rebase, force-push or PR draft-state change.
+
+## Validation
+
+Create product/test changes without CI skip. Obtain a new full exact-SHA Component CI run with cargo fmt/check/test/clippy and diagnostics finalization green. PR #50 remains open, draft and unmerged.
+
+## Report
+
+Write only `crates/haze-gdrive-adapter/control/report.md` with:
+
+- `REPORT_TYPE: FIX`;
+- `phase_id: FIX-GDA-GDA-P1-REVIEW`;
+- `chat_name: gdrive-adapter — W1 FIX-GDA-GDA-P1 Review`;
+- status `FIX_COMPLETE`, `FIX_NEEDS_MORE`, `FIX_BLOCKED_BY_CONTRACT`, or `FIX_BLOCKED_BY_TOOLING`.
+
+Record exact changed paths, how duplicate authority was eliminated, updated invariant tests, final code-bearing SHA and exact CI. Do not claim CLEAN_ACCEPT; a repeat clean review follows.
