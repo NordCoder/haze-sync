@@ -5,7 +5,7 @@
 Run commands from the repository root unless noted otherwise.
 
 ```bash
-npm install --no-audit --no-fund
+npm ci
 npm test --workspace haze-obsidian-plugin
 npm run typecheck --workspace haze-obsidian-plugin
 npm run build --workspace haze-obsidian-plugin
@@ -13,8 +13,44 @@ npm run build --workspace haze-obsidian-plugin
 
 The current `build` command is a source/test type-validation gate. It intentionally does not
 produce an installable Obsidian bundle. The test command compiles TypeScript into the ignored
-`.test-dist/` directory, runs Node's built-in test runner, and may compare the vendored API
-fixture with the canonical workspace fixture after API fan-in.
+`.test-dist/` directory, runs Node's built-in test runner, and compares the vendored API fixture
+with the canonical workspace fixture when that accepted fixture is present.
+
+## Server compatibility integration harness
+
+Normal CI uses `tests/server-compatibility-e2e.test.ts`, which supplies a deterministic fake HTTP
+transport to the production API client. It uses only synthetic paths, content, adapter identifiers,
+tokens, idempotency keys, revisions, conflicts, and timestamps. It requires no public network,
+database, provider, credentials, or real vault.
+
+The harness covers:
+
+- server-info protocol/capability negotiation;
+- canonical changes pagination and ordered sequence values used by cursor persistence;
+- upload headers for idempotency, content hash, and explicit null base;
+- download metadata/body boundary for revision, content hash, size, and bytes;
+- guarded delete construction with an explicit base revision;
+- canonical conflict listing and a currently supported Server-routed `keep_both` action;
+- authorization, conflict, unavailable, and validation error categories;
+- redaction of configured tokens, mutation keys, Windows/Unix absolute paths, and raw content.
+
+API fixture compatibility remains separately enforced by `tests/api-compatibility.test.ts`.
+Neither harness invents routes, DTO fields, conflict actions, or Server policy.
+
+## Optional loopback Server smoke
+
+The smoke command is opt-in and read-only:
+
+```bash
+HAZE_OBSIDIAN_SMOKE_SERVER_URL=http://127.0.0.1:3000 \
+HAZE_OBSIDIAN_SMOKE_AUTH_TOKEN='<synthetic-test-token>' \
+npm run test:server-smoke --workspace haze-obsidian-plugin
+```
+
+It accepts only `localhost`, `127.0.0.1`, or `[::1]`, then validates `/v1/server-info` and a bounded
+`/v1/changes?since=0&limit=1` response. When either variable is absent it exits successfully with
+an explicit `SKIP` message. Do not use production URLs, real adapter tokens, real vault data, or
+provider credentials.
 
 ## Generated artifact policy
 
