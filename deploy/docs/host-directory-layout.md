@@ -4,9 +4,9 @@
 
 This DEP-P5 runbook defines production-style host path placeholders, ownership expectations, permission boundaries, backup classification, and validation checks for Haze Sync.
 
-It is documentation only. It does not create directories, users, groups, bind mounts, secrets, backup archives, cleanup jobs, or Worktree runtime behavior.
+It is documentation only. It does not create directories, users, groups, bind mounts, secrets, backup archives, cleanup jobs, or Worktree runtime behavior on a host.
 
-The current local Compose scaffold still uses Docker named volumes and keeps Worktree runtime disabled. The paths below are examples for a future host deployment or explicitly accepted bind-mount phase; they are not automatically provisioned by `deploy/docker-compose.yml`.
+The base local Compose scaffold still uses Docker named volumes, has no Worktree host bind, and keeps Worktree runtime disabled. The accepted opt-in `deploy/docker-compose.worktree.yml` override may bind an operator-supplied host path to `/var/lib/haze-sync/worktree`; it does not provision the source path automatically and remains read-only and disabled by default. See `deploy/docs/worktree-compose.md`.
 
 ## Accepted Server path keys
 
@@ -50,9 +50,9 @@ These names are examples. Operators may choose different names, but the resultin
 
 Any group granted read access to secret files must be dedicated to the exact runtime identities that require those secrets. Do not reuse a broad operator, login, or shared application group for secret access.
 
-The current server container runs as the non-root user `haze-sync` with numeric UID `10001`. A future host bind mount must therefore either:
+The current server container runs as the non-root user `haze-sync` with numeric UID `10001`. An accepted Worktree host bind must therefore either:
 
-- grant the container UID `10001` the required access; or
+- grant the container UID `10001` the required read access and, only when explicitly approved, write access; or
 - explicitly coordinate a different runtime user/group mapping in a later deployment phase.
 
 Do not make persistent directories world-writable to work around UID/GID mismatches.
@@ -62,7 +62,7 @@ Do not make persistent directories world-writable to work around UID/GID mismatc
 | Path placeholder | Class | Primary consumer | Suggested owner/group | Suggested directory mode | Recovery role |
 | --- | --- | --- | --- | --- | --- |
 | `/srv/haze-sync/objects` | persistent application data | Server object store | `haze-sync:haze-sync` | `0750` | required with PostgreSQL metadata |
-| `/srv/haze-vault/worktree` | user-visible worktree data | future Worktree runtime and authorized vault users | `<vault-owner>:haze-vault` | `2770` when shared-group writes are required | back up when it may contain authoritative or unreplicated content |
+| `/srv/haze-vault/worktree` | user-visible worktree data | opt-in Worktree runtime and authorized vault users | `<vault-owner>:haze-vault` | `2770` when shared-group writes are required | back up when it may contain authoritative or unreplicated content |
 | `/etc/haze-sync` | non-secret configuration | operator and service | `root:haze-sync` | `0750` | back up sanitized configuration where useful |
 | `/opt/haze-sync/secrets` | secret material | operator and explicitly authorized service processes | `root:<dedicated-secret-group>` | prefer directory `0700` and files `0600`; use `0750`/`0640` only when dedicated group access is required | back up separately through an encrypted/secret-manager process |
 | `/var/log/haze-sync` | service logs | service and log operator | `haze-sync:haze-sync` or logging agent group | `0750` | not required for state recovery |
@@ -112,18 +112,25 @@ That mapping must not be added until ownership and numeric UID/GID behavior are 
 
 ## Worktree permissions
 
-`/srv/haze-vault/worktree` is the production-style placeholder for `HAZE_SYNC_WORKTREE_PATH`.
+`/srv/haze-vault/worktree` is the production-style placeholder for an operator-supplied `HAZE_SYNC_WORKTREE_HOST_PATH`. The accepted opt-in override maps that source exactly to the Server container target:
 
-Because Worktree runtime behavior is not enabled by DEP-P5:
+```text
+operator-supplied host path -> /var/lib/haze-sync/worktree
+```
 
-- do not add a Compose bind mount yet;
-- do not assume the directory is safely reconstructible from another source;
-- do not give the service write access unless the accepted Worktree mode requires it;
-- do not expose the directory to unrelated system users.
+The base Compose file has no Worktree bind and keeps `HAZE_SYNC_WORKTREE_ADAPTER_MODE=disabled`. When the override is used:
 
-When shared writes are eventually accepted, a setgid directory such as mode `2770` can preserve a shared vault group on newly created entries. The exact file umask and write model must be coordinated with the accepted Worktree contract before runtime enablement.
+- the host source must be supplied through an untracked `.env` or operator environment;
+- the bind is read-only by default;
+- UID `10001` must be able to traverse the parent directories and read required files;
+- write access requires a separate explicit operator decision, compatible ownership and permissions, and an approved write-capable rollout mode;
+- changing the adapter mode does not independently authorize a writable bind, and changing the bind to writable does not independently authorize a write-capable mode;
+- the directory must not be exposed to unrelated system users;
+- the directory must not be assumed safely reconstructible from another source.
 
-Back up the worktree whenever it may contain user-authored or otherwise unreplicated content. A later Worktree contract may refine whether a particular deployment treats it as authoritative, derived, import-only, or export-only data.
+When shared writes are explicitly accepted, a setgid directory such as mode `2770` can preserve a shared vault group on newly created entries. The exact file umask and write model must remain coordinated with the accepted Worktree contract.
+
+Back up the worktree whenever it may contain user-authored, authoritative, or otherwise unreplicated content. Capture it in the same stopped/quiesced recovery window as PostgreSQL metadata and object-store data. See `deploy/docs/worktree-compose.md` and `deploy/docs/migrations-backup-restore.md`.
 
 ## Configuration and secrets
 
@@ -201,7 +208,7 @@ Rules:
 | --- | --- | --- |
 | PostgreSQL metadata | yes | coordinate with object store and stopped/quiesced writers |
 | `/srv/haze-sync/objects` | yes | capture from the same recovery window as PostgreSQL |
-| `/srv/haze-vault/worktree` | conditional but usually yes | required whenever user-authored or unreplicated data may exist |
+| `/srv/haze-vault/worktree` | conditional but usually yes | required whenever user-authored, authoritative, or unreplicated data may exist; capture in the same recovery window |
 | `/etc/haze-sync` | optional | only sanitized non-secret configuration; verify values before reuse |
 | `/opt/haze-sync/secrets` | separately | encrypted/secret-manager process, not general data archive |
 | `/var/log/haze-sync` | no for recovery | retain only for operations/security policy |
@@ -244,8 +251,10 @@ Before starting a host deployment:
 [ ] Backup root is operator-owned and outside data/config/temp paths.
 [ ] Runtime temp paths contain no persistent data.
 [ ] HAZE_SYNC_OBJECT_STORE_PATH matches the approved object-store root.
-[ ] HAZE_SYNC_WORKTREE_PATH matches the approved worktree root.
-[ ] Future container bind mounts account for UID 10001 or an explicitly coordinated runtime user.
+[ ] HAZE_SYNC_WORKTREE_PATH remains /var/lib/haze-sync/worktree in the container.
+[ ] HAZE_SYNC_WORKTREE_HOST_PATH is supplied only through an untracked operator environment when the override is used.
+[ ] The Worktree bind defaults read-only; any write access is explicitly approved.
+[ ] Container bind permissions account for UID 10001 or an explicitly coordinated runtime user.
 [ ] No path points into the repository checkout.
 [ ] No real secret or runtime artifact is tracked by Git.
 ```
@@ -297,13 +306,13 @@ Any `MISSING` line or world-writable path requires operator review. Do not attac
 
 ## Non-goals preserved
 
-DEP-P5 does not:
+DEP-P5 and DEP-P5A do not:
 
 ```text
 create host users or groups
 create or chmod host directories
-add Compose bind mounts
-enable Worktree runtime
+add a Worktree bind to the base Compose file
+automatically enable Worktree runtime or a write-capable mode
 change Server config keys
 implement object-store behavior
 add cleanup or retention automation
