@@ -10,45 +10,31 @@ default_branch_control_is_active: no
 
 active_prompt: crates/haze-sync-server/control/prompt.md
 active_report: crates/haze-sync-server/control/report.md
-active_agent_role: implementation-worker
-assigned_chat_name: server — W1 SRV-GDA-P1 Tests and Verification
+active_agent_role: fixer-worker
+assigned_chat_name: server — W1 FIX-SRV-GDA-P1 CI
 
 wave: W1
-phase: SRV-GDA-P1-CONTINUE-TESTS-AND-VERIFICATION
-implementation_status: SELF_NEEDS_FIX
-fix_status: NOT_APPLICABLE_PRODUCT_INCOMPLETE
+phase: FIX-SRV-GDA-P1-CI
+implementation_status: COMPLETE_PENDING_CI_FIX
+fix_status: NOT_STARTED
 clean_review_status: NOT_STARTED
-ci_status: CI_RED_INCOMPLETE_CANDIDATE
+ci_status: CI_RED_FINALIZER_ONLY
 architect_status: ARCHITECT_ACCEPT_GDRIVE_FAN_IN
 
-incomplete_candidate:
-- code_bearing_sha: 8bf6d2fa881bfca3c53553ea5b1b63aed01be5f0
-- implementation_report_blob: ad664f9a0dce10c6e49fffedec9a40b74366816c
-- ci_run_id: 29484442496
-- ci_run_number: 2030
-- rust_checks: success
-- diagnostics_finalizer: failure
-
-accepted_dependencies:
-- api_gdrive_sha: c60c3976696da1970d539e5cff6e9f74a61fc10e
-- api_clean_report_blob: 55ff6047c9c6c0f6f548f10197b76706c0a244e1
-- storage_gdrive_sha: 3617bd1cf947fdd394f1ab29d4b992f7b8859a84
-- storage_clean_report_blob: 4584b8705221d3cd2aa43b5776674b3a1ec9a0f4
-
-required_completion:
-- mandatory Server-owned PostgreSQL route/application tests
-- actual route-level authorization/transaction/outcome coverage
-- final accepted dependency blob identity verification
-- minimal implementation-log alignment
-- new exact-SHA DB-capable green CI
+failing_candidate:
+- code_bearing_sha: 94375e36976c87b62e524c0f1cb490224b778179
+- implementation_report_blob: efc05e8e2a903e7197b90cc996d471f753f5a7fa
+- ci_run_id: 29488329906
+- ci_run_number: 2035
+- ci_attempt: 1
+- artifact_id: 8371364050
+- artifact_name: ci-diag__component-server__wf-component-ci__run-29488329906__attempt-1
 
 protected_scope:
-- continuation of existing SRV-GDA-P1 only
-- no API/Storage contract redesign
-- no provider/OAuth/Core policy/status-control/CLI/Deployment work
-- no sibling or workflow changes
+- artifact-proven fix only
+- preserve completed route, transaction and PostgreSQL verification surface
+- no owner-contract or sibling/workflow changes
 
 next_gate:
-- SELF_ACCEPT plus exact-SHA DB-capable green CI -> focused Server clean/functional review
-- complete candidate with red CI -> artifact-first fixer loop
-- owner mismatch -> BLOCKED_BY_CONTRACT
+- FIX_COMPLETE plus full exact-SHA DB-capable green CI -> focused Server clean review
+- artifact unavailable -> FIX_BLOCKED_BY_LOGS
