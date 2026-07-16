@@ -10,35 +10,32 @@ default_branch_control_is_active: no
 
 active_prompt: crates/haze-gdrive-adapter/control/prompt.md
 active_report: crates/haze-gdrive-adapter/control/report.md
-active_agent_role: fixer-worker
-assigned_chat_name: gdrive-adapter — W1 FIX-GDA-GDA-P3 OAuth Expiry
+active_agent_role: clean-code-reviewer
+assigned_chat_name: gdrive-adapter — W1 GDA-GDA-P3 OAuth Security Review Rerun
 
 wave: W1
-phase: FIX-GDA-GDA-P3-REVIEW
-implementation_status: COMPLETE_AFTER_CI_FIX
-fix_status: REVIEW_FIX_NOT_STARTED
-clean_review_status: CLEAN_NEEDS_FIX
-ci_status: CI_GREEN_ON_REVIEWED_SHA
+phase: GDA-GDA-P3-CLEAN-REVIEW-RERUN
+implementation_status: COMPLETE_AFTER_REVIEW_FIX
+fix_status: FIX_COMPLETE
+clean_review_status: RERUN_NOT_STARTED
+ci_status: CI_GREEN
 architect_status: ARCHITECT_ACCEPT_GDRIVE_FAN_IN
 
 review_candidate:
-- code_bearing_sha: cf86aba890df6dcfb95f1d285677ceacf96a7772
-- clean_review_report_blob: ec281ebc5f3f5343887d339d7f676977587ab738
-- ci_run_id: 29456659157
-- ci_run_number: 2026
+- code_bearing_sha: 7f00a60641ca157907d0e75e4ab1bb47c05f03c9
+- prior_clean_review_report_blob: ec281ebc5f3f5343887d339d7f676977587ab738
+- review_fixer_report_blob: 08ff97333d6089e77cbf48cc21baa8a90fce3588
+- ci_run_id: 29486777334
+- ci_run_number: 2032
+- ci_conclusion: success
 
-required_fix:
+required_review:
 - deterministic explicit token time boundary
-- post-refresh minimum-lifetime validation against caller now
-- reject and do not cache unusable refreshed tokens
-- focused expired/usable/too-short cached and refreshed lifecycle tests
-- preserve read-only credentials, redaction and fake-only boundaries
-
-protected_scope:
-- no next GDrive product phase
-- no Server/API/Storage/scheduler/Deployment/sibling/workflow changes
-- no real credentials, network calls or test weakening
+- post-refresh minimum-lifetime enforcement
+- no caching of unusable refreshed tokens
+- fixed-time lifecycle coverage
+- preserved credential, redaction and fake-only boundaries
 
 next_gate:
-- FIX_COMPLETE plus full exact-SHA green CI -> repeat OAuth/security clean review
-- unresolved expiry invariant -> FIX_NEEDS_MORE
+- CLEAN_ACCEPT -> next sequential GDrive owner phase
+- CLEAN_NEEDS_FIX -> focused GDrive fixer loop
