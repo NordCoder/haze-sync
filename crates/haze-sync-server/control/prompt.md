@@ -1,47 +1,63 @@
-# W1-SRV-GDA-P1-CLEAN-FUNCTIONAL-REVIEW
+# W1-FIX-SRV-GDA-P1-OUTCOME-MAPPING
 
 Before starting, name this worker chat exactly:
 
-`server — W1 SRV-GDA-P1 Clean Functional Review`
+`server — W1 FIX-SRV-GDA-P1 Outcome Mapping`
 
 Repository: `NordCoder/haze-sync`
 Component: server
 Path: `crates/haze-sync-server`
 Branch/ref: `component/server`
 PR: #45
-Role: clean-code-reviewer
-Phase: `SRV-GDA-P1-CLEAN-FUNCTIONAL-REVIEW`
+Role: fixer-worker
+Phase: `FIX-SRV-GDA-P1-OUTCOME-MAPPING`
 
-Review exact code-bearing SHA `b0ae522229bbc6422763a2cd075b995768346963`.
+This is a focused review-fixer for the existing `SRV-GDA-P1-STATE-ROUTES-AND-TRANSACTIONS` phase. Do not begin another Server product phase.
 
-Authoritative evidence:
-- initial implementation report blob: `ad664f9a0dce10c6e49fffedec9a40b74366816c`;
-- completion implementation report blob: `efc05e8e2a903e7197b90cc996d471f753f5a7fa`;
-- CI fixer report blob: `7df311e91b8a4e7023b02568304cdeb77b3e9c2e`;
-- Component CI run `29490745222`, run number `2041`, success and DB-capable;
-- accepted API GDrive SHA: `c60c3976696da1970d539e5cff6e9f74a61fc10e`;
-- API clean-review blob: `55ff6047c9c6c0f6f548f10197b76706c0a244e1`;
-- accepted Storage GDrive SHA: `3617bd1cf947fdd394f1ab29d4b992f7b8859a84`;
-- Storage clean-review blob: `4584b8705221d3cd2aa43b5776674b3a1ec9a0f4`.
+Review target:
+- code-bearing SHA: `b0ae522229bbc6422763a2cd075b995768346963`;
+- clean-review report blob: `d4fe8c9150184f34383d708048d402df7c008078`;
+- DB-capable green Component CI run: `29490745222`, number `2041`.
 
-Review only the completed SRV-GDA-P1 route/application/transaction surface:
-1. GET and POST route registration exactly matches the accepted API paths and DTO/header/error vocabulary.
-2. Matching GDrive adapter private access, admin sanitized read-only access, unrelated principal rejection, adapter identity/type mismatch and missing authentication fail closed correctly.
-3. Server resolves adapter identity/type before durable-state access.
-4. Read and compare-and-commit flows use caller-owned PostgreSQL transactions with correct commit/rollback ownership.
-5. Committed/replayed outcomes commit; stale state, cursor gap/regression, mapping conflict, idempotency conflict and internal failures do not leave partial state.
-6. Exact Storage invariants are preserved: state-version CAS, cursor generation/contiguity, checkpoint non-regression, atomic mapping/echo/delete-candidate/operation facts, deterministic replay and adapter isolation.
-7. Accepted API and Storage fan-in files remain byte-identical to the pinned owner refs; no owner semantics were edited on the Server branch.
-8. Real PostgreSQL tests exercise the assembled Axum route/application boundary, including concurrency, rollback, isolation and safe redaction—not only repository internals.
-9. Error/log/Debug surfaces do not expose raw cursor, provider facts, Idempotency-Key, request body, SQLx/database details or database URLs.
-10. No provider/OAuth/Core policy/scheduler/status-control/CLI/Deployment/sibling/workflow expansion occurred.
+The review accepted authorization, route registration, transaction ownership, rollback atomicity, dependency identity, PostgreSQL route evidence, concurrency/replay/isolation and secrecy. Fix only these two blocking Server outcome mappings:
 
-Inspect exact code, tests and dependency identity evidence. Do not change product code, tests, dependencies, docs or workflows. Do not merge, rebase, force-push or change PR draft state.
+1. `RepositoryError::GDriveCursorGenerationMismatch` must not map to the `cursor_gap` commit outcome.
+   - After rollback, return the accepted fixed HTTP 409 route error envelope with code `invalid_cursor_state`.
+   - Add a real PostgreSQL route test using the current state version with a mismatched persisted cursor generation.
+   - Prove the response category and no state mutation.
+
+2. Internal or unexpected Storage failures must not map to caller-facing `validation_failed`.
+   - `DatabaseOperationFailed`, `UnsupportedGDriveStateVersion`, `StateVersionOverflow` and other internal/unexpected invariant failures must return the accepted safe HTTP 500 `internal` error envelope after rollback.
+   - Keep `validation_failed` only for genuine request/storage validation categories.
+   - Update the existing rollback PostgreSQL test to assert the internal envelope while preserving all no-partial-facts and secrecy assertions.
+
+Allowed scope:
+- `crates/haze-sync-server/src/routes/gdrive.rs`;
+- focused Server GDrive route/PostgreSQL tests;
+- minimal Server docs only if outcome mapping documentation must be corrected;
+- control report.
+
+Preserve:
+- accepted API and Storage files byte-identical to owner refs;
+- existing route paths and authorization;
+- caller-owned transaction choreography;
+- committed/replayed commit behavior;
+- stale, cursor gap/regression, mapping and idempotency outcomes;
+- rollback, concurrency, isolation and redaction coverage.
+
+Forbidden:
+- API or Storage contract/schema edits;
+- provider/OAuth/Core policy/scheduler/status-control/CLI/Deployment work;
+- sibling or workflow changes;
+- raw cursor, provider facts, Idempotency-Key, request body, SQLx/database errors or URLs in output;
+- test weakening, merge, rebase, force-push or PR draft-state changes.
+
+Create code/test changes without CI skip. Obtain full exact-SHA DB-capable Component CI with fmt/check/test/clippy, Server/PostgreSQL tests and diagnostics finalization green.
 
 Write only `crates/haze-sync-server/control/report.md` with:
-- `REPORT_TYPE: CLEAN_CODE_REVIEW`;
-- `phase_id: SRV-GDA-P1-CLEAN-FUNCTIONAL-REVIEW`;
-- `chat_name: server — W1 SRV-GDA-P1 Clean Functional Review`;
-- status `CLEAN_ACCEPT`, `CLEAN_NEEDS_FIX`, `CLEAN_BLOCKED_BY_CONTRACT`, or `CLEAN_BLOCKED_BY_TOOLING`.
+- `REPORT_TYPE: FIX`;
+- `phase_id: FIX-SRV-GDA-P1-OUTCOME-MAPPING`;
+- `chat_name: server — W1 FIX-SRV-GDA-P1 Outcome Mapping`;
+- status `FIX_COMPLETE`, `FIX_NEEDS_MORE`, `FIX_BLOCKED_BY_CONTRACT`, or `FIX_BLOCKED_BY_TOOLING`.
 
-Record reviewed SHA, authorization and transaction findings, exact dependency identity, PostgreSQL route evidence, secrecy review and exact CI. Do not claim repository merge readiness. `CLEAN_ACCEPT` accepts Server GDrive state routes and unblocks the GDrive HTTP/durable-state client phase.
+Record exact error mapping, changed tests, rollback evidence, final code-bearing SHA and exact DB-capable CI. Do not claim CLEAN_ACCEPT; a repeat clean functional review follows.
