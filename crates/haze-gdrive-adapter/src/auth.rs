@@ -283,9 +283,7 @@ impl<T: TokenEndpoint> GoogleAuthClient<T> {
             }
             self.access_token = Some(refreshed);
         }
-        self.access_token
-            .as_ref()
-            .ok_or_else(refresh_unavailable)
+        self.access_token.as_ref().ok_or_else(refresh_unavailable)
     }
 }
 
@@ -485,10 +483,7 @@ mod tests {
         let now = fixed_now();
         let endpoint = FakeTokenEndpoint {
             refreshes: 0,
-            next: Some(Ok(token(
-                "too-short-access",
-                now + Duration::from_secs(29),
-            ))),
+            next: Some(Ok(token("too-short-access", now + Duration::from_secs(29)))),
         };
         let mut client = auth_client(endpoint);
 
@@ -507,18 +502,15 @@ mod tests {
     fn valid_cached_token_is_returned_without_refresh() {
         let now = fixed_now();
         let mut client = auth_client(FakeTokenEndpoint::default());
-        client.access_token = Some(token(
-            "cached-access",
-            now + Duration::from_secs(300),
-        ));
+        client.access_token = Some(token("cached-access", now + Duration::from_secs(300)));
 
         let cached = client
             .access_token(now)
             .expect("cached token should remain usable");
 
         assert_eq!(cached.expose_for_authorization(), "cached-access");
-        assert_eq!(client.endpoint.refreshes, 0);
         assert!(!format!("{cached:?}").contains("cached-access"));
+        assert_eq!(client.endpoint.refreshes, 0);
     }
 
     #[test]
