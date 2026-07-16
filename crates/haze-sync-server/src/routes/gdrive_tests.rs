@@ -74,7 +74,10 @@ async fn gdrive_routes_enforce_auth_type_visibility_and_adapter_isolation() {
     assert_eq!(private["cursor"]["generation"], 1);
     assert_eq!(private["cursor"]["present"], true);
     assert_eq!(private["mappings"][0]["path"], path);
-    assert_eq!(private["mappings"][0]["drive_file_id"], "private-drive-file");
+    assert_eq!(
+        private["mappings"][0]["drive_file_id"],
+        "private-drive-file"
+    );
     assert!(!private.to_string().contains("private-raw-cursor"));
 
     let (status, admin) = request_json(
@@ -204,14 +207,7 @@ async fn gdrive_commit_route_is_replay_safe_and_rolls_back_all_partial_facts() {
     assert_eq!(replayed["status"], "replayed");
     assert_eq!(replayed["state_version"], 1);
 
-    let stale = checkpoint_commit(
-        0,
-        1,
-        None,
-        2,
-        &namespace.operation_id("stale"),
-        '2',
-    );
+    let stale = checkpoint_commit(0, 1, None, 2, &namespace.operation_id("stale"), '2');
     let (status, stale_response) = request_json(
         state(context.pool(), &adapter, AdapterRole::GdriveAdapter),
         "POST",
@@ -326,20 +322,18 @@ async fn gdrive_commit_route_is_replay_safe_and_rolls_back_all_partial_facts() {
         assert!(!rendered.contains(secret));
     }
 
-    let state_version: i64 = sqlx::query_scalar(
-        "select state_version from gdrive_adapter_state where adapter_id = $1",
-    )
-    .bind(&adapter)
-    .fetch_one(context.pool())
-    .await
-    .unwrap();
-    let mapping_count: i64 = sqlx::query_scalar(
-        "select count(*) from gdrive_durable_items where adapter_id = $1",
-    )
-    .bind(&adapter)
-    .fetch_one(context.pool())
-    .await
-    .unwrap();
+    let state_version: i64 =
+        sqlx::query_scalar("select state_version from gdrive_adapter_state where adapter_id = $1")
+            .bind(&adapter)
+            .fetch_one(context.pool())
+            .await
+            .unwrap();
+    let mapping_count: i64 =
+        sqlx::query_scalar("select count(*) from gdrive_durable_items where adapter_id = $1")
+            .bind(&adapter)
+            .fetch_one(context.pool())
+            .await
+            .unwrap();
     let rollback_path_count: i64 = sqlx::query_scalar(
         "select count(*) from gdrive_durable_items where adapter_id = $1 and path = $2",
     )
@@ -370,22 +364,8 @@ async fn concurrent_gdrive_route_writer_loser_is_stale_and_other_adapter_is_unch
     register_adapter(context.pool(), &adapter, "gdrive_adapter", true).await;
     register_adapter(context.pool(), &isolated, "gdrive_adapter", true).await;
     let route = format!("/v1/adapters/{adapter}/gdrive/state/commit");
-    let winner = checkpoint_commit(
-        0,
-        0,
-        None,
-        1,
-        &namespace.operation_id("winner"),
-        '5',
-    );
-    let loser = checkpoint_commit(
-        0,
-        0,
-        None,
-        2,
-        &namespace.operation_id("loser"),
-        '6',
-    );
+    let winner = checkpoint_commit(0, 0, None, 1, &namespace.operation_id("winner"), '5');
+    let loser = checkpoint_commit(0, 0, None, 2, &namespace.operation_id("loser"), '6');
     let first = request_json(
         state(context.pool(), &adapter, AdapterRole::GdriveAdapter),
         "POST",
@@ -407,9 +387,7 @@ async fn concurrent_gdrive_route_writer_loser_is_stale_and_other_adapter_is_unch
     assert_eq!(
         results
             .iter()
-            .filter(|(status, body)| {
-                *status == StatusCode::OK && body["status"] == "committed"
-            })
+            .filter(|(status, body)| { *status == StatusCode::OK && body["status"] == "committed" })
             .count(),
         1
     );
