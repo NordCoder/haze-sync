@@ -10,40 +10,36 @@ default_branch_control_is_active: no
 
 active_prompt: crates/haze-gdrive-adapter/control/prompt.md
 active_report: crates/haze-gdrive-adapter/control/report.md
-active_agent_role: clean-code-reviewer
-assigned_chat_name: gdrive-adapter — W1 GDA-GDA-P2 HTTP Security Review
+active_agent_role: fixer-worker
+assigned_chat_name: gdrive-adapter — W1 FIX-GDA-GDA-P2 HTTP Security
 
 wave: W1
-phase: GDA-GDA-P2-CLEAN-REVIEW
+phase: FIX-GDA-GDA-P2-HTTP-SECURITY
 implementation_status: SELF_ACCEPT
-fix_status: NOT_STARTED
-clean_review_status: NOT_STARTED
-ci_status: CI_GREEN
+fix_status: REVIEW_FIX_NOT_STARTED
+clean_review_status: CLEAN_NEEDS_FIX
+ci_status: CI_GREEN_ON_REVIEWED_SHA
 architect_status: ARCHITECT_ACCEPT_GDRIVE_FAN_IN
 
 review_candidate:
 - code_bearing_sha: cb9c85169e6f212e11824858501e70b182b26a29
 - implementation_report_blob: 4574f7a8e3a91892062b86c329025011ea332c71
+- clean_review_report_blob: e84988ad9aea6881f142b30c98461c2279a08106
 - ci_run_id: 29507840727
 - ci_run_number: 2049
 - ci_conclusion: success
 
-accepted_inputs:
-- api_gdrive_sha: c60c3976696da1970d539e5cff6e9f74a61fc10e
-- api_clean_report_blob: 55ff6047c9c6c0f6f548f10197b76706c0a244e1
-- server_gdrive_sha: c023b83e1e6f502e7d2261acccb871dd5588edf1
-- server_clean_report_blob: 1c223ebda33a1550fa8cbf38a15079ef7810c63d
-- oauth_auth_sha: 7f00a60641ca157907d0e75e4ab1bb47c05f03c9
+required_fix:
+- concrete overall request deadline and timeout classification
+- origin-only Server base URL and exact route construction
+- provider-root and endpoint Debug redaction
+- committed Cargo.lock synchronization and reproducibility
 
-required_review:
-- exact API fan-in and route-contract compatibility
-- mode-before-transport gating
-- bounded redirect-free HTTP and pagination
-- strict outcome/error and retry classification
-- comprehensive client/request/error secrecy
-- fake-only deterministic tests and preserved boundaries
+protected_scope:
+- GDrive HTTP client/config/runtime redaction tests and lockfile only
+- accepted API owner files remain byte-identical
+- no runtime loop, provider sync, direct DB, status-control, CLI, Deployment or workflow changes
 
 next_gate:
-- CLEAN_ACCEPT -> GDA-GDA-P4-LONG-RUNNING-RUNTIME
-- CLEAN_NEEDS_FIX -> focused GDrive HTTP client fixer loop
-- owner contract mismatch -> CLEAN_BLOCKED_BY_CONTRACT
+- FIX_COMPLETE plus full exact-SHA green CI -> repeat GDrive HTTP/security clean review
+- unresolved owner mismatch -> FIX_BLOCKED_BY_CONTRACT
