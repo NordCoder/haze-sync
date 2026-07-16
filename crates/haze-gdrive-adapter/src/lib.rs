@@ -4,18 +4,20 @@
 //! normalization, fake-first provider abstractions, adapter-local mapping and
 //! cursor state, dependency-free content hashing, full-scan import planning,
 //! change-feed reconciliation, Core-to-Drive export planning/apply boundaries,
-//! conservative delete-candidate guardrails, and process lifecycle scaffolding.
-//! Concrete provider transport, persistence, and background runtime wiring remain
-//! deferred.
+//! conservative delete-candidate guardrails, OAuth credential/token handling,
+//! and a bounded mode-aware HTTP client for Server-owned durable state.
+//! Provider synchronization and long-running runtime composition remain deferred.
 
 pub mod auth;
 pub mod change_feed;
 pub mod config;
 pub mod delete_guard;
 pub mod drive;
+pub mod durable_state;
 pub mod error;
 pub mod export;
 pub mod hash;
+pub mod identity;
 pub mod runtime;
 pub mod scan;
 pub mod state;
@@ -53,6 +55,11 @@ pub use drive::{
     FakeDriveProvider, NormalizedDriveEntry, ProviderError, ProviderErrorCategory,
     SupportedFileType, UnsupportedEntryReason,
 };
+pub use durable_state::{
+    CollectedGDriveState, DurableStateClient, DurableStateClientError, DurableStateErrorCategory,
+    HttpClientPolicy, HttpDurableStateClient, HttpMethod, HttpRequest, HttpResponse, HttpTransport,
+    HttpTransportError, ModeAwareDurableStateClient, UreqHttpTransport,
+};
 pub use error::{ConfigError, ConfigErrorCategory, RuntimeError, RuntimeErrorCategory};
 pub use export::{
     cursor_after_page, echo_observation_for_mapping, plan_core_export, run_export_cycle,
@@ -65,6 +72,7 @@ pub use export::{
     InMemoryExportStateStore, VerifiedExportSource, DEFAULT_CORE_CHANGE_PAGE_LIMIT,
 };
 pub use hash::ContentSha256;
+pub use identity::{AdapterIdentity, AdapterIdentitySource, ENV_ADAPTER_ID};
 pub use runtime::{AdapterRuntime, RuntimeState, StartupStatus};
 pub use scan::{
     plan_full_scan, CoreUploadRequest, DeleteCandidatePlan, FullScanError, FullScanInput,

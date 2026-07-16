@@ -5,6 +5,8 @@
 
 use core::fmt;
 
+use haze_sync_common::ContentHash;
+
 /// Header name for bearer adapter authentication.
 pub const AUTHORIZATION_HEADER: &str = "Authorization";
 
@@ -95,7 +97,7 @@ impl fmt::Debug for BearerToken {
 }
 
 /// Contract type for the Idempotency-Key write header.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct IdempotencyKey(String);
 
 impl IdempotencyKey {
@@ -110,6 +112,12 @@ impl IdempotencyKey {
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+}
+
+impl fmt::Debug for IdempotencyKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("IdempotencyKey(<redacted>)")
     }
 }
 
@@ -135,6 +143,11 @@ impl ContentSha256Header {
     #[must_use]
     pub fn hex_digest(&self) -> &str {
         &self.0[SHA256_PREFIX.len()..]
+    }
+
+    /// Converts the validated header value into the common content-hash type.
+    pub fn to_common_hash(&self) -> Result<ContentHash, HeaderValueError> {
+        ContentHash::parse(&self.0).map_err(|_| HeaderValueError::InvalidSha256)
     }
 }
 
@@ -214,32 +227,80 @@ mod tests {
 
     #[test]
     fn bearer_token_debug_is_redacted() {
-        let token = BearerToken::parse_authorization_header("Bearer secret-token").unwrap();
+        let raw_token = "fixture-token";
+        let token = BearerToken::parse_authorization_header(format!("Bearer {raw_token}")).unwrap();
 
         assert_eq!(format!("{token:?}"), "BearerToken(<redacted>)");
-        assert_eq!(token.expose_for_auth(), "secret-token");
+        assert!(!format!("{token:?}").contains(raw_token));
+        assert_eq!(token.expose_for_auth(), raw_token);
     }
 
     #[test]
-    fn sha256_header_requires_prefixed_hex() {
-        let good = format!("sha256:{}", "a".repeat(64));
-        let parsed = ContentSha256Header::parse(good).unwrap();
+    fn bearer_token_parser_rejects_unsafe_shapes_without_echoing_values() {
+        let raw_token = "fixture-token";
 
+        assert_eq!(
+            BearerToken::parse_authorization_header(raw_token),
+            Err(HeaderValueError::InvalidBearerScheme)
+        );
+        assert_eq!(
+            BearerToken::parse_authorization_header(format!("Bearer {raw_token} ")),
+            Err(HeaderValueError::ContainsWhitespace)
+        );
+        assert!(!HeaderValueError::InvalidBearerScheme
+            .to_string()
+            .contains(raw_token));
+    }
+
+    #[test]
+    fn idempotency_key_debug_is_redacted_and_validation_is_safe() {
+        let raw_key = "fixture-idempotency-key-01";
+        let key = IdempotencyKey::new(raw_key).unwrap();
+
+        assert_eq!(key.as_str(), raw_key);
+        assert_eq!(format!("{key:?}"), "IdempotencyKey(<redacted>)");
+        assert!(!format!("{key:?}").contains(raw_key));
+        assert_eq!(
+            IdempotencyKey::new("fixture key with spaces"),
+            Err(HeaderValueError::ContainsWhitespace)
+        );
+        assert!(!HeaderValueError::ContainsWhitespace
+            .to_string()
+            .contains(raw_key));
+    }
+
+    #[test]
+    fn sha256_header_requires_prefixed_hex_and_converts_to_common_hash() {
+        let uppercase = format!("sha256:{}", "A".repeat(64));
+        let canonical = format!("sha256:{}", "a".repeat(64));
+        let parsed = ContentSha256Header::parse(uppercase).unwrap();
+
+        assert_eq!(parsed.as_str(), canonical);
         assert_eq!(parsed.hex_digest(), "a".repeat(64));
-        assert!(ContentSha256Header::parse("abc").is_err());
+        assert_eq!(parsed.to_common_hash().unwrap().to_string(), canonical);
+        assert_eq!(
+            ContentSha256Header::parse("abc"),
+            Err(HeaderValueError::InvalidSha256)
+        );
     }
 
     #[test]
     fn base_revision_header_supports_explicit_null() {
+        let null_base = BaseRevisionIdHeader::parse("null").unwrap();
+        let revision_base = BaseRevisionIdHeader::parse("rev_01J").unwrap();
+
+        assert_eq!(null_base, BaseRevisionIdHeader::Null);
+        assert!(null_base.is_null());
+        assert_eq!(revision_base.as_optional_revision_id(), Some("rev_01J"));
         assert_eq!(
-            BaseRevisionIdHeader::parse("null").unwrap(),
-            BaseRevisionIdHeader::Null
-        );
-        assert_eq!(
-            BaseRevisionIdHeader::parse("rev_01J")
+            BaseRevisionIdHeader::parse("NULL")
                 .unwrap()
                 .as_optional_revision_id(),
-            Some("rev_01J")
+            Some("NULL")
+        );
+        assert_eq!(
+            BaseRevisionIdHeader::parse("rev 01J"),
+            Err(HeaderValueError::ContainsWhitespace)
         );
     }
 }

@@ -1,10 +1,12 @@
 //! Runtime lifecycle skeleton for the Google Drive adapter.
 //!
-//! This phase validates configuration and exposes lifecycle hooks only. It does
-//! not call Google Drive, Haze Sync Core/API, or any persistence boundary.
+//! This phase validates configuration, including explicit authenticated adapter
+//! identity, and exposes lifecycle hooks only. It does not call Google Drive,
+//! execute durable-state requests, or start a synchronization loop.
 
 use crate::config::{AdapterConfig, AdapterMode};
 use crate::error::RuntimeError;
+use crate::identity::AdapterIdentity;
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,27 +60,38 @@ impl fmt::Display for StartupStatus {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdapterRuntime {
     config: AdapterConfig,
+    identity: AdapterIdentity,
     state: RuntimeState,
 }
 
 impl AdapterRuntime {
     pub fn from_env() -> Result<Self, RuntimeError> {
         let config = AdapterConfig::load_from_env()?;
-        Ok(Self::new(config))
+        let identity = AdapterIdentity::load_from_env()?;
+        Ok(Self::new(config, identity))
     }
 
-    pub fn new(config: AdapterConfig) -> Self {
+    #[must_use]
+    pub const fn new(config: AdapterConfig, identity: AdapterIdentity) -> Self {
         Self {
             config,
+            identity,
             state: RuntimeState::Created,
         }
     }
 
-    pub fn config(&self) -> &AdapterConfig {
+    #[must_use]
+    pub const fn config(&self) -> &AdapterConfig {
         &self.config
     }
 
-    pub fn state(&self) -> RuntimeState {
+    #[must_use]
+    pub const fn identity(&self) -> &AdapterIdentity {
+        &self.identity
+    }
+
+    #[must_use]
+    pub const fn state(&self) -> RuntimeState {
         self.state
     }
 
@@ -118,13 +131,18 @@ mod tests {
         }
     }
 
+    fn identity() -> AdapterIdentity {
+        AdapterIdentity::from_raw("gdrive-runtime-test").expect("identity")
+    }
+
     #[test]
     fn runtime_start_returns_safe_status() {
-        let mut runtime = AdapterRuntime::new(config());
+        let mut runtime = AdapterRuntime::new(config(), identity());
 
         let status = runtime.start().expect("runtime should start");
 
         assert_eq!(runtime.state(), RuntimeState::Running);
+        assert_eq!(runtime.identity().expose_for_route(), "gdrive-runtime-test");
         assert_eq!(status.mode, AdapterMode::ImportOnly);
         assert!(!status.is_dry_run());
         assert_eq!(status.poll_interval_seconds, 30);
@@ -148,7 +166,7 @@ mod tests {
 
     #[test]
     fn runtime_shutdown_is_explicit() {
-        let mut runtime = AdapterRuntime::new(config());
+        let mut runtime = AdapterRuntime::new(config(), identity());
         runtime.start().expect("runtime should start");
         runtime.request_shutdown();
         assert_eq!(runtime.state(), RuntimeState::ShutdownRequested);
@@ -158,13 +176,14 @@ mod tests {
     }
 
     #[test]
-    fn startup_status_display_has_no_secret_material() {
-        let mut runtime = AdapterRuntime::new(config());
+    fn startup_surfaces_do_not_expose_secret_or_identity_material() {
+        let mut runtime = AdapterRuntime::new(config(), identity());
         let status = runtime.start().expect("runtime should start");
-        let rendered = status.to_string();
+        let rendered = format!("{runtime:?} {status}");
 
         assert!(!rendered.contains("adapter-token"));
         assert!(!rendered.contains("/run/secrets"));
+        assert!(!rendered.contains("gdrive-runtime-test"));
         assert!(rendered.contains("mode=import_only"));
         assert!(rendered.contains("dry_run=false"));
     }
