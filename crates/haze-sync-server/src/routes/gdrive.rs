@@ -30,9 +30,9 @@ use haze_sync_common::{AdapterId, OperationId, RevisionId, VaultPath};
 use haze_sync_storage::repositories::{
     gdrive_state::{
         compare_and_commit_gdrive_state, load_gdrive_state_snapshot, GDriveCommitOutcome,
-        GDriveCursor, GDriveCursorAdvance, GDriveDurableItemRow, GDriveEchoState,
-        GDriveItemUpsert, GDriveOperationFingerprint, GDriveOperationInput, GDriveOperationKind,
-        GDriveStateCommit, GDriveStateSnapshotPage,
+        GDriveCursor, GDriveCursorAdvance, GDriveDurableItemRow, GDriveEchoState, GDriveItemUpsert,
+        GDriveOperationFingerprint, GDriveOperationInput, GDriveOperationKind, GDriveStateCommit,
+        GDriveStateSnapshotPage,
     },
     RepositoryError,
 };
@@ -225,12 +225,13 @@ async fn verify_gdrive_adapter(
     transaction: &mut Transaction<'_, Postgres>,
     adapter_id: &AdapterId,
 ) -> Result<(), GDriveHttpError> {
-    let row = sqlx::query("select role from sync_adapters where adapter_id = $1 and enabled = true")
-        .bind(adapter_id.as_str())
-        .fetch_optional(&mut **transaction)
-        .await
-        .map_err(|_| GDriveHttpError::internal())?
-        .ok_or_else(|| GDriveHttpError::from_route(GDriveStateRouteError::AdapterNotFound))?;
+    let row =
+        sqlx::query("select role from sync_adapters where adapter_id = $1 and enabled = true")
+            .bind(adapter_id.as_str())
+            .fetch_optional(&mut **transaction)
+            .await
+            .map_err(|_| GDriveHttpError::internal())?
+            .ok_or_else(|| GDriveHttpError::from_route(GDriveStateRouteError::AdapterNotFound))?;
     let role: String = row
         .try_get("role")
         .map_err(|_| GDriveHttpError::internal())?;
@@ -261,14 +262,8 @@ fn snapshot_response(
         },
         core_export_checkpoint: to_u64(page.state.core_export_seq)?,
         last_operations: GDriveLastOperationsSummaryDto {
-            import: page
-                .state
-                .last_import_operation_id
-                .map(OperationIdDto::new),
-            export: page
-                .state
-                .last_export_operation_id
-                .map(OperationIdDto::new),
+            import: page.state.last_import_operation_id.map(OperationIdDto::new),
+            export: page.state.last_export_operation_id.map(OperationIdDto::new),
             provider_mutation: page
                 .state
                 .last_provider_mutation_operation_id
@@ -313,7 +308,10 @@ fn mapping_response(row: GDriveDurableItemRow) -> Result<GDriveMappingFactsDto, 
     };
     Ok(GDriveMappingFactsDto {
         path: VaultPathDto::new(row.path),
-        drive_file_id: row.drive_file_id.map(parse_provider_identifier).transpose()?,
+        drive_file_id: row
+            .drive_file_id
+            .map(parse_provider_identifier)
+            .transpose()?,
         drive_parent_id: row
             .drive_parent_id
             .map(parse_provider_identifier)
@@ -325,7 +323,10 @@ fn mapping_response(row: GDriveDurableItemRow) -> Result<GDriveMappingFactsDto, 
             .head_revision_id
             .map(parse_provider_identifier)
             .transpose()?,
-        drive_version: row.drive_version.map(parse_provider_identifier).transpose()?,
+        drive_version: row
+            .drive_version
+            .map(parse_provider_identifier)
+            .transpose()?,
         drive_modified_time: row.drive_modified_time.map(timestamp),
         core_object_id: row.core_object_id,
         core_revision_id: row.core_revision_id.map(RevisionIdDto::new),
@@ -575,9 +576,7 @@ fn private_id(value: Option<&GDriveProviderIdentifierDto>) -> Option<String> {
     value.map(|value| value.expose_for_private_transport().to_owned())
 }
 
-fn parse_timestamp(
-    value: Option<&TimestampDto>,
-) -> Result<Option<DateTime<Utc>>, GDriveHttpError> {
+fn parse_timestamp(value: Option<&TimestampDto>) -> Result<Option<DateTime<Utc>>, GDriveHttpError> {
     value
         .map(|value| {
             DateTime::parse_from_rfc3339(value.as_str())
@@ -600,13 +599,10 @@ fn commit_error_response(error: RepositoryError) -> (StatusCode, GDriveStateComm
             StatusCode::CONFLICT,
             GDriveStateCommitResponse::CursorRegression,
         ),
-        RepositoryError::CursorGap => {
+        RepositoryError::CursorGap => (StatusCode::CONFLICT, GDriveStateCommitResponse::CursorGap),
+        RepositoryError::GDriveCursorGenerationMismatch => {
             (StatusCode::CONFLICT, GDriveStateCommitResponse::CursorGap)
         }
-        RepositoryError::GDriveCursorGenerationMismatch => (
-            StatusCode::CONFLICT,
-            GDriveStateCommitResponse::CursorGap,
-        ),
         RepositoryError::GDriveOperationConflict => (
             StatusCode::CONFLICT,
             GDriveStateCommitResponse::IdempotencyConflict,
@@ -641,9 +637,7 @@ fn repository_error(error: RepositoryError) -> GDriveHttpError {
         RepositoryError::CursorRegression | RepositoryError::CheckpointRegression => {
             GDriveHttpError::from_route(GDriveStateRouteError::CursorRegression)
         }
-        RepositoryError::CursorGap => {
-            GDriveHttpError::from_route(GDriveStateRouteError::CursorGap)
-        }
+        RepositoryError::CursorGap => GDriveHttpError::from_route(GDriveStateRouteError::CursorGap),
         RepositoryError::GDriveOperationConflict => {
             GDriveHttpError::from_route(GDriveStateRouteError::IdempotencyConflict)
         }
