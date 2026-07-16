@@ -220,6 +220,49 @@ async fn gdrive_commit_route_is_replay_safe_and_rolls_back_all_partial_facts() {
     assert_eq!(status, StatusCode::CONFLICT);
     assert_eq!(stale_response["status"], "stale_state");
 
+    let generation_mismatch = checkpoint_commit(
+        1,
+        0,
+        Some((1, "mismatched-generation-private-cursor")),
+        2,
+        &namespace.operation_id("generation-mismatch"),
+        '7',
+    );
+    let (status, mismatch_response) = request_json(
+        state(context.pool(), &adapter, AdapterRole::GdriveAdapter),
+        "POST",
+        &route,
+        Some(generation_mismatch),
+        true,
+        Some("generation-mismatch-idempotency-key"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(
+        mismatch_response["error"]["code"],
+        "invalid_cursor_state"
+    );
+    let rendered = mismatch_response.to_string();
+    assert!(!rendered.contains("mismatched-generation-private-cursor"));
+    assert!(!rendered.contains("generation-mismatch-idempotency-key"));
+
+    let persisted_after_mismatch: (i64, i64, i64) = sqlx::query_as(
+        "select state_version, drive_cursor_generation, core_export_seq \
+         from gdrive_adapter_state where adapter_id = $1",
+    )
+    .bind(&adapter)
+    .fetch_one(context.pool())
+    .await
+    .unwrap();
+    let operations_after_mismatch: i64 =
+        sqlx::query_scalar("select count(*) from gdrive_operations where adapter_id = $1")
+            .bind(&adapter)
+            .fetch_one(context.pool())
+            .await
+            .unwrap();
+    assert_eq!(persisted_after_mismatch, (1, 1, 1));
+    assert_eq!(operations_after_mismatch, 1);
+
     for (next_generation, expected_code) in [(1, "cursor_regression"), (3, "cursor_gap")] {
         let invalid_cursor = checkpoint_commit(
             1,
@@ -309,7 +352,8 @@ async fn gdrive_commit_route_is_replay_safe_and_rolls_back_all_partial_facts() {
     )
     .await;
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-    assert_eq!(rollback_response["status"], "validation_failed");
+    assert_eq!(rollback_response["error"]["code"], "internal");
+    assert!(rollback_response.get("status").is_none());
     let rendered = rollback_response.to_string();
     for secret in [
         "rollback-private-cursor",
