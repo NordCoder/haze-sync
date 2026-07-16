@@ -398,18 +398,14 @@ impl DurableStateClientError {
             DurableStateErrorCategory::TransportUnavailable => {
                 "durable-state transport is unavailable"
             }
-            DurableStateErrorCategory::ServiceUnavailable => {
-                "durable-state service is unavailable"
-            }
+            DurableStateErrorCategory::ServiceUnavailable => "durable-state service is unavailable",
             DurableStateErrorCategory::Internal => "durable-state service failed safely",
             DurableStateErrorCategory::MalformedResponse => "durable-state response is malformed",
             DurableStateErrorCategory::ResponseTooLarge => {
                 "durable-state response exceeds the configured bound"
             }
             DurableStateErrorCategory::RedirectRefused => "durable-state redirect was refused",
-            DurableStateErrorCategory::PaginationLoop => {
-                "durable-state pagination did not advance"
-            }
+            DurableStateErrorCategory::PaginationLoop => "durable-state pagination did not advance",
             DurableStateErrorCategory::PaginationLimit => {
                 "durable-state pagination exceeded the configured bound"
             }
@@ -449,9 +445,7 @@ impl Error for DurableStateClientError {}
 impl From<HttpTransportError> for DurableStateClientError {
     fn from(error: HttpTransportError) -> Self {
         match error {
-            HttpTransportError::Timeout => {
-                Self::new(DurableStateErrorCategory::TransportTimeout)
-            }
+            HttpTransportError::Timeout => Self::new(DurableStateErrorCategory::TransportTimeout),
             HttpTransportError::Unavailable => {
                 Self::new(DurableStateErrorCategory::TransportUnavailable)
             }
@@ -936,7 +930,11 @@ fn validate_optional_port(suffix: &str) -> Result<(), DurableStateClientError> {
 fn validate_port(port: &str) -> Result<(), DurableStateClientError> {
     if port.is_empty()
         || !port.bytes().all(|byte| byte.is_ascii_digit())
-        || port.parse::<u16>().ok().filter(|value| *value != 0).is_none()
+        || port
+            .parse::<u16>()
+            .ok()
+            .filter(|value| *value != 0)
+            .is_none()
     {
         Err(invalid_request())
     } else {
@@ -953,10 +951,7 @@ fn valid_dns_or_ipv4_host(host: &str) -> bool {
         return false;
     }
     host.split('.').all(|label| {
-        !label.is_empty()
-            && !label.starts_with('-')
-            && !label.ends_with('-')
-            && label.len() <= 63
+        !label.is_empty() && !label.starts_with('-') && !label.ends_with('-') && label.len() <= 63
     })
 }
 
@@ -1107,7 +1102,7 @@ mod tests {
     use haze_sync_api::dto::gdrive::MAX_GDRIVE_STATE_ITEMS;
     use std::cell::RefCell;
     use std::collections::VecDeque;
-    use std::io::{Read as _, Write as _};
+    use std::io::Write as _;
     use std::net::{TcpListener, TcpStream};
     use std::thread;
     use std::time::Instant;
@@ -1329,9 +1324,8 @@ mod tests {
         let (base_url, server) = spawn_loopback_server(|mut stream| {
             read_request_headers(&mut stream);
             thread::sleep(Duration::from_millis(180));
-            let _ = stream.write_all(
-                b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
-            );
+            let _ = stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}");
         });
         let timeout_policy = HttpClientPolicy::new(
             Duration::from_millis(100),
@@ -1426,10 +1420,7 @@ mod tests {
         );
         assert_eq!(
             read_only
-                .compare_and_commit(
-                    &IdempotencyKey::new("safe-key").unwrap(),
-                    &minimal_commit(),
-                )
+                .compare_and_commit(&IdempotencyKey::new("safe-key").unwrap(), &minimal_commit(),)
                 .unwrap_err()
                 .category(),
             DurableStateErrorCategory::ModeDenied
@@ -1494,7 +1485,12 @@ mod tests {
                 DurableStateErrorCategory::Unauthorized,
                 false,
             ),
-            (403, "forbidden", DurableStateErrorCategory::Forbidden, false),
+            (
+                403,
+                "forbidden",
+                DurableStateErrorCategory::Forbidden,
+                false,
+            ),
             (
                 404,
                 "adapter_not_found",
@@ -1623,18 +1619,5 @@ mod tests {
         ] {
             assert!(!rendered.contains(sentinel));
         }
-    }
-
-    /// Temporary fixer diagnostic: Cargo updates the workspace lock before tests
-    /// run. The failing output lets the connector capture the generated lockfile
-    /// without using local git or an untrusted external checkout.
-    #[test]
-    fn emit_generated_lockfile_for_fixer_diagnostics() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../Cargo.lock");
-        let lockfile = std::fs::read_to_string(path).unwrap();
-        eprintln!("BEGIN_GENERATED_LOCKFILE");
-        eprintln!("{lockfile}");
-        eprintln!("END_GENERATED_LOCKFILE");
-        panic!("intentional fixer diagnostic: capture generated Cargo.lock");
     }
 }
