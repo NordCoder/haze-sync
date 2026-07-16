@@ -238,10 +238,7 @@ async fn gdrive_commit_route_is_replay_safe_and_rolls_back_all_partial_facts() {
     )
     .await;
     assert_eq!(status, StatusCode::CONFLICT);
-    assert_eq!(
-        mismatch_response["error"]["code"],
-        "invalid_cursor_state"
-    );
+    assert_eq!(mismatch_response["error"]["code"], "invalid_cursor_state");
     let rendered = mismatch_response.to_string();
     assert!(!rendered.contains("mismatched-generation-private-cursor"));
     assert!(!rendered.contains("generation-mismatch-idempotency-key"));
