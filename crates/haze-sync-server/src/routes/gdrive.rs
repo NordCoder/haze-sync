@@ -215,8 +215,10 @@ async fn commit_state_route(
         }
         Err(error) => {
             let _ = transaction.rollback().await;
-            let (status, response) = commit_error_response(error);
-            Ok((status, Json(response)).into_response())
+            match commit_error_response(error) {
+                Ok((status, response)) => Ok((status, Json(response)).into_response()),
+                Err(error) => Err(error),
+            }
         }
     }
 }
@@ -590,36 +592,39 @@ fn to_i64(value: u64) -> Result<i64, GDriveHttpError> {
     i64::try_from(value).map_err(|_| GDriveHttpError::validation())
 }
 
-fn commit_error_response(error: RepositoryError) -> (StatusCode, GDriveStateCommitResponse) {
+fn commit_error_response(
+    error: RepositoryError,
+) -> Result<(StatusCode, GDriveStateCommitResponse), GDriveHttpError> {
     match error {
-        RepositoryError::GDriveStateStaleExpected => {
-            (StatusCode::CONFLICT, GDriveStateCommitResponse::StaleState)
-        }
-        RepositoryError::CursorRegression | RepositoryError::CheckpointRegression => (
+        RepositoryError::GDriveStateStaleExpected => Ok((
+            StatusCode::CONFLICT,
+            GDriveStateCommitResponse::StaleState,
+        )),
+        RepositoryError::CursorRegression | RepositoryError::CheckpointRegression => Ok((
             StatusCode::CONFLICT,
             GDriveStateCommitResponse::CursorRegression,
-        ),
-        RepositoryError::CursorGap => (StatusCode::CONFLICT, GDriveStateCommitResponse::CursorGap),
-        RepositoryError::GDriveCursorGenerationMismatch => {
-            (StatusCode::CONFLICT, GDriveStateCommitResponse::CursorGap)
-        }
-        RepositoryError::GDriveOperationConflict => (
+        )),
+        RepositoryError::CursorGap => Ok((
+            StatusCode::CONFLICT,
+            GDriveStateCommitResponse::CursorGap,
+        )),
+        RepositoryError::GDriveCursorGenerationMismatch => Err(GDriveHttpError::from_route(
+            GDriveStateRouteError::InvalidCursorState,
+        )),
+        RepositoryError::GDriveOperationConflict => Ok((
             StatusCode::CONFLICT,
             GDriveStateCommitResponse::IdempotencyConflict,
-        ),
+        )),
         RepositoryError::InvalidPath
         | RepositoryError::InvalidIdentifier
         | RepositoryError::InvalidHash
         | RepositoryError::InvalidProviderMetadata
         | RepositoryError::InvalidOperationKind
-        | RepositoryError::InvalidSequence => (
+        | RepositoryError::InvalidSequence => Ok((
             StatusCode::UNPROCESSABLE_ENTITY,
             GDriveStateCommitResponse::ValidationFailed,
-        ),
-        _ => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            GDriveStateCommitResponse::ValidationFailed,
-        ),
+        )),
+        _ => Err(GDriveHttpError::internal()),
     }
 }
 
