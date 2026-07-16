@@ -96,10 +96,9 @@ mod tests {
         assert_eq!(missing.key(), ENV_ADAPTER_ID);
 
         let sentinel = "invalid adapter identity sentinel";
-        let invalid = AdapterIdentity::load_from_source(&MemoryIdentitySource(Some(
-            sentinel.to_owned(),
-        )))
-        .expect_err("invalid identity must fail");
+        let invalid =
+            AdapterIdentity::load_from_source(&MemoryIdentitySource(Some(sentinel.to_owned())))
+                .expect_err("invalid identity must fail");
         assert_eq!(invalid.category(), ConfigErrorCategory::Invalid);
         assert!(!invalid.to_string().contains(sentinel));
     }
