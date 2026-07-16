@@ -116,3 +116,13 @@ Branch: component/server
 Summary: Extracted reusable async Server application services for authoritative file PUT, guarded DELETE, bounded changes, and verified revision-content retrieval. HTTP routes now retain transport parsing, authentication, authorization, DTO and status mapping while application services own transaction, path-lock, idempotency, Core planning, object-store and Storage choreography. Added typed internal actors/outcomes, deterministic path-hashed future Worktree idempotency derivation, strict DB-backed service tests and route parity tests. Removed the former route-private file planning/persistence modules. No Worktree executor, scheduler, public API, schema, configuration, Cargo or workflow behavior was added.
 Status: SELF_ACCEPT_PENDING_CI
 Follow-ups: resolve the exact diagnostics artifact for the final code-bearing Component CI run, then perform mandatory clean-code review only after authoritative green CI.
+
+### 2026-07-16 — W1/SRV-GDA-P1
+
+Agent: implementation-worker
+Branch: component/server
+Current code-bearing SHA: `94375e36976c87b62e524c0f1cb490224b778179`
+Component CI: run `29487536775`, run number `2034`; fmt/check/test/clippy success, diagnostics finalizer failure
+Summary: Fanned in the accepted API and Storage Google Drive durable-state contracts exactly, implemented authenticated bounded state-read and compare-and-commit HTTP transaction boundaries, and added Server-owned real PostgreSQL route tests for authorization, private/admin visibility, commit/replay, optimistic concurrency, cursor and mapping conflicts, rollback, redaction and adapter isolation.
+Status: SELF_NEEDS_FIX
+Follow-ups: run exact-SHA CI after this implementation-log alignment and route any remaining diagnostics-only failure to an artifact-first fixer without changing accepted API or Storage contracts.
