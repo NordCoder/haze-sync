@@ -3,39 +3,35 @@
 component: gdrive-adapter
 repository: NordCoder/haze-sync
 branch: component/gdrive-adapter
-status: PROMPT_READY
+status: BLOCKED_BY_DEPENDENCY
 repository_access_verified: yes
 control_ref_source: component/gdrive-adapter
 default_branch_control_is_active: no
 
 active_prompt: crates/haze-gdrive-adapter/control/prompt.md
-active_report: crates/haze-gdrive-adapter/control/report.md
-active_agent_role: clean-code-reviewer
-assigned_chat_name: gdrive-adapter — W1 GDA-GDA-P3 OAuth Security Review Rerun
+active_report: none
+active_agent_role: orchestrator-hold
+assigned_chat_name: none
 
 wave: W1
-phase: GDA-GDA-P3-CLEAN-REVIEW-RERUN
+phase: GDA-GDA-P3-ACCEPTED-DEPENDENCY-HOLD
 implementation_status: COMPLETE_AFTER_REVIEW_FIX
 fix_status: FIX_COMPLETE
-clean_review_status: RERUN_NOT_STARTED
+clean_review_status: CLEAN_ACCEPT
 ci_status: CI_GREEN
 architect_status: ARCHITECT_ACCEPT_GDRIVE_FAN_IN
 
-review_candidate:
+accepted_candidate:
 - code_bearing_sha: 7f00a60641ca157907d0e75e4ab1bb47c05f03c9
-- prior_clean_review_report_blob: ec281ebc5f3f5343887d339d7f676977587ab738
-- review_fixer_report_blob: 08ff97333d6089e77cbf48cc21baa8a90fce3588
+- clean_review_report_blob: 27a465aabd66975f2c519516d8086292639d5cd0
 - ci_run_id: 29486777334
 - ci_run_number: 2032
 - ci_conclusion: success
 
-required_review:
-- deterministic explicit token time boundary
-- post-refresh minimum-lifetime enforcement
-- no caching of unusable refreshed tokens
-- fixed-time lifecycle coverage
-- preserved credential, redaction and fake-only boundaries
+blocking_dependency:
+- server_phase: SRV-GDA-P1-CLEAN-FUNCTIONAL-REVIEW
+- required_status: CLEAN_ACCEPT
 
 next_gate:
-- CLEAN_ACCEPT -> next sequential GDrive owner phase
-- CLEAN_NEEDS_FIX -> focused GDrive fixer loop
+- accepted Server routes -> GDA-GDA-P2-HTTP-AND-DURABLE-STATE-CLIENT
+- runtime phase waits for accepted P2 and P3
