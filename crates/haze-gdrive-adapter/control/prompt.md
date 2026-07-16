@@ -1,43 +1,67 @@
-# W1-GDA-GDA-P2-CLEAN-REVIEW-RERUN
+# W1-FIX-GDA-GDA-P2-LOCKFILE-RECOVERY
 
 Before starting, name this worker chat exactly:
 
-`gdrive-adapter — W1 GDA-GDA-P2 HTTP Security Review Rerun`
+`gdrive-adapter — W1 FIX-GDA-GDA-P2 Lockfile Recovery`
 
 Repository: `NordCoder/haze-sync`
 Component: gdrive-adapter
 Path: `crates/haze-gdrive-adapter`
 Branch/ref: `component/gdrive-adapter`
 PR: #50
-Role: clean-code-reviewer
-Phase: `GDA-GDA-P2-CLEAN-REVIEW-RERUN`
+Role: fixer-worker
+Phase: `FIX-GDA-GDA-P2-LOCKFILE-RECOVERY`
 
-Review exact code-bearing SHA `d63094949c12453f98b28647aa6b3a56b55177e1`.
+This is a control-integrity and lockfile recovery fixer for `GDA-GDA-P2-HTTP-AND-DURABLE-STATE-CLIENT`. Do not begin the long-running runtime.
 
-Authoritative evidence:
-- implementation report blob: `4574f7a8e3a91892062b86c329025011ea332c71`;
-- prior clean-review report blob: `e84988ad9aea6881f142b30c98461c2279a08106`;
-- HTTP-security fixer report blob: `ae20c8c1bc6bbe4f4f03c000a1be46d99d99bacf`;
-- Component CI run `29520792538`, run number `2057`, success;
-- accepted API GDrive SHA: `c60c3976696da1970d539e5cff6e9f74a61fc10e`;
-- accepted Server GDrive SHA: `c023b83e1e6f502e7d2261acccb871dd5588edf1`;
-- accepted OAuth/auth SHA: `7f00a60641ca157907d0e75e4ab1bb47c05f03c9`.
+## Corrected authoritative coordinates
 
-Repeat the focused HTTP/security/contract review and verify all prior findings are closed:
-1. `UreqHttpTransport` applies a bounded whole-request deadline while preserving a separate connect bound and bounded response-body reading.
-2. Concrete timeout failures become the safe typed timeout category; dependency errors, URLs, headers and bodies remain redacted.
-3. Server endpoint configuration is origin-only HTTP(S): no userinfo, query, fragment or non-root path prefix; exact accepted `/v1` routes are constructed.
-4. `AdapterConfig` and `AdapterRuntime` Debug do not expose server endpoint, provider root id, adapter identity, bearer token or OAuth secret path.
-5. Provider-root and endpoint sentinel tests cover all log-ready formatting surfaces.
-6. Committed `Cargo.lock` contains the final GDrive HTTP dependency graph and matches the Cargo-generated lock blob `882be8e8ce61ac4c77e8bdaec45d1cbaa030aa86`.
-7. Exact accepted API owner files remain byte-identical; GET/POST contracts, mode-before-transport gating, strict decoding, pagination bounds, retry classification and no automatic POST retry remain intact.
-8. Tests remain loopback/fake-only with no live Server, Google endpoint, credentials or external network.
-9. No direct DB, provider synchronization, long-running runtime, status-control, CLI, Deployment, sibling or workflow expansion was introduced.
+The previous fixer report claimed a candidate and CI run that do not exist. They are not accepted evidence.
 
-Do not change product code, tests, dependencies, docs or workflows. Write only `crates/haze-gdrive-adapter/control/report.md` with:
-- `REPORT_TYPE: CLEAN_CODE_REVIEW`;
-- `phase_id: GDA-GDA-P2-CLEAN-REVIEW-RERUN`;
-- `chat_name: gdrive-adapter — W1 GDA-GDA-P2 HTTP Security Review Rerun`;
-- status `CLEAN_ACCEPT`, `CLEAN_NEEDS_FIX`, `CLEAN_BLOCKED_BY_CONTRACT`, or `CLEAN_BLOCKED_BY_TOOLING`.
+- actual last product commit: `8aa7616152bd24711bb6a494170885c4d4a5bbe1`;
+- actual committed Cargo.lock blob: `256a4fe0c39f2a2d40511aec1f74f3ebb064428a`;
+- actual failing Component CI: run `29519686947`, number `2058`;
+- diagnostics artifact: `8384159071`;
+- blocked clean-review report blob: `e907d38bb27d422715061b30647bdf34577f7fc3`;
+- prior inaccurate fixer report blob: `ae20c8c1bc6bbe4f4f03c000a1be46d99d99bacf`.
 
-Record closure of each prior finding, exact API identity, transport/URL/redaction/lockfile evidence and exact CI. `CLEAN_ACCEPT` authorizes `GDA-GDA-P4-LONG-RUNNING-RUNTIME` but does not claim deployment or merge readiness.
+Verified failure: the committed lockfile contains registry checksums that differ from Cargo registry metadata. Commit `8aa761...` manually changed checksum text. This is invalid.
+
+## Required protocol
+
+1. Read artifact `8384159071` first: `summary.md`, `manifest.json`, every failure marker, and every failed-check log. Use raw job logs only if the artifact is unavailable or incomplete.
+2. Regenerate the complete `Cargo.lock` using Cargo from the final workspace manifests. Never manually edit, copy, guess or patch registry checksum fields.
+3. Commit the exact Cargo-generated lockfile. Do not change unrelated dependency intent.
+4. Preserve the currently reachable non-lock fixes unless CI proves a focused defect:
+   - bounded whole-request deadline and timeout classification;
+   - origin-only Server endpoint and exact accepted `/v1` routes;
+   - AdapterConfig/AdapterRuntime provider-root and endpoint redaction;
+   - byte-identical accepted API owner files;
+   - mode gating, pagination, strict decoding and no automatic POST retry.
+5. Obtain a real, resolvable code-bearing commit SHA and full exact-SHA Component CI with fmt/check/test/clippy and diagnostics finalization green. Record only coordinates verified through GitHub.
+6. Verify the committed `Cargo.lock` blob equals the exact generated file used by the green build. A `--locked` check is preferred where available.
+7. If the available execution environment cannot generate a trustworthy lockfile through Cargo, report `FIX_BLOCKED_BY_TOOLING`. Do not fabricate a SHA, blob or CI run.
+
+## Allowed scope
+
+- `Cargo.lock`;
+- GDrive manifests only if Cargo proves a minimal manifest correction is necessary;
+- focused GDrive tests only if the artifact proves another regression;
+- control report.
+
+## Forbidden
+
+- manual registry checksum editing;
+- invented or unverified commit/blob/run identifiers;
+- API/Server/Storage/Core semantic changes;
+- runtime loop, provider synchronization, direct DB, status-control, CLI or Deployment work;
+- workflow changes, test weakening, live credentials or external-network CI;
+- merge, rebase, force-push or PR draft-state changes.
+
+Create product/lockfile changes without CI skip. Write only `crates/haze-gdrive-adapter/control/report.md` with:
+- `REPORT_TYPE: FIX`;
+- `phase_id: FIX-GDA-GDA-P2-LOCKFILE-RECOVERY`;
+- `chat_name: gdrive-adapter — W1 FIX-GDA-GDA-P2 Lockfile Recovery`;
+- status `FIX_COMPLETE`, `FIX_NEEDS_MORE`, `FIX_BLOCKED_BY_LOGS`, `FIX_BLOCKED_BY_TOOLING`, or `FIX_BLOCKED_BY_CONTRACT`.
+
+Record artifact files read, exact Cargo generation method, final lockfile blob, real final code-bearing SHA and real exact-SHA CI. Do not claim CLEAN_ACCEPT; a repeat HTTP/security review follows.
