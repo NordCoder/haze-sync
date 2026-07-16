@@ -596,18 +596,16 @@ fn commit_error_response(
     error: RepositoryError,
 ) -> Result<(StatusCode, GDriveStateCommitResponse), GDriveHttpError> {
     match error {
-        RepositoryError::GDriveStateStaleExpected => Ok((
-            StatusCode::CONFLICT,
-            GDriveStateCommitResponse::StaleState,
-        )),
+        RepositoryError::GDriveStateStaleExpected => {
+            Ok((StatusCode::CONFLICT, GDriveStateCommitResponse::StaleState))
+        }
         RepositoryError::CursorRegression | RepositoryError::CheckpointRegression => Ok((
             StatusCode::CONFLICT,
             GDriveStateCommitResponse::CursorRegression,
         )),
-        RepositoryError::CursorGap => Ok((
-            StatusCode::CONFLICT,
-            GDriveStateCommitResponse::CursorGap,
-        )),
+        RepositoryError::CursorGap => {
+            Ok((StatusCode::CONFLICT, GDriveStateCommitResponse::CursorGap))
+        }
         RepositoryError::GDriveCursorGenerationMismatch => Err(GDriveHttpError::from_route(
             GDriveStateRouteError::InvalidCursorState,
         )),
