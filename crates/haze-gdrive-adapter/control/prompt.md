@@ -1,43 +1,59 @@
-# W1-GDA-GDA-P3-CLEAN-REVIEW
+# W1-FIX-GDA-GDA-P3-REVIEW
 
 Before starting, name this worker chat exactly:
 
-`gdrive-adapter — W1 GDA-GDA-P3 OAuth Security Review`
+`gdrive-adapter — W1 FIX-GDA-GDA-P3 OAuth Expiry`
 
 Repository: `NordCoder/haze-sync`
 Component: gdrive-adapter
 Path: `crates/haze-gdrive-adapter`
 Branch/ref: `component/gdrive-adapter`
 PR: #50
-Role: clean-code-reviewer
-Phase: `GDA-GDA-P3-CLEAN-REVIEW`
+Role: fixer-worker
+Phase: `FIX-GDA-GDA-P3-REVIEW`
 
-Review exact code-bearing SHA `cf86aba890df6dcfb95f1d285677ceacf96a7772`.
+This is a focused review-fixer for the existing `GDA-GDA-P3-LIVE-GOOGLE-OAUTH` phase. Do not begin another GDrive product phase.
 
-Authoritative evidence:
-- implementation report blob: `5f0aea2859eba8575f3c8e302b72a09ca7aa24fc`;
-- CI fixer report blob: `e33d265a28c2f56fff60d5e528c4f7dfd6a0e2a8`;
-- Component CI run `29456659157`, run number `2026`, success;
-- accepted config/mode SHA: `fcc04afd1fe9808656d9bc2effbfff7160efe9fc`;
-- config clean-review blob: `d9bc16c1a50755ccaecd1b51add231bf52e7e35f`.
+Review target:
+- code-bearing SHA: `cf86aba890df6dcfb95f1d285677ceacf96a7772`;
+- clean-review report blob: `ec281ebc5f3f5343887d339d7f676977587ab738`;
+- green CI run: `29456659157`, number `2026`.
 
-Review only the completed OAuth/credential/auth boundary:
-1. versioned bounded credential-file parsing is strict and fail-closed;
-2. credential file remains read-only and refreshed access tokens remain memory-only;
-3. secret-path validation and all Debug/Display/error surfaces redact credentials, tokens, authorization metadata, provider bodies, endpoints and paths;
-4. token refresh expiry/minimum-lifetime handling is bounded and deterministic;
-5. revoked, insufficient-scope, refresh-unavailable and provider-unavailable categories are safe and correctly retry-classified;
-6. startup preflight is observation-only and performs no provider mutation;
-7. token/provider abstractions are fakeable and ordinary CI requires no real credentials or network;
-8. no Server/API, Storage, scheduler, Deployment, sibling or workflow behavior was introduced;
-9. tests cover malformed/missing/duplicate/unknown fields, refresh lifecycle, scope/revocation, safe errors and redaction without weakening.
+The review found one blocking lifecycle defect:
+- token construction validates expiry against hidden wall-clock `SystemTime::now()`;
+- `GoogleAuthClient::access_token(now)` does not revalidate a refreshed token against its explicit caller-provided `now` before caching/returning it;
+- a refreshed token can therefore be returned below the required minimum lifetime for the caller's time boundary.
 
-Inspect the exact implementation and tests. Do not change product code. If a defect exists, report `CLEAN_NEEDS_FIX`; otherwise report `CLEAN_ACCEPT`.
+Required fix:
+1. Make access-token construction/validation deterministic with an explicit reference time, or otherwise remove hidden wall-clock validation from the model.
+2. After refresh, validate the returned token against the same `now` passed to `access_token(now)` before storing or returning it.
+3. Reject a refreshed token below `MIN_TOKEN_LIFETIME` as the accepted safe `RefreshUnavailable` category without exposing provider details.
+4. Add deterministic tests for:
+   - an expired cached token causing refresh;
+   - a refreshed token usable for the caller-provided time being cached/returned;
+   - a refreshed token below the minimum lifetime being rejected and not cached;
+   - existing valid cached-token behavior remaining unchanged.
+5. Preserve the read-only credential-file contract, memory-only token lifecycle, auth/scope/provider categories, retry classification, observation-only preflight, redaction and fake-only tests.
+
+Allowed scope:
+- `crates/haze-gdrive-adapter/src/auth.rs`;
+- focused GDrive auth tests;
+- minimal docs only if an internal timing contract must be clarified;
+- control report.
+
+Forbidden:
+- real credentials or network calls;
+- credential-file writes;
+- Server/API/Storage/scheduler/Deployment/sibling/workflow changes;
+- unrelated refactors or test weakening;
+- merge, rebase, force-push or PR draft-state changes.
+
+Create code/test changes without CI skip. Obtain a new full exact-SHA Component CI run with fmt/check/test/clippy and diagnostics finalization green.
 
 Write only `crates/haze-gdrive-adapter/control/report.md` with:
-- `REPORT_TYPE: CLEAN_CODE_REVIEW`;
-- `phase_id: GDA-GDA-P3-CLEAN-REVIEW`;
-- `chat_name: gdrive-adapter — W1 GDA-GDA-P3 OAuth Security Review`;
-- status `CLEAN_ACCEPT` or `CLEAN_NEEDS_FIX`.
+- `REPORT_TYPE: FIX`;
+- `phase_id: FIX-GDA-GDA-P3-REVIEW`;
+- `chat_name: gdrive-adapter — W1 FIX-GDA-GDA-P3 OAuth Expiry`;
+- status `FIX_COMPLETE`, `FIX_NEEDS_MORE`, `FIX_BLOCKED_BY_CONTRACT`, or `FIX_BLOCKED_BY_TOOLING`.
 
-Record reviewed SHA, security findings, redaction/auth lifecycle evidence and exact CI. Do not claim deployment or repository merge readiness.
+Record exact changed paths, deterministic time model, post-refresh validation, lifecycle tests, final code-bearing SHA and exact CI. Do not claim CLEAN_ACCEPT; a repeat OAuth/security clean review follows.
