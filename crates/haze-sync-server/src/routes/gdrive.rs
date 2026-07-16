@@ -9,15 +9,13 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use haze_sync_api::{
-    auth::AdapterPrincipal,
     contracts::headers::IDEMPOTENCY_KEY_HEADER,
     dto::{
         gdrive::{
             GDriveCursorSummaryDto, GDriveDeleteCandidateFactsDto, GDriveEchoFactsDto,
             GDriveEchoStateDto, GDriveLastOperationsSummaryDto, GDriveMappingFactsDto,
-            GDriveOperationKindDto, GDriveProviderIdentifierDto, GDriveStateAdminSummaryResponse,
-            GDriveStateCommitRequest, GDriveStateCommitResponse, GDriveStateErrorResponse,
-            GDriveStateSnapshotResponse,
+            GDriveOperationKindDto, GDriveProviderIdentifierDto, GDriveStateCommitRequest,
+            GDriveStateCommitResponse, GDriveStateErrorResponse, GDriveStateSnapshotResponse,
         },
         primitives::{AdapterIdDto, OperationIdDto, RevisionIdDto, TimestampDto, VaultPathDto},
     },
@@ -83,6 +81,8 @@ async fn get_state_route(
         Some(&principal),
     )
     .map_err(GDriveHttpError::from_route)?;
+    let limit = u32::try_from(request.limit())
+        .map_err(|_| GDriveHttpError::from_route(GDriveStateRouteError::ValidationError))?;
     let pool = state
         .db_pool()
         .ok_or_else(|| GDriveHttpError::from_route(GDriveStateRouteError::Unavailable))?;
@@ -90,24 +90,44 @@ async fn get_state_route(
         .begin()
         .await
         .map_err(|_| GDriveHttpError::internal())?;
-    verify_gdrive_adapter(&mut transaction, request.adapter_id())
-        .await
-        .map_err(|error| rollback_error(&mut transaction, error).await)?;
-    let limit = u32::try_from(request.limit())
-        .map_err(|_| GDriveHttpError::from_route(GDriveStateRouteError::ValidationError))?;
-    let page = load_gdrive_state_snapshot(
+
+    if let Err(error) = verify_gdrive_adapter(&mut transaction, request.adapter_id()).await {
+        let _ = transaction.rollback().await;
+        return Err(error);
+    }
+
+    let page = match load_gdrive_state_snapshot(
         &mut transaction,
         request.adapter_id(),
         request.after_path(),
         limit,
     )
     .await
-    .map_err(|error| rollback_repository(&mut transaction, error).await)?
-    .ok_or_else(|| GDriveHttpError::from_route(GDriveStateRouteError::AdapterNotFound))?;
-    let snapshot = snapshot_response(page).map_err(|error| {
-        GDriveHttpError::from_route(error)
-    })?;
-    validate_private_snapshot(&snapshot).map_err(GDriveHttpError::from_route)?;
+    {
+        Ok(Some(page)) => page,
+        Ok(None) => {
+            let _ = transaction.rollback().await;
+            return Err(GDriveHttpError::from_route(
+                GDriveStateRouteError::AdapterNotFound,
+            ));
+        }
+        Err(error) => {
+            let _ = transaction.rollback().await;
+            return Err(repository_error(error));
+        }
+    };
+
+    let snapshot = match snapshot_response(page) {
+        Ok(snapshot) => snapshot,
+        Err(error) => {
+            let _ = transaction.rollback().await;
+            return Err(error);
+        }
+    };
+    if let Err(error) = validate_private_snapshot(&snapshot) {
+        let _ = transaction.rollback().await;
+        return Err(GDriveHttpError::from_route(error));
+    }
     transaction
         .commit()
         .await
@@ -118,8 +138,8 @@ async fn get_state_route(
             Ok((StatusCode::OK, Json(snapshot)).into_response())
         }
         GDriveStateReadAccess::AdminSanitized => {
-            let summary = sanitize_snapshot_for_admin(&snapshot)
-                .map_err(GDriveHttpError::from_route)?;
+            let summary =
+                sanitize_snapshot_for_admin(&snapshot).map_err(GDriveHttpError::from_route)?;
             Ok((StatusCode::OK, Json(summary)).into_response())
         }
     }
@@ -156,9 +176,12 @@ async fn commit_state_route(
         .begin()
         .await
         .map_err(|_| GDriveHttpError::internal())?;
-    verify_gdrive_adapter(&mut transaction, request.adapter_id())
-        .await
-        .map_err(|error| rollback_error(&mut transaction, error).await)?;
+
+    if let Err(error) = verify_gdrive_adapter(&mut transaction, request.adapter_id()).await {
+        let _ = transaction.rollback().await;
+        return Err(error);
+    }
+
     let storage_input = prepared.as_storage_input();
     let outcome = compare_and_commit_gdrive_state(&mut transaction, &storage_input).await;
     match outcome {
@@ -212,28 +235,16 @@ async fn verify_gdrive_adapter(
         .try_get("role")
         .map_err(|_| GDriveHttpError::internal())?;
     if role != "gdrive_adapter" {
-        return Err(GDriveHttpError::from_route(GDriveStateRouteError::Forbidden));
+        return Err(GDriveHttpError::from_route(
+            GDriveStateRouteError::Forbidden,
+        ));
     }
     Ok(())
 }
 
-async fn rollback_error(
-    transaction: &mut Transaction<'_, Postgres>,
-    error: GDriveHttpError,
-) -> GDriveHttpError {
-    let _ = transaction.rollback().await;
-    error
-}
-
-async fn rollback_repository(
-    transaction: &mut Transaction<'_, Postgres>,
-    error: RepositoryError,
-) -> GDriveHttpError {
-    let _ = transaction.rollback().await;
-    repository_error(error)
-}
-
-fn snapshot_response(page: GDriveStateSnapshotPage) -> Result<GDriveStateSnapshotResponse, GDriveHttpError> {
+fn snapshot_response(
+    page: GDriveStateSnapshotPage,
+) -> Result<GDriveStateSnapshotResponse, GDriveHttpError> {
     let mappings = page
         .items
         .into_iter()
@@ -327,7 +338,9 @@ fn mapping_response(row: GDriveDurableItemRow) -> Result<GDriveMappingFactsDto, 
     })
 }
 
-fn parse_provider_identifier(value: String) -> Result<GDriveProviderIdentifierDto, GDriveHttpError> {
+fn parse_provider_identifier(
+    value: String,
+) -> Result<GDriveProviderIdentifierDto, GDriveHttpError> {
     GDriveProviderIdentifierDto::parse(value).map_err(|_| GDriveHttpError::internal())
 }
 
@@ -390,10 +403,16 @@ impl PreparedCommit {
             .cursor
             .advance
             .as_ref()
-            .map(|advance| GDriveCursor::parse(advance.cursor.expose_for_private_commit().to_owned()))
+            .map(|advance| {
+                GDriveCursor::parse(advance.cursor.expose_for_private_commit().to_owned())
+            })
             .transpose()
             .map_err(repository_error)?;
-        let item = body.mapping.as_ref().map(PreparedItem::try_from).transpose()?;
+        let item = body
+            .mapping
+            .as_ref()
+            .map(PreparedItem::try_from)
+            .transpose()?;
         Ok(Self {
             adapter_id,
             expected_state_version: to_i64(body.expected_state_version)?,
@@ -440,10 +459,7 @@ impl PreparedCommit {
     }
 
     fn as_storage_input(&self) -> GDriveStateCommit<'_> {
-        let cursor_advance = match (
-            self.cursor.as_ref(),
-            self.cursor_next_generation,
-        ) {
+        let cursor_advance = match (self.cursor.as_ref(), self.cursor_next_generation) {
             (Some(cursor), Some(next_generation)) => Some(GDriveCursorAdvance {
                 cursor,
                 expected_generation: self.cursor_expected_generation,
@@ -505,8 +521,12 @@ impl TryFrom<&GDriveMappingFactsDto> for PreparedItem {
                 .transpose()
                 .map_err(|_| GDriveHttpError::validation())?,
             echo_provider_version: private_id(value.echo.provider_version.as_ref()),
-            delete_candidate_first_seen_at: parse_timestamp(candidate.map(|item| &item.first_seen_at))?,
-            delete_candidate_last_seen_at: parse_timestamp(candidate.map(|item| &item.last_seen_at))?,
+            delete_candidate_first_seen_at: parse_timestamp(
+                candidate.map(|item| &item.first_seen_at),
+            )?,
+            delete_candidate_last_seen_at: parse_timestamp(
+                candidate.map(|item| &item.last_seen_at),
+            )?,
             delete_candidate_generation: candidate
                 .map(|item| to_i64(item.generation))
                 .transpose()?,
@@ -555,7 +575,9 @@ fn private_id(value: Option<&GDriveProviderIdentifierDto>) -> Option<String> {
     value.map(|value| value.expose_for_private_transport().to_owned())
 }
 
-fn parse_timestamp(value: Option<&TimestampDto>) -> Result<Option<DateTime<Utc>>, GDriveHttpError> {
+fn parse_timestamp(
+    value: Option<&TimestampDto>,
+) -> Result<Option<DateTime<Utc>>, GDriveHttpError> {
     value
         .map(|value| {
             DateTime::parse_from_rfc3339(value.as_str())
