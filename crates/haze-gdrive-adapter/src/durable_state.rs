@@ -372,20 +372,14 @@ impl DurableStateClientError {
             DurableStateErrorCategory::TransportUnavailable => {
                 "durable-state transport is unavailable"
             }
-            DurableStateErrorCategory::ServiceUnavailable => {
-                "durable-state service is unavailable"
-            }
+            DurableStateErrorCategory::ServiceUnavailable => "durable-state service is unavailable",
             DurableStateErrorCategory::Internal => "durable-state service failed safely",
             DurableStateErrorCategory::MalformedResponse => "durable-state response is malformed",
             DurableStateErrorCategory::ResponseTooLarge => {
                 "durable-state response exceeds the configured bound"
             }
-            DurableStateErrorCategory::RedirectRefused => {
-                "durable-state redirect was refused"
-            }
-            DurableStateErrorCategory::PaginationLoop => {
-                "durable-state pagination did not advance"
-            }
+            DurableStateErrorCategory::RedirectRefused => "durable-state redirect was refused",
+            DurableStateErrorCategory::PaginationLoop => "durable-state pagination did not advance",
             DurableStateErrorCategory::PaginationLimit => {
                 "durable-state pagination exceeded the configured bound"
             }
@@ -425,9 +419,7 @@ impl Error for DurableStateClientError {}
 impl From<HttpTransportError> for DurableStateClientError {
     fn from(error: HttpTransportError) -> Self {
         match error {
-            HttpTransportError::Timeout => {
-                Self::new(DurableStateErrorCategory::TransportTimeout)
-            }
+            HttpTransportError::Timeout => Self::new(DurableStateErrorCategory::TransportTimeout),
             HttpTransportError::Unavailable => {
                 Self::new(DurableStateErrorCategory::TransportUnavailable)
             }
@@ -505,10 +497,7 @@ pub trait DurableStateClient {
         limit: usize,
     ) -> Result<GDriveStateSnapshotResponse, DurableStateClientError>;
 
-    fn collect_state(
-        &self,
-        limit: usize,
-    ) -> Result<CollectedGDriveState, DurableStateClientError>;
+    fn collect_state(&self, limit: usize) -> Result<CollectedGDriveState, DurableStateClientError>;
 
     fn compare_and_commit(
         &self,
@@ -586,9 +575,8 @@ impl<T> HttpDurableStateClient<T> {
         body: &GDriveStateCommitRequest,
     ) -> Result<HttpRequest, DurableStateClientError> {
         let route = route_for_identity(GDRIVE_STATE_COMMIT_ROUTE, &self.identity);
-        let body = serde_json::to_vec(body).map_err(|_| {
-            DurableStateClientError::new(DurableStateErrorCategory::InvalidRequest)
-        })?;
+        let body = serde_json::to_vec(body)
+            .map_err(|_| DurableStateClientError::new(DurableStateErrorCategory::InvalidRequest))?;
         Ok(HttpRequest {
             method: HttpMethod::Post,
             url: format!("{}{}", self.base_url, route),
@@ -659,10 +647,7 @@ impl<T: HttpTransport> DurableStateClient for HttpDurableStateClient<T> {
         Ok(snapshot)
     }
 
-    fn collect_state(
-        &self,
-        limit: usize,
-    ) -> Result<CollectedGDriveState, DurableStateClientError> {
+    fn collect_state(&self, limit: usize) -> Result<CollectedGDriveState, DurableStateClientError> {
         let mut after_path: Option<VaultPath> = None;
         let mut seen_paths = BTreeSet::new();
         let mut baseline: Option<SnapshotSignature> = None;
@@ -814,10 +799,7 @@ impl<C: DurableStateClient> DurableStateClient for ModeAwareDurableStateClient<C
         self.inner.get_state_page(after_path, limit)
     }
 
-    fn collect_state(
-        &self,
-        limit: usize,
-    ) -> Result<CollectedGDriveState, DurableStateClientError> {
+    fn collect_state(&self, limit: usize) -> Result<CollectedGDriveState, DurableStateClientError> {
         if !self.mode.permits_core_reads() {
             return Err(DurableStateClientError::new(
                 DurableStateErrorCategory::ModeDenied,
@@ -840,9 +822,7 @@ impl<C: DurableStateClient> DurableStateClient for ModeAwareDurableStateClient<C
     }
 }
 
-fn validate_and_normalize_server_url(
-    server_url: &str,
-) -> Result<String, DurableStateClientError> {
+fn validate_and_normalize_server_url(server_url: &str) -> Result<String, DurableStateClientError> {
     if server_url.is_empty()
         || server_url.chars().any(char::is_whitespace)
         || server_url.contains('?')
@@ -855,9 +835,7 @@ fn validate_and_normalize_server_url(
     let rest = server_url
         .strip_prefix("https://")
         .or_else(|| server_url.strip_prefix("http://"))
-        .ok_or_else(|| {
-            DurableStateClientError::new(DurableStateErrorCategory::InvalidRequest)
-        })?;
+        .ok_or_else(|| DurableStateClientError::new(DurableStateErrorCategory::InvalidRequest))?;
     let authority = rest.split('/').next().unwrap_or_default();
     if authority.is_empty() || authority.contains('@') {
         return Err(DurableStateClientError::new(
