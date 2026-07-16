@@ -1,63 +1,43 @@
-# W1-FIX-SRV-GDA-P1-OUTCOME-MAPPING
+# W1-SRV-GDA-P1-CLEAN-FUNCTIONAL-REVIEW-RERUN
 
 Before starting, name this worker chat exactly:
 
-`server — W1 FIX-SRV-GDA-P1 Outcome Mapping`
+`server — W1 SRV-GDA-P1 Clean Functional Review Rerun`
 
 Repository: `NordCoder/haze-sync`
 Component: server
 Path: `crates/haze-sync-server`
 Branch/ref: `component/server`
 PR: #45
-Role: fixer-worker
-Phase: `FIX-SRV-GDA-P1-OUTCOME-MAPPING`
+Role: clean-code-reviewer
+Phase: `SRV-GDA-P1-CLEAN-FUNCTIONAL-REVIEW-RERUN`
 
-This is a focused review-fixer for the existing `SRV-GDA-P1-STATE-ROUTES-AND-TRANSACTIONS` phase. Do not begin another Server product phase.
+Review exact code-bearing SHA `c023b83e1e6f502e7d2261acccb871dd5588edf1`.
 
-Review target:
-- code-bearing SHA: `b0ae522229bbc6422763a2cd075b995768346963`;
-- clean-review report blob: `d4fe8c9150184f34383d708048d402df7c008078`;
-- DB-capable green Component CI run: `29490745222`, number `2041`.
+Authoritative evidence:
+- initial implementation report blob: `ad664f9a0dce10c6e49fffedec9a40b74366816c`;
+- completion implementation report blob: `efc05e8e2a903e7197b90cc996d471f753f5a7fa`;
+- CI fixer report blob: `7df311e91b8a4e7023b02568304cdeb77b3e9c2e`;
+- prior clean-review report blob: `d4fe8c9150184f34383d708048d402df7c008078`;
+- outcome-mapping fixer report blob: `2c8feb9d05e07c68f9e6b501a4098d96d2f0f1c0`;
+- Component CI run `29494321838`, run number `2045`, success and DB-capable;
+- accepted API GDrive SHA: `c60c3976696da1970d539e5cff6e9f74a61fc10e`;
+- accepted Storage GDrive SHA: `3617bd1cf947fdd394f1ab29d4b992f7b8859a84`.
 
-The review accepted authorization, route registration, transaction ownership, rollback atomicity, dependency identity, PostgreSQL route evidence, concurrency/replay/isolation and secrecy. Fix only these two blocking Server outcome mappings:
+Repeat the focused Server review and verify the two prior findings are closed:
+1. persisted cursor-generation mismatch returns HTTP 409 route error `invalid_cursor_state`, not the `cursor_gap` commit outcome;
+2. `DatabaseOperationFailed`, unsupported state version, overflow and other internal/unexpected repository failures return the safe HTTP 500 `internal` envelope after rollback;
+3. `validation_failed` remains limited to genuine caller/storage validation categories;
+4. real PostgreSQL route tests prove mismatched persisted generation causes no state mutation;
+5. internal database failure leaves no partial state and exposes no private cursor, provider, idempotency, SQLx or database information;
+6. accepted API and Storage owner files remain byte-identical;
+7. route registration, authorization, caller-owned transactions, committed/replayed behavior, stale/gap/regression/mapping/idempotency outcomes, concurrency, isolation and redaction remain intact;
+8. no provider/OAuth/Core policy/scheduler/status-control/CLI/Deployment/sibling/workflow expansion was introduced.
 
-1. `RepositoryError::GDriveCursorGenerationMismatch` must not map to the `cursor_gap` commit outcome.
-   - After rollback, return the accepted fixed HTTP 409 route error envelope with code `invalid_cursor_state`.
-   - Add a real PostgreSQL route test using the current state version with a mismatched persisted cursor generation.
-   - Prove the response category and no state mutation.
+Do not change product code, tests, dependencies, docs or workflows. Write only `crates/haze-sync-server/control/report.md` with:
+- `REPORT_TYPE: CLEAN_CODE_REVIEW`;
+- `phase_id: SRV-GDA-P1-CLEAN-FUNCTIONAL-REVIEW-RERUN`;
+- `chat_name: server — W1 SRV-GDA-P1 Clean Functional Review Rerun`;
+- status `CLEAN_ACCEPT`, `CLEAN_NEEDS_FIX`, `CLEAN_BLOCKED_BY_CONTRACT`, or `CLEAN_BLOCKED_BY_TOOLING`.
 
-2. Internal or unexpected Storage failures must not map to caller-facing `validation_failed`.
-   - `DatabaseOperationFailed`, `UnsupportedGDriveStateVersion`, `StateVersionOverflow` and other internal/unexpected invariant failures must return the accepted safe HTTP 500 `internal` error envelope after rollback.
-   - Keep `validation_failed` only for genuine request/storage validation categories.
-   - Update the existing rollback PostgreSQL test to assert the internal envelope while preserving all no-partial-facts and secrecy assertions.
-
-Allowed scope:
-- `crates/haze-sync-server/src/routes/gdrive.rs`;
-- focused Server GDrive route/PostgreSQL tests;
-- minimal Server docs only if outcome mapping documentation must be corrected;
-- control report.
-
-Preserve:
-- accepted API and Storage files byte-identical to owner refs;
-- existing route paths and authorization;
-- caller-owned transaction choreography;
-- committed/replayed commit behavior;
-- stale, cursor gap/regression, mapping and idempotency outcomes;
-- rollback, concurrency, isolation and redaction coverage.
-
-Forbidden:
-- API or Storage contract/schema edits;
-- provider/OAuth/Core policy/scheduler/status-control/CLI/Deployment work;
-- sibling or workflow changes;
-- raw cursor, provider facts, Idempotency-Key, request body, SQLx/database errors or URLs in output;
-- test weakening, merge, rebase, force-push or PR draft-state changes.
-
-Create code/test changes without CI skip. Obtain full exact-SHA DB-capable Component CI with fmt/check/test/clippy, Server/PostgreSQL tests and diagnostics finalization green.
-
-Write only `crates/haze-sync-server/control/report.md` with:
-- `REPORT_TYPE: FIX`;
-- `phase_id: FIX-SRV-GDA-P1-OUTCOME-MAPPING`;
-- `chat_name: server — W1 FIX-SRV-GDA-P1 Outcome Mapping`;
-- status `FIX_COMPLETE`, `FIX_NEEDS_MORE`, `FIX_BLOCKED_BY_CONTRACT`, or `FIX_BLOCKED_BY_TOOLING`.
-
-Record exact error mapping, changed tests, rollback evidence, final code-bearing SHA and exact DB-capable CI. Do not claim CLEAN_ACCEPT; a repeat clean functional review follows.
+Record reviewed SHA, closure of both outcome-mapping findings, rollback/secrecy evidence and exact DB-capable CI. `CLEAN_ACCEPT` accepts Server GDrive routes and unblocks `GDA-GDA-P2-HTTP-AND-DURABLE-STATE-CLIENT`.
