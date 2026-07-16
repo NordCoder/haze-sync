@@ -12,7 +12,7 @@ use haze_sync_api::contracts::headers::{
 use haze_sync_api::dto::gdrive::{
     GDriveLastOperationsSummaryDto, GDriveMappingFactsDto, GDriveStateCommitRequest,
     GDriveStateCommitResponse, GDriveStateErrorCode, GDriveStateErrorResponse,
-    GDriveStateSnapshotResponse, MAX_GDRIVE_STATE_ITEMS,
+    GDriveStateSnapshotResponse,
 };
 use haze_sync_api::routes::gdrive::{
     validate_private_snapshot, GDRIVE_STATE_COMMIT_ROUTE, GDRIVE_STATE_ROUTE,
@@ -245,7 +245,10 @@ fn read_bounded_ureq_response(
 }
 
 fn map_io_error(error: io::Error) -> HttpTransportError {
-    if matches!(error.kind(), io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock) {
+    if matches!(
+        error.kind(),
+        io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
+    ) {
         HttpTransportError::Timeout
     } else {
         HttpTransportError::Unavailable
@@ -356,13 +359,9 @@ impl DurableStateClientError {
             DurableStateErrorCategory::StateVersionMismatch => {
                 "durable-state version does not match"
             }
-            DurableStateErrorCategory::InvalidCursorState => {
-                "durable cursor state is invalid"
-            }
+            DurableStateErrorCategory::InvalidCursorState => "durable cursor state is invalid",
             DurableStateErrorCategory::StaleState => "durable state is stale",
-            DurableStateErrorCategory::CursorRegression => {
-                "durable cursor would regress"
-            }
+            DurableStateErrorCategory::CursorRegression => "durable cursor would regress",
             DurableStateErrorCategory::CursorGap => "durable cursor contains a gap",
             DurableStateErrorCategory::MappingConflict => "durable mapping facts conflict",
             DurableStateErrorCategory::IdempotencyConflict => {
@@ -377,9 +376,7 @@ impl DurableStateClientError {
                 "durable-state service is unavailable"
             }
             DurableStateErrorCategory::Internal => "durable-state service failed safely",
-            DurableStateErrorCategory::MalformedResponse => {
-                "durable-state response is malformed"
-            }
+            DurableStateErrorCategory::MalformedResponse => "durable-state response is malformed",
             DurableStateErrorCategory::ResponseTooLarge => {
                 "durable-state response exceeds the configured bound"
             }
@@ -899,9 +896,8 @@ fn decode_commit_response(
     status: u16,
     body: &[u8],
 ) -> Result<GDriveStateCommitResponse, DurableStateClientError> {
-    let value: serde_json::Value = serde_json::from_slice(body).map_err(|_| {
-        DurableStateClientError::new(DurableStateErrorCategory::MalformedResponse)
-    })?;
+    let value: serde_json::Value = serde_json::from_slice(body)
+        .map_err(|_| DurableStateClientError::new(DurableStateErrorCategory::MalformedResponse))?;
     let object = value.as_object().ok_or_else(|| {
         DurableStateClientError::new(DurableStateErrorCategory::MalformedResponse)
     })?;
@@ -919,8 +915,12 @@ fn decode_commit_response(
             "core_export_checkpoint",
         ],
         "replayed" => &["status", "state_version"],
-        "stale_state" | "cursor_regression" | "cursor_gap" | "mapping_conflict"
-        | "idempotency_conflict" | "validation_failed" => &["status"],
+        "stale_state"
+        | "cursor_regression"
+        | "cursor_gap"
+        | "mapping_conflict"
+        | "idempotency_conflict"
+        | "validation_failed" => &["status"],
         _ => {
             return Err(DurableStateClientError::new(
                 DurableStateErrorCategory::MalformedResponse,
@@ -934,26 +934,23 @@ fn decode_commit_response(
             DurableStateErrorCategory::MalformedResponse,
         ));
     }
-    let response: GDriveStateCommitResponse = serde_json::from_value(value).map_err(|_| {
-        DurableStateClientError::new(DurableStateErrorCategory::MalformedResponse)
-    })?;
-    let status_matches = match (&response, status) {
+    let response: GDriveStateCommitResponse = serde_json::from_value(value)
+        .map_err(|_| DurableStateClientError::new(DurableStateErrorCategory::MalformedResponse))?;
+    let status_matches = matches!(
+        (&response, status),
         (
             GDriveStateCommitResponse::Committed { .. }
-            | GDriveStateCommitResponse::Replayed { .. },
+                | GDriveStateCommitResponse::Replayed { .. },
             200,
-        ) => true,
-        (
+        ) | (
             GDriveStateCommitResponse::StaleState
-            | GDriveStateCommitResponse::CursorRegression
-            | GDriveStateCommitResponse::CursorGap
-            | GDriveStateCommitResponse::MappingConflict
-            | GDriveStateCommitResponse::IdempotencyConflict,
+                | GDriveStateCommitResponse::CursorRegression
+                | GDriveStateCommitResponse::CursorGap
+                | GDriveStateCommitResponse::MappingConflict
+                | GDriveStateCommitResponse::IdempotencyConflict,
             409,
-        ) => true,
-        (GDriveStateCommitResponse::ValidationFailed, 422) => true,
-        _ => false,
-    };
+        ) | (GDriveStateCommitResponse::ValidationFailed, 422)
+    );
     if !status_matches {
         return Err(DurableStateClientError::new(
             DurableStateErrorCategory::MalformedResponse,
@@ -965,10 +962,8 @@ fn decode_commit_response(
 fn decode_route_error(
     response: &HttpResponse,
 ) -> Result<DurableStateClientError, DurableStateClientError> {
-    let envelope: GDriveStateErrorResponse =
-        serde_json::from_slice(response.body_for_decoder()).map_err(|_| {
-            DurableStateClientError::new(DurableStateErrorCategory::MalformedResponse)
-        })?;
+    let envelope: GDriveStateErrorResponse = serde_json::from_slice(response.body_for_decoder())
+        .map_err(|_| DurableStateClientError::new(DurableStateErrorCategory::MalformedResponse))?;
     if envelope.error.message.is_empty()
         || envelope.error.message.len() > MAX_SAFE_ERROR_MESSAGE_BYTES
         || envelope.error.message.chars().any(char::is_control)
@@ -992,17 +987,13 @@ fn decode_route_error(
             DurableStateErrorCategory::CursorRegression
         }
         (409, GDriveStateErrorCode::CursorGap) => DurableStateErrorCategory::CursorGap,
-        (409, GDriveStateErrorCode::MappingConflict) => {
-            DurableStateErrorCategory::MappingConflict
-        }
+        (409, GDriveStateErrorCode::MappingConflict) => DurableStateErrorCategory::MappingConflict,
         (409, GDriveStateErrorCode::IdempotencyConflict) => {
             DurableStateErrorCategory::IdempotencyConflict
         }
         (422, GDriveStateErrorCode::ValidationError) => DurableStateErrorCategory::Validation,
         (500, GDriveStateErrorCode::Internal) => DurableStateErrorCategory::Internal,
-        (503, GDriveStateErrorCode::Unavailable) => {
-            DurableStateErrorCategory::ServiceUnavailable
-        }
+        (503, GDriveStateErrorCode::Unavailable) => DurableStateErrorCategory::ServiceUnavailable,
         _ => {
             return Err(DurableStateClientError::new(
                 DurableStateErrorCategory::MalformedResponse,
@@ -1016,6 +1007,7 @@ fn decode_route_error(
 mod tests {
     use super::*;
     use haze_sync_api::contracts::headers::IdempotencyKey;
+    use haze_sync_api::dto::gdrive::MAX_GDRIVE_STATE_ITEMS;
     use std::cell::RefCell;
     use std::collections::VecDeque;
 
@@ -1203,7 +1195,10 @@ mod tests {
             policy(8_192, 4, 1),
         );
         assert_eq!(
-            item_limited.collect_state(2).expect_err("item bound").category(),
+            item_limited
+                .collect_state(2)
+                .expect_err("item bound")
+                .category(),
             DurableStateErrorCategory::CollectionTooLarge
         );
 
@@ -1215,7 +1210,10 @@ mod tests {
             policy(8_192, 1, 10),
         );
         assert_eq!(
-            page_limited.collect_state(1).expect_err("page bound").category(),
+            page_limited
+                .collect_state(1)
+                .expect_err("page bound")
+                .category(),
             DurableStateErrorCategory::PaginationLimit
         );
     }
@@ -1223,7 +1221,10 @@ mod tests {
     #[test]
     fn exact_post_headers_body_and_every_accepted_outcome_decode() {
         let cases = [
-            (200, r#"{"status":"committed","state_version":8,"cursor_generation":4,"core_export_checkpoint":20}"#),
+            (
+                200,
+                r#"{"status":"committed","state_version":8,"cursor_generation":4,"core_export_checkpoint":20}"#,
+            ),
             (200, r#"{"status":"replayed","state_version":8}"#),
             (409, r#"{"status":"stale_state"}"#),
             (409, r#"{"status":"cursor_regression"}"#),
@@ -1278,9 +1279,24 @@ mod tests {
     #[test]
     fn route_error_envelopes_have_exact_safe_retry_classification() {
         let cases = [
-            (401, "unauthorized", DurableStateErrorCategory::Unauthorized, false),
-            (403, "forbidden", DurableStateErrorCategory::Forbidden, false),
-            (404, "adapter_not_found", DurableStateErrorCategory::NotFound, false),
+            (
+                401,
+                "unauthorized",
+                DurableStateErrorCategory::Unauthorized,
+                false,
+            ),
+            (
+                403,
+                "forbidden",
+                DurableStateErrorCategory::Forbidden,
+                false,
+            ),
+            (
+                404,
+                "adapter_not_found",
+                DurableStateErrorCategory::NotFound,
+                false,
+            ),
             (
                 409,
                 "state_version_mismatch",
@@ -1293,7 +1309,12 @@ mod tests {
                 DurableStateErrorCategory::InvalidCursorState,
                 false,
             ),
-            (422, "validation_error", DurableStateErrorCategory::Validation, false),
+            (
+                422,
+                "validation_error",
+                DurableStateErrorCategory::Validation,
+                false,
+            ),
             (500, "internal", DurableStateErrorCategory::Internal, true),
             (
                 503,
@@ -1312,7 +1333,7 @@ mod tests {
                 .expect_err("route error expected");
             assert_eq!(error.category(), category);
             assert_eq!(error.is_retryable(), retryable);
-            assert!(!error.to_string().contains(code));
+            assert!(!error.to_string().contains("safe fixed message"));
         }
     }
 
@@ -1394,7 +1415,10 @@ mod tests {
                 &minimal_commit(),
             )
             .expect_err("unknown response field");
-        assert_eq!(error.category(), DurableStateErrorCategory::MalformedResponse);
+        assert_eq!(
+            error.category(),
+            DurableStateErrorCategory::MalformedResponse
+        );
     }
 
     #[test]
@@ -1420,8 +1444,7 @@ mod tests {
             ))],
             policy(8_192, 4, 10),
         );
-        let read_only =
-            ModeAwareDurableStateClient::new(AdapterMode::ReadOnly, read_only_client);
+        let read_only = ModeAwareDurableStateClient::new(AdapterMode::ReadOnly, read_only_client);
         assert_eq!(
             read_only
                 .compare_and_commit(
@@ -1466,7 +1489,9 @@ mod tests {
             page_count: 1,
         };
         let error = DurableStateClientError::new(DurableStateErrorCategory::Internal);
-        let rendered = format!("{client:?} {request:?} {request} {response:?} {collection:?} {error:?} {error}");
+        let rendered = format!(
+            "{client:?} {request:?} {request} {response:?} {collection:?} {error:?} {error}"
+        );
         for sentinel in [
             "sentinel-adapter-token",
             "gdrive-main",
@@ -1489,10 +1514,7 @@ mod tests {
                     200,
                     snapshot_json(Some("Notes/a.md"), &["Notes/0.md"]),
                 )),
-                Ok(HttpResponse::new(
-                    200,
-                    snapshot_json(None, &["Notes/a.md"]),
-                )),
+                Ok(HttpResponse::new(200, snapshot_json(None, &["Notes/a.md"]))),
             ],
             policy(8_192, 4, 10),
         );
