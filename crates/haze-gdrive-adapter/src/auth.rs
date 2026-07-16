@@ -193,6 +193,14 @@ const fn invalid_credentials() -> AuthError {
     )
 }
 
+const fn refresh_unavailable() -> AuthError {
+    AuthError::new(
+        AuthErrorCategory::RefreshUnavailable,
+        true,
+        "Google access-token refresh is unavailable",
+    )
+}
+
 pub struct TokenRefreshRequest<'a> {
     token_uri: &'a str,
     client_id: &'a str,
@@ -219,18 +227,8 @@ pub struct AccessToken {
 }
 
 impl AccessToken {
-    pub fn new(value: SecretString, expires_at: SystemTime) -> Result<Self, AuthError> {
-        let remaining = expires_at
-            .duration_since(SystemTime::now())
-            .unwrap_or_default();
-        if remaining < MIN_TOKEN_LIFETIME {
-            return Err(AuthError::new(
-                AuthErrorCategory::RefreshUnavailable,
-                true,
-                "Google access-token refresh is unavailable",
-            ));
-        }
-        Ok(Self { value, expires_at })
+    pub fn new(value: SecretString, expires_at: SystemTime) -> Self {
+        Self { value, expires_at }
     }
 
     pub fn is_usable_at(&self, now: SystemTime) -> bool {
@@ -278,15 +276,16 @@ impl<T: TokenEndpoint> GoogleAuthClient<T> {
             .unwrap_or(true);
         if needs_refresh {
             let request = self.credentials.refresh_request();
-            self.access_token = Some(self.endpoint.refresh(request)?);
+            let refreshed = self.endpoint.refresh(request)?;
+            if !refreshed.is_usable_at(now) {
+                self.access_token = None;
+                return Err(refresh_unavailable());
+            }
+            self.access_token = Some(refreshed);
         }
-        self.access_token.as_ref().ok_or_else(|| {
-            AuthError::new(
-                AuthErrorCategory::RefreshUnavailable,
-                true,
-                "Google access-token refresh is unavailable",
-            )
-        })
+        self.access_token
+            .as_ref()
+            .ok_or_else(refresh_unavailable)
     }
 }
 
@@ -394,6 +393,24 @@ mod tests {
         )
     }
 
+    fn fixed_now() -> SystemTime {
+        SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000)
+    }
+
+    fn token(value: &str, expires_at: SystemTime) -> AccessToken {
+        AccessToken::new(
+            SecretString::from_raw("test", value).expect("secret"),
+            expires_at,
+        )
+    }
+
+    fn auth_client(endpoint: FakeTokenEndpoint) -> GoogleAuthClient<FakeTokenEndpoint> {
+        GoogleAuthClient::new(
+            GoogleCredentials::parse(&valid_credentials()).expect("credentials"),
+            endpoint,
+        )
+    }
+
     #[test]
     fn parses_versioned_credentials_and_redacts_every_surface() {
         let credentials = GoogleCredentials::parse(&valid_credentials()).expect("valid fixture");
@@ -419,23 +436,89 @@ mod tests {
     }
 
     #[test]
-    fn expired_token_refreshes_in_memory() {
-        let credentials = GoogleCredentials::parse(&valid_credentials()).expect("credentials");
-        let refreshed = AccessToken::new(
-            SecretString::from_raw("test", "synthetic-access").expect("secret"),
-            SystemTime::now() + Duration::from_secs(300),
-        )
-        .expect("token");
+    fn expired_cached_token_causes_refresh() {
+        let now = fixed_now();
         let endpoint = FakeTokenEndpoint {
             refreshes: 0,
-            next: Some(Ok(refreshed)),
+            next: Some(Ok(token(
+                "refreshed-access",
+                now + Duration::from_secs(300),
+            ))),
         };
-        let mut client = GoogleAuthClient::new(credentials, endpoint);
-        let token = client
-            .access_token(SystemTime::now())
-            .expect("refresh should succeed");
-        assert_eq!(token.expose_for_authorization(), "synthetic-access");
-        assert!(!format!("{token:?}").contains("synthetic-access"));
+        let mut client = auth_client(endpoint);
+        client.access_token = Some(token(
+            "expired-access",
+            now.checked_sub(Duration::from_secs(1))
+                .expect("fixed time supports subtraction"),
+        ));
+
+        let refreshed = client.access_token(now).expect("refresh should succeed");
+
+        assert_eq!(refreshed.expose_for_authorization(), "refreshed-access");
+        assert_eq!(client.endpoint.refreshes, 1);
+    }
+
+    #[test]
+    fn usable_refreshed_token_is_cached_and_reused() {
+        let now = fixed_now();
+        let endpoint = FakeTokenEndpoint {
+            refreshes: 0,
+            next: Some(Ok(token(
+                "refreshed-access",
+                now + Duration::from_secs(300),
+            ))),
+        };
+        let mut client = auth_client(endpoint);
+
+        let first = client.access_token(now).expect("refresh should succeed");
+        assert_eq!(first.expose_for_authorization(), "refreshed-access");
+        let second = client
+            .access_token(now + Duration::from_secs(10))
+            .expect("cached token should remain usable");
+
+        assert_eq!(second.expose_for_authorization(), "refreshed-access");
+        assert_eq!(client.endpoint.refreshes, 1);
+    }
+
+    #[test]
+    fn too_short_refreshed_token_is_rejected_and_not_cached() {
+        let now = fixed_now();
+        let endpoint = FakeTokenEndpoint {
+            refreshes: 0,
+            next: Some(Ok(token(
+                "too-short-access",
+                now + Duration::from_secs(29),
+            ))),
+        };
+        let mut client = auth_client(endpoint);
+
+        let error = client
+            .access_token(now)
+            .expect_err("short refreshed token must fail closed");
+
+        assert_eq!(error.category(), AuthErrorCategory::RefreshUnavailable);
+        assert!(error.is_retryable());
+        assert!(client.access_token.is_none());
+        assert_eq!(client.endpoint.refreshes, 1);
+        assert!(!error.to_string().contains("too-short-access"));
+    }
+
+    #[test]
+    fn valid_cached_token_is_returned_without_refresh() {
+        let now = fixed_now();
+        let mut client = auth_client(FakeTokenEndpoint::default());
+        client.access_token = Some(token(
+            "cached-access",
+            now + Duration::from_secs(300),
+        ));
+
+        let cached = client
+            .access_token(now)
+            .expect("cached token should remain usable");
+
+        assert_eq!(cached.expose_for_authorization(), "cached-access");
+        assert_eq!(client.endpoint.refreshes, 0);
+        assert!(!format!("{cached:?}").contains("cached-access"));
     }
 
     #[test]
