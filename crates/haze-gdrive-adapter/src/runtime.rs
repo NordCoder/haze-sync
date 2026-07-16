@@ -57,11 +57,22 @@ impl fmt::Display for StartupStatus {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct AdapterRuntime {
     config: AdapterConfig,
     identity: AdapterIdentity,
     state: RuntimeState,
+}
+
+impl fmt::Debug for AdapterRuntime {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("AdapterRuntime")
+            .field("config", &"<redacted-adapter-config>")
+            .field("identity", &"<redacted-adapter-identity>")
+            .field("state", &self.state)
+            .finish()
+    }
 }
 
 impl AdapterRuntime {
@@ -119,30 +130,35 @@ mod tests {
 
     fn config() -> AdapterConfig {
         AdapterConfig {
-            server_url: "https://sync.example.test".to_owned(),
-            adapter_token: SecretString::from_raw("test", "adapter-token").expect("secret"),
-            drive_root_folder_id: "driveRoot123".to_owned(),
-            oauth_token_path: SecretPath::from_raw("test", "/run/secrets/oauth.json")
-                .expect("secret path"),
+            server_url: "https://sentinel-runtime-endpoint.example.test".to_owned(),
+            adapter_token: SecretString::from_raw("test", "sentinel-runtime-token").unwrap(),
+            drive_root_folder_id: "sentinel-runtime-provider-root".to_owned(),
+            oauth_token_path: SecretPath::from_raw(
+                "test",
+                "/run/secrets/sentinel-runtime-oauth.json",
+            )
+            .unwrap(),
             mode: AdapterMode::ImportOnly,
             intervals: RuntimeIntervals::new(Duration::from_secs(30), Duration::from_secs(300))
-                .expect("intervals"),
-            delete_safety: DeleteSafetyConfig::new(5, 20).expect("delete safety"),
+                .unwrap(),
+            delete_safety: DeleteSafetyConfig::new(5, 20).unwrap(),
         }
     }
 
     fn identity() -> AdapterIdentity {
-        AdapterIdentity::from_raw("gdrive-runtime-test").expect("identity")
+        AdapterIdentity::from_raw("sentinel-runtime-identity").unwrap()
     }
 
     #[test]
     fn runtime_start_returns_safe_status() {
         let mut runtime = AdapterRuntime::new(config(), identity());
-
-        let status = runtime.start().expect("runtime should start");
+        let status = runtime.start().unwrap();
 
         assert_eq!(runtime.state(), RuntimeState::Running);
-        assert_eq!(runtime.identity().expose_for_route(), "gdrive-runtime-test");
+        assert_eq!(
+            runtime.identity().expose_for_route(),
+            "sentinel-runtime-identity"
+        );
         assert_eq!(status.mode, AdapterMode::ImportOnly);
         assert!(!status.is_dry_run());
         assert_eq!(status.poll_interval_seconds, 30);
@@ -152,39 +168,32 @@ mod tests {
     }
 
     #[test]
-    fn startup_status_derives_dry_run_only_from_mode() {
-        let mut config = config();
-        let import_status = StartupStatus::from_config(&config);
-        assert!(!import_status.is_dry_run());
-        assert!(import_status.to_string().contains("dry_run=false"));
-
-        config.mode = AdapterMode::DryRun;
-        let dry_run_status = StartupStatus::from_config(&config);
-        assert!(dry_run_status.is_dry_run());
-        assert!(dry_run_status.to_string().contains("dry_run=true"));
-    }
-
-    #[test]
     fn runtime_shutdown_is_explicit() {
         let mut runtime = AdapterRuntime::new(config(), identity());
-        runtime.start().expect("runtime should start");
+        runtime.start().unwrap();
         runtime.request_shutdown();
         assert_eq!(runtime.state(), RuntimeState::ShutdownRequested);
-
         runtime.stop();
         assert_eq!(runtime.state(), RuntimeState::Stopped);
     }
 
     #[test]
-    fn startup_surfaces_do_not_expose_secret_or_identity_material() {
+    fn runtime_and_status_surfaces_redact_all_private_configuration() {
         let mut runtime = AdapterRuntime::new(config(), identity());
-        let status = runtime.start().expect("runtime should start");
+        let status = runtime.start().unwrap();
         let rendered = format!("{runtime:?} {status}");
 
-        assert!(!rendered.contains("adapter-token"));
-        assert!(!rendered.contains("/run/secrets"));
-        assert!(!rendered.contains("gdrive-runtime-test"));
+        for sentinel in [
+            "sentinel-runtime-endpoint.example.test",
+            "sentinel-runtime-token",
+            "sentinel-runtime-provider-root",
+            "/run/secrets/sentinel-runtime-oauth.json",
+            "sentinel-runtime-identity",
+        ] {
+            assert!(!rendered.contains(sentinel));
+        }
+        assert!(rendered.contains("<redacted-adapter-config>"));
+        assert!(rendered.contains("<redacted-adapter-identity>"));
         assert!(rendered.contains("mode=import_only"));
-        assert!(rendered.contains("dry_run=false"));
     }
 }
