@@ -10,36 +10,37 @@ default_branch_control_is_active: no
 
 active_prompt: crates/haze-sync-server/control/prompt.md
 active_report: crates/haze-sync-server/control/report.md
-active_agent_role: fixer-worker
-assigned_chat_name: server — W1 FIX-SRV-GDA-P1 Outcome Mapping
+active_agent_role: clean-code-reviewer
+assigned_chat_name: server — W1 SRV-GDA-P1 Clean Functional Review Rerun
 
 wave: W1
-phase: FIX-SRV-GDA-P1-OUTCOME-MAPPING
+phase: SRV-GDA-P1-CLEAN-FUNCTIONAL-REVIEW-RERUN
 implementation_status: COMPLETE_AFTER_CONTINUATION
-fix_status: REVIEW_FIX_NOT_STARTED
-clean_review_status: CLEAN_NEEDS_FIX
-ci_status: CI_GREEN_DB_VERIFIED_ON_REVIEWED_SHA
+fix_status: FIX_COMPLETE
+clean_review_status: RERUN_NOT_STARTED
+ci_status: CI_GREEN_DB_VERIFIED
 architect_status: ARCHITECT_ACCEPT_GDRIVE_FAN_IN
 
 review_candidate:
-- code_bearing_sha: b0ae522229bbc6422763a2cd075b995768346963
-- clean_review_report_blob: d4fe8c9150184f34383d708048d402df7c008078
-- ci_run_id: 29490745222
-- ci_run_number: 2041
+- code_bearing_sha: c023b83e1e6f502e7d2261acccb871dd5588edf1
+- prior_clean_review_report_blob: d4fe8c9150184f34383d708048d402df7c008078
+- outcome_mapping_fixer_report_blob: 2c8feb9d05e07c68f9e6b501a4098d96d2f0f1c0
+- ci_run_id: 29494321838
+- ci_run_number: 2045
 - ci_conclusion: success
 - db_capable: yes
 
-required_fix:
-- map persisted cursor-generation mismatch to invalid_cursor_state
-- map internal and unexpected Storage failures to safe internal envelope
-- keep validation_failed only for genuine validation categories
-- add/update PostgreSQL route assertions with rollback and secrecy evidence
+accepted_dependencies:
+- api_gdrive_sha: c60c3976696da1970d539e5cff6e9f74a61fc10e
+- storage_gdrive_sha: 3617bd1cf947fdd394f1ab29d4b992f7b8859a84
 
-protected_scope:
-- Server outcome mapping and focused route tests only
-- accepted API and Storage owner files remain byte-identical
-- no provider/OAuth/Core policy/status-control/CLI/Deployment/sibling/workflow changes
+required_review:
+- invalid_cursor_state classification for persisted generation mismatch
+- internal envelope for internal/unexpected failures
+- validation_failed limited to genuine validation
+- PostgreSQL rollback and secrecy evidence
+- preserved route, transaction, concurrency, isolation and owner identity boundaries
 
 next_gate:
-- FIX_COMPLETE plus exact-SHA DB-capable green CI -> repeat Server clean functional review
-- unresolved owner mismatch -> FIX_BLOCKED_BY_CONTRACT
+- CLEAN_ACCEPT -> GDA-GDA-P2-HTTP-AND-DURABLE-STATE-CLIENT
+- CLEAN_NEEDS_FIX -> focused Server fixer loop
