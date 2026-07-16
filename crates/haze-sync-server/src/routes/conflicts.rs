@@ -8,3 +8,7 @@ mod gdrive;
 pub fn router() -> axum::Router {
     original::router().merge(gdrive::router())
 }
+
+#[cfg(test)]
+#[path = "gdrive_tests.rs"]
+mod gdrive_tests;
