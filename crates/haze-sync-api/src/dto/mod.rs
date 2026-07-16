@@ -7,6 +7,7 @@ pub mod changes;
 pub mod common;
 pub mod conflicts;
 pub mod files;
+pub mod gdrive;
 pub mod primitives;
 pub mod server;
 pub mod worktree;

@@ -147,4 +147,36 @@ mod tests {
         );
         assert_eq!(serde_json::to_value(&listed).unwrap()[0], "retry later");
     }
+
+    #[test]
+    fn validation_details_use_public_names_without_secret_values() {
+        let raw_idempotency_key = "fixture-idempotency-key-01";
+        let raw_bearer = "fixture-bearer-token-01";
+        let mut details = BTreeMap::new();
+        details.insert(
+            "Idempotency-Key".to_owned(),
+            vec!["is required for write routes".to_owned()],
+        );
+        details.insert(
+            "X-Base-Revision-Id".to_owned(),
+            vec!["must be a revision id or literal null".to_owned()],
+        );
+        details.insert("query.limit".to_owned(), vec!["must be <= 1000".to_owned()]);
+        let response = ErrorResponse {
+            error: PublicError::new(PublicErrorCode::ValidationError, "validation failed")
+                .with_request_id("req_02J")
+                .with_details(SafeErrorDetails::Map(details)),
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+
+        assert!(json.contains("Idempotency-Key"));
+        assert!(json.contains("X-Base-Revision-Id"));
+        assert!(json.contains("query.limit"));
+        assert!(!json.contains(raw_idempotency_key));
+        assert!(!json.contains(raw_bearer));
+        assert!(!json.contains("token_hash"));
+        assert!(!json.contains("database_url"));
+        assert!(!json.contains("stack_trace"));
+    }
 }
