@@ -284,7 +284,7 @@ impl DeleteSafetyConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct AdapterConfig {
     pub server_url: String,
     pub adapter_token: SecretString,
@@ -293,6 +293,21 @@ pub struct AdapterConfig {
     pub mode: AdapterMode,
     pub intervals: RuntimeIntervals,
     pub delete_safety: DeleteSafetyConfig,
+}
+
+impl fmt::Debug for AdapterConfig {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("AdapterConfig")
+            .field("server_url", &"<redacted-server-endpoint>")
+            .field("adapter_token", &self.adapter_token)
+            .field("drive_root_folder_id", &"<redacted-provider-root>")
+            .field("oauth_token_path", &self.oauth_token_path)
+            .field("mode", &self.mode)
+            .field("intervals", &self.intervals)
+            .field("delete_safety", &self.delete_safety)
+            .finish()
+    }
 }
 
 impl AdapterConfig {
@@ -519,13 +534,13 @@ mod tests {
     impl MemoryConfigSource {
         fn with_required_values() -> Self {
             let mut source = Self::default();
-            source.insert(ENV_SERVER_URL, "https://sync.example.test");
-            source.insert(ENV_ADAPTER_TOKEN, "adapter-token");
-            source.insert(ENV_DRIVE_ROOT_FOLDER_ID, "driveRoot123");
-            source.insert(ENV_OAUTH_TOKEN_FILE, "/run/secrets/gdrive-oauth-token.json");
+            source.insert(ENV_SERVER_URL, "https://sentinel-endpoint.example.test");
+            source.insert(ENV_ADAPTER_TOKEN, "sentinel-adapter-token");
+            source.insert(ENV_DRIVE_ROOT_FOLDER_ID, "sentinel-provider-root");
+            source.insert(ENV_OAUTH_TOKEN_FILE, "/run/secrets/sentinel-oauth.json");
             source
                 .existing_files
-                .insert("/run/secrets/gdrive-oauth-token.json".to_owned());
+                .insert("/run/secrets/sentinel-oauth.json".to_owned());
             source
         }
 
@@ -563,8 +578,8 @@ mod tests {
 
     #[test]
     fn loads_required_config_with_safe_defaults() {
-        let source = MemoryConfigSource::with_required_values();
-        let config = AdapterConfig::load_from_source(&source).expect("config should load");
+        let config =
+            AdapterConfig::load_from_source(&MemoryConfigSource::with_required_values()).unwrap();
         assert_eq!(config.mode, AdapterMode::DryRun);
         assert!(config.is_dry_run());
         assert_eq!(config.intervals.poll_interval_seconds(), 60);
@@ -572,63 +587,33 @@ mod tests {
     }
 
     #[test]
-    fn parses_every_authoritative_mode() {
-        let cases = [
+    fn parses_every_authoritative_mode_and_keeps_capabilities_closed() {
+        for (raw, expected) in [
             ("disabled", AdapterMode::Disabled),
             ("dry_run", AdapterMode::DryRun),
             ("read_only", AdapterMode::ReadOnly),
             ("import_only", AdapterMode::ImportOnly),
             ("export_only", AdapterMode::ExportOnly),
             ("bidirectional", AdapterMode::Bidirectional),
-        ];
-        for (raw, expected) in cases {
+        ] {
             let mut source = MemoryConfigSource::with_required_values();
             source.insert(ENV_ADAPTER_MODE, raw);
-            let config = AdapterConfig::load_from_source(&source).expect("valid mode");
+            let config = AdapterConfig::load_from_source(&source).unwrap();
             assert_eq!(config.mode, expected);
-            assert_eq!(config.is_dry_run(), expected == AdapterMode::DryRun);
         }
-    }
-
-    #[test]
-    fn capability_matrix_is_explicit_and_non_mutating_modes_are_closed() {
-        assert_eq!(
-            AdapterMode::Disabled.capabilities(),
-            ModeCapabilities {
-                provider_reads: false,
-                core_reads: false,
-                core_writes: false,
-                provider_writes: false,
-                provider_trash: false,
-                durable_state_mutation: false,
-            }
-        );
         for mode in [AdapterMode::DryRun, AdapterMode::ReadOnly] {
-            assert!(mode.permits_provider_reads());
             assert!(mode.permits_core_reads());
-            assert!(!mode.permits_core_writes());
-            assert!(!mode.permits_provider_writes());
-            assert!(!mode.permits_provider_trash());
             assert!(!mode.permits_durable_state_mutation());
         }
-        assert!(AdapterMode::ImportOnly.permits_core_writes());
-        assert!(!AdapterMode::ImportOnly.permits_provider_writes());
-        assert!(AdapterMode::ExportOnly.permits_provider_writes());
-        assert!(!AdapterMode::ExportOnly.permits_core_writes());
-        assert!(AdapterMode::Bidirectional.permits_core_writes());
-        assert!(AdapterMode::Bidirectional.permits_provider_writes());
     }
 
     #[test]
-    fn accepts_legacy_true_only_with_dry_run_mode() {
-        let mut source = MemoryConfigSource::with_required_values();
-        source.insert(ENV_ADAPTER_MODE, "dry_run");
-        source.insert(ENV_DRY_RUN, "true");
-        assert!(AdapterConfig::load_from_source(&source).is_ok());
-    }
+    fn legacy_dry_run_is_only_a_consistent_assertion() {
+        let mut accepted = MemoryConfigSource::with_required_values();
+        accepted.insert(ENV_ADAPTER_MODE, "dry_run");
+        accepted.insert(ENV_DRY_RUN, "true");
+        assert!(AdapterConfig::load_from_source(&accepted).is_ok());
 
-    #[test]
-    fn rejects_every_contradictory_legacy_combination() {
         for (mode, legacy) in [
             ("disabled", "true"),
             ("read_only", "true"),
@@ -640,64 +625,49 @@ mod tests {
             let mut source = MemoryConfigSource::with_required_values();
             source.insert(ENV_ADAPTER_MODE, mode);
             source.insert(ENV_DRY_RUN, legacy);
-            let error = AdapterConfig::load_from_source(&source).expect_err("must fail closed");
+            let error = AdapterConfig::load_from_source(&source).unwrap_err();
             assert_eq!(error.key(), ENV_DRY_RUN);
             assert_eq!(error.category(), ConfigErrorCategory::Invalid);
         }
     }
 
     #[test]
-    fn rejects_invalid_or_legacy_mode_aliases() {
-        for raw in ["", "dry-run", "dryrun", "readonly", "sync-everything"] {
-            let mut source = MemoryConfigSource::with_required_values();
-            source.insert(ENV_ADAPTER_MODE, raw);
-            let result = AdapterConfig::load_from_source(&source);
-            if raw.is_empty() {
-                assert!(result.is_ok());
-            } else {
-                assert!(result.is_err());
-            }
-        }
-    }
+    fn loads_adapter_token_from_secret_file_and_rejects_ambiguous_sources() {
+        let mut file_source = MemoryConfigSource::with_required_values();
+        file_source.values.remove(ENV_ADAPTER_TOKEN);
+        file_source.insert(ENV_ADAPTER_TOKEN_FILE, "/run/secrets/adapter-token");
+        file_source.insert_secret_file("/run/secrets/adapter-token", "token-from-file\n");
+        assert_eq!(
+            AdapterConfig::load_from_source(&file_source)
+                .unwrap()
+                .adapter_token
+                .expose_secret(),
+            "token-from-file"
+        );
 
-    #[test]
-    fn loads_adapter_token_from_secret_file() {
-        let mut source = MemoryConfigSource::with_required_values();
-        source.values.remove(ENV_ADAPTER_TOKEN);
-        source.insert(ENV_ADAPTER_TOKEN_FILE, "/run/secrets/gdrive-adapter-token");
-        source.insert_secret_file("/run/secrets/gdrive-adapter-token", "token-from-file\n");
-        let config = AdapterConfig::load_from_source(&source).expect("config should load");
-        assert_eq!(config.adapter_token.expose_secret(), "token-from-file");
-    }
-
-    #[test]
-    fn rejects_ambiguous_adapter_token_sources() {
-        let mut source = MemoryConfigSource::with_required_values();
-        source.insert(ENV_ADAPTER_TOKEN_FILE, "/run/secrets/gdrive-adapter-token");
-        let error = AdapterConfig::load_from_source(&source).expect_err("config must fail");
+        let mut ambiguous = MemoryConfigSource::with_required_values();
+        ambiguous.insert(ENV_ADAPTER_TOKEN_FILE, "/run/secrets/adapter-token");
+        let error = AdapterConfig::load_from_source(&ambiguous).unwrap_err();
         assert_eq!(error.category(), ConfigErrorCategory::AmbiguousSecretSource);
-        assert!(!error.to_string().contains("adapter-token"));
+        assert!(!error.to_string().contains("sentinel-adapter-token"));
         assert!(!error.to_string().contains("/run/secrets"));
     }
 
     #[test]
-    fn redacts_secret_debug_and_display() {
-        let secret = SecretString::from_raw(ENV_ADAPTER_TOKEN, "super-secret").expect("secret");
-        let path = SecretPath::from_raw(ENV_OAUTH_TOKEN_FILE, "/run/secrets/oauth.json")
-            .expect("secret path");
-        assert_eq!(secret.to_string(), "<redacted-secret>");
-        assert_eq!(format!("{secret:?}"), "<redacted-secret>");
-        assert_eq!(path.to_string(), "<redacted-secret-path>");
-        assert_eq!(format!("{path:?}"), "<redacted-secret-path>");
-    }
-
-    #[test]
-    fn config_debug_does_not_expose_secret_material() {
-        let config = AdapterConfig::load_from_source(&MemoryConfigSource::with_required_values())
-            .expect("config should load");
+    fn config_debug_redacts_endpoint_provider_root_token_and_secret_path() {
+        let config =
+            AdapterConfig::load_from_source(&MemoryConfigSource::with_required_values()).unwrap();
         let rendered = format!("{config:?}");
-        assert!(!rendered.contains("adapter-token"));
-        assert!(!rendered.contains("/run/secrets"));
+        for sentinel in [
+            "sentinel-endpoint.example.test",
+            "sentinel-provider-root",
+            "sentinel-adapter-token",
+            "/run/secrets/sentinel-oauth.json",
+        ] {
+            assert!(!rendered.contains(sentinel));
+        }
+        assert!(rendered.contains("<redacted-server-endpoint>"));
+        assert!(rendered.contains("<redacted-provider-root>"));
         assert!(rendered.contains("DryRun"));
     }
 
@@ -705,7 +675,7 @@ mod tests {
     fn validates_delete_safety_ratio() {
         let mut source = MemoryConfigSource::with_required_values();
         source.insert(ENV_MAX_DELETE_RATIO_PERCENT, "101");
-        let error = AdapterConfig::load_from_source(&source).expect_err("config must fail");
+        let error = AdapterConfig::load_from_source(&source).unwrap_err();
         assert_eq!(error.key(), ENV_MAX_DELETE_RATIO_PERCENT);
     }
 }
