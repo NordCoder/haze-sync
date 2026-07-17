@@ -1,11 +1,20 @@
 {
   "protocol_version": 3,
-  "revision": 0,
-  "active_orchestrator_dispatch": null,
+  "revision": 1,
+  "active_orchestrator_dispatch": {
+    "orchestrator_execution_id": "orchestrator-20260717102652-509ee26f",
+    "status": "DELIVERY_RESERVED",
+    "role": "orchestrator",
+    "component": null,
+    "chat_key": "orchestrator",
+    "prompt_fingerprint": "880ead145bd1f8f4abe9c7881d5b1c8988f990104f59957da9e7385317b49ec5",
+    "delivery_attempt_id": "delivery-20260717102909-3204a8a9",
+    "reserved_at": "2026-07-17T10:29:09.032Z"
+  },
   "active_agent_batch": null,
   "last_consumed_orchestrator_result": null,
   "not_before": null,
   "completed_executions": [],
   "recent_failures": [],
-  "last_poll": null
+  "last_poll": "2026-07-17T10:29:09.032Z"
 }
