@@ -46,6 +46,17 @@ Summary: Added passive authenticated contracts for bounded Google Drive durable-
 Status: SELF_ACCEPT_PENDING_CI
 Follow-ups: Obtain exact-final-SHA Component CI and then run focused API-GDA-P1 clean review. Server/Storage fan-in and standalone GDrive client work require separate verified control slots.
 
+### 2026-07-17 — W1/API-GDA-P2-PRIVATE-CURSOR-SNAPSHOT-CONTRACT
+
+Agent: Implementation Worker
+Branch: component/api
+Prompt: crates/haze-sync-api/control/prompt.md
+Report: crates/haze-sync-api/control/report.md
+Commit(s): private cursor DTO, passive validation/admin projection, compatibility fixture, focused tests and contract documentation on component/api; exact final code-bearing SHA is recorded in the control report
+Summary: Replaced the private GDrive snapshot cursor summary with strict tagged `absent`/`present` state carrying the existing bounded opaque cursor only for the matching adapter. Added invalid generation/value pair rejection, unchanged cursor-presence admin projection, marker-only Debug/Display, synthetic compatibility evidence and secrecy tests. Existing routes, authorization, pagination, commit/idempotency semantics and public errors remain unchanged. No Server, Storage or GDrive implementation was modified.
+Status: SELF_ACCEPT_PENDING_CI
+Follow-ups: Obtain exact-final-SHA Component CI and focused API clean-code/security review. Server cursor mapping and corrected GDrive client decoding must follow as coordinated gated phases before any deployment event.
+
 ---
 
 Use this format for future entries:
