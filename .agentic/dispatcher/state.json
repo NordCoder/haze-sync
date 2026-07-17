@@ -1,33 +1,36 @@
 {
   "protocol_version": 3,
-  "revision": 6,
-  "active_orchestrator_dispatch": {
+  "revision": 7,
+  "active_orchestrator_dispatch": null,
+  "active_agent_batch": {
+    "batch_id": "orchestrator-20260717122757-3799a1-batch",
     "orchestrator_execution_id": "orchestrator-20260717122757-3799a1",
-    "status": "DISPATCHED_WAITING_GITHUB_RESULT",
-    "reserved_at": "2026-07-17T12:29:32.203Z",
-    "dispatched_at": "2026-07-17T12:31:25.346Z",
-    "chat_key": "orchestrator",
-    "prompt_fingerprint": "bfad6adc4a2dc41130678568cc007e114474ecd0aaaa9bc62b23b6f8c40d5b4a",
-    "delivery_attempt_id": "delivery-20260717122757-archfix-3799a1",
-    "completed_execution_references": [
+    "status": "DELIVERY_RESERVED",
+    "reserved_at": "2026-07-17T12:52:29.975Z",
+    "executions": [
       {
-        "agent_execution_id": "gdrive-adapter-GDA-GDA-P4-cursor-contract-arch-20260717113213-a4c27d91",
-        "component": "gdrive-adapter",
-        "role": "architect",
-        "branch": "component/gdrive-adapter",
-        "report_path": "crates/haze-gdrive-adapter/control/report.md",
-        "report_blob_sha": "dc95fa55d3b707da462beebe56b32d73cd54eb86",
-        "phase": "GDA-GDA-P4-CURSOR-READ-CONTRACT-ARCHITECTURE-REVIEW",
-        "status": "ARCHITECT_CHANGED_CONTRACTS",
-        "completed_at": "2026-07-17T12:29:32.203Z"
+        "agent_execution_id": "api-API-GDA-P2-private-cursor-impl-20260717122757-3799a1",
+        "component": "api",
+        "role": "implementation-worker",
+        "branch": "component/api",
+        "prompt_path": "crates/haze-sync-api/control/prompt.md",
+        "report_path": "crates/haze-sync-api/control/report.md",
+        "prompt_commit_sha": "3c793d6f0e0402f0d5f12986f9cd2cba3c52c18f",
+        "prompt_blob_sha": "8a4008404c3c83876a731e41b7d151c1ca20a569",
+        "wave": "W1",
+        "phase": "API-GDA-P2-PRIVATE-CURSOR-SNAPSHOT-CONTRACT",
+        "chat_key": "5 api",
+        "prompt_fingerprint": "6025939d610121a17f31998ef7ab385555f596eb2cea9cd58b3c67e9902cd427",
+        "delivery_attempt_id": "delivery-20260717125128-api-2fd1f3",
+        "status": "DELIVERY_RESERVED",
+        "reserved_at": "2026-07-17T12:52:29.975Z"
       }
     ]
   },
-  "active_agent_batch": null,
   "last_consumed_orchestrator_result": {
-    "orchestrator_execution_id": "orchestrator-20260717102652-509ee26f",
-    "result_blob_sha": "23320908cd3ba3568a156596d88f2fd68b483295",
-    "consumed_at": "2026-07-17T11:03:20.852Z"
+    "orchestrator_execution_id": "orchestrator-20260717122757-3799a1",
+    "result_blob_sha": "404efcd745e5acf329d7bb1e688fd11f659ad98e",
+    "consumed_at": "2026-07-17T12:52:29.975Z"
   },
   "not_before": null,
   "completed_executions": [
@@ -44,5 +47,5 @@
     }
   ],
   "recent_failures": [],
-  "last_poll": "2026-07-17T12:31:25.346Z"
+  "last_poll": "2026-07-17T12:52:29.975Z"
 }
