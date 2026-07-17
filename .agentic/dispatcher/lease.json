@@ -1,8 +1,8 @@
 {
   "protocol_version": 3,
-  "holder_run_id": null,
-  "lease_token": null,
-  "acquired_at": null,
-  "heartbeat_at": null,
-  "expires_at": null
+  "holder_run_id": "haze-dispatch-20260717122055-d5d84e",
+  "lease_token": "lease-bf0c838231a6e8-3c7de7595b0bc8",
+  "acquired_at": "2026-07-17T12:20:55.464Z",
+  "heartbeat_at": "2026-07-17T12:20:55.464Z",
+  "expires_at": "2026-07-17T12:22:55.464Z"
 }
