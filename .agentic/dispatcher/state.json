@@ -1,0 +1,11 @@
+{
+  "protocol_version": 3,
+  "revision": 0,
+  "active_orchestrator_dispatch": null,
+  "active_agent_batch": null,
+  "last_consumed_orchestrator_result": null,
+  "not_before": null,
+  "completed_executions": [],
+  "recent_failures": [],
+  "last_poll": null
+}
