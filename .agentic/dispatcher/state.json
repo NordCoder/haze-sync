@@ -1,21 +1,39 @@
 {
   "protocol_version": 3,
-  "revision": 2,
-  "active_orchestrator_dispatch": {
+  "revision": 3,
+  "active_orchestrator_dispatch": null,
+  "active_agent_batch": {
+    "batch_id": "orchestrator-20260717102652-509ee26f-batch",
     "orchestrator_execution_id": "orchestrator-20260717102652-509ee26f",
-    "status": "DISPATCHED_WAITING_GITHUB_RESULT",
-    "role": "orchestrator",
-    "component": null,
-    "chat_key": "orchestrator",
-    "prompt_fingerprint": "880ead145bd1f8f4abe9c7881d5b1c8988f990104f59957da9e7385317b49ec5",
-    "delivery_attempt_id": "delivery-20260717102909-3204a8a9",
-    "reserved_at": "2026-07-17T10:29:09.032Z",
-    "dispatched_at": "2026-07-17T10:32:09.592Z"
+    "status": "DELIVERY_RESERVED",
+    "reserved_at": "2026-07-17T11:03:20.852Z",
+    "executions": [
+      {
+        "agent_execution_id": "gdrive-adapter-GDA-GDA-P4-impl-20260717102652-509ee26f",
+        "component": "gdrive-adapter",
+        "role": "implementation-worker",
+        "branch": "component/gdrive-adapter",
+        "prompt_path": "crates/haze-gdrive-adapter/control/prompt.md",
+        "report_path": "crates/haze-gdrive-adapter/control/report.md",
+        "prompt_commit_sha": "e096ffe434ad2d360c4f1afd4a36dfa790774101",
+        "prompt_blob_sha": "246fd253148f855ae79741f2e6e0617297fbeb60",
+        "wave": "W1",
+        "phase": "GDA-GDA-P4-LONG-RUNNING-RUNTIME",
+        "chat_key": "2 gdrive-adapter",
+        "prompt_fingerprint": "025eba1530300471bb9caf8134db883e291a60ab59ba28e29c5b5a93a34f9022",
+        "delivery_attempt_id": "delivery-20260717110320-b3f2c9cb",
+        "status": "DELIVERY_RESERVED",
+        "reserved_at": "2026-07-17T11:03:20.852Z"
+      }
+    ]
   },
-  "active_agent_batch": null,
-  "last_consumed_orchestrator_result": null,
+  "last_consumed_orchestrator_result": {
+    "orchestrator_execution_id": "orchestrator-20260717102652-509ee26f",
+    "result_blob_sha": "23320908cd3ba3568a156596d88f2fd68b483295",
+    "consumed_at": "2026-07-17T11:03:20.852Z"
+  },
   "not_before": null,
   "completed_executions": [],
   "recent_failures": [],
-  "last_poll": "2026-07-17T10:32:09.592Z"
+  "last_poll": "2026-07-17T11:03:20.852Z"
 }
