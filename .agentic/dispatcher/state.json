@@ -1,28 +1,28 @@
 {
   "protocol_version": 3,
-  "revision": 12,
-  "active_orchestrator_dispatch": null,
-  "active_agent_batch": {
-    "batch_id": "api-FIX-API-GDA-P2-ci-diagnostics-20260717163141-ee53d9-batch",
-    "created_at": "2026-07-17T16:31:41.000Z",
-    "executions": [
+  "revision": 13,
+  "active_orchestrator_dispatch": {
+    "orchestrator_execution_id": "orchestrator-20260717171012-ee53d9",
+    "status": "DELIVERY_RESERVED",
+    "reserved_at": "2026-07-17T17:10:12.000Z",
+    "chat_key": "orchestrator",
+    "prompt_fingerprint": "pending",
+    "delivery_attempt_id": "delivery-20260717171012-api-fix-complete-7c1e9a",
+    "completed_execution_references": [
       {
         "agent_execution_id": "api-FIX-API-GDA-P2-ci-diagnostics-20260717130949-ee53d9",
         "component": "api",
         "role": "fixer-worker",
         "branch": "component/api",
-        "prompt_path": "crates/haze-sync-api/control/prompt.md",
         "report_path": "crates/haze-sync-api/control/report.md",
-        "prompt_commit_sha": "bcb952e00c01f86aa04f16a841724e5e3bbb165c",
-        "prompt_blob_sha": "b0200262283f6d8aa2383a5e9de803458b13f9c2",
-        "wave": "W1",
+        "report_blob_sha": "fc0b2c67ee9bb7195ab288eed82392b785033fbb",
         "phase": "FIX-API-GDA-P2-CI-DIAGNOSTICS",
-        "delivery_attempt_id": "delivery-20260717163141-api-fixer-9a1f6d"
+        "status": "FIX_COMPLETE",
+        "completed_at": "2026-07-17T17:10:12.000Z"
       }
-    ],
-    "status": "DISPATCHED_WAITING_GITHUB_RESULT",
-    "dispatched_at": "2026-07-17T16:32:30.000Z"
+    ]
   },
+  "active_agent_batch": null,
   "last_consumed_orchestrator_result": {
     "orchestrator_execution_id": "orchestrator-20260717122757-3799a1",
     "result_blob_sha": "404efcd745e5acf329d7bb1e688fd11f659ad98e",
@@ -51,8 +51,19 @@
       "phase": "API-GDA-P2-PRIVATE-CURSOR-SNAPSHOT-CONTRACT",
       "status": "SELF_NEEDS_FIX",
       "completed_at": "2026-07-17T13:10:39.535Z"
+    },
+    {
+      "agent_execution_id": "api-FIX-API-GDA-P2-ci-diagnostics-20260717130949-ee53d9",
+      "component": "api",
+      "role": "fixer-worker",
+      "branch": "component/api",
+      "report_path": "crates/haze-sync-api/control/report.md",
+      "report_blob_sha": "fc0b2c67ee9bb7195ab288eed82392b785033fbb",
+      "phase": "FIX-API-GDA-P2-CI-DIAGNOSTICS",
+      "status": "FIX_COMPLETE",
+      "completed_at": "2026-07-17T17:10:12.000Z"
     }
   ],
   "recent_failures": [],
-  "last_poll": "2026-07-17T16:32:30.000Z"
+  "last_poll": "2026-07-17T17:10:12.000Z"
 }
