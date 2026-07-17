@@ -10,52 +10,47 @@ default_branch_control_is_active: no
 
 active_prompt: crates/haze-sync-api/control/prompt.md
 active_report: crates/haze-sync-api/control/report.md
-active_agent_role: fixer-worker
-agent_execution_id: api-FIX-API-GDA-P2-ci-diagnostics-20260717130949-ee53d9
+active_agent_role: clean-code-reviewer
+agent_execution_id: api-API-GDA-P2-clean-security-review-20260717181732-ee53d9
 chat_key: api
 
 wave: W1
-phase: FIX-API-GDA-P2-CI-DIAGNOSTICS
-implementation_status: SELF_NEEDS_FIX
-fix_status: NOT_STARTED
+phase: API-GDA-P2-CLEAN-CODE-SECURITY-REVIEW
+implementation_status: COMPLETE_AFTER_FIX
+fix_status: FIX_COMPLETE
 clean_review_status: NOT_STARTED
-ci_status: CI_RED
+ci_status: CI_GREEN
 architect_status: ARCHITECT_CHANGED_CONTRACTS
 
 active_prompt_identity:
-- prompt_commit_sha: bcb952e00c01f86aa04f16a841724e5e3bbb165c
-- prompt_blob_sha: b0200262283f6d8aa2383a5e9de803458b13f9c2
+- prompt_commit_sha: 2a6b5336c0f1f4419e838af9824464af5b07dfe0
+- prompt_blob_sha: 4ac32b46b5cef422bbed665d6517d019c2043593
 
-implementation_candidate:
-- previous_accepted_baseline_sha: c60c3976696da1970d539e5cff6e9f74a61fc10e
-- implementation_code_bearing_sha: 618fda1d01ec636ba95884f5cf8f6a596560381b
+review_candidate:
+- code_bearing_sha: dba43751521c32aca53729c1c8dbddf2e7d8fbfb
 - implementation_report_blob: f60ca2d90b233d541a70451883838dc873d6da49
-- implementation_report_status: SELF_NEEDS_FIX
+- fixer_report_blob: fc0b2c67ee9bb7195ab288eed82392b785033fbb
 - architect_report_blob: dc95fa55d3b707da462beebe56b32d73cd54db86
-
-ci_failure_evidence:
 - workflow: Component CI
-- run_id: 29582479954
-- run_number: 2066
+- run_id: 29585502722
+- run_number: 2069
 - run_attempt: 1
-- conclusion: failure
-- job_id: 87891297074
-- diagnostics_finalizer: failure
-- artifact_id: 8407621247
-- artifact_name: ci-diag__component-api__wf-component-ci__run-29582479954__attempt-1
-- artifact_digest: sha256:077d47353cd09a4575a26cf83a7f7962b9cb667411cbb359aeeb08cac4481ba9
-- artifact_expired: false
+- job_id: 87901373635
+- conclusion: success
+- cargo_fmt: success
+- cargo_check: success
+- cargo_test: success
+- cargo_clippy: success
+- diagnostics_finalizer: success
 
 protected_scope:
-- artifact-first diagnosis
-- minimum API-owned correction only
-- no workflow or sibling-component edits
-- no test weakening or contract rollback
-- no raw cursor, token, provider payload, private path or raw log output
+- focused API clean-code, contract-integrity and secrecy review only
+- report-only execution; no product, test, fixture, docs, dependency, lockfile or workflow edits
+- no Server, Storage, GDrive adapter or sibling-component writes
+- no raw cursor, token, Idempotency-Key, provider payload, private path or raw job log output
 - no merge, rebase, force-push or draft-state changes
 
 next_gate:
-- FIX_COMPLETE with exact-SHA full green CI -> focused API clean-code/security review
-- FIX_NEEDS_MORE -> evaluate latest exact diagnostics
-- blocked status -> route only the proven owner or hold
-- Server remains blocked until API fixer and clean review acceptance
+- CLEAN_ACCEPT on exact candidate -> accept API phase and authorize SRV-GDA-P2-PRIVATE-CURSOR-SNAPSHOT-ROUTE
+- CLEAN_NEEDS_FIX -> one focused API fixer
+- blocked status -> exact hold; Server remains blocked
