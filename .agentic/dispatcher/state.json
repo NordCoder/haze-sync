@@ -6,7 +6,7 @@
     "status": "DELIVERY_RESERVED",
     "reserved_at": "2026-07-17T17:10:12.000Z",
     "chat_key": "orchestrator",
-    "prompt_fingerprint": "pending",
+    "prompt_fingerprint": "80817274ab88b176fd4a857dfecfda758afaf89e8271117bdd6dcdbce0661d92",
     "delivery_attempt_id": "delivery-20260717171012-api-fix-complete-7c1e9a",
     "completed_execution_references": [
       {
