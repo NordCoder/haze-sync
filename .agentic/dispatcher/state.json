@@ -1,33 +1,32 @@
 {
   "protocol_version": 3,
-  "revision": 16,
-  "active_orchestrator_dispatch": {
-    "orchestrator_execution_id": "orchestrator-20260717181732-ee53d9",
-    "status": "DISPATCHED_WAITING_GITHUB_RESULT",
-    "reserved_at": "2026-07-17T18:17:32.000Z",
-    "chat_key": "orchestrator",
-    "prompt_fingerprint": "2e732f85f0aa28b0e4fba2e6e1c51977bee8501c941175a1fbf5119cf4e96cc7",
-    "delivery_attempt_id": "delivery-20260717181732-fresh-reconcile-91c7e2",
-    "completed_execution_references": [
+  "revision": 17,
+  "active_orchestrator_dispatch": null,
+  "active_agent_batch": {
+    "batch_id": "api-API-GDA-P2-clean-security-review-20260717181732-ee53d9-batch",
+    "created_at": "2026-07-17T19:00:00.000Z",
+    "status": "DELIVERY_RESERVED",
+    "executions": [
       {
-        "agent_execution_id": "api-FIX-API-GDA-P2-ci-diagnostics-20260717130949-ee53d9",
+        "agent_execution_id": "api-API-GDA-P2-clean-security-review-20260717181732-ee53d9",
         "component": "api",
-        "role": "fixer-worker",
+        "role": "clean-code-reviewer",
         "branch": "component/api",
+        "prompt_path": "crates/haze-sync-api/control/prompt.md",
         "report_path": "crates/haze-sync-api/control/report.md",
-        "report_blob_sha": "fc0b2c67ee9bb7195ab288eed82392b785033fbb",
-        "phase": "FIX-API-GDA-P2-CI-DIAGNOSTICS",
-        "status": "FIX_COMPLETE",
-        "completed_at": "2026-07-17T17:10:12.000Z"
+        "prompt_commit_sha": "2a6b5336c0f1f4419e838af9824464af5b07dfe0",
+        "prompt_blob_sha": "4ac32b46b5cef422bbed665d6517d019c2043593",
+        "wave": "W1",
+        "phase": "API-GDA-P2-CLEAN-CODE-SECURITY-REVIEW",
+        "delivery_attempt_id": "delivery-20260717190000-api-review-a9d4c1"
       }
     ],
-    "dispatched_at": "2026-07-17T18:18:30.000Z"
+    "reserved_at": "2026-07-17T19:00:00.000Z"
   },
-  "active_agent_batch": null,
   "last_consumed_orchestrator_result": {
-    "orchestrator_execution_id": "orchestrator-20260717122757-3799a1",
-    "result_blob_sha": "404efcd745e5acf329d7bb1e688fd11f659ad98e",
-    "consumed_at": "2026-07-17T12:51:41.000Z"
+    "orchestrator_execution_id": "orchestrator-20260717181732-ee53d9",
+    "result_blob_sha": "f11d6caab604a9605e41ca64c7e0c3ea0b6eb17a",
+    "consumed_at": "2026-07-17T19:00:00.000Z"
   },
   "not_before": null,
   "completed_executions": [
@@ -66,5 +65,5 @@
     }
   ],
   "recent_failures": [],
-  "last_poll": "2026-07-17T18:18:30.000Z"
+  "last_poll": "2026-07-17T19:00:00.000Z"
 }
