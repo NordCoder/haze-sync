@@ -1,9 +1,9 @@
 {
   "protocol_version": 3,
-  "revision": 13,
+  "revision": 14,
   "active_orchestrator_dispatch": {
     "orchestrator_execution_id": "orchestrator-20260717171012-ee53d9",
-    "status": "DELIVERY_RESERVED",
+    "status": "DISPATCHED_WAITING_GITHUB_RESULT",
     "reserved_at": "2026-07-17T17:10:12.000Z",
     "chat_key": "orchestrator",
     "prompt_fingerprint": "80817274ab88b176fd4a857dfecfda758afaf89e8271117bdd6dcdbce0661d92",
@@ -20,7 +20,8 @@
         "status": "FIX_COMPLETE",
         "completed_at": "2026-07-17T17:10:12.000Z"
       }
-    ]
+    ],
+    "dispatched_at": "2026-07-17T17:11:30.000Z"
   },
   "active_agent_batch": null,
   "last_consumed_orchestrator_result": {
@@ -65,5 +66,5 @@
     }
   ],
   "recent_failures": [],
-  "last_poll": "2026-07-17T17:10:12.000Z"
+  "last_poll": "2026-07-17T17:11:30.000Z"
 }
