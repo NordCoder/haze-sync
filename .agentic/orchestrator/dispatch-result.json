@@ -1,21 +1,21 @@
 {
   "protocol_version": 3,
-  "orchestrator_execution_id": "orchestrator-20260717102652-509ee26f",
+  "orchestrator_execution_id": "orchestrator-20260717122757-3799a1",
   "status": "PROMPTS_READY",
   "prepared_executions": [
     {
-      "agent_execution_id": "gdrive-adapter-GDA-GDA-P4-impl-20260717102652-509ee26f",
-      "component": "gdrive-adapter",
+      "agent_execution_id": "api-API-GDA-P2-private-cursor-impl-20260717122757-3799a1",
+      "component": "api",
       "role": "implementation-worker",
-      "branch": "component/gdrive-adapter",
-      "prompt_path": "crates/haze-gdrive-adapter/control/prompt.md",
-      "report_path": "crates/haze-gdrive-adapter/control/report.md",
-      "prompt_commit_sha": "e096ffe434ad2d360c4f1afd4a36dfa790774101",
-      "prompt_blob_sha": "246fd253148f855ae79741f2e6e0617297fbeb60",
+      "branch": "component/api",
+      "prompt_path": "crates/haze-sync-api/control/prompt.md",
+      "report_path": "crates/haze-sync-api/control/report.md",
+      "prompt_commit_sha": "3c793d6f0e0402f0d5f12986f9cd2cba3c52c18f",
+      "prompt_blob_sha": "8a4008404c3c83876a731e41b7d151c1ca20a569",
       "wave": "W1",
-      "phase": "GDA-GDA-P4-LONG-RUNNING-RUNTIME"
+      "phase": "API-GDA-P2-PRIVATE-CURSOR-SNAPSHOT-CONTRACT"
     }
   ],
-  "summary": "Prepared the next valid GDrive Adapter execution: standalone long-running runtime implementation after accepted HTTP/durable-state and OAuth prerequisites.",
+  "summary": "Validated the GDrive cursor-contract architecture decision and prepared the first dependency-ready owner phase: API private cursor snapshot contract implementation. Server, GDrive client, runtime and Deployment remain gated.",
   "not_before": null
 }
