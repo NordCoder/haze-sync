@@ -13,8 +13,9 @@ use crate::{
     contracts::headers::{HeaderValueError, IdempotencyKey},
     dto::{
         gdrive::{
-            GDriveDeleteCandidateCountSummaryDto, GDriveEchoCountSummaryDto, GDriveEchoStateDto,
-            GDriveLastOperationPresenceDto, GDriveMappingFactsDto, GDriveStateAdminSummaryResponse,
+            GDriveCursorSummaryDto, GDriveDeleteCandidateCountSummaryDto,
+            GDriveEchoCountSummaryDto, GDriveEchoStateDto, GDriveLastOperationPresenceDto,
+            GDriveMappingFactsDto, GDrivePrivateCursorStateDto, GDriveStateAdminSummaryResponse,
             GDriveStateCommitRequest, GDriveStateErrorCode, GDriveStateErrorResponse,
             GDriveStatePublicError, GDriveStateSnapshotResponse, GDRIVE_MD5_HEX_BYTES,
             MAX_GDRIVE_STATE_ITEMS, MAX_GDRIVE_TEXT_BYTES,
@@ -215,7 +216,7 @@ pub fn validate_private_snapshot(
     AdapterId::try_from(&snapshot.adapter_id)
         .map_err(|_| GDriveStateRouteError::ValidationError)?;
     validate_storage_number(snapshot.state_version)?;
-    validate_storage_number(snapshot.cursor.generation)?;
+    private_cursor_summary(&snapshot.cursor)?;
     validate_storage_number(snapshot.core_export_checkpoint)?;
     if snapshot.mappings.len() > MAX_GDRIVE_STATE_ITEMS {
         return Err(GDriveStateRouteError::CollectionTooLarge);
@@ -243,6 +244,7 @@ pub fn sanitize_snapshot_for_admin(
     snapshot: &GDriveStateSnapshotResponse,
 ) -> Result<GDriveStateAdminSummaryResponse, GDriveStateRouteError> {
     validate_private_snapshot(snapshot)?;
+    let cursor = private_cursor_summary(&snapshot.cursor)?;
     let mapping_count = u64::try_from(snapshot.mappings.len())
         .map_err(|_| GDriveStateRouteError::CountOutOfRange)?;
     let mut echo_none = 0_u64;
@@ -268,7 +270,7 @@ pub fn sanitize_snapshot_for_admin(
         adapter_id: AdapterIdDto::new(snapshot.adapter_id.as_str()),
         state_format_version: snapshot.state_format_version,
         state_version: snapshot.state_version,
-        cursor: snapshot.cursor.clone(),
+        cursor,
         core_export_checkpoint: snapshot.core_export_checkpoint,
         mapping_count,
         echo_counts: GDriveEchoCountSummaryDto {
@@ -286,6 +288,33 @@ pub fn sanitize_snapshot_for_admin(
             provider_mutation: snapshot.last_operations.provider_mutation.is_some(),
         },
     })
+}
+
+fn private_cursor_summary(
+    cursor: &GDrivePrivateCursorStateDto,
+) -> Result<GDriveCursorSummaryDto, GDriveStateRouteError> {
+    match cursor {
+        GDrivePrivateCursorStateDto::Absent { generation } => {
+            validate_storage_number(*generation)?;
+            if *generation != 0 {
+                return Err(GDriveStateRouteError::InvalidCursorState);
+            }
+            Ok(GDriveCursorSummaryDto {
+                generation: *generation,
+                present: false,
+            })
+        }
+        GDrivePrivateCursorStateDto::Present { generation, .. } => {
+            validate_storage_number(*generation)?;
+            if *generation == 0 {
+                return Err(GDriveStateRouteError::InvalidCursorState);
+            }
+            Ok(GDriveCursorSummaryDto {
+                generation: *generation,
+                present: true,
+            })
+        }
+    }
 }
 
 fn validate_commit_body(body: &GDriveStateCommitRequest) -> Result<(), GDriveStateRouteError> {
@@ -534,7 +563,8 @@ mod tests {
     use crate::dto::{
         gdrive::{
             GDriveCursorAdvanceDto, GDriveCursorCommitDto, GDriveFactsFingerprintDto,
-            GDriveOperationFactsDto, GDriveOperationKindDto, GDriveRawCursorDto,
+            GDriveLastOperationsSummaryDto, GDriveOperationFactsDto, GDriveOperationKindDto,
+            GDriveRawCursorDto,
         },
         primitives::OperationIdDto,
     };
@@ -565,6 +595,23 @@ mod tests {
         }
     }
 
+    fn minimal_snapshot(cursor: GDrivePrivateCursorStateDto) -> GDriveStateSnapshotResponse {
+        GDriveStateSnapshotResponse {
+            adapter_id: AdapterIdDto::new("gdrive-main"),
+            state_format_version: 1,
+            state_version: 7,
+            cursor,
+            core_export_checkpoint: 19,
+            last_operations: GDriveLastOperationsSummaryDto {
+                import: None,
+                export: None,
+                provider_mutation: None,
+            },
+            mappings: Vec::new(),
+            next_after_path: None,
+        }
+    }
+
     #[test]
     fn read_requires_matching_gdrive_adapter_or_admin() {
         let adapter = principal("gdrive-main", AdapterRole::GdriveAdapter);
@@ -590,6 +637,50 @@ mod tests {
         )
         .unwrap();
         assert_eq!(request.access(), GDriveStateReadAccess::AdminSanitized);
+    }
+
+    #[test]
+    fn private_cursor_state_requires_consistent_generation() {
+        let absent_non_zero = minimal_snapshot(GDrivePrivateCursorStateDto::Absent { generation: 1 });
+        assert_eq!(
+            validate_private_snapshot(&absent_non_zero).unwrap_err(),
+            GDriveStateRouteError::InvalidCursorState
+        );
+
+        let present_zero = minimal_snapshot(GDrivePrivateCursorStateDto::Present {
+            generation: 0,
+            cursor: GDriveRawCursorDto::parse("synthetic-private-cursor").unwrap(),
+        });
+        assert_eq!(
+            validate_private_snapshot(&present_zero).unwrap_err(),
+            GDriveStateRouteError::InvalidCursorState
+        );
+    }
+
+    #[test]
+    fn admin_sanitization_preserves_only_generation_and_presence() {
+        let sentinel = "synthetic-private-cursor-sentinel";
+        let snapshot = minimal_snapshot(GDrivePrivateCursorStateDto::Present {
+            generation: 3,
+            cursor: GDriveRawCursorDto::parse(sentinel).unwrap(),
+        });
+        let summary = sanitize_snapshot_for_admin(&snapshot).unwrap();
+        assert_eq!(
+            summary.cursor,
+            GDriveCursorSummaryDto {
+                generation: 3,
+                present: true,
+            }
+        );
+        let json = serde_json::to_string(&summary).unwrap();
+        assert!(json.contains("\"generation\":3"));
+        assert!(json.contains("\"present\":true"));
+        assert!(!json.contains("\"cursor\""));
+        assert!(!json.contains(sentinel));
+        assert!(!format!("{snapshot:?}").contains(sentinel));
+        assert!(!GDriveStateRouteError::InvalidCursorState
+            .to_string()
+            .contains(sentinel));
     }
 
     #[test]
