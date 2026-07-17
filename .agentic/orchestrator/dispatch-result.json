@@ -1,8 +1,21 @@
 {
   "protocol_version": 3,
-  "orchestrator_execution_id": null,
-  "status": "NO_ACTION",
-  "prepared_executions": [],
-  "summary": "Haze dispatcher control plane initialized. No Orchestrator execution has completed yet.",
+  "orchestrator_execution_id": "orchestrator-20260717102652-509ee26f",
+  "status": "PROMPTS_READY",
+  "prepared_executions": [
+    {
+      "agent_execution_id": "gdrive-adapter-GDA-GDA-P4-impl-20260717102652-509ee26f",
+      "component": "gdrive-adapter",
+      "role": "implementation-worker",
+      "branch": "component/gdrive-adapter",
+      "prompt_path": "crates/haze-gdrive-adapter/control/prompt.md",
+      "report_path": "crates/haze-gdrive-adapter/control/report.md",
+      "prompt_commit_sha": "e096ffe434ad2d360c4f1afd4a36dfa790774101",
+      "prompt_blob_sha": "246fd253148f855ae79741f2e6e0617297fbeb60",
+      "wave": "W1",
+      "phase": "GDA-GDA-P4-LONG-RUNNING-RUNTIME"
+    }
+  ],
+  "summary": "Prepared the next valid GDrive Adapter execution: standalone long-running runtime implementation after accepted HTTP/durable-state and OAuth prerequisites.",
   "not_before": null
 }
