@@ -1,12 +1,13 @@
 {
   "protocol_version": 3,
-  "revision": 3,
+  "revision": 4,
   "active_orchestrator_dispatch": null,
   "active_agent_batch": {
     "batch_id": "orchestrator-20260717102652-509ee26f-batch",
     "orchestrator_execution_id": "orchestrator-20260717102652-509ee26f",
-    "status": "DELIVERY_RESERVED",
+    "status": "DISPATCHED_WAITING_GITHUB_RESULT",
     "reserved_at": "2026-07-17T11:03:20.852Z",
+    "dispatched_at": "2026-07-17T11:05:08.768Z",
     "executions": [
       {
         "agent_execution_id": "gdrive-adapter-GDA-GDA-P4-impl-20260717102652-509ee26f",
@@ -22,8 +23,9 @@
         "chat_key": "2 gdrive-adapter",
         "prompt_fingerprint": "025eba1530300471bb9caf8134db883e291a60ab59ba28e29c5b5a93a34f9022",
         "delivery_attempt_id": "delivery-20260717110320-b3f2c9cb",
-        "status": "DELIVERY_RESERVED",
-        "reserved_at": "2026-07-17T11:03:20.852Z"
+        "status": "DISPATCHED_WAITING_GITHUB_RESULT",
+        "reserved_at": "2026-07-17T11:03:20.852Z",
+        "dispatched_at": "2026-07-17T11:05:08.768Z"
       }
     ]
   },
@@ -35,5 +37,5 @@
   "not_before": null,
   "completed_executions": [],
   "recent_failures": [],
-  "last_poll": "2026-07-17T11:03:20.852Z"
+  "last_poll": "2026-07-17T11:05:08.768Z"
 }
