@@ -1,4 +1,4 @@
-# W1-API-GDA-P2-PRIVATE-CURSOR-SNAPSHOT-CONTRACT
+# W1-FIX-API-GDA-P2-CI-DIAGNOSTICS
 
 ## Routing envelope
 
@@ -6,259 +6,195 @@
 - repository: `NordCoder/haze-sync`
 - component: `api`
 - component_path: `crates/haze-sync-api`
-- role: `implementation-worker`
-- agent_execution_id: `api-API-GDA-P2-private-cursor-impl-20260717122757-3799a1`
+- role: `fixer-worker`
+- agent_execution_id: `api-FIX-API-GDA-P2-ci-diagnostics-20260717130949-ee53d9`
 - chat_key: `api`
 - branch: `component/api`
 - pull_request: `#44`
 - wave: `W1`
-- phase: `API-GDA-P2-PRIVATE-CURSOR-SNAPSHOT-CONTRACT`
+- phase: `FIX-API-GDA-P2-CI-DIAGNOSTICS`
 - control_prompt_path: `crates/haze-sync-api/control/prompt.md`
 - control_report_path: `crates/haze-sync-api/control/report.md`
-- expected_report_type: `IMPLEMENTATION`
+- expected_report_type: `FIX`
 
-Use the existing dedicated API component chat. For this execution only, act as `implementation-worker`. Do not create role-specific routing and do not derive current state from chat history.
+Use the existing dedicated API component chat. For this execution only, act as `fixer-worker`. Do not create role-specific routing and do not derive current state from chat history.
 
 ## Mandatory source order
 
 Read and apply, in order:
 
-1. the current project implementation manifest and report template;
+1. the current project implementation manifest, report template, fixer-worker instructions and GitHub connector instructions;
 2. `crates/haze-sync-api/docs/component-contract.md`;
 3. `crates/haze-sync-api/docs/implementation-plan.md`;
 4. `crates/haze-sync-api/docs/implementation-log.md`;
 5. `crates/haze-sync-api/docs/dependency-map.md`;
 6. `crates/haze-sync-api/docs/decisions.md`;
 7. Architect report blob `dc95fa55d3b707da462beebe56b32d73cd54db86`;
-8. accepted API baseline SHA `c60c3976696da1970d539e5cff6e9f74a61fc10e`, especially:
-   - `crates/haze-sync-api/src/dto/gdrive.rs` blob `8098457eee373f63210fbd381c6487a054d7609f`;
-   - `crates/haze-sync-api/src/routes/gdrive.rs` blob `ef7f8dc1d02b3742e76bb99c66ee39703bee3b4b`;
-9. accepted Storage state evidence SHA `3617bd1cf947fdd394f1ab29d4b992f7b8859a84`, read-only as contract evidence;
-10. accepted Server SHA `c023b83e1e6f502e7d2261acccb871dd5588edf1`, read-only as downstream evidence;
-11. current API branch code, tests, docs, control state, PR metadata and relevant CI evidence;
-12. this active prompt.
+8. completed implementation prompt blob `8a4008404c3c83876a731e41b7d151c1ca20a569`;
+9. completed implementation report blob `f60ca2d90b233d541a70451883838dc873d6da49`;
+10. exact code-bearing commit `618fda1d01ec636ba95884f5cf8f6a596560381b` and its API-owned changed files;
+11. Component CI run `29582479954`, run number `2066`, attempt `1`;
+12. diagnostics artifact `8407621247` named `ci-diag__component-api__wf-component-ci__run-29582479954__attempt-1`;
+13. current API branch code, tests, docs, control state and PR metadata;
+14. this active prompt.
 
 Old prompts and reports are read-only evidence unless explicitly identified above. Do not archive control files.
 
-## Accepted baseline
+## Verified starting evidence
 
-The accepted API GDrive contract baseline is:
+The Orchestrator verified:
 
-- code-bearing SHA: `c60c3976696da1970d539e5cff6e9f74a61fc10e`;
-- clean-review report blob: `55ff6047c9c6c0f6f548f10197b76706c0a244e1`;
-- Component CI run `29446546229`, run number `2025`, conclusion `success`.
+- implementation report status: `SELF_NEEDS_FIX`;
+- exact code-bearing SHA: `618fda1d01ec636ba95884f5cf8f6a596560381b`;
+- workflow: `Component CI`;
+- workflow run ID: `29582479954`;
+- run number: `2066`;
+- conclusion: `failure`;
+- job ID: `87891297074`;
+- GitHub step conclusions show checkout, toolchain, context resolution, cargo fmt/check/test/clippy and artifact upload as completed, while `Finalize CI diagnostics` failed;
+- step conclusions are not sufficient to infer which wrapped cargo command failed;
+- diagnostics artifact ID: `8407621247`;
+- artifact digest: `sha256:077d47353cd09a4575a26cf83a7f7962b9cb667411cbb359aeeb08cac4481ba9`;
+- artifact size: `6407` bytes;
+- artifact is currently unexpired and identifies branch `component/api` and head SHA `618fda1d01ec636ba95884f5cf8f6a596560381b`.
 
-The current branch contains later control-only history. Do not reset, rebase, force-push or discard that history. Preserve all accepted GDrive DTO, route, error, header, pagination, idempotency and redaction behavior except for the exact private cursor response correction below.
+Do not guess the root cause from the finalizer step or from this summary. The artifact is the authoritative failure source.
 
-## Architecture decision
+## Required artifact-first diagnosis
 
-The private GET contract currently stores a cursor through Server/Storage but cannot return its opaque value to the matching adapter after restart. The accepted correction is a coordinated breaking change to the existing private response shape.
+Through the GitHub connector:
 
-- Existing route remains `GET /v1/adapters/{adapter_id}/gdrive/state`.
-- No new route is authorized.
-- Storage requires no code change.
-- Matching `gdrive_adapter` receives the private snapshot.
-- Admin continues to receive the separate sanitized summary with generation/presence only.
-- API implementation must finish and pass clean review/CI before Server work begins.
+1. download artifact `8407621247`;
+2. read `ci-diagnostics/summary.md`;
+3. read `ci-diagnostics/manifest.json`;
+4. verify the manifest identifies:
+   - schema `haze-ci-diagnostics-v1`;
+   - component `api`;
+   - branch `component/api`;
+   - run ID `29582479954`;
+   - attempt `1`;
+   - head SHA `618fda1d01ec636ba95884f5cf8f6a596560381b`;
+5. read every failure marker and every log named by `failed_checks`;
+6. identify the minimum proven API-owned cause;
+7. make only the minimum correction required by that evidence.
 
-## Required implementation
+If the artifact is missing, expired, malformed, inconsistent with the verified coordinates or unreadable, do not infer a cause. Write `FIX_BLOCKED_BY_LOGS` with exact sanitized evidence.
 
-### 1. Exact private cursor DTO
+Raw GitHub job logs are not the primary source and are not authorized as a substitute for a valid diagnostics artifact. Do not paste raw logs into the report.
 
-In `crates/haze-sync-api/src/dto/gdrive.rs`, add exactly this type-level state model:
+## Fix objective
 
-```rust
-#[derive(Clone, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "state", rename_all = "snake_case", deny_unknown_fields)]
-pub enum GDrivePrivateCursorStateDto {
-    Absent {
-        generation: u64,
-    },
-    Present {
-        generation: u64,
-        cursor: GDriveRawCursorDto,
-    },
-}
-```
+Restore full exact-SHA Component CI while preserving the accepted private cursor contract implementation.
 
-Requirements:
+The accepted product shape must remain:
 
-- variants serialize as tagged states `absent` and `present`;
-- `Absent` cannot carry a cursor value;
-- `Present` cannot omit the cursor value;
-- do not replace `GDriveRawCursorDto` or weaken its bounds;
-- `MAX_GDRIVE_CURSOR_BYTES` remains `8192`;
-- empty, over-bound and control-character cursor values remain invalid;
-- implement custom redacted `Debug` and `Display` that never format the raw cursor;
-- do not derive a value-bearing `Debug` implementation.
+- `GDrivePrivateCursorStateDto::Absent { generation }`;
+- `GDrivePrivateCursorStateDto::Present { generation, cursor: GDriveRawCursorDto }`;
+- strict tagged `snake_case` serde with `deny_unknown_fields`;
+- `GDriveStateSnapshotResponse.cursor` uses the private state type;
+- admin summary continues to use unchanged `GDriveCursorSummaryDto` and contains no cursor value;
+- absent generation must be `0`;
+- present generation must be greater than `0`;
+- no new route, reset/clear semantics or implicit fresh-cursor policy;
+- no raw cursor in admin output, logs, errors, diagnostics, reports, Debug or Display.
 
-### 2. Private snapshot shape
-
-Change only the private response field:
-
-```rust
-pub cursor: GDriveCursorSummaryDto
-```
-
-to:
-
-```rust
-pub cursor: GDrivePrivateCursorStateDto
-```
-
-in `GDriveStateSnapshotResponse`.
-
-Preserve every other private snapshot field and the current pagination shape.
-
-`GDriveCursorSummaryDto { generation, present }` remains unchanged and remains the cursor representation for `GDriveStateAdminSummaryResponse` only.
-
-### 3. Validation invariants
-
-Update passive API validation so these are the only valid private cursor states:
-
-- no stored cursor: `Absent { generation: 0 }`;
-- stored cursor: `Present { generation > 0, cursor }`;
-- `Absent` with non-zero generation fails as the existing safe invalid-cursor-state category;
-- `Present` with generation zero fails as the existing safe invalid-cursor-state category;
-- no clear/reset operation is added;
-- existing commit `advance = None` continues to mean unchanged, not cleared;
-- state-format, state-version, pagination, collection and numeric bounds remain unchanged.
-
-Provide narrowly scoped helpers/accessors only when they reduce duplication and preserve passive DTO ownership. Do not add runtime or Storage behavior.
-
-### 4. Admin sanitization
-
-Update `sanitize_snapshot_for_admin` so it converts either private variant into the existing admin summary:
-
-- `Absent { generation }` -> `GDriveCursorSummaryDto { generation, present: false }`;
-- `Present { generation, .. }` -> `GDriveCursorSummaryDto { generation, present: true }`.
-
-The admin response must remain:
-
-- cursor-value-free;
-- provider-identifier-free;
-- mapping-free;
-- strict and bounded;
-- unchanged in wire shape.
-
-Do not move the raw cursor into `GDriveCursorSummaryDto` and do not add an optional raw field beside the summary.
-
-### 5. Authorization and route ownership
-
-Preserve existing passive route-contract behavior:
-
-- matching `gdrive_adapter` principal may receive the private snapshot;
-- non-matching adapter remains `403 forbidden`;
-- unauthenticated caller remains `401 unauthorized`;
-- authenticated admin receives only `GDriveStateAdminSummaryResponse`;
-- route strings, auth vocabulary, error mapping and request pagination remain unchanged.
-
-API owns passive DTO and route validation only. Do not add Axum execution, database access, transaction choreography or Server handler behavior.
-
-### 6. Strict serde, secrecy and regression tests
-
-Add focused tests proving at least:
-
-- exact `absent` private wire variant with generation only;
-- exact `present` private wire variant with generation plus a synthetic bounded cursor sentinel;
-- `present` without cursor fails strict decoding;
-- `absent` with a cursor field fails strict decoding;
-- unknown fields fail strict decoding;
-- empty, over-bound and control-character cursor values fail;
-- absent/non-zero and present/zero generation pairs fail private snapshot validation;
-- admin sanitization JSON contains generation and presence but no private cursor field/value;
-- private DTO, snapshot, route wrappers and errors do not expose the synthetic sentinel through `Debug` or `Display`;
-- existing mapping, pagination, commit, idempotency, error and fixture tests remain valid or are updated only for the accepted private wire shape.
-
-Use synthetic values only. Do not place a real provider cursor, token, credential, provider payload or private path in code, fixtures, logs, reports or diagnostics.
-
-### 7. Compatibility boundary
-
-This private response change is intentionally breaking for strict old GDrive clients.
-
-- API library acceptance is not a deployment event.
-- Do not add a versioned duplicate route in this phase.
-- Do not claim old/new mixed compatibility.
-- Do not edit Deployment.
-- Record that Server and corrected GDrive client must later be released as one coordinated compatibility unit.
-- If current repository evidence proves a live old GDrive service exists, stop with `BLOCKED_BY_CONTRACT` and exact evidence instead of assuming compatibility.
+Do not undo or weaken the implementation merely to satisfy CI.
 
 ## Allowed scope
 
-- `crates/haze-sync-api/src/dto/gdrive.rs`;
-- `crates/haze-sync-api/src/routes/gdrive.rs`;
-- `crates/haze-sync-api/src/dto/mod.rs` only if an export is required;
-- `crates/haze-sync-api/src/routes/mod.rs` only if an export is required;
-- focused API tests colocated with or already covering these modules;
-- `crates/haze-sync-api/docs/**` only for focused contract/decision/implementation-log alignment required by this phase;
+Only files inside API ownership that are directly required by the artifact-proven failure:
+
+- `crates/haze-sync-api/src/**`;
+- `crates/haze-sync-api/tests/**`;
+- `crates/haze-sync-api/fixtures/**`;
+- `crates/haze-sync-api/docs/**` only when factual alignment is required by the fix;
 - `crates/haze-sync-api/control/report.md`.
 
-A broader internal API refactor is allowed only when required for a clean passive contract implementation and must be explained in the report.
+A broader API-internal edit is allowed only when the diagnostics prove it is necessary and the report explains why the smaller correction was insufficient.
 
 ## Forbidden scope
 
-- Server handler, Axum, transaction or PostgreSQL changes;
-- Storage schema, migration or repository changes;
-- GDrive client, provider, scheduler or runtime changes;
-- Core, Common, Worktree, Obsidian, CLI or Deployment changes;
-- new public/admin status or operator surfaces;
-- new route or route version;
-- cursor clear/reset semantics or fresh-cursor recovery policy;
-- raw cursor exposure in admin output, status, diagnostics, errors, logs, tracing, Debug or Display;
-- dependency, lockfile or workflow changes unless an unavoidable component-local tooling fact is proven and reported before writing;
-- test weakening, real credentials, live provider calls or external-network CI;
-- merge, rebase, force-push or PR draft-state changes.
+- `.github/**` workflows, scripts or diagnostics harness changes;
+- Server, Storage, GDrive adapter, Core, Common, CLI, Worktree, Obsidian or Deployment files;
+- dependency or lockfile changes unless a later Orchestrator prompt explicitly authorizes them;
+- new routes, versioned routes, status/doctor/operator surfaces;
+- cursor reset, clear or fallback policy;
+- weakening/removing tests or changing assertions only to hide a real failure;
+- ignoring a failed check, deleting fixtures, lowering validation or redaction guarantees;
+- real cursor values, credentials, tokens, provider payloads, private paths or raw response bodies;
+- external provider/network tests;
+- merge, rebase, force-push, history rewrite or PR draft-state changes.
+
+If the artifact proves the root cause belongs to the CI harness or another component, do not edit that owner’s files. Report `FIX_BLOCKED_BY_CONTRACT` with exact sanitized evidence and the required owner.
+
+If connector/tooling prevents a safe component-owned fix after the artifact was read, report `FIX_BLOCKED_BY_TOOLING` without inventing commits or CI results.
+
+## Tests and verification
+
+Preserve and run the complete API contract test surface, including:
+
+- exact absent/present private wire variants;
+- strict unknown/wrong-shape rejection;
+- cursor size/control-character validation;
+- absent/non-zero and present/zero invariant rejection;
+- admin cursor-value exclusion;
+- synthetic secrecy sentinel coverage;
+- compatibility fixture validation;
+- existing mapping, pagination, commit, idempotency, error and public-contract tests.
+
+Use synthetic values only. Never include a raw cursor or secret in reports, diagnostics commentary or commit messages.
 
 ## Commit and CI honesty
 
-- Product, test, contract-doc and implementation-doc commits must not use CI skip.
-- A final report-only commit may use CI skip.
-- Obtain a real final code-bearing SHA.
-- Obtain full Component CI for that exact SHA.
-- Record `cargo fmt`, `cargo check`, `cargo test`, `cargo clippy` and diagnostics-finalizer conclusions separately.
-- A skipped workflow is not green CI evidence.
+- Product, test, fixture and documentation fix commits must not use CI skip.
+- A final report-only control commit may use CI skip.
+- Obtain a real final code-bearing SHA after the fix.
+- Obtain full `Component CI` for that exact SHA.
+- Verify the actual wrapped cargo outcomes and the diagnostics finalizer, not only step labels.
+- Full acceptance requires fmt, check, test, clippy and finalizer success.
+- A skipped, cancelled, pending or unrelated run is not green evidence.
 - Do not fabricate commit, blob, run, job or artifact identifiers.
-- If CI is pending, use `SELF_ACCEPT_PENDING_CI` with exact pending coordinates.
-- If CI is red, report the exact run and diagnostics artifact metadata without guessing the failure; a focused fixer phase follows.
-- If the architecture cannot be implemented within API ownership, stop with `BLOCKED_BY_CONTRACT` and exact evidence.
+- If the next exact-SHA CI is red, use its new diagnostics artifact and continue only for API-owned proven failures within this same focused scope.
+- If another correction is still required when reporting, use `FIX_NEEDS_MORE` and record the exact latest SHA/run/artifact.
 
 ## Reporting
 
 Write only `crates/haze-sync-api/control/report.md` using the project report template.
 
-The report routing envelope must include exactly:
+The report routing envelope must include:
 
-- `REPORT_TYPE: IMPLEMENTATION`;
-- a terminal implementation `STATUS`;
-- `role: implementation-worker`;
-- `agent_execution_id: api-API-GDA-P2-private-cursor-impl-20260717122757-3799a1`;
+- `REPORT_TYPE: FIX`;
+- terminal `STATUS`: `FIX_COMPLETE`, `FIX_NEEDS_MORE`, `FIX_BLOCKED_BY_LOGS`, `FIX_BLOCKED_BY_CONTRACT`, or `FIX_BLOCKED_BY_TOOLING`;
+- `role: fixer-worker`;
+- `agent_execution_id: api-FIX-API-GDA-P2-ci-diagnostics-20260717130949-ee53d9`;
 - `chat_name: api`;
 - component `api`;
 - branch `component/api`;
 - wave `W1`;
-- phase_id `API-GDA-P2-PRIVATE-CURSOR-SNAPSHOT-CONTRACT`;
+- phase_id `FIX-API-GDA-P2-CI-DIAGNOSTICS`;
 - control prompt/report paths;
 - prompt commit SHA and prompt blob SHA supplied by the dispatcher launch envelope.
 
-Also record:
+Also record, without raw secret-bearing logs:
 
-- changed files;
-- exact DTO and serde shape;
-- invariant and admin-sanitization behavior;
-- strict and secrecy tests;
-- compatibility statement;
-- final code-bearing SHA;
-- exact Component CI metadata;
-- statement that no Server, Storage or GDrive implementation was changed.
+- artifact summary and manifest verification;
+- exact `failed_checks` names;
+- sanitized root cause;
+- changed files and minimum-fix rationale;
+- previous code-bearing SHA `618fda1d01ec636ba95884f5cf8f6a596560381b`;
+- final code-bearing SHA, when one exists;
+- exact final CI run, number, attempt, job and conclusion;
+- fmt/check/test/clippy/finalizer outcomes;
+- any new artifact metadata if CI remains red;
+- confirmation that Server, Storage and GDrive implementation were not changed;
+- confirmation that no raw cursor, token, Idempotency-Key, provider payload or private path was exposed.
 
-Do not archive prompt/report files. Do not claim `CLEAN_ACCEPT`, Server readiness, GDrive runtime readiness, deployment readiness or merge readiness.
+Do not archive control files and do not claim clean-review acceptance, Server readiness, GDrive runtime readiness, deployment readiness or merge readiness.
 
 ## Next gate
 
-- `SELF_ACCEPT` with exact-SHA green CI -> focused API clean-code/security review in the same dedicated API chat;
-- `SELF_ACCEPT_PENDING_CI` -> Orchestrator verifies exact-SHA CI before transition;
-- `SELF_NEEDS_FIX` -> continuation or focused API fixer;
-- `BLOCKED_BY_CONTRACT` -> architecture/contract hold with exact evidence;
-- `BLOCKED_BY_TOOLING` -> tooling hold with exact evidence.
+- `FIX_COMPLETE` with exact-SHA full green Component CI -> Orchestrator opens focused API clean-code/security review in the same dedicated API chat;
+- `FIX_NEEDS_MORE` -> Orchestrator evaluates the latest exact diagnostics and may continue the focused fixer loop;
+- blocked status -> Orchestrator routes only the proven owner or hold.
 
-Server phase `SRV-GDA-P2-PRIVATE-CURSOR-SNAPSHOT-ROUTE` remains blocked until this API implementation and its clean review are accepted with exact-SHA green CI.
+Server phase `SRV-GDA-P2-PRIVATE-CURSOR-SNAPSHOT-ROUTE` remains blocked until API implementation, fixer and clean review are accepted with exact-SHA green CI.
