@@ -1,10 +1,11 @@
 {
   "protocol_version": 3,
-  "revision": 5,
+  "revision": 6,
   "active_orchestrator_dispatch": {
     "orchestrator_execution_id": "orchestrator-20260717122757-3799a1",
-    "status": "DELIVERY_RESERVED",
+    "status": "DISPATCHED_WAITING_GITHUB_RESULT",
     "reserved_at": "2026-07-17T12:29:32.203Z",
+    "dispatched_at": "2026-07-17T12:31:25.346Z",
     "chat_key": "orchestrator",
     "prompt_fingerprint": "bfad6adc4a2dc41130678568cc007e114474ecd0aaaa9bc62b23b6f8c40d5b4a",
     "delivery_attempt_id": "delivery-20260717122757-archfix-3799a1",
@@ -43,5 +44,5 @@
     }
   ],
   "recent_failures": [],
-  "last_poll": "2026-07-17T12:29:32.203Z"
+  "last_poll": "2026-07-17T12:31:25.346Z"
 }
