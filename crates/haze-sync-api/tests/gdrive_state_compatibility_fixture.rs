@@ -131,11 +131,14 @@ fn snapshot_and_admin_summary_roundtrip_and_sanitize_deterministically() {
         sanitize_snapshot_for_admin(&snapshot).unwrap(),
         expected_admin
     );
+    assert_eq!(
+        serde_json::to_value(&expected_admin).unwrap()["cursor"],
+        serde_json::json!({"generation": 3, "present": true})
+    );
     let admin_json = serde_json::to_string(&expected_admin).unwrap();
     assert!(admin_json.contains("\"mapping_count\":1"));
     assert!(admin_json.contains("\"generation\":3"));
     assert!(admin_json.contains("\"present\":true"));
-    assert!(!admin_json.contains("\"cursor\""));
     assert!(!admin_json.contains(PRIVATE_CURSOR_SENTINEL));
 
     let snapshot_debug = format!("{snapshot:?}");
