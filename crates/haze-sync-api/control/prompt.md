@@ -1,4 +1,4 @@
-# W1-FIX-API-GDA-P2-CI-DIAGNOSTICS
+# W1-API-GDA-P2-CLEAN-CODE-SECURITY-REVIEW
 
 ## Routing envelope
 
@@ -6,195 +6,214 @@
 - repository: `NordCoder/haze-sync`
 - component: `api`
 - component_path: `crates/haze-sync-api`
-- role: `fixer-worker`
-- agent_execution_id: `api-FIX-API-GDA-P2-ci-diagnostics-20260717130949-ee53d9`
+- role: `clean-code-reviewer`
+- agent_execution_id: `api-API-GDA-P2-clean-security-review-20260717181732-ee53d9`
 - chat_key: `api`
 - branch: `component/api`
 - pull_request: `#44`
 - wave: `W1`
-- phase: `FIX-API-GDA-P2-CI-DIAGNOSTICS`
+- phase: `API-GDA-P2-CLEAN-CODE-SECURITY-REVIEW`
 - control_prompt_path: `crates/haze-sync-api/control/prompt.md`
 - control_report_path: `crates/haze-sync-api/control/report.md`
-- expected_report_type: `FIX`
+- expected_report_type: `CLEAN_CODE_REVIEW`
 
-Use the existing dedicated API component chat. For this execution only, act as `fixer-worker`. Do not create role-specific routing and do not derive current state from chat history.
+Use the existing dedicated API component chat. For this execution only, act as `clean-code-reviewer`. Do not create role-specific routing and do not derive current state from chat history.
 
 ## Mandatory source order
 
 Read and apply, in order:
 
-1. the current project implementation manifest, report template, fixer-worker instructions and GitHub connector instructions;
+1. the current project implementation manifest, report template and clean-code-reviewer instructions;
 2. `crates/haze-sync-api/docs/component-contract.md`;
 3. `crates/haze-sync-api/docs/implementation-plan.md`;
 4. `crates/haze-sync-api/docs/implementation-log.md`;
 5. `crates/haze-sync-api/docs/dependency-map.md`;
 6. `crates/haze-sync-api/docs/decisions.md`;
 7. Architect report blob `dc95fa55d3b707da462beebe56b32d73cd54db86`;
-8. completed implementation prompt blob `8a4008404c3c83876a731e41b7d151c1ca20a569`;
-9. completed implementation report blob `f60ca2d90b233d541a70451883838dc873d6da49`;
-10. exact code-bearing commit `618fda1d01ec636ba95884f5cf8f6a596560381b` and its API-owned changed files;
-11. Component CI run `29582479954`, run number `2066`, attempt `1`;
-12. diagnostics artifact `8407621247` named `ci-diag__component-api__wf-component-ci__run-29582479954__attempt-1`;
-13. current API branch code, tests, docs, control state and PR metadata;
-14. this active prompt.
+8. implementation prompt blob `8a4008404c3c83876a731e41b7d151c1ca20a569`;
+9. implementation report blob `f60ca2d90b233d541a70451883838dc873d6da49`;
+10. fixer prompt blob `b0200262283f6d8aa2383a5e9de803458b13f9c2`;
+11. fixer report blob `fc0b2c67ee9bb7195ab288eed82392b785033fbb`;
+12. exact candidate code-bearing commit `dba43751521c32aca53729c1c8dbddf2e7d8fbfb` and all API-owned code/test/fixture/doc changes in the implementation and fixer chain;
+13. exact Component CI run `29585502722`, run number `2069`, attempt `1`, job `87901373635`;
+14. current API branch, PR metadata, control state and this active prompt.
 
-Old prompts and reports are read-only evidence unless explicitly identified above. Do not archive control files.
+Old prompts and reports are read-only evidence. Do not archive control files.
 
-## Verified starting evidence
+## Verified candidate evidence
 
-The Orchestrator verified:
+The Orchestrator verified through GitHub:
 
-- implementation report status: `SELF_NEEDS_FIX`;
-- exact code-bearing SHA: `618fda1d01ec636ba95884f5cf8f6a596560381b`;
-- workflow: `Component CI`;
-- workflow run ID: `29582479954`;
-- run number: `2066`;
-- conclusion: `failure`;
-- job ID: `87891297074`;
-- GitHub step conclusions show checkout, toolchain, context resolution, cargo fmt/check/test/clippy and artifact upload as completed, while `Finalize CI diagnostics` failed;
-- step conclusions are not sufficient to infer which wrapped cargo command failed;
-- diagnostics artifact ID: `8407621247`;
-- artifact digest: `sha256:077d47353cd09a4575a26cf83a7f7962b9cb667411cbb359aeeb08cac4481ba9`;
-- artifact size: `6407` bytes;
-- artifact is currently unexpired and identifies branch `component/api` and head SHA `618fda1d01ec636ba95884f5cf8f6a596560381b`.
+- terminal fixer status: `FIX_COMPLETE`;
+- final code-bearing SHA: `dba43751521c32aca53729c1c8dbddf2e7d8fbfb`;
+- final Component CI run: `29585502722`, run number `2069`, conclusion `success`;
+- `cargo fmt`: success;
+- `cargo check`: success;
+- `cargo test`: success;
+- `cargo clippy`: success;
+- diagnostics finalizer: success;
+- diagnostics upload: skipped because no failure artifact was required;
+- fixer report commit: `ef445c3ee464cd830116bd3ec13b42b14fd59cba`;
+- API PR `#44` is open, draft, unmerged.
 
-Do not guess the root cause from the finalizer step or from this summary. The artifact is the authoritative failure source.
+These facts establish review eligibility only. They do not establish `CLEAN_ACCEPT`.
 
-## Required artifact-first diagnosis
+## Review objective
 
-Through the GitHub connector:
+Perform a focused clean-code, contract-integrity and secrecy review of the API-owned private GDrive cursor snapshot correction and its diagnostics fixes.
 
-1. download artifact `8407621247`;
-2. read `ci-diagnostics/summary.md`;
-3. read `ci-diagnostics/manifest.json`;
-4. verify the manifest identifies:
-   - schema `haze-ci-diagnostics-v1`;
-   - component `api`;
-   - branch `component/api`;
-   - run ID `29582479954`;
-   - attempt `1`;
-   - head SHA `618fda1d01ec636ba95884f5cf8f6a596560381b`;
-5. read every failure marker and every log named by `failed_checks`;
-6. identify the minimum proven API-owned cause;
-7. make only the minimum correction required by that evidence.
+The accepted contract is intentionally breaking for strict old private GDrive clients. Review whether the exact candidate implements the Architect decision cleanly and safely without expanding API ownership or weakening the existing passive contracts.
 
-If the artifact is missing, expired, malformed, inconsistent with the verified coordinates or unreadable, do not infer a cause. Write `FIX_BLOCKED_BY_LOGS` with exact sanitized evidence.
+Do not implement fixes. Do not edit product code, tests, fixtures, docs, dependencies, lockfiles or workflows. Write only the terminal review report.
 
-Raw GitHub job logs are not the primary source and are not authorized as a substitute for a valid diagnostics artifact. Do not paste raw logs into the report.
+## Required review areas
 
-## Fix objective
+### 1. Exact private cursor DTO and serde
 
-Restore full exact-SHA Component CI while preserving the accepted private cursor contract implementation.
+Verify that:
 
-The accepted product shape must remain:
+- `GDrivePrivateCursorStateDto` is exactly a strict tagged state model with `absent` and `present` variants;
+- `Absent` contains only `generation: u64`;
+- `Present` contains `generation: u64` and the existing `GDriveRawCursorDto`;
+- `deny_unknown_fields` and snake_case tagging are effective;
+- impossible optional-field combinations are not representable;
+- `GDriveRawCursorDto` bounds remain unchanged, including `MAX_GDRIVE_CURSOR_BYTES = 8192`, non-empty and no-control-character validation;
+- no value-bearing derived or manual formatting leaks the raw cursor.
 
-- `GDrivePrivateCursorStateDto::Absent { generation }`;
-- `GDrivePrivateCursorStateDto::Present { generation, cursor: GDriveRawCursorDto }`;
-- strict tagged `snake_case` serde with `deny_unknown_fields`;
-- `GDriveStateSnapshotResponse.cursor` uses the private state type;
-- admin summary continues to use unchanged `GDriveCursorSummaryDto` and contains no cursor value;
-- absent generation must be `0`;
-- present generation must be greater than `0`;
-- no new route, reset/clear semantics or implicit fresh-cursor policy;
-- no raw cursor in admin output, logs, errors, diagnostics, reports, Debug or Display.
+### 2. Private/admin wire separation
 
-Do not undo or weaken the implementation merely to satisfy CI.
+Verify that:
+
+- only `GDriveStateSnapshotResponse.cursor` uses the private cursor state;
+- `GDriveStateAdminSummaryResponse.cursor` remains the existing `GDriveCursorSummaryDto { generation, present }`;
+- the admin JSON legitimately contains the summary field named `cursor`, but never contains the private cursor value or private state shape;
+- the fixer changed only overbroad assertions and did not weaken private-value exclusion;
+- provider identifiers, mappings and private cursor values remain absent from the admin response;
+- no new route or route version was added.
+
+### 3. Cursor invariants and passive validation
+
+Verify that:
+
+- `Absent { generation: 0 }` is valid;
+- absent with non-zero generation fails through the existing safe invalid-cursor-state category;
+- `Present` requires generation greater than zero;
+- present with generation zero fails safely;
+- commit `advance = None` still means unchanged, not cleared;
+- no reset, clear, fallback or implicit fresh-cursor policy was introduced;
+- state-format, state-version, pagination, numeric and collection bounds remain unchanged.
+
+### 4. Authorization and ownership boundaries
+
+Verify that passive route contracts still express:
+
+- matching `gdrive_adapter` principal receives the private response;
+- non-matching adapter remains forbidden;
+- unauthenticated caller remains unauthorized;
+- authenticated admin receives only the sanitized admin DTO;
+- API contains no Axum execution, database access, transaction choreography, Storage implementation, GDrive client/runtime logic or Deployment behavior;
+- no sibling component or workflow changes occurred in the candidate chain.
+
+### 5. Redaction and secrecy
+
+Review all relevant `Debug`, `Display`, error, request/response wrapper and test surfaces. Confirm that no raw cursor, bearer token, Idempotency-Key, provider payload, private path or raw dependency body can appear in:
+
+- admin output;
+- errors;
+- logs or tracing;
+- diagnostics;
+- `Debug` or `Display`;
+- fixtures or reports.
+
+Synthetic sentinels are allowed only as bounded test values and must be proven absent from formatted and sanitized surfaces.
+
+### 6. Test and fixture quality
+
+Verify that the tests prove, rather than merely execute:
+
+- exact absent/present wire variants;
+- strict unknown-field and wrong-shape rejection;
+- cursor bounds and control-character rejection;
+- invalid generation/value pair rejection;
+- exact admin summary shape with generation and presence;
+- private cursor value exclusion from admin JSON;
+- redacted formatting across DTO, snapshot, wrappers and errors;
+- compatibility fixture alignment;
+- preservation of mapping, pagination, commit, idempotency and safe-error contracts.
+
+Specifically review the fixer changes at intermediate SHA `73154140c31f424f18c2c58241d2b5449428e96e` and final SHA `dba43751521c32aca53729c1c8dbddf2e7d8fbfb` for test weakening or false-positive assertions.
+
+### 7. Compatibility boundary
+
+Confirm that:
+
+- the existing private route change is acknowledged as intentionally breaking for strict old GDrive clients;
+- API acceptance is not treated as a deployment event;
+- no mixed old/new compatibility is claimed;
+- Server and corrected GDrive client remain gated as a coordinated compatibility unit;
+- Server phase is not authorized until this review reaches terminal clean acceptance.
+
+## Findings standard
+
+A finding must be concrete and actionable and include:
+
+- severity;
+- exact file and code location;
+- violated contract or safety invariant;
+- observable failure or risk;
+- minimum owner-scoped correction;
+- whether it blocks acceptance.
+
+Do not request style-only churn. Do not broaden scope into Server, Storage, GDrive runtime, Deployment or unrelated API cleanup.
 
 ## Allowed scope
 
-Only files inside API ownership that are directly required by the artifact-proven failure:
-
-- `crates/haze-sync-api/src/**`;
-- `crates/haze-sync-api/tests/**`;
-- `crates/haze-sync-api/fixtures/**`;
-- `crates/haze-sync-api/docs/**` only when factual alignment is required by the fix;
-- `crates/haze-sync-api/control/report.md`.
-
-A broader API-internal edit is allowed only when the diagnostics prove it is necessary and the report explains why the smaller correction was insufficient.
+- read repository files, blobs, commits, PR and CI metadata;
+- inspect the exact candidate and predecessor diffs;
+- write only `crates/haze-sync-api/control/report.md` as a report-only commit using CI skip.
 
 ## Forbidden scope
 
-- `.github/**` workflows, scripts or diagnostics harness changes;
-- Server, Storage, GDrive adapter, Core, Common, CLI, Worktree, Obsidian or Deployment files;
-- dependency or lockfile changes unless a later Orchestrator prompt explicitly authorizes them;
-- new routes, versioned routes, status/doctor/operator surfaces;
-- cursor reset, clear or fallback policy;
-- weakening/removing tests or changing assertions only to hide a real failure;
-- ignoring a failed check, deleting fixtures, lowering validation or redaction guarantees;
-- real cursor values, credentials, tokens, provider payloads, private paths or raw response bodies;
-- external provider/network tests;
-- merge, rebase, force-push, history rewrite or PR draft-state changes.
-
-If the artifact proves the root cause belongs to the CI harness or another component, do not edit that owner’s files. Report `FIX_BLOCKED_BY_CONTRACT` with exact sanitized evidence and the required owner.
-
-If connector/tooling prevents a safe component-owned fix after the artifact was read, report `FIX_BLOCKED_BY_TOOLING` without inventing commits or CI results.
-
-## Tests and verification
-
-Preserve and run the complete API contract test surface, including:
-
-- exact absent/present private wire variants;
-- strict unknown/wrong-shape rejection;
-- cursor size/control-character validation;
-- absent/non-zero and present/zero invariant rejection;
-- admin cursor-value exclusion;
-- synthetic secrecy sentinel coverage;
-- compatibility fixture validation;
-- existing mapping, pagination, commit, idempotency, error and public-contract tests.
-
-Use synthetic values only. Never include a raw cursor or secret in reports, diagnostics commentary or commit messages.
-
-## Commit and CI honesty
-
-- Product, test, fixture and documentation fix commits must not use CI skip.
-- A final report-only control commit may use CI skip.
-- Obtain a real final code-bearing SHA after the fix.
-- Obtain full `Component CI` for that exact SHA.
-- Verify the actual wrapped cargo outcomes and the diagnostics finalizer, not only step labels.
-- Full acceptance requires fmt, check, test, clippy and finalizer success.
-- A skipped, cancelled, pending or unrelated run is not green evidence.
-- Do not fabricate commit, blob, run, job or artifact identifiers.
-- If the next exact-SHA CI is red, use its new diagnostics artifact and continue only for API-owned proven failures within this same focused scope.
-- If another correction is still required when reporting, use `FIX_NEEDS_MORE` and record the exact latest SHA/run/artifact.
+- any product, test, fixture, documentation, dependency, lockfile or workflow edit;
+- Server, Storage, GDrive adapter or other component writes;
+- merge, rebase, force-push, history rewrite or PR draft-state changes;
+- real credentials, provider values, raw cursors, private paths or raw job logs in the report;
+- invented commit, blob, run, job or artifact identifiers;
+- claiming Server, GDrive runtime, Deployment or merge readiness.
 
 ## Reporting
 
 Write only `crates/haze-sync-api/control/report.md` using the project report template.
 
-The report routing envelope must include:
+The routing envelope must include:
 
-- `REPORT_TYPE: FIX`;
-- terminal `STATUS`: `FIX_COMPLETE`, `FIX_NEEDS_MORE`, `FIX_BLOCKED_BY_LOGS`, `FIX_BLOCKED_BY_CONTRACT`, or `FIX_BLOCKED_BY_TOOLING`;
-- `role: fixer-worker`;
-- `agent_execution_id: api-FIX-API-GDA-P2-ci-diagnostics-20260717130949-ee53d9`;
+- `REPORT_TYPE: CLEAN_CODE_REVIEW`;
+- terminal `STATUS`: `CLEAN_ACCEPT`, `CLEAN_NEEDS_FIX`, `CLEAN_BLOCKED_BY_CONTRACT`, or `CLEAN_BLOCKED_BY_TOOLING`;
+- `role: clean-code-reviewer`;
+- `agent_execution_id: api-API-GDA-P2-clean-security-review-20260717181732-ee53d9`;
 - `chat_name: api`;
 - component `api`;
 - branch `component/api`;
 - wave `W1`;
-- phase_id `FIX-API-GDA-P2-CI-DIAGNOSTICS`;
+- phase_id `API-GDA-P2-CLEAN-CODE-SECURITY-REVIEW`;
 - control prompt/report paths;
 - prompt commit SHA and prompt blob SHA supplied by the dispatcher launch envelope.
 
-Also record, without raw secret-bearing logs:
+Also record:
 
-- artifact summary and manifest verification;
-- exact `failed_checks` names;
-- sanitized root cause;
-- changed files and minimum-fix rationale;
-- previous code-bearing SHA `618fda1d01ec636ba95884f5cf8f6a596560381b`;
-- final code-bearing SHA, when one exists;
-- exact final CI run, number, attempt, job and conclusion;
-- fmt/check/test/clippy/finalizer outcomes;
-- any new artifact metadata if CI remains red;
-- confirmation that Server, Storage and GDrive implementation were not changed;
-- confirmation that no raw cursor, token, Idempotency-Key, provider payload or private path was exposed.
+- exact reviewed code-bearing SHA `dba43751521c32aca53729c1c8dbddf2e7d8fbfb`;
+- implementation and fixer report blobs;
+- exact CI run/job conclusions;
+- reviewed files and evidence;
+- findings or explicit statement that none remain;
+- contract, authorization, compatibility and secrecy verdicts;
+- PR state observed;
+- confirmation that only the report file changed.
 
-Do not archive control files and do not claim clean-review acceptance, Server readiness, GDrive runtime readiness, deployment readiness or merge readiness.
+Do not archive control files.
 
 ## Next gate
 
-- `FIX_COMPLETE` with exact-SHA full green Component CI -> Orchestrator opens focused API clean-code/security review in the same dedicated API chat;
-- `FIX_NEEDS_MORE` -> Orchestrator evaluates the latest exact diagnostics and may continue the focused fixer loop;
-- blocked status -> Orchestrator routes only the proven owner or hold.
-
-Server phase `SRV-GDA-P2-PRIVATE-CURSOR-SNAPSHOT-ROUTE` remains blocked until API implementation, fixer and clean review are accepted with exact-SHA green CI.
+- `CLEAN_ACCEPT` on exact SHA `dba43751521c32aca53729c1c8dbddf2e7d8fbfb` with verified CI -> Orchestrator may accept API phase and prepare `SRV-GDA-P2-PRIVATE-CURSOR-SNAPSHOT-ROUTE`;
+- `CLEAN_NEEDS_FIX` -> Orchestrator opens one focused API fixer from the exact findings;
+- blocked status -> Orchestrator records the exact hold and does not dispatch Server.
