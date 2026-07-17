@@ -1,6 +1,6 @@
 {
   "protocol_version": 3,
-  "revision": 11,
+  "revision": 12,
   "active_orchestrator_dispatch": null,
   "active_agent_batch": {
     "batch_id": "api-FIX-API-GDA-P2-ci-diagnostics-20260717163141-ee53d9-batch",
@@ -19,7 +19,9 @@
         "phase": "FIX-API-GDA-P2-CI-DIAGNOSTICS",
         "delivery_attempt_id": "delivery-20260717163141-api-fixer-9a1f6d"
       }
-    ]
+    ],
+    "status": "DISPATCHED_WAITING_GITHUB_RESULT",
+    "dispatched_at": "2026-07-17T16:32:30.000Z"
   },
   "last_consumed_orchestrator_result": {
     "orchestrator_execution_id": "orchestrator-20260717122757-3799a1",
@@ -52,5 +54,5 @@
     }
   ],
   "recent_failures": [],
-  "last_poll": "2026-07-17T16:31:41.000Z"
+  "last_poll": "2026-07-17T16:32:30.000Z"
 }
