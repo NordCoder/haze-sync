@@ -1,41 +1,47 @@
 {
   "protocol_version": 3,
-  "revision": 4,
-  "active_orchestrator_dispatch": null,
-  "active_agent_batch": {
-    "batch_id": "orchestrator-20260717102652-509ee26f-batch",
-    "orchestrator_execution_id": "orchestrator-20260717102652-509ee26f",
-    "status": "DISPATCHED_WAITING_GITHUB_RESULT",
-    "reserved_at": "2026-07-17T11:03:20.852Z",
-    "dispatched_at": "2026-07-17T11:05:08.768Z",
-    "executions": [
+  "revision": 5,
+  "active_orchestrator_dispatch": {
+    "orchestrator_execution_id": "orchestrator-20260717122757-3799a1",
+    "status": "DELIVERY_RESERVED",
+    "reserved_at": "2026-07-17T12:29:32.203Z",
+    "chat_key": "orchestrator",
+    "prompt_fingerprint": "bfad6adc4a2dc41130678568cc007e114474ecd0aaaa9bc62b23b6f8c40d5b4a",
+    "delivery_attempt_id": "delivery-20260717122757-archfix-3799a1",
+    "completed_execution_references": [
       {
-        "agent_execution_id": "gdrive-adapter-GDA-GDA-P4-impl-20260717102652-509ee26f",
+        "agent_execution_id": "gdrive-adapter-GDA-GDA-P4-cursor-contract-arch-20260717113213-a4c27d91",
         "component": "gdrive-adapter",
-        "role": "implementation-worker",
+        "role": "architect",
         "branch": "component/gdrive-adapter",
-        "prompt_path": "crates/haze-gdrive-adapter/control/prompt.md",
         "report_path": "crates/haze-gdrive-adapter/control/report.md",
-        "prompt_commit_sha": "e096ffe434ad2d360c4f1afd4a36dfa790774101",
-        "prompt_blob_sha": "246fd253148f855ae79741f2e6e0617297fbeb60",
-        "wave": "W1",
-        "phase": "GDA-GDA-P4-LONG-RUNNING-RUNTIME",
-        "chat_key": "2 gdrive-adapter",
-        "prompt_fingerprint": "025eba1530300471bb9caf8134db883e291a60ab59ba28e29c5b5a93a34f9022",
-        "delivery_attempt_id": "delivery-20260717110320-b3f2c9cb",
-        "status": "DISPATCHED_WAITING_GITHUB_RESULT",
-        "reserved_at": "2026-07-17T11:03:20.852Z",
-        "dispatched_at": "2026-07-17T11:05:08.768Z"
+        "report_blob_sha": "dc95fa55d3b707da462beebe56b32d73cd54eb86",
+        "phase": "GDA-GDA-P4-CURSOR-READ-CONTRACT-ARCHITECTURE-REVIEW",
+        "status": "ARCHITECT_CHANGED_CONTRACTS",
+        "completed_at": "2026-07-17T12:29:32.203Z"
       }
     ]
   },
+  "active_agent_batch": null,
   "last_consumed_orchestrator_result": {
     "orchestrator_execution_id": "orchestrator-20260717102652-509ee26f",
     "result_blob_sha": "23320908cd3ba3568a156596d88f2fd68b483295",
     "consumed_at": "2026-07-17T11:03:20.852Z"
   },
   "not_before": null,
-  "completed_executions": [],
+  "completed_executions": [
+    {
+      "agent_execution_id": "gdrive-adapter-GDA-GDA-P4-cursor-contract-arch-20260717113213-a4c27d91",
+      "component": "gdrive-adapter",
+      "role": "architect",
+      "branch": "component/gdrive-adapter",
+      "report_path": "crates/haze-gdrive-adapter/control/report.md",
+      "report_blob_sha": "dc95fa55d3b707da462beebe56b32d73cd54eb86",
+      "phase": "GDA-GDA-P4-CURSOR-READ-CONTRACT-ARCHITECTURE-REVIEW",
+      "status": "ARCHITECT_CHANGED_CONTRACTS",
+      "completed_at": "2026-07-17T12:29:32.203Z"
+    }
+  ],
   "recent_failures": [],
-  "last_poll": "2026-07-17T11:05:08.768Z"
+  "last_poll": "2026-07-17T12:29:32.203Z"
 }
