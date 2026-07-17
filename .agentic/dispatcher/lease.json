@@ -3,6 +3,6 @@
   "holder_run_id": "haze-dispatch-20260717102652-bdccea9c",
   "lease_token": "lease-20260717102703-d3f12bb4e46ae",
   "acquired_at": "2026-07-17T10:27:03.004Z",
-  "heartbeat_at": "2026-07-17T10:27:03.004Z",
-  "expires_at": "2026-07-17T10:47:03.004Z"
+  "heartbeat_at": "2026-07-17T10:30:53.559Z",
+  "expires_at": "2026-07-17T10:50:53.559Z"
 }
