@@ -5,8 +5,9 @@
     "state_format_version": 1,
     "state_version": 7,
     "cursor": {
+      "state": "present",
       "generation": 3,
-      "present": true
+      "cursor": "synthetic-private-cursor-fixture"
     },
     "core_export_checkpoint": 19,
     "last_operations": {
