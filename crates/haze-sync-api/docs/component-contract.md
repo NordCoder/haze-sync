@@ -31,6 +31,8 @@ Covered V1 HTTP surfaces:
 - `DELETE /v1/files/{path}`
 - `GET /v1/conflicts?status=open`
 - `POST /v1/conflicts/{conflict_id}/resolve`
+- `GET /v1/adapters/{adapter_id}/gdrive/state`
+- `POST /v1/adapters/{adapter_id}/gdrive/state/commit`
 - passive admin/status DTOs for status and adapter-list output
 
 The concrete HTTP router, middleware stack, runtime app state, and handler registration belong to `haze-sync-server`.
@@ -59,7 +61,9 @@ DTOs and response helpers must preserve safe, deterministic JSON vocabulary for 
 - PUT responses distinguish accepted, conflict-saved, ignored, and rejected outcomes;
 - DELETE responses distinguish tombstoned, not-found, and rejected outcomes;
 - conflict list/resolve DTOs expose conflict identifiers, original/materialized paths, revisions, source adapter, policy, status, and resolution status;
-- admin/status DTOs expose sanitized readiness, adapter, cursor-presence, and pause-support summaries only.
+- admin/status DTOs expose sanitized readiness, adapter, cursor-presence, and pause-support summaries only;
+- the matching authenticated `gdrive_adapter` private state snapshot represents cursor state as exactly `absent { generation: 0 }` or `present { generation > 0, cursor }` using the bounded opaque `GDriveRawCursorDto`;
+- the separate GDrive admin summary remains cursor-value-free and contains generation/presence only.
 
 The API component may define response builders from already-validated service output, but it must not create revisions, tombstones, conflict records, operation-log rows, or adapter cursor updates.
 
@@ -95,7 +99,8 @@ Runtime wiring is owned by `haze-sync-server`. Sync state transitions and safety
 
 - Do not commit secrets, production `.env` files, OAuth tokens, bearer tokens, token hashes, provider payloads, local logs/dumps, or generated artifacts.
 - Redact token and token-hash formatting output.
-- Do not serialize or log raw bearer tokens, idempotency keys, database URLs, local absolute paths, stack traces, raw provider payloads, raw external cursors, request bodies, or file bytes.
+- Do not log or format raw bearer tokens, idempotency keys, database URLs, local absolute paths, stack traces, raw provider payloads, raw external cursors, request bodies, or file bytes.
+- A bounded raw external cursor may serialize only inside the authenticated matching-adapter private GDrive snapshot or commit contract; it must remain absent from admin/status/doctor output, public errors, logs, tracing, diagnostics, `Debug`, and `Display`.
 - Public admin/status output may indicate that a private external cursor exists, but must not expose the cursor itself.
 - Public errors must use safe codes/messages/details only.
 - API helpers may model authorization requirements, but token lookup and enforcement are server/runtime responsibilities.
@@ -145,6 +150,8 @@ Known dependents:
 - Conflict output vocabulary must preserve both sides and expose safe resolution actions only.
 - Safe public errors must never expose internals or secrets.
 - DTOs must remain JSON-serializable and deterministic for adapter clients.
+- A private GDrive cursor value and its generation form one indivisible typed state; absent/non-zero and present/zero pairs are invalid.
+- `advance = None` in the commit contract means unchanged and never means clear/reset.
 
 ## Test obligations
 
@@ -156,7 +163,8 @@ API tests should cover:
 - conversion between API DTO wrappers and common domain/value types;
 - route helper parsing for path, query, headers, body metadata, and bounds;
 - safe error code/status/detail mapping;
-- absence of secrets, token hashes, raw cursors, database URLs, local paths, stack traces, provider payloads, request bodies, and raw file bytes in public/debug output;
+- strict private GDrive cursor variants, generation/value invariants, bounded cursor decoding, admin sanitization, and formatting redaction;
+- absence of secrets, token hashes, raw cursors outside authenticated private transport, database URLs, local paths, stack traces, provider payloads, request bodies, and raw file bytes in public/debug output;
 - passive behavior boundaries: no DB, object-store, provider, router-registration, or background-job behavior inside API tests.
 
 Connector-only workers must honestly report shell checks as not run unless CI metadata is observed.
@@ -167,12 +175,14 @@ Connector-only workers must honestly report shell checks as not run unless CI me
 - Route helper names can appear active; docs and tests must keep passive boundaries explicit.
 - Adding Core conversions can accidentally pull runtime or storage concerns into API if not reviewed.
 - Admin/status output is especially leak-prone because it summarizes runtime state.
+- The private GDrive snapshot correction is intentionally breaking for strict old clients; Server and the corrected GDrive client must be released as one coordinated compatibility unit after their own accepted phases.
 
 ## Deferred work
 
 - Final cross-component route wiring remains server/fan-in work.
 - Full integration tests for live HTTP behavior belong in server or cross-component E2E phases.
 - Adapter/client contract tests may be added once adapter components consume these DTOs.
+- Server mapping of the persisted cursor and corrected GDrive client decoding remain separate gated phases.
 - Any future API contract expansion must update this contract, dependency map, and relevant server/adapter docs.
 
 ## Contract change protocol
