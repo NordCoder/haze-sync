@@ -3,9 +3,10 @@ use std::collections::BTreeSet;
 use haze_sync_api::{
     auth::{AdapterPrincipal, AdapterRole},
     dto::gdrive::{
-        GDriveCursorAdvanceDto, GDriveEchoStateDto, GDriveOperationKindDto, GDriveRawCursorDto,
-        GDriveStateAdminSummaryResponse, GDriveStateCommitRequest, GDriveStateCommitResponse,
-        GDriveStateErrorCode, GDriveStateSnapshotResponse,
+        GDriveCursorAdvanceDto, GDriveEchoStateDto, GDriveOperationKindDto,
+        GDrivePrivateCursorStateDto, GDriveRawCursorDto, GDriveStateAdminSummaryResponse,
+        GDriveStateCommitRequest, GDriveStateCommitResponse, GDriveStateErrorCode,
+        GDriveStateSnapshotResponse,
     },
     routes::gdrive::{
         parse_authenticated_gdrive_state_commit_request,
@@ -18,6 +19,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 
 const FIXTURE_JSON: &str = include_str!("../fixtures/gdrive-state-contract-v1.json");
+const PRIVATE_CURSOR_SENTINEL: &str = "synthetic-private-cursor-fixture";
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -73,9 +75,10 @@ fn assert_complete_unique(actual: &[String], expected: BTreeSet<String>) {
 }
 
 #[test]
-fn fixture_is_strict_public_and_contains_no_raw_cursor_or_secret_material() {
+fn fixture_is_strict_and_contains_only_synthetic_private_cursor_material() {
     let fixture = load_fixture();
     assert_eq!(fixture.schema_version, 1);
+    assert!(FIXTURE_JSON.contains(PRIVATE_CURSOR_SENTINEL));
 
     let lowercase = FIXTURE_JSON.to_ascii_lowercase();
     for forbidden in [
@@ -118,14 +121,27 @@ fn snapshot_and_admin_summary_roundtrip_and_sanitize_deterministically() {
 
     validate_private_snapshot(&snapshot).unwrap();
     assert_eq!(
+        snapshot.cursor,
+        GDrivePrivateCursorStateDto::Present {
+            generation: 3,
+            cursor: GDriveRawCursorDto::parse(PRIVATE_CURSOR_SENTINEL).unwrap(),
+        }
+    );
+    assert_eq!(
         sanitize_snapshot_for_admin(&snapshot).unwrap(),
         expected_admin
     );
-    assert!(serde_json::to_string(&expected_admin)
-        .unwrap()
-        .contains("\"mapping_count\":1"));
-    assert!(!format!("{snapshot:?}").contains("drive-file-fixture-01"));
-    assert!(!format!("{snapshot:?}").contains("drive-version-fixture-07"));
+    let admin_json = serde_json::to_string(&expected_admin).unwrap();
+    assert!(admin_json.contains("\"mapping_count\":1"));
+    assert!(admin_json.contains("\"generation\":3"));
+    assert!(admin_json.contains("\"present\":true"));
+    assert!(!admin_json.contains("\"cursor\""));
+    assert!(!admin_json.contains(PRIVATE_CURSOR_SENTINEL));
+
+    let snapshot_debug = format!("{snapshot:?}");
+    assert!(!snapshot_debug.contains(PRIVATE_CURSOR_SENTINEL));
+    assert!(!snapshot_debug.contains("drive-file-fixture-01"));
+    assert!(!snapshot_debug.contains("drive-version-fixture-07"));
 }
 
 #[test]
@@ -170,6 +186,15 @@ fn read_route_allows_matching_adapter_and_sanitized_admin_only() {
         Some(&wrong_adapter),
     )
     .is_err());
+    assert!(parse_authenticated_get_gdrive_state_request(
+        GetGDriveStateRouteParts {
+            adapter_id: "gdrive-main",
+            after_path: None,
+            limit: None,
+        },
+        None,
+    )
+    .is_err());
 }
 
 #[test]
@@ -202,18 +227,23 @@ fn commit_fixture_is_strict_authenticated_idempotent_metadata() {
 }
 
 #[test]
-fn raw_cursor_exists_only_in_private_commit_and_is_redacted_from_formatting() {
+fn raw_cursor_exists_only_in_authenticated_private_contracts_and_is_redacted() {
     let fixture = load_fixture();
+    let snapshot: GDriveStateSnapshotResponse = assert_roundtrip(&fixture.private_snapshot);
+    let private_json = serde_json::to_string(&snapshot).unwrap();
+    assert!(private_json.contains(PRIVATE_CURSOR_SENTINEL));
+    assert!(!format!("{snapshot:?}").contains(PRIVATE_CURSOR_SENTINEL));
+
     let mut request: GDriveStateCommitRequest =
         assert_roundtrip(&fixture.commit_request_without_cursor_advance);
     request.cursor.advance = Some(GDriveCursorAdvanceDto {
         next_generation: 4,
-        cursor: GDriveRawCursorDto::parse("private-provider-cursor-fixture").unwrap(),
+        cursor: GDriveRawCursorDto::parse("synthetic-private-commit-cursor").unwrap(),
     });
 
     let json = serde_json::to_string(&request).unwrap();
-    assert!(json.contains("private-provider-cursor-fixture"));
-    assert!(!format!("{request:?}").contains("private-provider-cursor-fixture"));
+    assert!(json.contains("synthetic-private-commit-cursor"));
+    assert!(!format!("{request:?}").contains("synthetic-private-commit-cursor"));
 
     let principal = AdapterPrincipal::new("gdrive-main", AdapterRole::GdriveAdapter).unwrap();
     parse_authenticated_gdrive_state_commit_request(
