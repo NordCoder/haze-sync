@@ -1,6 +1,6 @@
 {
   "protocol_version": 3,
-  "revision": 17,
+  "revision": 18,
   "active_orchestrator_dispatch": null,
   "active_agent_batch": {
     "batch_id": "api-API-GDA-P2-clean-security-review-20260717181732-ee53d9-batch",
@@ -18,7 +18,10 @@
         "prompt_blob_sha": "4ac32b46b5cef422bbed665d6517d019c2043593",
         "wave": "W1",
         "phase": "API-GDA-P2-CLEAN-CODE-SECURITY-REVIEW",
-        "delivery_attempt_id": "delivery-20260717190000-api-review-a9d4c1"
+        "delivery_attempt_id": "delivery-20260717190000-api-review-a9d4c1",
+        "chat_key": "api",
+        "prompt_fingerprint": "92fc78e65ba3666c707aeec54efbd998b3356569dffb5fe271403db4c3ad41bc",
+        "status": "DELIVERY_RESERVED"
       }
     ],
     "reserved_at": "2026-07-17T19:00:00.000Z"
