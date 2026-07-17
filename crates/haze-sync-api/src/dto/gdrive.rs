@@ -103,7 +103,7 @@ impl fmt::Display for GDriveProviderIdentifierDto {
     }
 }
 
-/// Opaque Drive change cursor accepted only by the authenticated private commit contract.
+/// Opaque Drive change cursor accepted only by authenticated private contracts.
 #[derive(Clone, Eq, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct GDriveRawCursorDto(String);
@@ -148,6 +148,29 @@ impl fmt::Debug for GDriveRawCursorDto {
 }
 
 impl fmt::Display for GDriveRawCursorDto {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("<redacted>")
+    }
+}
+
+/// Complete private cursor state returned only to the matching GDrive adapter.
+#[derive(Clone, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "state", rename_all = "snake_case", deny_unknown_fields)]
+pub enum GDrivePrivateCursorStateDto {
+    Absent { generation: u64 },
+    Present {
+        generation: u64,
+        cursor: GDriveRawCursorDto,
+    },
+}
+
+impl fmt::Debug for GDrivePrivateCursorStateDto {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("GDrivePrivateCursorStateDto(<redacted>)")
+    }
+}
+
+impl fmt::Display for GDrivePrivateCursorStateDto {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str("<redacted>")
     }
@@ -299,7 +322,7 @@ pub struct GDriveStateSnapshotResponse {
     pub adapter_id: AdapterIdDto,
     pub state_format_version: u32,
     pub state_version: u64,
-    pub cursor: GDriveCursorSummaryDto,
+    pub cursor: GDrivePrivateCursorStateDto,
     pub core_export_checkpoint: u64,
     pub last_operations: GDriveLastOperationsSummaryDto,
     pub mappings: Vec<GDriveMappingFactsDto>,
@@ -475,6 +498,7 @@ mod tests {
             "\"cursor-fixture-01\""
         );
         assert_eq!(format!("{cursor:?}"), "GDriveRawCursorDto(<redacted>)");
+        assert_eq!(format!("{cursor}"), "<redacted>");
         assert_eq!(
             format!("{provider_id:?}"),
             "GDriveProviderIdentifierDto(<redacted>)"
@@ -483,6 +507,55 @@ mod tests {
             format!("{fingerprint:?}"),
             "GDriveFactsFingerprintDto(<redacted>)"
         );
+    }
+
+    #[test]
+    fn private_cursor_state_uses_exact_strict_tagged_wire_shapes() {
+        let absent = GDrivePrivateCursorStateDto::Absent { generation: 0 };
+        assert_eq!(
+            serde_json::to_string(&absent).unwrap(),
+            "{\"state\":\"absent\",\"generation\":0}"
+        );
+
+        let sentinel = "synthetic-private-cursor-sentinel";
+        let present = GDrivePrivateCursorStateDto::Present {
+            generation: 3,
+            cursor: GDriveRawCursorDto::parse(sentinel).unwrap(),
+        };
+        assert_eq!(
+            serde_json::to_string(&present).unwrap(),
+            format!(
+                "{{\"state\":\"present\",\"generation\":3,\"cursor\":\"{sentinel}\"}}"
+            )
+        );
+        assert_eq!(
+            format!("{present:?}"),
+            "GDrivePrivateCursorStateDto(<redacted>)"
+        );
+        assert_eq!(format!("{present}"), "<redacted>");
+        assert!(!format!("{present:?}").contains(sentinel));
+        assert!(!format!("{present}").contains(sentinel));
+
+        for invalid in [
+            r#"{"state":"present","generation":3}"#,
+            r#"{"state":"absent","generation":0,"cursor":"synthetic"}"#,
+            r#"{"state":"absent","generation":0,"unexpected":true}"#,
+            r#"{"state":"present","generation":3,"cursor":"","unexpected":false}"#,
+        ] {
+            assert!(serde_json::from_str::<GDrivePrivateCursorStateDto>(invalid).is_err());
+        }
+    }
+
+    #[test]
+    fn private_cursor_state_preserves_cursor_bounds() {
+        let over_bound = "x".repeat(MAX_GDRIVE_CURSOR_BYTES + 1);
+        for invalid in [
+            serde_json::json!({"state": "present", "generation": 1, "cursor": ""}),
+            serde_json::json!({"state": "present", "generation": 1, "cursor": "line\nbreak"}),
+            serde_json::json!({"state": "present", "generation": 1, "cursor": over_bound}),
+        ] {
+            assert!(serde_json::from_value::<GDrivePrivateCursorStateDto>(invalid).is_err());
+        }
     }
 
     #[test]
