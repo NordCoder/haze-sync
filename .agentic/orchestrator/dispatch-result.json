@@ -1,21 +1,21 @@
 {
   "protocol_version": 3,
-  "orchestrator_execution_id": "orchestrator-20260717122757-3799a1",
+  "orchestrator_execution_id": "orchestrator-20260717130949-ee53d9",
   "status": "PROMPTS_READY",
   "prepared_executions": [
     {
-      "agent_execution_id": "api-API-GDA-P2-private-cursor-impl-20260717122757-3799a1",
+      "agent_execution_id": "api-FIX-API-GDA-P2-ci-diagnostics-20260717130949-ee53d9",
       "component": "api",
-      "role": "implementation-worker",
+      "role": "fixer-worker",
       "branch": "component/api",
       "prompt_path": "crates/haze-sync-api/control/prompt.md",
       "report_path": "crates/haze-sync-api/control/report.md",
-      "prompt_commit_sha": "3c793d6f0e0402f0d5f12986f9cd2cba3c52c18f",
-      "prompt_blob_sha": "8a4008404c3c83876a731e41b7d151c1ca20a569",
+      "prompt_commit_sha": "bcb952e00c01f86aa04f16a841724e5e3bbb165c",
+      "prompt_blob_sha": "b0200262283f6d8aa2383a5e9de803458b13f9c2",
       "wave": "W1",
-      "phase": "API-GDA-P2-PRIVATE-CURSOR-SNAPSHOT-CONTRACT"
+      "phase": "FIX-API-GDA-P2-CI-DIAGNOSTICS"
     }
   ],
-  "summary": "Validated the GDrive cursor-contract architecture decision and prepared the first dependency-ready owner phase: API private cursor snapshot contract implementation. Server, GDrive client, runtime and Deployment remain gated.",
+  "summary": "Prepared the focused API diagnostics fixer. Downstream phases remain gated.",
   "not_before": null
 }
