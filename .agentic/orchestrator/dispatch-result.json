@@ -1,0 +1,8 @@
+{
+  "protocol_version": 3,
+  "orchestrator_execution_id": null,
+  "status": "NO_ACTION",
+  "prepared_executions": [],
+  "summary": "Haze dispatcher control plane initialized. No Orchestrator execution has completed yet.",
+  "not_before": null
+}
