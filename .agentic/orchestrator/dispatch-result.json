@@ -1,21 +1,21 @@
 {
   "protocol_version": 3,
-  "orchestrator_execution_id": "orchestrator-20260717130949-ee53d9",
+  "orchestrator_execution_id": "orchestrator-20260717181732-ee53d9",
   "status": "PROMPTS_READY",
   "prepared_executions": [
     {
-      "agent_execution_id": "api-FIX-API-GDA-P2-ci-diagnostics-20260717130949-ee53d9",
+      "agent_execution_id": "api-API-GDA-P2-clean-security-review-20260717181732-ee53d9",
       "component": "api",
-      "role": "fixer-worker",
+      "role": "clean-code-reviewer",
       "branch": "component/api",
       "prompt_path": "crates/haze-sync-api/control/prompt.md",
       "report_path": "crates/haze-sync-api/control/report.md",
-      "prompt_commit_sha": "bcb952e00c01f86aa04f16a841724e5e3bbb165c",
-      "prompt_blob_sha": "b0200262283f6d8aa2383a5e9de803458b13f9c2",
+      "prompt_commit_sha": "2a6b5336c0f1f4419e838af9824464af5b07dfe0",
+      "prompt_blob_sha": "4ac32b46b5cef422bbed665d6517d019c2043593",
       "wave": "W1",
-      "phase": "FIX-API-GDA-P2-CI-DIAGNOSTICS"
+      "phase": "API-GDA-P2-CLEAN-CODE-SECURITY-REVIEW"
     }
   ],
-  "summary": "Prepared the focused API diagnostics fixer. Downstream phases remain gated.",
+  "summary": "Control-plane integrity audit reconciled the stale prior result. The completed API diagnostics fixer is not redispatched; the sole prepared execution is the dependency-valid focused API clean-code/security review on exact green-CI candidate dba43751521c32aca53729c1c8dbddf2e7d8fbfb.",
   "not_before": null
 }
