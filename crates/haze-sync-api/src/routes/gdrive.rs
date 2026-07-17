@@ -641,7 +641,8 @@ mod tests {
 
     #[test]
     fn private_cursor_state_requires_consistent_generation() {
-        let absent_non_zero = minimal_snapshot(GDrivePrivateCursorStateDto::Absent { generation: 1 });
+        let absent_non_zero =
+            minimal_snapshot(GDrivePrivateCursorStateDto::Absent { generation: 1 });
         assert_eq!(
             validate_private_snapshot(&absent_non_zero).unwrap_err(),
             GDriveStateRouteError::InvalidCursorState
@@ -672,10 +673,13 @@ mod tests {
                 present: true,
             }
         );
+        assert_eq!(
+            serde_json::to_value(&summary).unwrap()["cursor"],
+            serde_json::json!({"generation": 3, "present": true})
+        );
         let json = serde_json::to_string(&summary).unwrap();
         assert!(json.contains("\"generation\":3"));
         assert!(json.contains("\"present\":true"));
-        assert!(!json.contains("\"cursor\""));
         assert!(!json.contains(sentinel));
         assert!(!format!("{snapshot:?}").contains(sentinel));
         assert!(!GDriveStateRouteError::InvalidCursorState
