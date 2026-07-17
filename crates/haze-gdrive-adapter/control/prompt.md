@@ -1,21 +1,23 @@
-# W1-GDA-GDA-P4-LONG-RUNNING-RUNTIME
+# W1-GDA-GDA-P4-CURSOR-READ-CONTRACT-ARCHITECTURE-REVIEW
 
 ## Routing envelope
 
+- protocol_version: `3`
 - repository: `NordCoder/haze-sync`
 - component: `gdrive-adapter`
 - component_path: `crates/haze-gdrive-adapter`
-- role: `implementation-worker`
-- agent_execution_id: `gdrive-adapter-GDA-GDA-P4-impl-20260717102652-509ee26f`
+- role: `architect`
+- agent_execution_id: `gdrive-adapter-GDA-GDA-P4-cursor-contract-arch-20260717113213-a4c27d91`
 - branch: `component/gdrive-adapter`
 - pull_request: `#50`
 - wave: `W1`
-- phase: `GDA-GDA-P4-LONG-RUNNING-RUNTIME`
+- phase: `GDA-GDA-P4-CURSOR-READ-CONTRACT-ARCHITECTURE-REVIEW`
+- chat_key: `gdrive-adapter`
 - control_prompt_path: `crates/haze-gdrive-adapter/control/prompt.md`
 - control_report_path: `crates/haze-gdrive-adapter/control/report.md`
-- expected_report_type: `IMPLEMENTATION`
+- expected_report_type: `ARCHITECT_REVIEW`
 
-This component has one dedicated execution chat for implementation, clean-code-review, and fixer work. For this execution only, act as `implementation-worker`. Do not derive routing or scope from prior chat messages.
+Use the component's one dedicated `gdrive-adapter` chat. For this execution only, act as Architect. Do not derive current state from chat history and do not create role-specific chat routing.
 
 ## Mandatory source order
 
@@ -27,198 +29,191 @@ Read and apply, in order:
 4. `crates/haze-gdrive-adapter/docs/implementation-log.md`;
 5. `crates/haze-gdrive-adapter/docs/dependency-map.md`;
 6. `crates/haze-gdrive-adapter/docs/decisions.md`;
-7. architecture review blob `14c427880e1201d851cdc9ee04b9cd0e83334de4`;
-8. this prompt;
-9. current branch code, tests, manifests, lockfile and PR metadata.
+7. accepted fan-in architecture report blob `14c427880e1201d851cdc9ee04b9cd0e83334de4`;
+8. blocked runtime report blob `c12872192f1be968ab77bf44adfeb37c5228b2c0` from commit `42961e78a547ae003dc3310d82c3f8505d316d2f`;
+9. accepted API SHA `c60c3976696da1970d539e5cff6e9f74a61fc10e`, especially:
+   - `crates/haze-sync-api/src/dto/gdrive.rs` blob `8098457eee373f63210fbd381c6487a054d7609f`;
+   - `crates/haze-sync-api/src/routes/gdrive.rs` blob `ef7f8dc1d02b3742e76bb99c66ee39703bee3b4b`;
+10. accepted Server SHA `c023b83e1e6f502e7d2261acccb871dd5588edf1`, especially `crates/haze-sync-server/src/routes/gdrive.rs` blob `757bea6adf9939a87e3ae14695afefd2e9df94eb`;
+11. accepted Storage SHA `3617bd1cf947fdd394f1ab29d4b992f7b8859a84`, especially state-types blob `1f0d5ac29bbe52d5fc7579b9a1120179363cdfb6`;
+12. current GDrive change-feed model blob `27e7775e3d4401d0222cbe3f442245be4cb449a2` and current HTTP durable-state client;
+13. this prompt;
+14. current component branches, PR metadata, active control state and relevant CI evidence.
 
-Old control files are read-only evidence unless this prompt identifies them. Do not archive control files.
+Old control files are read-only evidence. Do not archive prompt/report files and do not implement product code.
 
-## Accepted inputs
+## Established facts
 
-The following are accepted and must remain intact unless a proven component-local defect requires a compatible correction:
+The accepted architecture remains fixed unless the evidence proves it impossible:
 
-- GDrive P2 HTTP/durable-state candidate: `746dc8790643e13e85553ff94f6b124a5c686127`;
-- GDrive P2 final clean-review report blob: `e78d1d5141c17cd60f0487d251cf73a8c985e6de` (`CLEAN_ACCEPT`);
-- Component CI run `29539680811`, run number `2060`, success on that exact SHA;
-- Cargo-generated lockfile blob: `882be8e8ce61ac4c77e8bdaec45d1cbaa030aa86`;
-- accepted OAuth/auth candidate: `7f00a60641ca157907d0e75e4ab1bb47c05f03c9`;
-- accepted API GDrive contract: `c60c3976696da1970d539e5cff6e9f74a61fc10e`;
-- accepted Server GDrive routes/transactions: `c023b83e1e6f502e7d2261acccb871dd5588edf1`;
-- accepted Storage durable-state contract: `3617bd1cf947fdd394f1ab29d4b992f7b8859a84`.
+- GDrive is one standalone long-running process per configured adapter identity/root;
+- API owns transport DTOs and route contracts;
+- Server owns authenticated route behavior and transaction choreography;
+- Storage owns durable state and already persists `drive_cursor: Option<String>`;
+- GDrive accesses durable state only through authenticated Server/API HTTP;
+- direct database access by GDrive is forbidden;
+- full scan is the correctness backstop, but it must not silently replace an unresolved durable cursor interval;
+- raw cursor values are private provider facts and must never appear in admin output, status, logs, errors, reports or public diagnostics.
 
-Fixed architecture:
+The blocker is exact:
 
-- one standalone long-running `haze-gdrive-adapter` process per configured adapter identity/root;
-- public authenticated HTTP through accepted API/Server contracts;
-- durable mapping/cursor/echo/delete state owned by Storage and reached only through Server/API;
-- no adapter database access;
-- one serialized authoritative scheduler per adapter identity;
-- full scan is the correctness backstop; change feed is a latency optimization;
-- Core remains authoritative for revision, conflict and delete policy.
+- the private commit contract can durably write the bounded opaque cursor;
+- the private GET snapshot returns only `generation` and `present`;
+- Server reads the stored cursor but discards its value while constructing `GDriveStateSnapshotResponse`;
+- the restarted adapter requires the actual cursor token to continue Google Drive change polling without weakening crash-safety semantics;
+- the admin path already returns a separate `GDriveStateAdminSummaryResponse`.
 
 ## Objective
 
-Replace the current immediate-exit lifecycle skeleton with a real, bounded, standalone long-running runtime that composes the already implemented scan, change-feed, export, delete-guard, OAuth/auth and durable-state boundaries.
+Decide and specify the smallest safe cross-component contract correction that allows the matching authenticated GDrive adapter to read its committed opaque cursor after restart while preserving admin sanitization, bounded validation, strict decoding, redaction and existing ownership boundaries.
 
-Do not deliver another fake-only or immediate-exit skeleton. Implement all missing concrete GDrive-local adapters needed for the standalone process to perform its accepted responsibilities. If a required public API/Server contract is genuinely absent or incompatible, report `BLOCKED_BY_CONTRACT` instead of inventing a sibling-owned contract.
+This is an architecture and transition-planning gate. Do not write product code, tests, component docs, manifests, lockfiles or workflows. Write only the architecture report.
 
-## Required implementation
+## Required decisions
 
-### 1. Concrete process composition
+### 1. Exact API shape
 
-The binary/runtime must:
+Choose one exact design and reject the alternatives explicitly:
 
-- load and validate config and explicit adapter identity;
-- load the read-only OAuth credential file safely;
-- construct a concrete bounded token endpoint and Google Drive provider client where the current fake-first traits lack production implementations;
-- construct the accepted bounded HTTP durable-state client;
-- construct concrete GDrive-local HTTP gateways for existing public Haze Server file/change/server-info routes when required by the existing import/export/delete modules;
-- load the bounded adapter-private durable-state snapshot before processing;
-- wire existing full-scan, change-feed, export, echo and delete-guard modules without duplicating their policy;
-- remain alive until cooperative shutdown or a startup-fatal condition.
+- extend the existing adapter-private snapshot response with a cursor-bearing private DTO using the existing `GDriveRawCursorDto`;
+- replace the private response's summary cursor type with a type-level private cursor state while retaining the separate admin summary DTO;
+- add a dedicated matching-principal private cursor-read route only if changing the existing private snapshot is materially less safe or less compatible.
 
-Do not infer adapter identity from credentials or provider metadata. Do not access PostgreSQL or Storage internals.
+Do not merely say “return the cursor”. Define exact Rust DTO names/fields, optionality, serde behavior, bounds and validation invariants. Prefer a design that makes impossible states difficult to represent and does not put the raw value into `GDriveCursorSummaryDto` used by admin output.
 
-### 2. Serialized scheduler
+Address compatibility with strict `deny_unknown_fields` clients and the required fan-in/deployment ordering. Do not assume an already deployed old client can ignore a new field.
 
-Implement one authoritative scheduler with no overlapping state-transition cycles:
+### 2. Authorization and wire separation
 
-- bounded change-feed poll cadence from config;
-- bounded periodic full-scan cadence from config;
-- full scan cannot be postponed indefinitely by polling, retries or jitter;
-- bounded exponential backoff with bounded jitter for retryable provider/Server failures;
-- cursor invalidation, permission uncertainty or mapping inconsistency schedules a full scan before cursor reinitialization;
-- one cycle owns checkpoint/cursor progression; bounded internal concurrency is allowed only where it cannot reorder durable progress.
+Specify exact behavior for:
 
-Use injectable clock/sleeper/cancellation/random-jitter boundaries so tests are deterministic and do not depend on long wall-clock sleeps.
+- matching authenticated `gdrive_adapter` principal;
+- non-matching adapter principal;
+- authenticated admin;
+- unauthenticated caller.
 
-### 3. Mode enforcement
+The admin wire response must remain provider-identifier-free and cursor-value-free. Decide whether the existing route can safely return different response DTOs by access class, as it already does, or whether a new route is required.
 
-Enforce the accepted capability matrix before provider, Core or durable-state work:
+### 3. Cursor invariants
 
-- `disabled`: lifecycle/local safe status only; no provider/Core reads and no durable mutation;
-- `dry_run` and `read_only`: observation/planning reads only; no Core writes, provider writes/trash, cursor/checkpoint advancement or mapping/echo/delete mutation;
-- `import_only`: provider reads, accepted Core writes and permitted durable import/cursor/delete-candidate commits; no provider writes/trash;
-- `export_only`: Core reads, permitted provider writes/trash and durable mapping/echo/export checkpoint commits; no provider-originated Core writes;
-- `bidirectional`: both directions, preserving every accepted guard.
+Define a complete invariant matrix covering:
 
-A mode denial must occur before constructing or sending the forbidden mutation.
+- no stored cursor;
+- stored cursor present;
+- cursor generation and value consistency;
+- state version consistency;
+- pagination across mapping pages;
+- stale or malformed persisted cursor;
+- cursor clear/reset, if allowed at all;
+- cursor invalidation recovery and full-scan interaction;
+- atomicity between the returned cursor value and its generation/state version.
 
-### 4. Durable progress and crash safety
+State whether private cursor metadata/value is repeated on every paginated snapshot page or delivered through a separate non-paginated read, and justify the choice.
 
-Preserve these rules:
+### 4. Secrecy and validation
 
-- Drive cursor advances only after the complete represented work and corresponding durable commit succeed;
-- Core export checkpoint advances only after provider confirmation and mapping/echo commit succeed;
-- mapping facts are committed only after confirmed Core/provider outcomes;
-- compare-and-commit POST is never blindly or automatically retried;
-- after stale/conflict/ambiguous outcomes, refetch/reconcile before any new commit attempt;
-- deterministic idempotency and operation identities allow Core mutation replay without duplicate mutation;
-- provider mutations without provider idempotency use preconditions and post-crash reconciliation before repetition;
-- no unresolved item may be skipped by a cursor or checkpoint;
-- no unbounded in-memory backlog is created while Server is unavailable.
+Preserve or strengthen:
 
-### 5. Failure and degraded-state behavior
+- `MAX_GDRIVE_CURSOR_BYTES` and `GDriveRawCursorDto` validation;
+- redacted `Debug`/`Display` for private DTOs and route/request/response wrappers;
+- no raw cursor in route errors, logs, tracing, admin summaries, status, diagnostics artifacts or reports;
+- no raw response-body or dependency-error leakage;
+- bounded response bodies and strict response decoding;
+- no bearer token or Idempotency-Key exposure.
 
-- invalid config or corrupt credential file: fail startup closed;
-- revoked credentials, insufficient scope, inaccessible root or mass-delete block: process remains alive in a safe degraded/blocked state and performs no mutations;
-- retryable provider rate limit/unavailability or Server outage: remain alive, preserve durable progress and retry with bounded backoff;
-- invalid cursor: preserve durable state and schedule a correctness full scan;
-- invariant/state-version mismatch: stop affected processing fail-closed and expose only a safe category;
-- never include raw dependency errors, response bodies or private facts in operator-safe output.
+Define required secrecy sentinel tests without using a real cursor value or provider credential.
 
-This phase may implement safe local runtime state required for lifecycle/testing. Do not create the deferred public status/control API contract.
+### 5. Owner-scoped implementation plan
 
-### 6. Graceful shutdown
+Produce an exact ordered phase plan with one active execution per component. At minimum decide whether the sequence is:
 
-Support cooperative process shutdown, including normal termination signals where the platform permits:
+1. API owner contract implementation and clean review;
+2. Server owner route/application implementation and DB-capable clean review;
+3. GDrive API fan-in/client adaptation and clean review;
+4. rerun `GDA-GDA-P4-LONG-RUNNING-RUNTIME` from its accepted P2/OAuth baseline.
 
-- stop accepting new cycles;
-- cancel waits promptly;
-- allow only the current bounded atomic HTTP/provider operation to finish;
-- commit only complete outcomes;
-- enforce a bounded shutdown deadline;
-- exit without advancing unresolved cursor/checkpoint state;
-- leave restart reconciliation able to resolve ambiguity safely.
+State whether Storage needs any code phase. Current evidence says Storage already persists the raw cursor; do not schedule Storage work without a specific missing contract or test obligation.
 
-### 7. Tests
+For each required phase provide:
 
-Add deterministic tests covering at least:
+- exact component and branch;
+- proposed phase ID;
+- role sequence;
+- allowed files and forbidden ownership expansion;
+- dependencies and accepted SHA inputs;
+- required tests;
+- exact CI gate, including DB-capable PostgreSQL evidence where Server transaction behavior is involved;
+- clean-review acceptance criteria;
+- fan-in order and rollback/compatibility constraints.
 
-- binary/runtime remains active rather than immediately exiting;
-- startup construction and observation-only preflight;
-- exactly one authoritative cycle and no overlap;
-- poll/full-scan scheduling and full-scan deadline fairness;
-- all adapter modes with zero forbidden calls/mutations;
-- transient provider and Server backoff without progress loss;
-- auth revoked/scope loss/root unreachable degraded behavior;
-- cursor invalidation triggering full scan;
-- stale durable-state conflict requiring refetch rather than blind POST retry;
-- crash boundaries before and after Core/provider mutation and before state commit;
-- graceful shutdown during wait and during bounded work;
-- comprehensive redaction sentinels.
+Do not route implementation/review/fixer roles to separate ChatGPT chats. Each component uses its one dedicated chat.
 
-Ordinary CI must use fakes, synthetic fixtures and loopback-only transport where necessary. It must not use real Google credentials, a live Google endpoint, a live Server, production data or unrestricted external network.
+### 6. Runtime resume gate
 
-### 8. Documentation
+Define the exact evidence required before GDrive runtime implementation may resume, including:
 
-Update the GDrive implementation log and focused runtime documentation to describe the implemented lifecycle, recovery boundaries, test model and remaining later-phase gates. Do not claim deployment readiness.
+- accepted API contract SHA and clean report blob;
+- accepted Server implementation SHA and DB-capable clean report blob;
+- exact GDrive fan-in/client SHA and clean report blob if a client adaptation phase is required;
+- round-trip proof that a committed cursor is returned to the matching adapter after restart-style reload;
+- proof that admin output and all formatted/error surfaces contain no cursor value;
+- proof that the adapter does not fall back to a fresh cursor or advance progress implicitly.
 
-## Allowed scope
+## Boundaries
 
-- `crates/haze-gdrive-adapter/src/**`;
-- focused GDrive tests/fixtures;
-- `crates/haze-gdrive-adapter/Cargo.toml` and repository `Cargo.lock` only for minimal runtime/network/signal dependencies actually required;
-- `crates/haze-gdrive-adapter/docs/**`;
-- exact existing API fan-in files are read-only and must remain byte-identical;
-- `crates/haze-gdrive-adapter/control/report.md`.
+Forbidden:
 
-The component scope is not limited to one file. A broader internal GDrive refactor is allowed when required for a clean runtime composition and must be explained in the report.
+- product or test edits;
+- edits to API, Server, Storage or GDrive implementation docs;
+- direct DB access from GDrive;
+- weakening the accepted commit, pagination, mode, retry or crash-safety contracts;
+- adding public status/control or operator APIs;
+- exposing cursor values to admin or public diagnostics;
+- real credentials, provider payloads or external-network testing;
+- workflow changes, merge, rebase, force-push or PR draft-state changes;
+- invented commit, blob, run, job or artifact identifiers.
 
-## Forbidden scope
+Allowed:
 
-- semantic edits to API, Server, Storage, Core, Common, Worktree, Obsidian, CLI or Deployment;
-- direct database access or `DATABASE_URL` consumption;
-- new public status/control DTOs or routes;
-- operator CLI commands or Deployment service packaging;
-- hard delete or bypass of Core/delete-candidate policy;
-- Server-hosted or dual-hosted provider loops;
-- automatic non-idempotent POST retry;
-- real credentials, tokens, provider payload archives or external-network CI;
-- workflow edits, test weakening, merge, rebase, force-push or PR draft-state changes.
-
-## CI and commit honesty
-
-- Product, test, manifest, dependency and documentation commits must not use CI skip.
-- Obtain a real final code-bearing SHA and full Component CI for that exact SHA.
-- Record fmt/check/test/clippy and diagnostics-finalizer conclusions separately.
-- A skipped workflow is not green CI.
-- If CI is pending, report `SELF_ACCEPT_PENDING_CI` with exact pending coordinates.
-- If CI is red, do not diagnose from memory and do not claim success; record the exact run/artifact metadata for a later fixer.
-- Do not fabricate commit, blob, job, artifact or run identifiers.
+- read repository files/blobs/commits/PR and CI metadata;
+- reason about cross-component contracts and compatibility;
+- write only `crates/haze-gdrive-adapter/control/report.md` as a control-only commit with CI skip.
 
 ## Reporting
 
 Write only `crates/haze-gdrive-adapter/control/report.md` using the project report template.
 
-The report routing envelope must include exactly:
+The report routing envelope must include:
 
-- `REPORT_TYPE: IMPLEMENTATION`;
-- terminal `STATUS` from the implementation vocabulary;
-- `role: implementation-worker`;
-- `agent_execution_id: gdrive-adapter-GDA-GDA-P4-impl-20260717102652-509ee26f`;
+- `REPORT_TYPE: ARCHITECT_REVIEW`;
+- terminal `STATUS`: `ARCHITECT_ACCEPT`, `ARCHITECT_NEEDS_CHANGES`, `ARCHITECT_CHANGED_CONTRACTS`, or `ARCHITECT_BLOCKED`;
+- `role: architect`;
+- `agent_execution_id: gdrive-adapter-GDA-GDA-P4-cursor-contract-arch-20260717113213-a4c27d91`;
+- `chat_name: gdrive-adapter`;
 - component `gdrive-adapter`;
 - branch `component/gdrive-adapter`;
 - wave `W1`;
-- phase_id `GDA-GDA-P4-LONG-RUNNING-RUNTIME`;
+- phase_id `GDA-GDA-P4-CURSOR-READ-CONTRACT-ARCHITECTURE-REVIEW`;
 - control prompt/report paths;
-- prompt commit SHA and prompt blob SHA supplied by the dispatcher launch envelope.
+- prompt commit SHA and prompt blob SHA supplied by the launch envelope.
 
-Also record changed files, runtime composition, mode matrix evidence, scheduler/recovery/shutdown behavior, concrete client boundaries, tests, secrecy review, final code-bearing SHA and exact CI metadata. Do not archive prompt/report files and do not claim `CLEAN_ACCEPT`, deployment readiness or merge readiness.
+The report must include:
+
+- exact chosen DTO/route design;
+- rejected alternatives and rationale;
+- authorization and cursor invariant matrices;
+- secrecy constraints and tests;
+- ordered owner-scoped phase plan;
+- exact next component/phase to dispatch;
+- whether Storage work is required;
+- runtime resume evidence;
+- PR state observed;
+- statement that no product code or contract file was changed by the Architect.
+
+Use `ARCHITECT_CHANGED_CONTRACTS` when a concrete API/Server contract change is accepted and owner-scoped implementation phases are authorized. Do not claim CI green, product readiness, deployment readiness or merge readiness from this report-only execution.
 
 ## Next gate
 
-- `SELF_ACCEPT` with exact-SHA green CI -> focused GDrive long-running runtime clean-code/security review;
-- `SELF_ACCEPT_PENDING_CI` -> Orchestrator verifies CI before transition;
-- `SELF_NEEDS_FIX` -> continuation or focused component fixer;
-- contract/dependency/tooling blocker -> stop safely with exact evidence.
+- `ARCHITECT_CHANGED_CONTRACTS` or `ARCHITECT_ACCEPT` with an executable owner-scoped plan -> Orchestrator opens only the first dependency-ready owner phase;
+- `ARCHITECT_NEEDS_CHANGES` -> revised architecture review;
+- `ARCHITECT_BLOCKED` -> component remains on contract hold with exact blocker evidence.
