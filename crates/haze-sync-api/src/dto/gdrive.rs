@@ -157,7 +157,9 @@ impl fmt::Display for GDriveRawCursorDto {
 #[derive(Clone, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "state", rename_all = "snake_case", deny_unknown_fields)]
 pub enum GDrivePrivateCursorStateDto {
-    Absent { generation: u64 },
+    Absent {
+        generation: u64,
+    },
     Present {
         generation: u64,
         cursor: GDriveRawCursorDto,
@@ -524,9 +526,7 @@ mod tests {
         };
         assert_eq!(
             serde_json::to_string(&present).unwrap(),
-            format!(
-                "{{\"state\":\"present\",\"generation\":3,\"cursor\":\"{sentinel}\"}}"
-            )
+            format!("{{\"state\":\"present\",\"generation\":3,\"cursor\":\"{sentinel}\"}}")
         );
         assert_eq!(
             format!("{present:?}"),
