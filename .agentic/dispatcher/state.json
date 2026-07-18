@@ -1,73 +1,13 @@
 {
-  "protocol_version": 3,
-  "revision": 19,
-  "active_orchestrator_dispatch": null,
-  "active_agent_batch": {
-    "batch_id": "api-API-GDA-P2-clean-security-review-20260717181732-ee53d9-batch",
-    "created_at": "2026-07-17T19:00:00.000Z",
-    "status": "DISPATCHED_WAITING_GITHUB_RESULT",
-    "executions": [
-      {
-        "agent_execution_id": "api-API-GDA-P2-clean-security-review-20260717181732-ee53d9",
-        "component": "api",
-        "role": "clean-code-reviewer",
-        "branch": "component/api",
-        "prompt_path": "crates/haze-sync-api/control/prompt.md",
-        "report_path": "crates/haze-sync-api/control/report.md",
-        "prompt_commit_sha": "2a6b5336c0f1f4419e838af9824464af5b07dfe0",
-        "prompt_blob_sha": "4ac32b46b5cef422bbed665d6517d019c2043593",
-        "wave": "W1",
-        "phase": "API-GDA-P2-CLEAN-CODE-SECURITY-REVIEW",
-        "delivery_attempt_id": "delivery-20260717190000-api-review-a9d4c1",
-        "chat_key": "api",
-        "prompt_fingerprint": "92fc78e65ba3666c707aeec54efbd998b3356569dffb5fe271403db4c3ad41bc",
-        "status": "DELIVERY_RESERVED"
-      }
-    ],
-    "reserved_at": "2026-07-17T19:00:00.000Z",
-    "dispatched_at": "2026-07-17T19:01:30.000Z"
-  },
-  "last_consumed_orchestrator_result": {
-    "orchestrator_execution_id": "orchestrator-20260717181732-ee53d9",
-    "result_blob_sha": "f11d6caab604a9605e41ca64c7e0c3ea0b6eb17a",
-    "consumed_at": "2026-07-17T19:00:00.000Z"
-  },
+  "protocol_version": 4,
+  "mode": "IDLE",
+  "active_orchestrator_execution_id": null,
+  "active_architect_execution_id": null,
+  "active_component_executions": [],
+  "last_consumed_orchestrator_execution_id": null,
   "not_before": null,
-  "completed_executions": [
-    {
-      "agent_execution_id": "gdrive-adapter-GDA-GDA-P4-cursor-contract-arch-20260717113213-a4c27d91",
-      "component": "gdrive-adapter",
-      "role": "architect",
-      "branch": "component/gdrive-adapter",
-      "report_path": "crates/haze-gdrive-adapter/control/report.md",
-      "report_blob_sha": "dc95fa55d3b707da462beebe56b32d73cd54eb86",
-      "phase": "GDA-GDA-P4-CURSOR-READ-CONTRACT-ARCHITECTURE-REVIEW",
-      "status": "ARCHITECT_CHANGED_CONTRACTS",
-      "completed_at": "2026-07-17T12:29:32.203Z"
-    },
-    {
-      "agent_execution_id": "api-API-GDA-P2-private-cursor-impl-20260717122757-3799a1",
-      "component": "api",
-      "role": "implementation-worker",
-      "branch": "component/api",
-      "report_path": "crates/haze-sync-api/control/report.md",
-      "report_blob_sha": "f60ca2d90b233d541a70451883838dc873d6da49",
-      "phase": "API-GDA-P2-PRIVATE-CURSOR-SNAPSHOT-CONTRACT",
-      "status": "SELF_NEEDS_FIX",
-      "completed_at": "2026-07-17T13:10:39.535Z"
-    },
-    {
-      "agent_execution_id": "api-FIX-API-GDA-P2-ci-diagnostics-20260717130949-ee53d9",
-      "component": "api",
-      "role": "fixer-worker",
-      "branch": "component/api",
-      "report_path": "crates/haze-sync-api/control/report.md",
-      "report_blob_sha": "fc0b2c67ee9bb7195ab288eed82392b785033fbb",
-      "phase": "FIX-API-GDA-P2-CI-DIAGNOSTICS",
-      "status": "FIX_COMPLETE",
-      "completed_at": "2026-07-17T17:10:12.000Z"
-    }
-  ],
+  "blocked_reason": null,
+  "blocked_at": null,
   "recent_failures": [],
-  "last_poll": "2026-07-17T19:01:30.000Z"
+  "health_incident": null
 }
