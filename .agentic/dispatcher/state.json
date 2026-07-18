@@ -1,7 +1,7 @@
 {
   "protocol_version": 4,
-  "mode": "ORCHESTRATOR",
-  "active_orchestrator_execution_id": "orch-live-once-20260718-1",
+  "mode": "IDLE",
+  "active_orchestrator_execution_id": null,
   "active_architect_execution_id": null,
   "active_component_executions": [],
   "last_consumed_orchestrator_execution_id": null,
