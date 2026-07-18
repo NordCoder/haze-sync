@@ -1,0 +1,29 @@
+{
+  "protocol_version": 4,
+  "bootstrap_version": 1,
+  "execution_id": "orch-live-once-20260718-1",
+  "actor": "orchestrator",
+  "mode": "NORMAL",
+  "role": "orchestrator",
+  "component": null,
+  "chat_key": "orchestrator",
+  "status": "PREPARED",
+  "product_branch": null,
+  "input_product_sha": null,
+  "prompt_path": null,
+  "prompt_blob_sha": null,
+  "prompt_commit_sha": null,
+  "report_path": null,
+  "prepared_at": "2026-07-18T20:00:23.953199Z",
+  "dispatched_at": null,
+  "acknowledged_at": null,
+  "working_at": null,
+  "completed_at": null,
+  "recovery": {
+    "full_trigger_redispatched_at": null,
+    "second_full_trigger_redispatched_at": null,
+    "ping_sent_at": null,
+    "stop_attempts": 0,
+    "continuation_sent_at": null
+  }
+}
