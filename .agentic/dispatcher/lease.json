@@ -1,8 +1,8 @@
 {
   "protocol_version": 4,
-  "holder_run_id": "codex-live-once-20260718-1",
-  "lease_token": "lease-295e904d85ec03322d4e0f3e43c306e4",
-  "acquired_at": "2026-07-18T20:00:23.953199Z",
-  "heartbeat_at": "2026-07-18T20:00:23.953199Z",
-  "expires_at": "2026-07-18T20:20:23.953199Z"
+  "holder_run_id": null,
+  "lease_token": null,
+  "acquired_at": null,
+  "heartbeat_at": null,
+  "expires_at": null
 }
