@@ -1,0 +1,12 @@
+{
+  "protocol_version": 4,
+  "bootstrap_version": 1,
+  "repository": "NordCoder/haze-sync",
+  "control_branch": "agentic/orchestration",
+  "chat_key": "8 cli",
+  "actor": "component",
+  "component": "cli",
+  "product_branch": "component/cli",
+  "status": "READY",
+  "registered_at": "2026-07-18T17:34:32Z"
+}
