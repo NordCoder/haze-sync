@@ -1,12 +1,30 @@
 {
   "last_dispatch": {
-    "kind": "ORCHESTRATOR",
+    "kind": "ACTORS",
     "targets": [
       {
-        "chat_key": "orchestrator",
-        "prompt_id": "orch-plan-20260719-01",
+        "chat_key": "5 api",
+        "prompt_id": "5-api-orch-plan-20260719-01",
         "attempt": 1,
-        "last_sent_at": "2026-07-19T20:55:12.426Z"
+        "last_sent_at": "2026-07-19T22:47:22.515Z"
+      },
+      {
+        "chat_key": "2 gdrive-adapter",
+        "prompt_id": "2-gdrive-adapter-orch-plan-20260719-01",
+        "attempt": 1,
+        "last_sent_at": "2026-07-19T22:47:22.515Z"
+      },
+      {
+        "chat_key": "8 cli",
+        "prompt_id": "8-cli-orch-plan-20260719-01",
+        "attempt": 1,
+        "last_sent_at": "2026-07-19T22:47:22.515Z"
+      },
+      {
+        "chat_key": "6 storage",
+        "prompt_id": "6-storage-orch-plan-20260719-01",
+        "attempt": 1,
+        "last_sent_at": "2026-07-19T22:47:22.515Z"
       }
     ]
   },
