@@ -1,6 +1,6 @@
 # Passive Google Drive Durable-State Contract
 
-Phase: `API-GDA-P1-CONTRACTS`
+Phase: `API-GDA-P1-CONTRACTS`, corrected by `API-GDA-P2-PRIVATE-CURSOR-SNAPSHOT-CONTRACT`
 
 Accepted inputs:
 
@@ -26,13 +26,13 @@ A matching authenticated `gdrive_adapter` principal receives the bounded private
 The private response contains:
 
 - adapter identity and state format/version;
-- cursor generation and presence, never the raw cursor;
+- cursor state as exactly `absent { generation: 0 }` or `present { generation > 0, cursor }`, with the bounded raw cursor serialized only for the matching authenticated adapter;
 - Core export checkpoint;
 - last import/export/provider-mutation operation identifiers;
 - at most 500 path-ordered mapping, echo and delete-candidate fact summaries;
 - an optional path cursor for bounded pagination.
 
-Provider identifiers are bounded opaque atoms used only by the matching authenticated adapter response. Their DTO formatting is redacted. Admin output contains counts and presence flags instead of provider identifiers, mapping paths or operation identifiers.
+Provider identifiers are bounded opaque atoms used only by the matching authenticated adapter response. Their DTO formatting is redacted. Admin output contains cursor generation/presence, counts and presence flags instead of the raw cursor, provider identifiers, mapping paths or operation identifiers.
 
 ## POST compare-and-commit
 
@@ -47,7 +47,7 @@ The private commit contract requires:
 - optional typed mapping/echo/delete-candidate facts;
 - mandatory operation id, kind and SHA-256 facts fingerprint.
 
-Raw cursor values exist only in the authenticated commit body. They are serialized for Server handoff but redacted from `Debug`, `Display`, public errors and compatibility fixtures.
+Raw cursor values exist only in the authenticated matching-adapter private snapshot and authenticated commit body. They are serialized for Server handoff but redacted from `Debug`, `Display`, public errors, logs and report-safe summaries. Compatibility fixtures may contain only explicit synthetic cursor sentinels, never production cursor material.
 
 API validates shape, bounds, identity, exact cursor increment and internal DTO consistency. It does not inspect current durable state, decide whether a checkpoint regresses, execute a transaction or translate provider policy. Server and Storage enforce current-state CAS, cursor/checkpoint invariants, atomicity and replay.
 
@@ -98,7 +98,7 @@ The strict verifier is:
 crates/haze-sync-api/tests/gdrive_state_compatibility_fixture.rs
 ```
 
-The fixture covers the private bounded snapshot, admin sanitization, strict-empty cursor transition omission, mandatory operation facts, all commit outcomes and complete closed vocabularies. A separate unit/integration test proves that a real private cursor transition serializes only for authenticated commit handoff and remains absent from formatting and the fixture.
+The fixture covers the bounded matching-adapter private snapshot with a synthetic raw-cursor sentinel, admin sanitization, strict-empty cursor transition omission, mandatory operation facts, all commit outcomes and complete closed vocabularies. Focused unit/integration tests prove that private snapshot and commit cursors serialize only for authenticated private transport and remain absent from admin JSON, formatting and public errors.
 
 ## Non-goals
 
