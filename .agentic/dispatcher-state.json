@@ -3,8 +3,9 @@
   "blocked": null,
   "acceptance_note": "workflow-minimal connector acceptance; no product work",
   "github_connector_probe": {
-    "status": "write-readback-pending",
+    "status": "write-readback-passed",
     "scope": "acceptance-only",
-    "repository": "NordCoder/haze-sync"
+    "repository": "NordCoder/haze-sync",
+    "write_commit": "029050fde4f9a2e6731eb8c42630a1068f84b23b"
   }
 }
