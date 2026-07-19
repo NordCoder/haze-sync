@@ -1,4 +1,14 @@
 {
-  "last_dispatch": null,
+  "last_dispatch": {
+    "kind": "ORCHESTRATOR",
+    "targets": [
+      {
+        "chat_key": "orchestrator",
+        "prompt_id": "orch-plan-20260719-01",
+        "attempt": 1,
+        "last_sent_at": "2026-07-19T20:55:12.426Z"
+      }
+    ]
+  },
   "blocked": null
 }
