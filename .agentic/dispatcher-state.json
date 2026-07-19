@@ -1,5 +1,10 @@
 {
   "last_dispatch": null,
   "blocked": null,
-  "acceptance_note": "workflow-minimal connector acceptance; no product work"
+  "acceptance_note": "workflow-minimal connector acceptance; no product work",
+  "github_connector_probe": {
+    "status": "write-readback-pending",
+    "scope": "acceptance-only",
+    "repository": "NordCoder/haze-sync"
+  }
 }
