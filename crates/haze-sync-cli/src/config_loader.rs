@@ -1,8 +1,6 @@
 //! Bounded process configuration and token-source loading.
 
-use crate::config::{
-    CliConfig, ConfigError, OutputFormat, ProfileName, ServerUrl, TokenSource,
-};
+use crate::config::{CliConfig, ConfigError, OutputFormat, ProfileName, ServerUrl, TokenSource};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt, fs,
@@ -92,7 +90,10 @@ fn parse_global_option(argument: &str) -> Option<(&str, Option<&str>)> {
         if argument == name {
             return Some((name, None));
         }
-        if let Some(value) = argument.strip_prefix(name).and_then(|rest| rest.strip_prefix('=')) {
+        if let Some(value) = argument
+            .strip_prefix(name)
+            .and_then(|rest| rest.strip_prefix('='))
+        {
             return Some((name, Some(value)));
         }
     }
@@ -254,7 +255,7 @@ fn load_config(
     ))
 }
 
-fn first_present<'a, const N: usize>(values: [Option<&'a str>; N]) -> Option<&'a str> {
+fn first_present<const N: usize>(values: [Option<&str>; N]) -> Option<&str> {
     values
         .into_iter()
         .flatten()
@@ -385,7 +386,7 @@ pub struct SecretToken(String);
 
 impl SecretToken {
     pub(crate) fn parse(value: &str) -> Result<Self, TokenLoadError> {
-        let value = value.trim_end_matches(|character| character == '\r' || character == '\n');
+        let value = value.trim_end_matches(['\r', '\n']);
         if value.is_empty() {
             return Err(TokenLoadError::EmptyToken);
         }
@@ -440,8 +441,8 @@ impl ProcessTokenProvider {
             }
             TokenSource::File(path) => {
                 let bytes = read_bounded_bytes(Path::new(path.as_str()), MAX_TOKEN_BYTES)?;
-                let value = String::from_utf8(bytes)
-                    .map_err(|_| TokenLoadError::InvalidTokenEncoding)?;
+                let value =
+                    String::from_utf8(bytes).map_err(|_| TokenLoadError::InvalidTokenEncoding)?;
                 SecretToken::parse(&value).map(Some)
             }
             TokenSource::Stdin => {
@@ -454,8 +455,8 @@ impl ProcessTokenProvider {
                 if input.len() > MAX_TOKEN_BYTES {
                     return Err(TokenLoadError::TokenTooLarge);
                 }
-                let value = String::from_utf8(input)
-                    .map_err(|_| TokenLoadError::InvalidTokenEncoding)?;
+                let value =
+                    String::from_utf8(input).map_err(|_| TokenLoadError::InvalidTokenEncoding)?;
                 SecretToken::parse(&value).map(Some)
             }
             TokenSource::OsSecret(_) => Err(TokenLoadError::OsSecretUnavailable),
@@ -524,7 +525,10 @@ mod tests {
 
         fn read_file(&self, path: &Path, max_bytes: usize) -> Result<Option<String>, LoadError> {
             let value = self.files.get(path).cloned();
-            if value.as_ref().is_some_and(|content| content.len() > max_bytes) {
+            if value
+                .as_ref()
+                .is_some_and(|content| content.len() > max_bytes)
+            {
                 return Err(LoadError::ConfigFileTooLarge);
             }
             Ok(value)
@@ -557,10 +561,9 @@ mod tests {
             SERVER_URL_ENV.to_owned(),
             "http://environment.test".to_owned(),
         );
-        sources.environment.insert(
-            OUTPUT_FORMAT_ENV.to_owned(),
-            "json".to_owned(),
-        );
+        sources
+            .environment
+            .insert(OUTPUT_FORMAT_ENV.to_owned(), "json".to_owned());
         sources.files.insert(
             path.clone(),
             "default_profile = ops\n[profile.ops]\nserver_url = http://file.test\noutput_format = human\ntoken_source = env:FILE_TOKEN\n"
@@ -612,7 +615,10 @@ mod tests {
             .unwrap_err(),
             LoadError::ConfigDuplicateKey
         );
-        let long = format!("[profile.default]\nserver_url={}\n", "x".repeat(MAX_CONFIG_LINE_BYTES));
+        let long = format!(
+            "[profile.default]\nserver_url={}\n",
+            "x".repeat(MAX_CONFIG_LINE_BYTES)
+        );
         assert_eq!(
             parse_config_file(&long).unwrap_err(),
             LoadError::ConfigLineTooLong
@@ -623,7 +629,9 @@ mod tests {
     fn token_debug_and_errors_never_echo_secret_values() {
         let token = SecretToken::parse("redacted-test-token").unwrap();
         assert_eq!(format!("{token:?}"), "SecretToken(<redacted>)");
-        let invalid = SecretToken::parse("redacted token").unwrap_err().to_string();
+        let invalid = SecretToken::parse("redacted token")
+            .unwrap_err()
+            .to_string();
         assert!(!invalid.contains("redacted"));
     }
 }
