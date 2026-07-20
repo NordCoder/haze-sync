@@ -541,7 +541,7 @@ fn connect(
 
 fn tls_config() -> Arc<ClientConfig> {
     let mut roots = RootCertStore::empty();
-    roots.add_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|anchor| {
+    roots.add_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.iter().map(|anchor| {
         OwnedTrustAnchor::from_subject_spki_name_constraints(
             anchor.subject,
             anchor.spki,
@@ -587,8 +587,8 @@ fn parse_response(wire: &[u8], max_body_bytes: usize) -> Result<HttpResponse, Tr
     if header_end > MAX_HEADER_BYTES {
         return Err(TransportError::ResponseTooLarge);
     }
-    let header = std::str::from_utf8(&wire[..header_end])
-        .map_err(|_| TransportError::MalformedResponse)?;
+    let header =
+        std::str::from_utf8(&wire[..header_end]).map_err(|_| TransportError::MalformedResponse)?;
     let mut lines = header.split("\r\n");
     let status_line = lines.next().ok_or(TransportError::MalformedResponse)?;
     let mut status_parts = status_line.split_whitespace();
@@ -665,14 +665,14 @@ fn decode_chunked(wire: &[u8], max_body_bytes: usize) -> Result<Vec<u8>, Transpo
     let mut offset = 0;
     let mut body = Vec::new();
     loop {
-        let relative_end = find_subsequence(&wire[offset..], b"\r\n")
-            .ok_or(TransportError::MalformedResponse)?;
+        let relative_end =
+            find_subsequence(&wire[offset..], b"\r\n").ok_or(TransportError::MalformedResponse)?;
         let line_end = offset + relative_end;
         let size_line = std::str::from_utf8(&wire[offset..line_end])
             .map_err(|_| TransportError::MalformedResponse)?;
         let size_text = size_line.split(';').next().unwrap_or("").trim();
-        let size = usize::from_str_radix(size_text, 16)
-            .map_err(|_| TransportError::MalformedResponse)?;
+        let size =
+            usize::from_str_radix(size_text, 16).map_err(|_| TransportError::MalformedResponse)?;
         offset = line_end + 2;
         if size == 0 {
             if wire.get(offset..offset + 2) != Some(b"\r\n") {
@@ -849,8 +849,7 @@ mod tests {
         );
 
         let oversized = "x".repeat(4096);
-        let (oversized_url, _) =
-            spawn_server(response("200 OK", &oversized, ""), Duration::ZERO);
+        let (oversized_url, _) = spawn_server(response("200 OK", &oversized, ""), Duration::ZERO);
         assert_eq!(
             ServerReadClient::fetch_status(&client, &oversized_url).unwrap_err(),
             ServerReadError::InvalidResponse
@@ -860,10 +859,7 @@ mod tests {
     #[test]
     fn timeout_and_unavailable_server_are_safe_runtime_errors() {
         let body = "{\"server_status\":\"ready\",\"db_readiness_state\":\"ready\",\"object_store_readiness_state\":\"ready\",\"last_operation_sequence\":null,\"adapter_count\":0,\"pause\":{\"supported\":false,\"active\":null}}";
-        let (url, _) = spawn_server(
-            response("200 OK", body, ""),
-            Duration::from_millis(600),
-        );
+        let (url, _) = spawn_server(response("200 OK", body, ""), Duration::from_millis(600));
         let client = AuthenticatedHttpClient::with_options(fixed_token(None), test_options());
         assert_eq!(
             ServerReadClient::fetch_status(&client, &url).unwrap_err(),
@@ -892,10 +888,7 @@ mod tests {
         ] {
             let (url, _) = spawn_server(response(status, "{}", ""), Duration::ZERO);
             let client = AuthenticatedHttpClient::with_options(fixed_token(None), test_options());
-            assert_eq!(
-                ServerReadClient::fetch_status(&client, &url),
-                Err(expected)
-            );
+            assert_eq!(ServerReadClient::fetch_status(&client, &url), Err(expected));
         }
     }
 }
