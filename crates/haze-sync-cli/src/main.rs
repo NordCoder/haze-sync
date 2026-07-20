@@ -8,6 +8,10 @@ mod output;
 mod server_api;
 mod worktree_api;
 
+// The legacy type remains as a compile-time compatibility boundary only.
+// Every executable command path constructs `AuthenticatedHttpClient` instead.
+const _: usize = std::mem::size_of::<worktree_api::DeferredWorktreeClient>();
+
 use commands::{AdaptersCommand, CliCommand, HelpTopic, WorktreeCommand};
 use config::CliConfig;
 use config_loader::{load_process_config, split_global_options, ProcessTokenProvider};
