@@ -41,7 +41,7 @@ where
 
     if let CliCommand::Help(topic) = command {
         return CliOutput::success(match topic {
-            HelpTopic::Root => usage().to_owned(),
+            HelpTopic::Root => usage(),
             HelpTopic::Doctor => doctor::usage().to_owned(),
         });
     }
@@ -98,8 +98,14 @@ fn render_command(command: CliCommand, config: CliConfig) -> CliOutput {
     }
 }
 
-fn usage() -> &'static str {
-    "usage: haze-sync [global options] <command>\n\nglobal options:\n  --config <path>         bounded profile configuration file\n  --profile <name>        selected configuration profile\n  --server-url <url>      Server base URL override\n  --output <format>       human, text, or json\n  --token-source <source> none, env:NAME, file:PATH, stdin, or os-secret:service/account\n\ncommands:\n  status [--offline]        read-only server status summary\n  adapters list [--offline] read-only adapter summary\n  doctor [--offline]        read-only offline doctor summary\n  doctor --live             read-only Server health/readiness/status doctor\n  worktree status           read hosted Worktree runtime status\n  worktree sync-once        request one bounded server-owned DryRun cycle"
+fn usage() -> String {
+    let command_usage = commands::usage();
+    let command_list = command_usage
+        .strip_prefix("usage: haze-sync <command>\n\n")
+        .unwrap_or(command_usage);
+    format!(
+        "usage: haze-sync [global options] <command>\n\nglobal options:\n  --config <path>         bounded profile configuration file\n  --profile <name>        selected configuration profile\n  --server-url <url>      Server base URL override\n  --output <format>       human, text, or json\n  --token-source <source> none, env:NAME, file:PATH, stdin, or os-secret:service/account\n\n{command_list}"
+    )
 }
 
 fn emit(output: CliOutput) -> ExitCode {
