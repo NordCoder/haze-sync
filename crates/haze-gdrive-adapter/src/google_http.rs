@@ -481,7 +481,10 @@ impl<T: GoogleHttpTransport, C: GoogleClock> GoogleOAuthHttpEndpoint<T, C> {
 
     fn token_request(&self, body: Vec<u8>) -> Result<Value, AuthError> {
         let request = GoogleHttpRequest::new(GoogleHttpMethod::Post, TOKEN_URL.to_owned())
-            .header("Content-Type", "application/x-www-form-urlencoded".to_owned())
+            .header(
+                "Content-Type",
+                "application/x-www-form-urlencoded".to_owned(),
+            )
             .body(body);
         let response = self
             .transport
@@ -721,7 +724,7 @@ impl<A: GoogleAccessTokenProvider, T: GoogleHttpTransport, C: GoogleClock> Drive
         validate_id(folder_id, "list_children")?;
         let query = format!("'{folder_id}' in parents and trashed = false");
         let fields = format!("nextPageToken,files({METADATA_FIELDS})");
-        let mut token = None;
+        let mut token: Option<String> = None;
         let mut seen = HashSet::new();
         let mut files = Vec::new();
         for _ in 0..self.policy.max_pages {
@@ -738,7 +741,9 @@ impl<A: GoogleAccessTokenProvider, T: GoogleHttpTransport, C: GoogleClock> Drive
                 GoogleHttpRequest::new(GoogleHttpMethod::Get, url),
                 "list_children",
             )?;
-            let object = value.as_object().ok_or_else(|| malformed_drive("list_children"))?;
+            let object = value
+                .as_object()
+                .ok_or_else(|| malformed_drive("list_children"))?;
             let page = object
                 .get("files")
                 .and_then(Value::as_array)
@@ -880,8 +885,8 @@ impl<A: GoogleAccessTokenProvider, T: GoogleHttpTransport, C: GoogleClock> Drive
     }
 }
 
-impl<A: GoogleAccessTokenProvider, T: GoogleHttpTransport, C: GoogleClock>
-    DriveChangeFeedProvider for GoogleDriveHttpClient<A, T, C>
+impl<A: GoogleAccessTokenProvider, T: GoogleHttpTransport, C: GoogleClock> DriveChangeFeedProvider
+    for GoogleDriveHttpClient<A, T, C>
 {
     fn get_start_page_token(&self) -> Result<String, ProviderError> {
         let value = self.json(
@@ -916,8 +921,8 @@ impl<A: GoogleAccessTokenProvider, T: GoogleHttpTransport, C: GoogleClock>
                 .map_err(|_| malformed_drive("list_changes"));
         }
         drive_status("list_changes", &response)?;
-        let value: Value = serde_json::from_slice(response.body())
-            .map_err(|_| malformed_drive("list_changes"))?;
+        let value: Value =
+            serde_json::from_slice(response.body()).map_err(|_| malformed_drive("list_changes"))?;
         let object = value
             .as_object()
             .ok_or_else(|| malformed_drive("list_changes"))?;
@@ -958,8 +963,7 @@ fn parse_change(value: &Value) -> Result<DriveChangeEntry, ProviderError> {
         return DriveChangeEntry::removed(id).map_err(|_| malformed_drive("list_changes"));
     }
     let Some(file) = object.get("file") else {
-        return DriveChangeEntry::metadata_missing(id)
-            .map_err(|_| malformed_drive("list_changes"));
+        return DriveChangeEntry::metadata_missing(id).map_err(|_| malformed_drive("list_changes"));
     };
     if file.get("trashed").and_then(Value::as_bool) == Some(true) {
         return DriveChangeEntry::removed(id).map_err(|_| malformed_drive("list_changes"));
@@ -1088,7 +1092,9 @@ fn validate_upload(
 
 fn multipart(metadata: &[u8], content: &[u8], mime_type: &str) -> Result<Vec<u8>, ProviderError> {
     let marker = MULTIPART_BOUNDARY.as_bytes();
-    if metadata.windows(marker.len()).any(|window| window == marker)
+    if metadata
+        .windows(marker.len())
+        .any(|window| window == marker)
         || content.windows(marker.len()).any(|window| window == marker)
     {
         return Err(provider_error(
@@ -1203,10 +1209,7 @@ fn map_oauth_transport(error: GoogleHttpTransportError) -> AuthError {
     )
 }
 
-fn map_drive_transport(
-    operation: &'static str,
-    error: GoogleHttpTransportError,
-) -> ProviderError {
+fn map_drive_transport(operation: &'static str, error: GoogleHttpTransportError) -> ProviderError {
     provider_error(
         operation,
         ProviderErrorCategory::ProviderUnavailable,
@@ -1309,9 +1312,7 @@ mod tests {
 
     impl FakeHttp {
         fn new(
-            responses: impl IntoIterator<
-                Item = Result<GoogleHttpResponse, GoogleHttpTransportError>,
-            >,
+            responses: impl IntoIterator<Item = Result<GoogleHttpResponse, GoogleHttpTransportError>>,
         ) -> Self {
             Self {
                 responses: RefCell::new(responses.into_iter().collect()),
@@ -1453,9 +1454,7 @@ mod tests {
         assert_eq!(files.len(), 2);
         assert_eq!(
             classify_drive_metadata(&files[1]),
-            DriveEntryClassification::Unsupported(
-                UnsupportedEntryReason::GoogleWorkspaceDocument
-            )
+            DriveEntryClassification::Unsupported(UnsupportedEntryReason::GoogleWorkspaceDocument)
         );
         assert_eq!(client.download_file("a").expect("download"), b"hello");
         assert_eq!(
