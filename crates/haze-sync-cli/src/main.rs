@@ -1,198 +1,167 @@
-use std::process::ExitCode;
-
 mod commands;
 mod config;
+mod config_loader;
 mod doctor;
 mod doctor_live;
+mod http_transport;
 mod output;
 mod server_api;
 mod worktree_api;
 
+use commands::{AdaptersCommand, CliCommand, HelpTopic, WorktreeCommand};
+use config::CliConfig;
+use config_loader::{load_process_config, split_global_options, ProcessTokenProvider};
+use doctor::{DoctorCommand, DoctorMode};
+use http_transport::AuthenticatedHttpClient;
+use output::CliOutput;
+use server_api::ReadCommandMode;
+use std::{env, process::ExitCode};
+
 fn main() -> ExitCode {
-    let output = run_from_args(std::env::args());
-    write_output(&output);
-    output.exit_code.into_exit_code()
+    emit(run(env::args()))
 }
 
-fn run_from_args<I, S>(args: I) -> output::CliOutput
+fn run<I, S>(args: I) -> CliOutput
 where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
-    match commands::parse_cli(args) {
-        Ok(command) => render_command(command),
-        Err(error) => output::CliOutput::usage_error(error.to_string()),
+    let invocation = match split_global_options(args) {
+        Ok(invocation) => invocation,
+        Err(error) => return CliOutput::usage_error(format!("{error}\n\n{}", usage())),
+    };
+    let command = match commands::parse_cli(invocation.command_args.iter().map(String::as_str)) {
+        Ok(command) => command,
+        Err(error) => return CliOutput::usage_error(format!("{error}\n\n{}", usage())),
+    };
+
+    if let CliCommand::Help(topic) = command {
+        return CliOutput::success(match topic {
+            HelpTopic::Root => usage().to_owned(),
+            HelpTopic::Doctor => doctor::usage().to_owned(),
+        });
     }
+
+    if command_is_offline(&command) {
+        return render_command(command, CliConfig::default());
+    }
+
+    let config = match load_process_config(&invocation.overrides) {
+        Ok(config) => config,
+        Err(error) => return CliOutput::runtime_error(format!("configuration error: {error}")),
+    };
+    render_command(command, config)
 }
 
-fn render_command(command: commands::CliCommand) -> output::CliOutput {
-    let config = config::CliConfig::default();
-    let client = server_api::DeferredHttpClient;
-    let worktree_client = worktree_api::DeferredWorktreeClient;
+fn command_is_offline(command: &CliCommand) -> bool {
+    matches!(
+        command,
+        CliCommand::Status(commands::StatusCommand {
+            mode: ReadCommandMode::Offline,
+        }) | CliCommand::Adapters(AdaptersCommand::List {
+            mode: ReadCommandMode::Offline,
+        }) | CliCommand::Doctor(DoctorCommand {
+            mode: DoctorMode::Offline,
+        })
+    )
+}
+
+fn render_command(command: CliCommand, config: CliConfig) -> CliOutput {
+    let token_provider = ProcessTokenProvider::new(config.token_source.clone());
+    let client = AuthenticatedHttpClient::new(token_provider);
 
     match command {
-        commands::CliCommand::Help(commands::HelpTopic::Root) => {
-            output::CliOutput::success(commands::usage())
+        CliCommand::Help(_) => unreachable!("help commands return before configuration loading"),
+        CliCommand::Status(command) => {
+            server_api::render_status_command(&config, command.mode, &client)
         }
-        commands::CliCommand::Help(commands::HelpTopic::Doctor) => {
-            output::CliOutput::success(doctor::usage())
+        CliCommand::Adapters(AdaptersCommand::List { mode }) => {
+            server_api::render_adapters_command(&config, mode, &client)
         }
-        commands::CliCommand::Status(command) => annotate_unconfigured_placeholder(
-            server_api::render_status_command(&config, command.mode, &client),
-            "status: not_configured",
-            "status command parsed; live server calls remain unavailable",
-        ),
-        commands::CliCommand::Adapters(commands::AdaptersCommand::List { mode }) => {
-            annotate_unconfigured_placeholder(
-                server_api::render_adapters_command(&config, mode, &client),
-                "adapters: not_configured",
-                "adapters list command parsed; live server calls remain unavailable",
-            )
-        }
-        commands::CliCommand::Doctor(command) => match command.mode {
-            doctor::DoctorMode::Offline => {
-                let report = command.build_offline_report();
-                output::CliOutput::success(doctor::render_offline_report(&report))
-            }
-            doctor::DoctorMode::Live => doctor_live::render_live_doctor(&config, &client),
+        CliCommand::Doctor(command) => match command.mode {
+            DoctorMode::Offline => doctor::render_doctor_command(command),
+            DoctorMode::Live => doctor_live::render_live_doctor(&config, &client),
         },
-        commands::CliCommand::Worktree(commands::WorktreeCommand::Status) => {
-            worktree_api::render_worktree_status(&config, &worktree_client)
+        CliCommand::Worktree(WorktreeCommand::Status) => {
+            worktree_api::render_worktree_status(&config, &client)
         }
-        commands::CliCommand::Worktree(commands::WorktreeCommand::SyncOnce) => {
-            worktree_api::render_worktree_sync_once(&config, &worktree_client)
+        CliCommand::Worktree(WorktreeCommand::SyncOnce) => {
+            worktree_api::render_worktree_sync_once(&config, &client)
         }
     }
 }
 
-fn annotate_unconfigured_placeholder(
-    mut output: output::CliOutput,
-    placeholder_marker: &'static str,
-    compatibility_line: &'static str,
-) -> output::CliOutput {
-    if output.exit_code == output::CliExitCode::Success
-        && output.stdout.contains(placeholder_marker)
-        && !output.stdout.contains(compatibility_line)
-    {
-        output.stdout = format!("{}\n{}", compatibility_line, output.stdout);
-    }
-
-    output
+fn usage() -> &'static str {
+    "usage: haze-sync [global options] <command>\n\nglobal options:\n  --config <path>         bounded profile configuration file\n  --profile <name>        selected configuration profile\n  --server-url <url>      Server base URL override\n  --output <format>       human, text, or json\n  --token-source <source> none, env:NAME, file:PATH, stdin, or os-secret:service/account\n\ncommands:\n  status [--offline]        read-only server status summary\n  adapters list [--offline] read-only adapter summary\n  doctor [--offline]        read-only offline doctor summary\n  doctor --live             read-only Server health/readiness/status doctor\n  worktree status           read hosted Worktree runtime status\n  worktree sync-once        request one bounded server-owned DryRun cycle"
 }
 
-fn write_output(output: &output::CliOutput) {
+fn emit(output: CliOutput) -> ExitCode {
     if !output.stdout.is_empty() {
         println!("{}", output.stdout);
     }
-
     if !output.stderr.is_empty() {
         eprintln!("{}", output.stderr);
     }
+    output.exit_code.into_exit_code()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::output::CliExitCode;
-    use haze_sync_api::dto::worktree::{
-        WorktreeConfiguredMode, WorktreeHostLifecycle, WorktreeManualAvailability,
-        WorktreeReadiness, WorktreeReadinessReason, WorktreeStatusResponse,
-        WorktreeStatusSafeParts, WorktreeSyncOnceResponse,
-    };
 
     #[test]
-    fn status_writes_not_configured_summary_to_stdout() {
-        let output = run_from_args(["haze-sync", "status"]);
+    fn help_documents_bounded_configuration_sources() {
+        let output = run(["haze-sync", "--help"]);
         assert_eq!(output.exit_code, CliExitCode::Success);
-        assert!(output.stdout.contains("status command parsed"));
-        assert!(output.stdout.contains("remain unavailable"));
-        assert!(output.stdout.contains("status: not_configured"));
-        assert!(output.stdout.contains("server_url: unset"));
-        assert!(output.stdout.contains("live server calls: not attempted"));
-        assert!(output.stderr.is_empty());
+        assert!(output.stdout.contains("--config <path>"));
+        assert!(output.stdout.contains("--token-source <source>"));
+        assert!(output.stdout.contains("worktree sync-once"));
     }
 
     #[test]
-    fn status_offline_writes_offline_summary_to_stdout() {
-        let output = run_from_args(["haze-sync", "status", "--offline"]);
-        assert_eq!(output.exit_code, CliExitCode::Success);
-        assert!(output.stdout.contains("status: offline"));
-        assert!(output.stdout.contains("live server calls: not attempted"));
-        assert!(!output.stdout.contains("remain unavailable"));
-        assert!(output.stderr.is_empty());
-    }
-
-    #[test]
-    fn live_success_is_not_annotated_as_unavailable() {
-        let output = output::CliOutput::success("server status: ready");
-        let output = annotate_unconfigured_placeholder(
-            output,
-            "status: not_configured",
-            "status command parsed; live server calls remain unavailable",
-        );
-        assert_eq!(output.stdout, "server status: ready");
-    }
-
-    #[test]
-    fn adapters_list_writes_not_configured_summary_to_stdout() {
-        let output = run_from_args(["haze-sync", "adapters", "list"]);
-        assert_eq!(output.exit_code, CliExitCode::Success);
-        assert!(output.stdout.contains("adapters list command parsed"));
-        assert!(output.stdout.contains("remain unavailable"));
-        assert!(output.stdout.contains("adapters: not_configured"));
-        assert!(output.stdout.contains("server_url: unset"));
-        assert!(output.stdout.contains("live server calls: not attempted"));
-        assert!(output.stderr.is_empty());
-    }
-
-    #[test]
-    fn doctor_defaults_to_offline_summary() {
-        let output = run_from_args(["haze-sync", "doctor"]);
+    fn default_doctor_remains_offline_without_config_loading() {
+        let output = run(["haze-sync", "doctor"]);
         assert_eq!(output.exit_code, CliExitCode::Success);
         assert!(output.stdout.contains("doctor mode: offline"));
         assert!(output.stdout.contains("live server calls: not attempted"));
-        assert!(output.stdout.contains("doctor summary"));
-        assert!(output.stdout.contains("total: 4"));
         assert!(output.stderr.is_empty());
     }
 
     #[test]
-    fn live_doctor_without_config_is_not_run_and_non_zero() {
-        let output = run_from_args(["haze-sync", "doctor", "--live"]);
-        assert_eq!(output.exit_code, CliExitCode::RuntimeError);
-        assert!(output.stdout.contains("doctor mode: live"));
-        assert!(output.stdout.contains("live checks: not_run"));
-        assert!(output.stderr.contains("server URL is not configured"));
-    }
-
-    #[test]
-    fn parse_errors_write_safe_message_to_stderr() {
-        let sensitive_arg = concat!("--", "to", "ken", "=", "redacted-test-value");
-        let output = run_from_args(["haze-sync", "status", sensitive_arg]);
-        assert_eq!(output.exit_code, CliExitCode::UsageError);
-        assert!(output.stdout.is_empty());
-        assert_eq!(output.stderr, "unexpected argument");
-        assert!(!output.stderr.contains("redacted-test-value"));
-    }
-
-    #[test]
-    fn doctor_help_writes_doctor_usage_to_stdout() {
-        let output = run_from_args(["haze-sync", "doctor", "--help"]);
+    fn explicit_offline_status_does_not_require_config_or_token() {
+        let output = run([
+            "haze-sync",
+            "--config",
+            "/definitely/not/read/in/offline/mode",
+            "status",
+            "--offline",
+        ]);
         assert_eq!(output.exit_code, CliExitCode::Success);
-        assert!(output
-            .stdout
-            .contains("usage: haze-sync doctor [--offline]"));
-        assert!(output.stdout.contains("haze-sync doctor --live"));
+        assert!(output.stdout.contains("status: offline"));
         assert!(output.stderr.is_empty());
     }
 
     #[test]
-    fn worktree_commands_require_live_configuration_and_do_not_fake_success() {
-        for args in [
+    fn unconfigured_live_commands_remain_truthful() {
+        let status = run(["haze-sync", "status"]);
+        assert_eq!(status.exit_code, CliExitCode::Success);
+        assert!(status.stdout.contains("status: not_configured"));
+        assert!(status.stdout.contains("live server calls: not attempted"));
+
+        let doctor = run(["haze-sync", "doctor", "--live"]);
+        assert_eq!(doctor.exit_code, CliExitCode::RuntimeError);
+        assert!(doctor.stdout.contains("live checks: not_run"));
+        assert!(doctor.stderr.contains("server URL is not configured"));
+    }
+
+    #[test]
+    fn worktree_commands_require_live_configuration() {
+        for arguments in [
             ["haze-sync", "worktree", "status"],
             ["haze-sync", "worktree", "sync-once"],
         ] {
-            let output = run_from_args(args);
+            let output = run(arguments);
             assert_eq!(output.exit_code, CliExitCode::RuntimeError);
             assert!(output.stdout.is_empty());
             assert!(output.stderr.contains("not configured"));
@@ -200,87 +169,50 @@ mod tests {
     }
 
     #[test]
-    fn worktree_parse_errors_do_not_echo_sensitive_arguments() {
-        let sensitive_arg = "--token=redacted-test-value";
-        let output = run_from_args(["haze-sync", "worktree", "sync-once", sensitive_arg]);
+    fn global_option_errors_do_not_echo_values() {
+        let private = "redacted-private-value";
+        let output = run([
+            "haze-sync",
+            "--server-url",
+            private,
+            "--server-url",
+            private,
+            "status",
+        ]);
         assert_eq!(output.exit_code, CliExitCode::UsageError);
-        assert!(output.stdout.is_empty());
-        assert_eq!(output.stderr, "unexpected argument");
-        assert!(!output.stderr.contains("redacted-test-value"));
-    }
-
-    struct StatusClient(WorktreeStatusResponse);
-
-    impl worktree_api::WorktreeClient for StatusClient {
-        fn fetch_worktree_status(
-            &self,
-            _server_url: &config::ServerUrl,
-            _request: worktree_api::WorktreeStatusRequest,
-        ) -> Result<(u16, WorktreeStatusResponse), worktree_api::WorktreeClientError> {
-            Ok((200, self.0))
-        }
-
-        fn submit_worktree_sync_once(
-            &self,
-            _server_url: &config::ServerUrl,
-            _request: worktree_api::WorktreeSyncRequest,
-        ) -> Result<(u16, WorktreeSyncOnceResponse), worktree_api::WorktreeClientError> {
-            Err(worktree_api::WorktreeClientError::ServerUnavailable)
-        }
-    }
-
-    fn worktree_status(
-        configured_mode: WorktreeConfiguredMode,
-        lifecycle: WorktreeHostLifecycle,
-        readiness: WorktreeReadiness,
-        readiness_reason: WorktreeReadinessReason,
-        manual_availability: WorktreeManualAvailability,
-    ) -> WorktreeStatusResponse {
-        WorktreeStatusResponse::from_safe_parts(WorktreeStatusSafeParts {
-            configured_mode,
-            host_lifecycle: lifecycle,
-            readiness,
-            readiness_reason,
-            cycles_completed: 3,
-            cycles_failed: 1,
-            cycle_in_progress: false,
-            pending_watcher_hints: 2,
-            manual_availability,
-        })
+        assert!(!output.stderr.contains(private));
     }
 
     #[test]
-    fn disabled_and_failed_http_200_statuses_render_as_success() {
-        let config = config::CliConfig::new(
-            config::ProfileName::parse("ops").unwrap(),
-            Some(config::ServerUrl::parse("https://sync.example.test").unwrap()),
-            config::OutputFormat::Human,
-            config::TokenSource::None,
-        );
-        let cases = [
-            worktree_status(
-                WorktreeConfiguredMode::Disabled,
-                WorktreeHostLifecycle::Disabled,
-                WorktreeReadiness::Ready,
-                WorktreeReadinessReason::DisabledInert,
-                WorktreeManualAvailability::Unavailable,
-            ),
-            worktree_status(
-                WorktreeConfiguredMode::DryRun,
-                WorktreeHostLifecycle::Failed,
-                WorktreeReadiness::NotReady,
-                WorktreeReadinessReason::Failed,
-                WorktreeManualAvailability::Failed,
-            ),
-        ];
+    fn config_error_is_runtime_failure_and_secret_safe() {
+        let output = run([
+            "haze-sync",
+            "--server-url",
+            "not-a-valid-url",
+            "status",
+        ]);
+        assert_eq!(output.exit_code, CliExitCode::RuntimeError);
+        assert!(output.stderr.contains("configuration error"));
+        assert!(!output.stderr.contains("not-a-valid-url"));
+    }
 
-        for response in cases {
-            let output = worktree_api::render_worktree_status(&config, &StatusClient(response));
-            assert_eq!(output.exit_code, CliExitCode::Success);
-            assert!(output.stderr.is_empty());
-            assert!(output.stdout.contains("worktree lifecycle:"));
-            assert!(output.stdout.contains("worktree readiness:"));
-            assert!(output.stdout.contains("manual availability:"));
-        }
+    #[test]
+    fn parse_errors_are_safe_and_actionable() {
+        let sensitive = "--private-value=redacted-test-value";
+        let output = run(["haze-sync", "status", sensitive]);
+        assert_eq!(output.exit_code, CliExitCode::UsageError);
+        assert!(output.stderr.starts_with("unexpected argument"));
+        assert!(output.stderr.contains("usage: haze-sync"));
+        assert!(!output.stderr.contains("redacted-test-value"));
+    }
+
+    #[test]
+    fn doctor_help_still_uses_doctor_specific_usage() {
+        let output = run(["haze-sync", "doctor", "--help"]);
+        assert_eq!(output.exit_code, CliExitCode::Success);
+        assert!(output
+            .stdout
+            .contains("usage: haze-sync doctor [--offline]"));
+        assert!(output.stdout.contains("haze-sync doctor --live"));
     }
 }
