@@ -79,7 +79,10 @@ fn render_command(command: CliCommand, config: CliConfig) -> CliOutput {
             server_api::render_adapters_command(&config, mode, &client)
         }
         CliCommand::Doctor(command) => match command.mode {
-            DoctorMode::Offline => doctor::render_doctor_command(command),
+            DoctorMode::Offline => {
+                let report = command.build_offline_report();
+                CliOutput::success(doctor::render_offline_report(&report))
+            }
             DoctorMode::Live => doctor_live::render_live_doctor(&config, &client),
         },
         CliCommand::Worktree(WorktreeCommand::Status) => {
@@ -185,12 +188,7 @@ mod tests {
 
     #[test]
     fn config_error_is_runtime_failure_and_secret_safe() {
-        let output = run([
-            "haze-sync",
-            "--server-url",
-            "not-a-valid-url",
-            "status",
-        ]);
+        let output = run(["haze-sync", "--server-url", "not-a-valid-url", "status"]);
         assert_eq!(output.exit_code, CliExitCode::RuntimeError);
         assert!(output.stderr.contains("configuration error"));
         assert!(!output.stderr.contains("not-a-valid-url"));
