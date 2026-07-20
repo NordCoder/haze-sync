@@ -11,14 +11,14 @@
       {
         "chat_key": "2 gdrive-adapter",
         "prompt_id": "2-gdrive-adapter-orch-plan-20260719-01",
-        "attempt": 2,
-        "last_sent_at": "2026-07-19T22:50:35.136Z"
+        "attempt": 1,
+        "last_sent_at": "2026-07-20T08:13:46.770Z"
       },
       {
         "chat_key": "8 cli",
         "prompt_id": "8-cli-orch-plan-20260719-01",
-        "attempt": 2,
-        "last_sent_at": "2026-07-19T22:50:35.136Z"
+        "attempt": 1,
+        "last_sent_at": "2026-07-20T08:13:46.770Z"
       },
       {
         "chat_key": "6 storage",
