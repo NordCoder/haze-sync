@@ -191,10 +191,7 @@ where
         })
     }
 
-    fn fetch_readiness(
-        &self,
-        server_url: &ServerUrl,
-    ) -> Result<ReadinessSummary, ServerReadError> {
+    fn fetch_readiness(&self, server_url: &ServerUrl) -> Result<ReadinessSummary, ServerReadError> {
         let response = self
             .request_json(server_url, "GET", "/ready", None)
             .map_err(server_transport_error)?;
@@ -444,9 +441,7 @@ impl RequestTarget {
         } else {
             format!("{display_host}:{port}")
         };
-        if !endpoint.starts_with('/')
-            || endpoint.contains(|character| character == '\r' || character == '\n')
-        {
+        if !endpoint.starts_with('/') || endpoint.contains(['\r', '\n']) {
             return Err(TransportError::InvalidServerUrl);
         }
         Ok(Self {
