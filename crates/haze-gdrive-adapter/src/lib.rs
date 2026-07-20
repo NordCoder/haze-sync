@@ -1,12 +1,13 @@
 //! Google Drive adapter runtime foundation.
 //!
 //! The crate owns configuration, redaction, provider-safe Drive metadata
-//! normalization, fake-first provider abstractions, adapter-local mapping and
-//! cursor state, dependency-free content hashing, full-scan import planning,
-//! change-feed reconciliation, Core-to-Drive export planning/apply boundaries,
-//! conservative delete-candidate guardrails, OAuth credential/token handling,
-//! and a bounded mode-aware HTTP client for Server-owned durable state.
-//! Provider synchronization and long-running runtime composition remain deferred.
+//! normalization, fake-first and concrete bounded provider abstractions,
+//! adapter-local mapping and cursor state, dependency-free content hashing,
+//! full-scan import planning, change-feed reconciliation, Core-to-Drive export
+//! planning/apply boundaries, conservative delete-candidate guardrails, OAuth
+//! credential/token handling, and a bounded mode-aware HTTP client for
+//! Server-owned durable state.
+//! Long-running runtime composition remains deferred.
 
 pub mod auth;
 pub mod change_feed;
@@ -16,6 +17,7 @@ pub mod drive;
 pub mod durable_state;
 pub mod error;
 pub mod export;
+pub mod google_http;
 pub mod hash;
 pub mod identity;
 pub mod runtime;
@@ -70,6 +72,12 @@ pub use export::{
     ExportModelError, ExportPlanItem, ExportRetryDisposition, ExportRetryPolicy, ExportSkipReason,
     ExportStateError, ExportStateStore, FakeCoreExportClient, FakeDriveExportProvider,
     InMemoryExportStateStore, VerifiedExportSource, DEFAULT_CORE_CHANGE_PAGE_LIMIT,
+};
+pub use google_http::{
+    AuthorizationCodeRequest, GoogleAccessTokenProvider, GoogleClock, GoogleDriveHttpClient,
+    GoogleHttpMethod, GoogleHttpPolicy, GoogleHttpRequest, GoogleHttpResponse, GoogleHttpTransport,
+    GoogleHttpTransportError, GoogleOAuthConfig, GoogleOAuthHttpEndpoint, OfflineTokenGrant,
+    SystemGoogleClock, UreqGoogleHttpTransport,
 };
 pub use hash::ContentSha256;
 pub use identity::{AdapterIdentity, AdapterIdentitySource, ENV_ADAPTER_ID};
