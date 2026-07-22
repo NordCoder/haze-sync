@@ -1,0 +1,29 @@
+name: Fan-in Source Export
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    name: Export exact Server sources
+    if: ${{ startsWith(github.head_ref, 'integration/') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Upload exact imported sources
+        uses: actions/upload-artifact@v4
+        with:
+          name: fan-in-stage3-server-sources-${{ github.event.pull_request.head.sha }}
+          path: |
+            crates/haze-sync-server/src/routes/gdrive.rs
+            crates/haze-sync-server/src/routes/gdrive_tests.rs
+          retention-days: 1
+          compression-level: 9
+          if-no-files-found: error
