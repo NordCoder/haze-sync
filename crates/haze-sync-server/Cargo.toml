@@ -17,15 +17,17 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "serd
 haze-sync-api = { path = "../haze-sync-api" }
 haze-sync-common = { path = "../haze-sync-common" }
 haze-sync-core = { path = "../haze-sync-core" }
-haze-sync-storage = { path = "../haze-sync-storage", features = ["test-support"] }
+haze-sync-storage = { path = "../haze-sync-storage" }
+haze-sync-worktree = { path = "../haze-sync-worktree" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.10"
 sqlx = { version = "0.7", default-features = false, features = ["postgres", "runtime-tokio-rustls", "migrate", "macros"] }
+tokio = { version = "1.0", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 
 [dev-dependencies]
+haze-sync-storage = { path = "../haze-sync-storage", features = ["test-support"] }
 http-body-util = "0.1"
-tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
 tower = { version = "0.4", features = ["util"] }
 
 [lints]
