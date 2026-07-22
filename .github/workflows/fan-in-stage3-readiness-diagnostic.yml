@@ -1,0 +1,80 @@
+name: Fan-in Stage 3 Readiness Diagnostic
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: Diagnose Server readiness component
+    if: ${{ startsWith(github.head_ref, 'integration/') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: haze_sync_server_test
+          POSTGRES_PASSWORD: haze_sync_server_test_password
+          POSTGRES_DB: haze_sync_ready_diag
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --username=haze_sync_server_test --dbname=haze_sync_ready_diag"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build and inspect readiness
+        shell: bash
+        env:
+          POSTGRES_SERVICE_ID: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          cargo build -p haze-sync-server
+          for migration in migrations/*.sql; do
+            docker exec -i "$POSTGRES_SERVICE_ID" psql \
+              --username=haze_sync_server_test \
+              --dbname=haze_sync_ready_diag \
+              --set=ON_ERROR_STOP=1 < "$migration" >/dev/null
+          done
+
+          export HAZE_SYNC_LISTEN_ADDR=127.0.0.1:18081
+          export HAZE_SYNC_DATABASE_URL=postgresql://haze_sync_server_test:haze_sync_server_test_password@localhost:5432/haze_sync_ready_diag
+          export HAZE_SYNC_OBJECT_STORE_PATH="${RUNNER_TEMP}/haze-ready-objects"
+          export HAZE_SYNC_WORKTREE_PATH="${RUNNER_TEMP}/haze-ready-worktree"
+          export HAZE_SYNC_WORKTREE_ADAPTER_MODE=disabled
+          export HAZE_GDRIVE_ADAPTER_MODE=disabled
+          export HAZE_OBSIDIAN_ADAPTER_MODE=disabled
+          mkdir -p "$HAZE_SYNC_OBJECT_STORE_PATH" "$HAZE_SYNC_WORKTREE_PATH"
+
+          log="${RUNNER_TEMP}/haze-ready-server.log"
+          target/debug/haze-sync-server >"$log" 2>&1 &
+          pid=$!
+          cleanup() {
+            kill -INT "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:18081/health >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+          echo '--- READY RESPONSE ---'
+          curl --silent --show-error --write-out '\nHTTP %{http_code}\n' http://127.0.0.1:18081/ready
+          echo '--- SERVER LOG ---'
+          cat "$log"
