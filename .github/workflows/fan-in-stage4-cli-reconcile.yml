@@ -1,20 +1,22 @@
 name: Fan-in Stage 4 CLI Reconciliation
 
 on:
-  push:
+  pull_request:
     branches:
-      - integration/v1-fan-in
+      - main
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   reconcile-cli:
+    if: ${{ startsWith(github.head_ref, 'integration/') }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout exact integration helper head
+      - name: Checkout exact integration head
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 2
 
       - name: Install Rust toolchain
@@ -22,12 +24,7 @@ jobs:
 
       - name: Verify guarded source
         shell: bash
-        run: |
-          test "$(git rev-parse HEAD^)" = "c8c4d02266a54a9c3c2c0f5199bab5462fcbb53d"
-          if git ls-remote --exit-code --heads origin refs/heads/fan-in/stage4-cli-reconcile >/dev/null 2>&1; then
-            echo "Temporary CLI reconciliation branch already exists." >&2
-            exit 1
-          fi
+        run: test "$(git rev-parse HEAD^)" = "793708c4d92fa54408bd1c30001cdef892c7bd00"
 
       - name: Apply Core doctor contract reconciliation
         shell: bash
@@ -134,12 +131,12 @@ fn not_run_adapter_token_check() -> DoctorCheckResult {
           cargo check -p haze-sync-cli
           cargo test -p haze-sync-cli
 
-      - name: Publish isolated CLI candidate
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git switch -c fan-in/stage4-cli-reconcile
-          git add crates/haze-sync-cli/src/doctor.rs crates/haze-sync-cli/src/doctor_live.rs
-          git commit -m "fix(cli): align live doctor with Core result contract"
-          git push origin HEAD:refs/heads/fan-in/stage4-cli-reconcile
+      - name: Upload verified CLI files
+        uses: actions/upload-artifact@v4
+        with:
+          name: fan-in-stage4-cli-${{ github.event.pull_request.head.sha }}
+          path: |
+            crates/haze-sync-cli/src/doctor.rs
+            crates/haze-sync-cli/src/doctor_live.rs
+          retention-days: 1
+          compression-level: 9
