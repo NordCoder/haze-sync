@@ -1,20 +1,25 @@
 name: Fan-in Stage 4 Rust Reconciliation
 
 on:
-  push:
+  pull_request:
     branches:
       - integration/v1-fan-in
+    types:
+      - opened
+      - synchronize
 
 permissions:
   contents: write
 
 jobs:
   reconcile-rust:
+    if: ${{ github.head_ref == 'fan-in/stage4-reconcile-trigger' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout exact integration head
+      - name: Checkout exact integration base
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.base.sha }}
           fetch-depth: 1
 
       - name: Install Rust toolchain
