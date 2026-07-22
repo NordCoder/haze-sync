@@ -66,3 +66,103 @@ jobs:
           compression-level: 9
           if-no-files-found: ignore
           include-hidden-files: false
+
+  storage-postgres:
+    name: Storage PostgreSQL integration
+    if: ${{ github.event_name != 'pull_request' || startsWith(github.head_ref, 'integration/') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      HAZE_COMPONENT: integration-storage
+      HAZE_WORKFLOW_SLUG: integration-ci-storage-postgres
+      HAZE_SYNC_TEST_DATABASE_URL: postgresql://haze_sync_test:haze_sync_test_password@localhost:5432/haze_sync_fanin_test
+      RUST_TEST_THREADS: "1"
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: haze_sync_test
+          POSTGRES_PASSWORD: haze_sync_test_password
+          POSTGRES_DB: haze_sync_fanin_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --username=haze_sync_test --dbname=haze_sync_fanin_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Resolve candidate context
+        shell: bash
+        run: |
+          branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          echo "HAZE_COMPONENT_BRANCH=${branch}" >> "$GITHUB_ENV"
+          echo "HAZE_HEAD_SHA=${{ github.event.pull_request.head.sha || github.sha }}" >> "$GITHUB_ENV"
+
+      - name: Wait for PostgreSQL readiness
+        shell: bash
+        env:
+          POSTGRES_SERVICE_ID: ${{ job.services.postgres.id }}
+        run: |
+          bash .github/scripts/ci-run.sh storage-postgres-readiness bash -ceu '
+            for attempt in $(seq 1 30); do
+              if docker exec "$POSTGRES_SERVICE_ID" pg_isready \
+                --username=haze_sync_test \
+                --dbname=haze_sync_fanin_test; then
+                exit 0
+              fi
+              sleep 1
+            done
+            echo "PostgreSQL service did not become ready after 30 attempts." >&2
+            exit 1
+          '
+
+      - name: Run strict Storage PostgreSQL tests
+        shell: bash
+        run: bash .github/scripts/ci-run.sh storage-postgres-strict cargo test -p haze-sync-storage --features test-support -- --ignored
+
+      - name: Verify Stage 2 database evidence
+        shell: bash
+        run: |
+          bash .github/scripts/ci-run.sh storage-postgres-evidence bash -ceu '
+            log="${RUNNER_TEMP}/haze-ci-logs/storage-postgres-strict.log"
+            test -f "$log"
+
+            expected_tests=(
+              "test repositories::adapter_cursors::postgres_tests::exact_cursor_progression_is_locked_contiguous_and_rollback_safe ... ok"
+              "test repositories::worktree_state::postgres_tests::durable_instances_and_path_state_are_isolated_and_transactional ... ok"
+              "test repositories::gdrive_state::postgres_contract_tests::gdrive_compare_and_commit_is_versioned_replay_safe_isolated_and_rollback_safe ... ok"
+              "test repositories::gdrive_state::postgres_contract_tests::concurrent_loser_observes_stale_expected_after_winner_commits ... ok"
+              "test migration_0010_sql_guard_preserves_nonempty_legacy_state ... ok"
+              "test migration_0011_sql_guard_preserves_incompatible_preexisting_state ... ok"
+            )
+
+            for expected_test in "${expected_tests[@]}"; do
+              if ! grep -F -- "$expected_test" "$log" >/dev/null; then
+                echo "Missing successful PostgreSQL test evidence: $expected_test" >&2
+                exit 1
+              fi
+            done
+          '
+
+      - name: Finalize CI diagnostics
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: bash .github/scripts/ci-finalize.sh
+
+      - name: Upload CI diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-diag__component-integration-storage__wf-integration-ci-storage-postgres__run-${{ github.run_id }}__attempt-${{ github.run_attempt }}
+          path: ci-diagnostics/
+          retention-days: 1
+          compression-level: 9
+          if-no-files-found: ignore
+          include-hidden-files: false
