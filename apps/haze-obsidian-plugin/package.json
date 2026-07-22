@@ -5,8 +5,12 @@
   "type": "module",
   "main": "main.js",
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "build": "tsc --noEmit"
+    "clean:test": "node -e \"require('fs').rmSync('.test-dist',{recursive:true,force:true})\"",
+    "test:compile": "npm run clean:test && tsc -p tsconfig.test.json",
+    "test": "npm run test:compile && node -e \"require('fs').writeFileSync('.test-dist/package.json',JSON.stringify({type:'commonjs'}))\" && node --test .test-dist/tests/run-tests.js",
+    "test:server-smoke": "npm run test:compile && node -e \"require('fs').writeFileSync('.test-dist/package.json',JSON.stringify({type:'commonjs'}))\" && node .test-dist/tests/loopback-server-smoke.js",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "build": "npm run typecheck"
   },
   "devDependencies": {
     "@types/node": "^20.14.10",

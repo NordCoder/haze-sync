@@ -1,0 +1,297 @@
+export const SYNC_MODES = [
+  "disabled",
+  "pull_only",
+  "push_only",
+  "bidirectional",
+  "dry_run",
+] as const;
+
+export const SYNC_INTERVAL_MINUTES = [0, 1, 5, 15, 30, 60] as const;
+export const EVENT_DEBOUNCE_SECONDS = [5, 15, 30, 60] as const;
+
+export type SyncMode = (typeof SYNC_MODES)[number];
+export type SyncIntervalMinutes = (typeof SYNC_INTERVAL_MINUTES)[number];
+export type EventDebounceSeconds = (typeof EVENT_DEBOUNCE_SECONDS)[number];
+
+export interface SafetyToggles {
+  protectLocalChanges: boolean;
+  confirmBeforeDelete: boolean;
+  showMobileBackgroundWarning: boolean;
+}
+
+export interface SyncAutomationSettings {
+  intervalMinutes: SyncIntervalMinutes;
+  syncOnFileEvents: boolean;
+  eventDebounceSeconds: EventDebounceSeconds;
+}
+
+export interface PluginSettings {
+  serverUrl: string;
+  adapterId: string;
+  authToken: string;
+  syncMode: SyncMode;
+  safety: SafetyToggles;
+  automation: SyncAutomationSettings;
+}
+
+export interface SettingsValidationResult {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+  normalized: PluginSettings;
+}
+
+const ADAPTER_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
+
+export function createDefaultPluginSettings(): PluginSettings {
+  return {
+    serverUrl: "",
+    adapterId: "obsidian-plugin",
+    authToken: "",
+    syncMode: "disabled",
+    safety: {
+      protectLocalChanges: true,
+      confirmBeforeDelete: true,
+      showMobileBackgroundWarning: true,
+    },
+    automation: {
+      intervalMinutes: 0,
+      syncOnFileEvents: false,
+      eventDebounceSeconds: 15,
+    },
+  };
+}
+
+export const DEFAULT_PLUGIN_SETTINGS = createDefaultPluginSettings();
+
+export function isSyncMode(value: unknown): value is SyncMode {
+  return typeof value === "string" && SYNC_MODES.includes(value as SyncMode);
+}
+
+export function mergePluginSettings(rawSettings: unknown): PluginSettings {
+  const defaults = createDefaultPluginSettings();
+
+  if (!isRecord(rawSettings)) {
+    return defaults;
+  }
+
+  const rawSafety = isRecord(rawSettings.safety) ? rawSettings.safety : {};
+  const rawAutomation = isRecord(rawSettings.automation) ? rawSettings.automation : {};
+
+  const merged: PluginSettings = {
+    serverUrl: readString(rawSettings.serverUrl, defaults.serverUrl),
+    adapterId: readString(rawSettings.adapterId, defaults.adapterId),
+    authToken: normalizeAuthToken(readString(rawSettings.authToken, defaults.authToken)),
+    syncMode: isSyncMode(rawSettings.syncMode) ? rawSettings.syncMode : defaults.syncMode,
+    safety: {
+      protectLocalChanges: readBoolean(
+        rawSafety.protectLocalChanges,
+        defaults.safety.protectLocalChanges,
+      ),
+      confirmBeforeDelete: readBoolean(
+        rawSafety.confirmBeforeDelete,
+        defaults.safety.confirmBeforeDelete,
+      ),
+      showMobileBackgroundWarning: readBoolean(
+        rawSafety.showMobileBackgroundWarning,
+        defaults.safety.showMobileBackgroundWarning,
+      ),
+    },
+    automation: {
+      intervalMinutes: isSyncIntervalMinutes(rawAutomation.intervalMinutes)
+        ? rawAutomation.intervalMinutes
+        : defaults.automation.intervalMinutes,
+      syncOnFileEvents: readBoolean(
+        rawAutomation.syncOnFileEvents,
+        defaults.automation.syncOnFileEvents,
+      ),
+      eventDebounceSeconds: isEventDebounceSeconds(rawAutomation.eventDebounceSeconds)
+        ? rawAutomation.eventDebounceSeconds
+        : defaults.automation.eventDebounceSeconds,
+    },
+  };
+
+  return validatePluginSettings(merged).normalized;
+}
+
+export function validatePluginSettings(settings: PluginSettings): SettingsValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  const serverUrlResult = normalizeServerUrl(settings.serverUrl);
+  if (serverUrlResult.error !== undefined) {
+    errors.push(serverUrlResult.error);
+  }
+  if (serverUrlResult.warning !== undefined) {
+    warnings.push(serverUrlResult.warning);
+  }
+
+  const adapterId = settings.adapterId.trim();
+  if (adapterId.length === 0) {
+    errors.push("Adapter identity is required.");
+  } else if (!ADAPTER_ID_PATTERN.test(adapterId)) {
+    errors.push(
+      "Adapter identity may contain only letters, numbers, dots, underscores, colons, and hyphens.",
+    );
+  }
+
+  if (!isSyncMode(settings.syncMode)) {
+    errors.push("Sync mode is invalid.");
+  }
+
+  const intervalMinutes = isSyncIntervalMinutes(settings.automation.intervalMinutes)
+    ? settings.automation.intervalMinutes
+    : 0;
+  const eventDebounceSeconds = isEventDebounceSeconds(settings.automation.eventDebounceSeconds)
+    ? settings.automation.eventDebounceSeconds
+    : 15;
+  const syncOnFileEvents = Boolean(settings.automation.syncOnFileEvents);
+
+  if ((intervalMinutes > 0 || syncOnFileEvents) && settings.syncMode === "disabled") {
+    warnings.push("Automatic sync is configured but sync mode is disabled.");
+  }
+  if ((intervalMinutes > 0 || syncOnFileEvents) && settings.syncMode === "dry_run") {
+    warnings.push("Automatic triggers in dry-run mode scan and report only; they do not mutate server or vault state.");
+  }
+
+  const normalized: PluginSettings = {
+    serverUrl: serverUrlResult.url,
+    adapterId,
+    authToken: normalizeAuthToken(settings.authToken),
+    syncMode: isSyncMode(settings.syncMode) ? settings.syncMode : "disabled",
+    safety: {
+      protectLocalChanges: Boolean(settings.safety.protectLocalChanges),
+      confirmBeforeDelete: Boolean(settings.safety.confirmBeforeDelete),
+      showMobileBackgroundWarning: Boolean(settings.safety.showMobileBackgroundWarning),
+    },
+    automation: {
+      intervalMinutes,
+      syncOnFileEvents,
+      eventDebounceSeconds,
+    },
+  };
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings,
+    normalized,
+  };
+}
+
+export function normalizeServerUrl(value: string): {
+  url: string;
+  error?: string;
+  warning?: string;
+} {
+  const trimmed = value.trim();
+
+  if (trimmed.length === 0) {
+    return {
+      url: "",
+      warning: "Server URL is not configured.",
+    };
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return {
+      url: trimmed,
+      error: "Server URL must be a valid http:// or https:// URL.",
+    };
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return {
+      url: trimmed,
+      error: "Server URL must use http:// or https://.",
+    };
+  }
+
+  if (parsed.username.length > 0 || parsed.password.length > 0) {
+    return {
+      url: trimmed,
+      error: "Server URL must not include embedded credentials.",
+    };
+  }
+
+  if (parsed.search.length > 0 || parsed.hash.length > 0) {
+    return {
+      url: trimmed,
+      error: "Server URL must not include query strings or fragments.",
+    };
+  }
+
+  const pathname = parsed.pathname.replace(/\/+$/u, "");
+  const normalizedPath = pathname === "" ? "" : pathname;
+
+  return {
+    url: `${parsed.origin}${normalizedPath}`,
+  };
+}
+
+export function normalizeAuthToken(value: string): string {
+  return value.trim();
+}
+
+export function redactToken(value: string): string {
+  return normalizeAuthToken(value).length === 0 ? "not configured" : "••••••••";
+}
+
+export function tokenInputPlaceholder(value: string): string {
+  return normalizeAuthToken(value).length === 0
+    ? "Paste adapter token"
+    : "Token saved; paste a new token to replace it";
+}
+
+export function syncModeLabel(mode: SyncMode): string {
+  switch (mode) {
+    case "disabled":
+      return "Disabled";
+    case "pull_only":
+      return "Pull only";
+    case "push_only":
+      return "Push only";
+    case "bidirectional":
+      return "Bidirectional";
+    case "dry_run":
+      return "Dry run";
+  }
+}
+
+export function settingsAreReady(settings: PluginSettings): boolean {
+  const validation = validatePluginSettings(settings);
+
+  return (
+    validation.valid &&
+    validation.normalized.serverUrl.length > 0 &&
+    validation.normalized.authToken.length > 0 &&
+    validation.normalized.adapterId.length > 0
+  );
+}
+
+export function syncAutomationEnabled(settings: PluginSettings): boolean {
+  return settings.automation.intervalMinutes > 0 || settings.automation.syncOnFileEvents;
+}
+
+function isSyncIntervalMinutes(value: unknown): value is SyncIntervalMinutes {
+  return typeof value === "number" && SYNC_INTERVAL_MINUTES.includes(value as SyncIntervalMinutes);
+}
+
+function isEventDebounceSeconds(value: unknown): value is EventDebounceSeconds {
+  return typeof value === "number" && EVENT_DEBOUNCE_SECONDS.includes(value as EventDebounceSeconds);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readString(value: unknown, fallback: string): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function readBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
