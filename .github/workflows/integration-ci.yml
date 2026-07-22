@@ -273,6 +273,8 @@ jobs:
             export HAZE_GDRIVE_ADAPTER_MODE=disabled
             export HAZE_OBSIDIAN_ADAPTER_MODE=disabled
 
+            mkdir -p "$HAZE_SYNC_OBJECT_STORE_PATH" "$HAZE_SYNC_WORKTREE_PATH"
+
             log="${RUNNER_TEMP}/haze-server-runtime.log"
             target/debug/haze-sync-server >"$log" 2>&1 &
             server_pid=$!
