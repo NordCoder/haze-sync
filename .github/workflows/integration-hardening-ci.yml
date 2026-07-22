@@ -153,9 +153,20 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      - name: Format and reconcile lockfile
+      - name: Apply verified compatibility fix, format, and reconcile lockfile
         shell: bash
         run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('crates/haze-gdrive-adapter/src/runtime.rs')
+          source = path.read_text()
+          old = '.is_none_or(|maximum| iterations < maximum)'
+          new = '.map_or(true, |maximum| iterations < maximum)'
+          if source.count(old) != 1:
+              raise SystemExit('unexpected Stage 7 runtime compatibility patch context')
+          path.write_text(source.replace(old, new))
+          Path('clippy.toml').write_text('msrv = "1.88.0"\n')
+          PY
           cargo fmt --all
           cargo generate-lockfile
 
@@ -190,6 +201,7 @@ jobs:
         run: |
           tar -czf "${RUNNER_TEMP}/stage7-verified-files.tgz" \
             Cargo.lock \
+            clippy.toml \
             .env.example \
             .github/scripts/deployment-smoke.sh \
             crates/haze-gdrive-adapter/Cargo.toml \
