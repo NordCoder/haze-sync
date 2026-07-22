@@ -1,0 +1,58 @@
+# Opt-in Google Drive adapter service.
+#
+# Use only with deploy/docker-compose.yml after creating both secret files and
+# setting the required environment variables. The service defaults to disabled
+# mode and performs no provider/Core cycle while disabled. Mutation-capable
+# modes remain fail-closed until the concrete cycle composition is published.
+
+services:
+  gdrive:
+    profiles: ["gdrive"]
+    build:
+      context: ..
+      dockerfile: deploy/gdrive.Dockerfile
+    environment:
+      HAZE_GDRIVE_SERVER_URL: http://server:8080
+      HAZE_GDRIVE_ADAPTER_ID: ${HAZE_GDRIVE_ADAPTER_ID:?set HAZE_GDRIVE_ADAPTER_ID}
+      HAZE_GDRIVE_ADAPTER_TOKEN_FILE: /run/secrets/haze_gdrive_adapter_token
+      HAZE_GDRIVE_ROOT_FOLDER_ID: ${HAZE_GDRIVE_ROOT_FOLDER_ID:?set HAZE_GDRIVE_ROOT_FOLDER_ID}
+      HAZE_GDRIVE_OAUTH_TOKEN_FILE: /run/secrets/haze_gdrive_oauth
+      HAZE_GDRIVE_MODE: ${HAZE_GDRIVE_MODE:-disabled}
+      HAZE_GDRIVE_POLL_INTERVAL_SECONDS: ${HAZE_GDRIVE_POLL_INTERVAL_SECONDS:-60}
+      HAZE_GDRIVE_FULL_SCAN_INTERVAL_SECONDS: ${HAZE_GDRIVE_FULL_SCAN_INTERVAL_SECONDS:-3600}
+      HAZE_GDRIVE_MAX_DELETES_PER_RUN: ${HAZE_GDRIVE_MAX_DELETES_PER_RUN:-10}
+      HAZE_GDRIVE_MAX_DELETE_RATIO_PERCENT: ${HAZE_GDRIVE_MAX_DELETE_RATIO_PERCENT:-10}
+    secrets:
+      - source: haze_gdrive_adapter_token
+        target: haze_gdrive_adapter_token
+        uid: "10002"
+        gid: "10002"
+        mode: 0400
+      - source: haze_gdrive_oauth
+        target: haze_gdrive_oauth
+        uid: "10002"
+        gid: "10002"
+        mode: 0400
+    depends_on:
+      server:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 20s
+    healthcheck:
+      test: ["CMD-SHELL", "test -r /proc/1/status"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+secrets:
+  haze_gdrive_adapter_token:
+    file: ${HAZE_GDRIVE_ADAPTER_TOKEN_SECRET_FILE:?set HAZE_GDRIVE_ADAPTER_TOKEN_SECRET_FILE}
+  haze_gdrive_oauth:
+    file: ${HAZE_GDRIVE_OAUTH_SECRET_FILE:?set HAZE_GDRIVE_OAUTH_SECRET_FILE}
