@@ -12,10 +12,11 @@ use haze_sync_api::{
     contracts::headers::IDEMPOTENCY_KEY_HEADER,
     dto::{
         gdrive::{
-            GDriveCursorSummaryDto, GDriveDeleteCandidateFactsDto, GDriveEchoFactsDto,
-            GDriveEchoStateDto, GDriveLastOperationsSummaryDto, GDriveMappingFactsDto,
-            GDriveOperationKindDto, GDriveProviderIdentifierDto, GDriveStateCommitRequest,
-            GDriveStateCommitResponse, GDriveStateErrorResponse, GDriveStateSnapshotResponse,
+            GDriveDeleteCandidateFactsDto, GDriveEchoFactsDto, GDriveEchoStateDto,
+            GDriveLastOperationsSummaryDto, GDriveMappingFactsDto, GDriveOperationKindDto,
+            GDrivePrivateCursorStateDto, GDriveProviderIdentifierDto, GDriveRawCursorDto,
+            GDriveStateCommitRequest, GDriveStateCommitResponse, GDriveStateErrorResponse,
+            GDriveStateSnapshotResponse,
         },
         primitives::{AdapterIdDto, OperationIdDto, RevisionIdDto, TimestampDto, VaultPathDto},
     },
@@ -253,15 +254,22 @@ fn snapshot_response(
         .into_iter()
         .map(mapping_response)
         .collect::<Result<Vec<_>, _>>()?;
+    let cursor_generation = to_u64(page.state.drive_cursor_generation)?;
+    let cursor = match page.state.drive_cursor.as_deref() {
+        Some(cursor) => GDrivePrivateCursorStateDto::Present {
+            generation: cursor_generation,
+            cursor: GDriveRawCursorDto::parse(cursor).map_err(|_| GDriveHttpError::internal())?,
+        },
+        None => GDrivePrivateCursorStateDto::Absent {
+            generation: cursor_generation,
+        },
+    };
     Ok(GDriveStateSnapshotResponse {
         adapter_id: AdapterIdDto::new(page.state.adapter_id),
         state_format_version: u32::try_from(page.state.state_format_version)
             .map_err(|_| GDriveHttpError::internal())?,
         state_version: to_u64(page.state.state_version)?,
-        cursor: GDriveCursorSummaryDto {
-            generation: to_u64(page.state.drive_cursor_generation)?,
-            present: page.state.drive_cursor.is_some(),
-        },
+        cursor,
         core_export_checkpoint: to_u64(page.state.core_export_seq)?,
         last_operations: GDriveLastOperationsSummaryDto {
             import: page.state.last_import_operation_id.map(OperationIdDto::new),

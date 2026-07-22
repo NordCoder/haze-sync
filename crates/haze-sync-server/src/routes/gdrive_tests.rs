@@ -71,15 +71,14 @@ async fn gdrive_routes_enforce_auth_type_visibility_and_adapter_isolation() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(private["adapter_id"], adapter);
     assert_eq!(private["state_version"], 1);
+    assert_eq!(private["cursor"]["state"], "present");
     assert_eq!(private["cursor"]["generation"], 1);
-    assert_eq!(private["cursor"]["present"], true);
+    assert_eq!(private["cursor"]["cursor"], "private-raw-cursor");
     assert_eq!(private["mappings"][0]["path"], path);
     assert_eq!(
         private["mappings"][0]["drive_file_id"],
         "private-drive-file"
     );
-    assert!(!private.to_string().contains("private-raw-cursor"));
-
     let (status, admin) = request_json(
         state(context.pool(), "admin-gdrive-test", AdapterRole::Admin),
         "GET",
@@ -91,6 +90,9 @@ async fn gdrive_routes_enforce_auth_type_visibility_and_adapter_isolation() {
     .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(admin["adapter_id"], adapter);
+    assert_eq!(admin["cursor"]["generation"], 1);
+    assert_eq!(admin["cursor"]["present"], true);
+    assert!(admin["cursor"].get("cursor").is_none());
     assert_eq!(admin["mapping_count"], 1);
     assert_eq!(admin["echo_counts"]["none"], 1);
     assert!(admin.get("mappings").is_none());
@@ -156,6 +158,9 @@ async fn gdrive_routes_enforce_auth_type_visibility_and_adapter_isolation() {
     .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(isolated_state["state_version"], 0);
+    assert_eq!(isolated_state["cursor"]["state"], "absent");
+    assert_eq!(isolated_state["cursor"]["generation"], 0);
+    assert!(isolated_state["cursor"].get("cursor").is_none());
     assert_eq!(isolated_state["mappings"], json!([]));
 }
 
