@@ -290,9 +290,8 @@ impl fmt::Display for RuntimeLoopError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Cycle(error) => write!(formatter, "runtime cycle failed safely: {error}"),
-            Self::MissingDurableCheckpoint { .. } => formatter.write_str(
-                "mutation-capable runtime cycle completed without a durable checkpoint",
-            ),
+            Self::MissingDurableCheckpoint { .. } => formatter
+                .write_str("mutation-capable runtime cycle completed without a durable checkpoint"),
             Self::CycleIdExhausted => {
                 formatter.write_str("runtime cycle identifier space exhausted")
             }
@@ -400,15 +399,14 @@ impl AdapterRuntime {
         while !shutdown.is_requested()
             && options
                 .max_iterations
-                .is_none_or(|maximum| iterations < maximum)
+                .map_or(true, |maximum| iterations < maximum)
         {
             iterations = iterations.saturating_add(1);
 
             if self.config.mode == AdapterMode::Disabled {
                 sleeper.sleep(poll_interval);
-                resume.elapsed_since_full_scan = resume
-                    .elapsed_since_full_scan
-                    .saturating_add(poll_interval);
+                resume.elapsed_since_full_scan =
+                    resume.elapsed_since_full_scan.saturating_add(poll_interval);
                 continue;
             }
 
@@ -443,9 +441,8 @@ impl AdapterRuntime {
                     }
                     backoff = poll_interval;
                     sleeper.sleep(poll_interval);
-                    resume.elapsed_since_full_scan = resume
-                        .elapsed_since_full_scan
-                        .saturating_add(poll_interval);
+                    resume.elapsed_since_full_scan =
+                        resume.elapsed_since_full_scan.saturating_add(poll_interval);
                 }
                 Err(error) if error.is_retryable() => {
                     retryable_failures = retryable_failures.saturating_add(1);
