@@ -1,32 +1,37 @@
-name: Fan-in Stage 4 CLI Reconciliation
+name: Fan-in Stage 4 Rust Reconciliation
 
 on:
-  pull_request:
+  push:
     branches:
-      - main
+      - integration/v1-fan-in
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  reconcile-cli:
-    if: ${{ startsWith(github.head_ref, 'integration/') }}
+  reconcile-rust:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout exact integration head
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 2
+          fetch-depth: 1
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Verify guarded source
+      - name: Verify source blobs and destination
         shell: bash
-        run: test "$(git rev-parse HEAD^)" = "793708c4d92fa54408bd1c30001cdef892c7bd00"
+        run: |
+          test "$(git hash-object crates/haze-sync-cli/src/doctor.rs)" = "5e3c8d0b3238e6aa142e752b1273aa977b6dcc95"
+          test "$(git hash-object crates/haze-sync-cli/src/doctor_live.rs)" = "1b55130529ac9c47ad321d1458022452c3565088"
+          test "$(git hash-object crates/haze-gdrive-adapter/src/durable_state.rs)" = "cc1785ad54c130c565fe96ababf04388f399c09a"
+          if git ls-remote --exit-code --heads origin refs/heads/fan-in/stage4-rust-reconciled >/dev/null 2>&1; then
+            echo "Temporary Stage 4 reconciliation branch already exists." >&2
+            exit 1
+          fi
 
-      - name: Apply Core doctor contract reconciliation
+      - name: Apply CLI and GDrive contract reconciliation
         shell: bash
         run: |
           python - <<'PY'
@@ -125,18 +130,116 @@ fn not_run_adapter_token_check() -> DoctorCheckResult {
           )
           live = replace_once(live, '        assert!(output.stdout.contains("failed: 2"));', '        assert!(output.stdout.contains("failed: 1"));\n        assert!(output.stdout.contains("not_run: 3"));', "not-ready live doctor expectations")
           live_path.write_text(live)
+
+          durable_path = Path("crates/haze-gdrive-adapter/src/durable_state.rs")
+          durable = durable_path.read_text()
+          durable = replace_once(
+              durable,
+              "    GDriveLastOperationsSummaryDto, GDriveMappingFactsDto, GDriveStateCommitRequest,\n    GDriveStateCommitResponse, GDriveStateErrorCode, GDriveStateErrorResponse,\n    GDriveStateSnapshotResponse,",
+              "    GDriveLastOperationsSummaryDto, GDriveMappingFactsDto, GDrivePrivateCursorStateDto,\n    GDriveStateCommitRequest, GDriveStateCommitResponse, GDriveStateErrorCode,\n    GDriveStateErrorResponse, GDriveStateSnapshotResponse,",
+              "private cursor import",
+          )
+          durable = replace_once(
+              durable,
+              '''    fn from_snapshot(snapshot: &GDriveStateSnapshotResponse) -> Self {
+        Self {
+            state_format_version: snapshot.state_format_version,
+            state_version: snapshot.state_version,
+            cursor_generation: snapshot.cursor.generation,
+            cursor_present: snapshot.cursor.present,
+            core_export_checkpoint: snapshot.core_export_checkpoint,
+            last_operations: snapshot.last_operations.clone(),
+        }
+    }''',
+              '''    fn from_snapshot(snapshot: &GDriveStateSnapshotResponse) -> Self {
+        let (cursor_generation, cursor_present) = match &snapshot.cursor {
+            GDrivePrivateCursorStateDto::Absent { generation } => (*generation, false),
+            GDrivePrivateCursorStateDto::Present { generation, .. } => (*generation, true),
+        };
+        Self {
+            state_format_version: snapshot.state_format_version,
+            state_version: snapshot.state_version,
+            cursor_generation,
+            cursor_present,
+            core_export_checkpoint: snapshot.core_export_checkpoint,
+            last_operations: snapshot.last_operations.clone(),
+        }
+    }''',
+              "snapshot signature mapping",
+          )
+          durable = replace_once(
+              durable,
+              '            "cursor": { "generation": 3, "present": true },',
+              '            "cursor": {\n                "state": "present",\n                "generation": 3,\n                "cursor": "sentinel-private-cursor"\n            },',
+              "snapshot fixture cursor",
+          )
+          durable = replace_once(
+              durable,
+              '''        assert_eq!(snapshot.state_version, 7);
+        let calls = client.transport().calls();''',
+              '''        assert_eq!(snapshot.state_version, 7);
+        match &snapshot.cursor {
+            GDrivePrivateCursorStateDto::Present { generation, cursor } => {
+                assert_eq!(*generation, 3);
+                assert_eq!(
+                    cursor.expose_for_private_commit(),
+                    "sentinel-private-cursor"
+                );
+            }
+            GDrivePrivateCursorStateDto::Absent { .. } => panic!("cursor should be present"),
+        }
+        let calls = client.transport().calls();''',
+              "present cursor assertion",
+          )
+          marker = '''    #[test]
+    fn origin_only_server_url_accepts_root_forms_and_rejects_ambiguous_endpoints() {'''
+          absent_test = '''    #[test]
+    fn absent_private_cursor_decodes_and_signs_without_provider_value() {
+        let body = serde_json::to_vec(&serde_json::json!({
+            "adapter_id": "gdrive-main",
+            "state_format_version": 1,
+            "state_version": 7,
+            "cursor": { "state": "absent", "generation": 0 },
+            "core_export_checkpoint": 0,
+            "last_operations": {},
+            "mappings": [],
+            "next_after_path": null
+        }))
+        .unwrap();
+        let client = fake_client(
+            [Ok(HttpResponse::new(200, body))],
+            policy(8_192, 4, 10),
+        );
+
+        let snapshot = client.get_state_page(None, 1).unwrap();
+        assert!(matches!(
+            snapshot.cursor,
+            GDrivePrivateCursorStateDto::Absent { generation: 0 }
+        ));
+        let signature = SnapshotSignature::from_snapshot(&snapshot);
+        assert_eq!(signature.cursor_generation, 0);
+        assert!(!signature.cursor_present);
+    }
+
+'''
+          durable = replace_once(durable, marker, absent_test + marker, "absent cursor test")
+          durable_path.write_text(durable)
           PY
 
-          cargo fmt --all --check
-          cargo check -p haze-sync-cli
-          cargo test -p haze-sync-cli
+          cargo fmt --all
+          cargo check --workspace
+          cargo test --workspace --exclude haze-sync-server
+          cargo clippy --workspace --all-targets -- -D warnings
 
-      - name: Upload verified CLI files
-        uses: actions/upload-artifact@v4
-        with:
-          name: fan-in-stage4-cli-${{ github.event.pull_request.head.sha }}
-          path: |
-            crates/haze-sync-cli/src/doctor.rs
-            crates/haze-sync-cli/src/doctor_live.rs
-          retention-days: 1
-          compression-level: 9
+      - name: Publish isolated reconciled source
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c fan-in/stage4-rust-reconciled
+          git add \
+            crates/haze-sync-cli/src/doctor.rs \
+            crates/haze-sync-cli/src/doctor_live.rs \
+            crates/haze-gdrive-adapter/src/durable_state.rs
+          git commit -m "fix(fan-in): reconcile CLI and GDrive contracts"
+          git push origin HEAD:refs/heads/fan-in/stage4-rust-reconciled
