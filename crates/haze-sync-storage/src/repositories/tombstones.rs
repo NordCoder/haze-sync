@@ -1,8 +1,8 @@
 //! Passive SQLx repository helpers for `tombstones` rows.
 //!
-//! This module creates and reads tombstone metadata only. It never hard-deletes
-//! rows, removes blobs, clears retention, runs cleanup jobs, calls providers, or
-//! decides whether a delete is safe.
+//! This module creates, reads, and marks tombstone restore metadata only. It
+//! never hard-deletes rows, removes blobs, clears retention, runs cleanup jobs,
+//! calls providers, or decides whether a delete or restore is safe.
 
 use super::{map_sqlx_error, validate_limit, RepositoryError, RepositoryResult};
 use crate::models::TombstoneRow;
@@ -25,6 +25,11 @@ const LIST_ACTIVE_TOMBSTONES_SQL: &str = "select tombstone_id, path, \
      deleted_revision_id, deleted_by, deleted_at, retention_until, restored_at \
      from tombstones where restored_at is null order by deleted_at desc, \
      tombstone_id desc limit $1";
+const MARK_TOMBSTONE_RESTORED_SQL: &str = "update tombstones \
+     set restored_at = now() \
+     where tombstone_id = $1 and restored_at is null \
+     returning tombstone_id, path, deleted_revision_id, deleted_by, deleted_at, \
+     retention_until, restored_at";
 
 /// Input for inserting a safe tombstone row.
 #[derive(Clone, Debug)]
@@ -76,6 +81,27 @@ where
     ExecutorType: Executor<'executor, Database = Postgres>,
 {
     let row = sqlx::query(GET_TOMBSTONE_BY_ID_SQL)
+        .bind(tombstone_id)
+        .fetch_optional(executor)
+        .await
+        .map_err(map_sqlx_error)?;
+
+    row.as_ref().map(tombstone_from_row).transpose()
+}
+
+/// Marks a tombstone restored once and returns the updated metadata.
+///
+/// This helper records only `restored_at`. It does not restore file content,
+/// clear object delete metadata, append operation-log rows, or decide whether a
+/// restore is allowed.
+pub async fn mark_tombstone_restored<'executor, ExecutorType>(
+    executor: ExecutorType,
+    tombstone_id: &str,
+) -> RepositoryResult<Option<TombstoneRow>>
+where
+    ExecutorType: Executor<'executor, Database = Postgres>,
+{
+    let row = sqlx::query(MARK_TOMBSTONE_RESTORED_SQL)
         .bind(tombstone_id)
         .fetch_optional(executor)
         .await
@@ -159,6 +185,18 @@ impl TombstoneRepository {
         get_tombstone_by_id(executor, tombstone_id).await
     }
 
+    /// Mark a tombstone restored once.
+    pub async fn mark_restored<'executor, ExecutorType>(
+        &self,
+        executor: ExecutorType,
+        tombstone_id: &str,
+    ) -> Result<Option<TombstoneRow>, RepositoryError>
+    where
+        ExecutorType: Executor<'executor, Database = Postgres>,
+    {
+        mark_tombstone_restored(executor, tombstone_id).await
+    }
+
     /// List tombstones for a normalized path.
     pub async fn list_by_path<'executor, ExecutorType>(
         &self,
@@ -201,12 +239,13 @@ fn tombstone_from_row(row: &PgRow) -> RepositoryResult<TombstoneRow> {
 mod tests {
     use super::*;
 
-    fn sql_fragments() -> [&'static str; 4] {
+    fn sql_fragments() -> [&'static str; 5] {
         [
             INSERT_TOMBSTONE_SQL,
             GET_TOMBSTONE_BY_ID_SQL,
             LIST_TOMBSTONES_BY_PATH_SQL,
             LIST_ACTIVE_TOMBSTONES_SQL,
+            MARK_TOMBSTONE_RESTORED_SQL,
         ]
     }
 
@@ -216,6 +255,14 @@ mod tests {
             assert!(!sql.to_ascii_lowercase().contains("delete from"));
             assert!(!sql.to_ascii_lowercase().contains("truncate"));
         }
+    }
+
+    #[test]
+    fn restore_metadata_update_is_guarded_and_does_not_clear_retention() {
+        let sql = MARK_TOMBSTONE_RESTORED_SQL.to_ascii_lowercase();
+        assert!(sql.contains("restored_at is null"));
+        assert!(!sql.contains("retention_until ="));
+        assert!(!sql.contains("deleted_revision_id ="));
     }
 
     #[test]
