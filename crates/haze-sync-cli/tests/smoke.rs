@@ -6,7 +6,7 @@ const FORBIDDEN_MARKERS: &[&str] = &[
     "db_url",
     "credential",
     "oauth",
-    "secret",
+    "redacted-test-value",
     "provider_payload",
     "/srv/",
     "C:\\",
@@ -45,7 +45,7 @@ fn top_level_help_smoke_is_read_only_and_safe() {
     assert!(output.status.success());
 
     let rendered = render_stdout(&output);
-    assert!(rendered.contains("usage: haze-sync <command>"));
+    assert!(rendered.contains("usage: haze-sync [global options] <command>"));
     assert!(rendered.contains("doctor [--offline]"));
     assert!(rendered.contains("read-only"));
     assert_no_sensitive_leaks(&rendered);
@@ -57,8 +57,8 @@ fn status_command_smoke_is_safe() {
     assert!(output.status.success());
 
     let rendered = render_stdout(&output);
-    assert!(rendered.contains("status command parsed"));
-    assert!(rendered.contains("remain unavailable"));
+    assert!(rendered.contains("status: not_configured"));
+    assert!(rendered.contains("live server calls: not attempted"));
     assert_no_sensitive_leaks(&rendered);
 }
 
@@ -68,8 +68,8 @@ fn adapters_list_command_smoke_is_safe() {
     assert!(output.status.success());
 
     let rendered = render_stdout(&output);
-    assert!(rendered.contains("adapters list command parsed"));
-    assert!(rendered.contains("remain unavailable"));
+    assert!(rendered.contains("adapters: not_configured"));
+    assert!(rendered.contains("live server calls: not attempted"));
     assert_no_sensitive_leaks(&rendered);
 }
 

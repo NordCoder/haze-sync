@@ -1,6 +1,6 @@
 [package]
 name = "haze-sync-cli"
-description = "Haze Sync CLI scaffold binary."
+description = "Haze Sync operator CLI."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -12,7 +12,13 @@ name = "haze-sync"
 path = "src/main.rs"
 
 [dependencies]
+haze-sync-api = { path = "../haze-sync-api" }
 haze-sync-core = { path = "../haze-sync-core" }
+rustls = "0.21.12"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+url = "2.5"
+webpki-roots = "0.25.4"
 
 [lints]
 workspace = true
