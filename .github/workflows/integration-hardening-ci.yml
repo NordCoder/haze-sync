@@ -106,3 +106,32 @@ jobs:
           compression-level: 9
           if-no-files-found: ignore
           include-hidden-files: false
+
+  stage7-source-export:
+    name: Stage 7 source export
+    if: ${{ github.event_name == 'pull_request' && startsWith(github.head_ref, 'integration/') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+
+      - name: Create source archive
+        shell: bash
+        run: |
+          tar \
+            --exclude=.git \
+            --exclude=target \
+            --exclude=node_modules \
+            --exclude=dist \
+            --exclude=.test-dist \
+            -czf "${RUNNER_TEMP}/haze-sync-stage7-source.tgz" .
+
+      - name: Upload source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage7-source__head-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/haze-sync-stage7-source.tgz
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
