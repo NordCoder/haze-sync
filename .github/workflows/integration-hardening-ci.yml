@@ -135,3 +135,62 @@ jobs:
           retention-days: 1
           compression-level: 0
           if-no-files-found: error
+
+  stage7-candidate-verify:
+    name: Stage 7 GDrive candidate verification
+    if: ${{ github.event_name == 'pull_request' && github.head_ref == 'fan-in/stage7-gdrive-runtime-candidate' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Format and reconcile lockfile
+        shell: bash
+        run: |
+          cargo fmt --all
+          cargo generate-lockfile
+
+      - name: Verify locked workspace
+        shell: bash
+        run: |
+          cargo check --workspace --locked
+          cargo test --workspace --exclude haze-sync-server --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Verify GDrive runtime package
+        shell: bash
+        run: |
+          cargo test -p haze-gdrive-adapter --locked
+          cargo clippy -p haze-gdrive-adapter --all-targets --locked -- -D warnings
+
+      - name: Package verified Stage 7 files
+        shell: bash
+        run: |
+          tar -czf "${RUNNER_TEMP}/stage7-verified-files.tgz" \
+            Cargo.lock \
+            .env.example \
+            .github/scripts/deployment-smoke.sh \
+            crates/haze-gdrive-adapter/Cargo.toml \
+            crates/haze-gdrive-adapter/src/lib.rs \
+            crates/haze-gdrive-adapter/src/main.rs \
+            crates/haze-gdrive-adapter/src/runtime.rs \
+            deploy/gdrive.Dockerfile \
+            deploy/gdrive.Dockerfile.dockerignore \
+            deploy/docker-compose.gdrive.yml
+
+      - name: Upload verified Stage 7 files
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage7-verified__head-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/stage7-verified-files.tgz
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
