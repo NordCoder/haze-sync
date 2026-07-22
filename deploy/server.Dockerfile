@@ -4,9 +4,9 @@
 # This image contains no secrets and does not run migrations. Runtime config is
 # supplied by environment variables from deployment tooling.
 
-# Rust 1.85 is the workspace MSRV and the first stable toolchain whose Cargo can
-# parse Edition 2024 dependency manifests present in the canonical lockfile.
-ARG RUST_VERSION=1.85
+# Rust 1.88 is the minimum toolchain accepted by the canonical locked dependency
+# graph. Keep this value aligned with workspace.package.rust-version.
+ARG RUST_VERSION=1.88
 
 FROM rust:${RUST_VERSION}-bookworm AS builder
 WORKDIR /workspace
