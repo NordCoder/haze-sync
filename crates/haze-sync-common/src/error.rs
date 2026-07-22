@@ -84,14 +84,122 @@ impl std::error::Error for ValidationError {}
 mod tests {
     use super::*;
 
+    const ERROR_CASES: &[(ValidationError, &str, &str)] = &[
+        (
+            ValidationError::EmptyPath,
+            "empty_path",
+            "path must not be empty",
+        ),
+        (
+            ValidationError::AbsolutePath,
+            "absolute_path",
+            "path must be relative to the vault",
+        ),
+        (
+            ValidationError::PathTraversal,
+            "path_traversal",
+            "path must not contain traversal segments",
+        ),
+        (
+            ValidationError::WindowsDrivePrefix,
+            "windows_drive_prefix",
+            "path must not contain a Windows drive prefix",
+        ),
+        (
+            ValidationError::WindowsSeparator,
+            "windows_separator",
+            "path must use forward slash separators",
+        ),
+        (
+            ValidationError::NullByte,
+            "null_byte",
+            "value must not contain null bytes",
+        ),
+        (
+            ValidationError::RuntimePath,
+            "runtime_path",
+            "path is reserved for runtime state and must not sync",
+        ),
+        (
+            ValidationError::InvalidPercentEncoding,
+            "invalid_percent_encoding",
+            "path contains invalid percent encoding",
+        ),
+        (
+            ValidationError::InvalidHashLength,
+            "invalid_hash_length",
+            "SHA-256 value must contain exactly 64 hexadecimal characters",
+        ),
+        (
+            ValidationError::InvalidHashCharacter,
+            "invalid_hash_character",
+            "SHA-256 value contains non-hexadecimal characters",
+        ),
+        (
+            ValidationError::InvalidIdentifier,
+            "invalid_identifier",
+            "identifier contains unsupported characters",
+        ),
+        (
+            ValidationError::InvalidIdentifierPrefix,
+            "invalid_identifier_prefix",
+            "identifier does not use the required prefix",
+        ),
+        (
+            ValidationError::InvalidAdapterRole,
+            "invalid_adapter_role",
+            "adapter role is not supported",
+        ),
+        (
+            ValidationError::InvalidAdapterMode,
+            "invalid_adapter_mode",
+            "adapter mode is not supported",
+        ),
+    ];
+
     #[test]
-    fn error_serializes_as_safe_code() {
-        let json = serde_json::to_string(&ValidationError::PathTraversal).unwrap();
-        assert_eq!(json, "\"path_traversal\"");
-        assert_eq!(ValidationError::PathTraversal.code(), "path_traversal");
-        assert_eq!(
-            ValidationError::PathTraversal.message(),
-            "path must not contain traversal segments"
-        );
+    fn errors_serialize_as_safe_codes() {
+        for (error, code, message) in ERROR_CASES {
+            let json = serde_json::to_string(error).unwrap();
+
+            assert_eq!(json, format!("\"{code}\""));
+            assert_eq!(error.code(), *code);
+            assert_eq!(error.message(), *message);
+            assert_eq!(error.to_string(), *message);
+        }
+    }
+
+    #[test]
+    fn errors_deserialize_from_stable_codes() {
+        for (error, code, _) in ERROR_CASES {
+            let json = format!("\"{code}\"");
+            assert_eq!(
+                serde_json::from_str::<ValidationError>(&json).unwrap(),
+                *error
+            );
+        }
+
+        assert!(serde_json::from_str::<ValidationError>("\"raw_secret_token\"").is_err());
+    }
+
+    #[test]
+    fn safe_messages_do_not_embed_raw_context() {
+        let forbidden_fragments = [
+            "/etc/passwd",
+            "C:\\secret",
+            "bearer",
+            "oauth",
+            "token",
+            "postgres://",
+            "stack backtrace",
+        ];
+
+        for (error, _, message) in ERROR_CASES {
+            let debug = format!("{error:?}");
+            for fragment in forbidden_fragments {
+                assert!(!message.contains(fragment), "message={message:?}");
+                assert!(!debug.to_lowercase().contains(fragment), "debug={debug:?}");
+            }
+        }
     }
 }
