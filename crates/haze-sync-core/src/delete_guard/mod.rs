@@ -151,14 +151,24 @@ pub enum ManualDeleteUnlock {
 }
 
 impl ManualDeleteUnlock {
+    /// Create a scoped unlock with explicit threshold-category coverage.
+    #[must_use]
+    pub fn scoped(
+        scope: DeleteRunScope,
+        allow_too_many_deletes: bool,
+        allow_delete_ratio: bool,
+    ) -> Self {
+        Self::Scoped {
+            scope,
+            allow_too_many_deletes,
+            allow_delete_ratio,
+        }
+    }
+
     /// Create a scoped unlock covering both delete-count and delete-ratio blocks.
     #[must_use]
     pub fn scoped_for_all(scope: DeleteRunScope) -> Self {
-        Self::Scoped {
-            scope,
-            allow_too_many_deletes: true,
-            allow_delete_ratio: true,
-        }
+        Self::scoped(scope, true, true)
     }
 
     fn covers_too_many_deletes(&self, scope: &DeleteRunScope) -> bool {
@@ -268,42 +278,43 @@ impl DeleteGuard {
     /// Evaluate delete candidates without mutating storage or calling providers.
     #[must_use]
     pub fn evaluate(&self, input: &DeleteGuardInput) -> DeleteGuardDecision {
-        if input.proposed_delete_count > self.policy.max_deletes_per_run
-            && !input.manual_unlock.covers_too_many_deletes(&input.scope)
-        {
-            if self.policy.require_manual_unlock_for_mass_delete {
+        if input.proposed_delete_count > self.policy.max_deletes_per_run {
+            if !self.policy.require_manual_unlock_for_mass_delete {
+                return DeleteGuardDecision::BlockedTooManyDeletes {
+                    proposed_delete_count: input.proposed_delete_count,
+                    max_deletes_per_run: self.policy.max_deletes_per_run,
+                };
+            }
+
+            if !input.manual_unlock.covers_too_many_deletes(&input.scope) {
                 return DeleteGuardDecision::BlockedRequiresManualUnlock {
                     proposed_delete_count: input.proposed_delete_count,
                     total_files_before_run: input.total_files_before_run,
                     reason: DeleteGuardBlockReason::TooManyDeletes,
                 };
             }
-
-            return DeleteGuardDecision::BlockedTooManyDeletes {
-                proposed_delete_count: input.proposed_delete_count,
-                max_deletes_per_run: self.policy.max_deletes_per_run,
-            };
         }
 
         if self
             .policy
             .max_delete_ratio_per_run
             .is_exceeded_by(input.proposed_delete_count, input.total_files_before_run)
-            && !input.manual_unlock.covers_delete_ratio(&input.scope)
         {
-            if self.policy.require_manual_unlock_for_mass_delete {
+            if !self.policy.require_manual_unlock_for_mass_delete {
+                return DeleteGuardDecision::BlockedDeleteRatio {
+                    proposed_delete_count: input.proposed_delete_count,
+                    total_files_before_run: input.total_files_before_run,
+                    max_delete_ratio_per_run: self.policy.max_delete_ratio_per_run,
+                };
+            }
+
+            if !input.manual_unlock.covers_delete_ratio(&input.scope) {
                 return DeleteGuardDecision::BlockedRequiresManualUnlock {
                     proposed_delete_count: input.proposed_delete_count,
                     total_files_before_run: input.total_files_before_run,
                     reason: DeleteGuardBlockReason::DeleteRatio,
                 };
             }
-
-            return DeleteGuardDecision::BlockedDeleteRatio {
-                proposed_delete_count: input.proposed_delete_count,
-                total_files_before_run: input.total_files_before_run,
-                max_delete_ratio_per_run: self.policy.max_delete_ratio_per_run,
-            };
         }
 
         DeleteGuardDecision::Allowed
@@ -363,12 +374,16 @@ fn validate_run_id(run_id: &str) -> Result<(), DeleteGuardError> {
 mod tests {
     use super::*;
 
-    fn adapter_id() -> AdapterId {
-        AdapterId::parse("gdrive-adapter").unwrap()
+    fn adapter_id(value: &str) -> AdapterId {
+        AdapterId::parse(value).expect("fixture adapter id should parse")
+    }
+
+    fn scope_for(adapter: &str, run_id: &str) -> DeleteRunScope {
+        DeleteRunScope::new(adapter_id(adapter), run_id).expect("fixture scope should parse")
     }
 
     fn scope(run_id: &str) -> DeleteRunScope {
-        DeleteRunScope::new(adapter_id(), run_id).unwrap()
+        scope_for("gdrive-adapter", run_id)
     }
 
     #[test]
@@ -377,6 +392,39 @@ mod tests {
         assert_eq!(policy.max_deletes_per_run, 20);
         assert_eq!(policy.max_delete_ratio_per_run, DeleteRatioLimit::default());
         assert!(policy.require_manual_unlock_for_mass_delete);
+    }
+
+    #[test]
+    fn ratio_limit_rejects_zero_denominator() {
+        assert_eq!(
+            DeleteRatioLimit::new(1, 0).expect_err("zero denominator should reject"),
+            DeleteGuardError::InvalidDeleteRatioLimit
+        );
+    }
+
+    #[test]
+    fn ratio_limit_handles_zero_totals_exact_boundaries_and_u64_extremes() {
+        let five_percent = DeleteRatioLimit::percent(5).unwrap();
+        assert!(!five_percent.is_exceeded_by(0, 0));
+        assert!(five_percent.is_exceeded_by(1, 0));
+        assert!(!five_percent.is_exceeded_by(5, 100));
+        assert!(five_percent.is_exceeded_by(6, 100));
+
+        let half = DeleteRatioLimit::new(1, 2).unwrap();
+        let largest_even_total = u64::MAX - 1;
+        assert!(!half.is_exceeded_by(largest_even_total / 2, largest_even_total));
+        assert!(half.is_exceeded_by(largest_even_total / 2 + 1, largest_even_total));
+
+        let almost_one = DeleteRatioLimit::new(u64::MAX - 1, u64::MAX).unwrap();
+        assert!(almost_one.is_exceeded_by(u64::MAX, u64::MAX));
+    }
+
+    #[test]
+    fn delete_guard_allows_exact_count_and_ratio_boundaries() {
+        let guard = DeleteGuard::default();
+        let input = DeleteGuardInput::without_manual_unlock(scope("scan-boundary"), 20, 400);
+
+        assert_eq!(guard.evaluate(&input), DeleteGuardDecision::Allowed);
     }
 
     #[test]
@@ -417,21 +465,57 @@ mod tests {
     }
 
     #[test]
-    fn manual_unlock_allows_only_explicit_scope() {
-        let guard = DeleteGuard::default();
-        let actual_scope = scope("run-safe");
-        let wrong_scope = scope("run-other");
-        let unsafe_input = DeleteGuardInput::without_manual_unlock(actual_scope.clone(), 25, 100)
-            .with_manual_unlock(ManualDeleteUnlock::scoped_for_all(wrong_scope));
+    fn delete_guard_handles_zero_total_without_division_or_overflow() {
+        let guard = DeleteGuard::new(DeleteGuardPolicy::new(
+            u64::MAX,
+            DeleteRatioLimit::percent(5).unwrap(),
+            false,
+        ));
 
         assert_eq!(
-            guard.evaluate(&unsafe_input),
-            DeleteGuardDecision::BlockedRequiresManualUnlock {
-                proposed_delete_count: 25,
-                total_files_before_run: 100,
-                reason: DeleteGuardBlockReason::TooManyDeletes,
+            guard.evaluate(&DeleteGuardInput::without_manual_unlock(
+                scope("scan-empty-noop"),
+                0,
+                0,
+            )),
+            DeleteGuardDecision::Allowed
+        );
+        assert_eq!(
+            guard.evaluate(&DeleteGuardInput::without_manual_unlock(
+                scope("scan-empty-delete"),
+                1,
+                0,
+            )),
+            DeleteGuardDecision::BlockedDeleteRatio {
+                proposed_delete_count: 1,
+                total_files_before_run: 0,
+                max_delete_ratio_per_run: DeleteRatioLimit::percent(5).unwrap(),
             }
         );
+    }
+
+    #[test]
+    fn manual_unlock_requires_exact_adapter_and_run_scope() {
+        let guard = DeleteGuard::default();
+        let actual_scope = scope("run-safe");
+
+        for wrong_scope in [
+            scope("run-other"),
+            scope_for("worktree-adapter", "run-safe"),
+        ] {
+            let unsafe_input =
+                DeleteGuardInput::without_manual_unlock(actual_scope.clone(), 25, 100)
+                    .with_manual_unlock(ManualDeleteUnlock::scoped_for_all(wrong_scope));
+
+            assert_eq!(
+                guard.evaluate(&unsafe_input),
+                DeleteGuardDecision::BlockedRequiresManualUnlock {
+                    proposed_delete_count: 25,
+                    total_files_before_run: 100,
+                    reason: DeleteGuardBlockReason::TooManyDeletes,
+                }
+            );
+        }
 
         let allowed_input = DeleteGuardInput::without_manual_unlock(actual_scope.clone(), 25, 100)
             .with_manual_unlock(ManualDeleteUnlock::scoped_for_all(actual_scope));
@@ -439,9 +523,94 @@ mod tests {
     }
 
     #[test]
-    fn invalid_run_id_is_rejected() {
+    fn manual_unlock_covers_only_explicit_threshold_categories() {
+        let guard = DeleteGuard::new(DeleteGuardPolicy::new(
+            2,
+            DeleteRatioLimit::percent(5).unwrap(),
+            true,
+        ));
+        let actual_scope = scope("run-category");
+
+        let count_only = DeleteGuardInput::without_manual_unlock(actual_scope.clone(), 6, 100)
+            .with_manual_unlock(ManualDeleteUnlock::scoped(
+                actual_scope.clone(),
+                true,
+                false,
+            ));
         assert_eq!(
-            DeleteRunScope::new(adapter_id(), "bad/run").unwrap_err(),
+            guard.evaluate(&count_only),
+            DeleteGuardDecision::BlockedRequiresManualUnlock {
+                proposed_delete_count: 6,
+                total_files_before_run: 100,
+                reason: DeleteGuardBlockReason::DeleteRatio,
+            }
+        );
+
+        let ratio_only = DeleteGuardInput::without_manual_unlock(actual_scope.clone(), 6, 100)
+            .with_manual_unlock(ManualDeleteUnlock::scoped(actual_scope, false, true));
+        assert_eq!(
+            guard.evaluate(&ratio_only),
+            DeleteGuardDecision::BlockedRequiresManualUnlock {
+                proposed_delete_count: 6,
+                total_files_before_run: 100,
+                reason: DeleteGuardBlockReason::TooManyDeletes,
+            }
+        );
+    }
+
+    #[test]
+    fn manual_unlock_cannot_bypass_hard_block_policy() {
+        let actual_scope = scope("run-hard-block");
+        let unlock = ManualDeleteUnlock::scoped_for_all(actual_scope.clone());
+
+        let count_guard = DeleteGuard::new(DeleteGuardPolicy::new(
+            2,
+            DeleteRatioLimit::percent(100).unwrap(),
+            false,
+        ));
+        let count_input = DeleteGuardInput::without_manual_unlock(actual_scope.clone(), 3, 100)
+            .with_manual_unlock(unlock.clone());
+        assert_eq!(
+            count_guard.evaluate(&count_input),
+            DeleteGuardDecision::BlockedTooManyDeletes {
+                proposed_delete_count: 3,
+                max_deletes_per_run: 2,
+            }
+        );
+
+        let ratio_guard = DeleteGuard::new(DeleteGuardPolicy::new(
+            u64::MAX,
+            DeleteRatioLimit::percent(5).unwrap(),
+            false,
+        ));
+        let ratio_input = DeleteGuardInput::without_manual_unlock(actual_scope, 6, 100)
+            .with_manual_unlock(unlock);
+        assert_eq!(
+            ratio_guard.evaluate(&ratio_input),
+            DeleteGuardDecision::BlockedDeleteRatio {
+                proposed_delete_count: 6,
+                total_files_before_run: 100,
+                max_delete_ratio_per_run: DeleteRatioLimit::percent(5).unwrap(),
+            }
+        );
+    }
+
+    #[test]
+    fn run_id_validation_covers_empty_invalid_and_length_boundaries() {
+        for invalid in ["", "bad/run", "bad run"] {
+            assert_eq!(
+                DeleteRunScope::new(adapter_id("gdrive-adapter"), invalid)
+                    .expect_err("invalid run id should reject"),
+                DeleteGuardError::InvalidRunId
+            );
+        }
+
+        let max_length = "r".repeat(MAX_RUN_ID_LEN);
+        assert!(DeleteRunScope::new(adapter_id("gdrive-adapter"), max_length).is_ok());
+        let too_long = "r".repeat(MAX_RUN_ID_LEN + 1);
+        assert_eq!(
+            DeleteRunScope::new(adapter_id("gdrive-adapter"), too_long)
+                .expect_err("overlong run id should reject"),
             DeleteGuardError::InvalidRunId
         );
     }
