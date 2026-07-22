@@ -41,6 +41,7 @@ jobs:
           POSTGRES_SERVICE_ID: ${{ job.services.postgres.id }}
         run: |
           set -euo pipefail
+          mkdir -p ready-diagnostics
           cargo build -p haze-sync-server
           for migration in migrations/*.sql; do
             docker exec -i "$POSTGRES_SERVICE_ID" psql \
@@ -74,7 +75,19 @@ jobs:
             sleep 1
           done
 
-          echo '--- READY RESPONSE ---'
-          curl --silent --show-error --write-out '\nHTTP %{http_code}\n' http://127.0.0.1:18081/ready
-          echo '--- SERVER LOG ---'
-          cat "$log"
+          curl --silent --show-error \
+            --output ready-diagnostics/ready-response.json \
+            --write-out '%{http_code}\n' \
+            http://127.0.0.1:18081/ready > ready-diagnostics/http-code.txt
+          cp "$log" ready-diagnostics/server.log
+          cat ready-diagnostics/ready-response.json
+          cat ready-diagnostics/http-code.txt
+
+      - name: Upload readiness diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: fan-in-stage3-readiness-${{ github.event.pull_request.head.sha }}
+          path: ready-diagnostics/
+          retention-days: 1
+          compression-level: 9
+          if-no-files-found: error
