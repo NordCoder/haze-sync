@@ -15,21 +15,6 @@ tmp_log="${tmp_dir}/${check_name}.log"
 
 mkdir -p "$tmp_dir"
 
-if [ "${HAZE_COMPONENT:-}" = "integration" ] && [ "$check_name" = "rust-fmt" ]; then
-  python .github/scripts/fan-in-stage4-reconcile.py
-  cargo fmt --all
-  mkdir -p "${diag_dir}/stage4-rust" "${diag_dir}/failures"
-  cp crates/haze-sync-cli/src/doctor.rs "${diag_dir}/stage4-rust/doctor.rs"
-  cp crates/haze-sync-cli/src/doctor_live.rs "${diag_dir}/stage4-rust/doctor_live.rs"
-  cp crates/haze-gdrive-adapter/src/durable_state.rs "${diag_dir}/stage4-rust/durable_state.rs"
-  {
-    echo "check=stage4-rust-export"
-    echo "exit_code=1"
-    echo "log=stage4-rust/verified-source-files"
-    echo "failure_marker=failures/stage4-rust-export.txt"
-  } > "${diag_dir}/failures/stage4-rust-export.txt"
-fi
-
 {
   echo "## check"
   echo "$check_name"

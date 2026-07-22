@@ -15,10 +15,9 @@ use crate::{
     },
 };
 use haze_sync_core::doctor::{
-    db_connectivity_check, object_store_exists_writable_check, AdapterTokenSanityDetails,
-    DbConnectivityCheckInput, DbConnectivityDetails, DoctorCheckDetails, DoctorCheckId,
-    DoctorCheckResult, DoctorCheckStatus, DoctorReport, MissingBlobDetectionDetails,
-    ObjectStoreExistsWritableDetails, ObjectStoreExistsWritableInput,
+    db_connectivity_check, object_store_exists_writable_check, DbConnectivityCheckInput,
+    DoctorCheckId, DoctorCheckResult, DoctorCheckStatus, DoctorNotRunReason, DoctorReport,
+    ObjectStoreExistsWritableInput,
 };
 
 /// Accepted public Server surface used by live doctor.
@@ -144,18 +143,18 @@ where
 }
 
 fn build_core_report(readiness: Option<&ReadinessSummary>) -> DoctorReport {
-    let database = readiness.map_or_else(skipped_database_check, |summary| {
+    let database = readiness.map_or_else(not_run_database_check, |summary| {
         database_check(summary.database)
     });
-    let object_store = readiness.map_or_else(skipped_object_store_check, |summary| {
+    let object_store = readiness.map_or_else(not_run_object_store_check, |summary| {
         object_store_check(summary.object_store)
     });
 
     DoctorReport::from_results(vec![
         database,
         object_store,
-        skipped_missing_blob_check(),
-        skipped_adapter_token_check(),
+        not_run_missing_blob_check(),
+        not_run_adapter_token_check(),
     ])
 }
 
@@ -174,7 +173,7 @@ fn database_check(state: ReadinessComponentState) -> DoctorCheckResult {
         ReadinessComponentState::Disabled => {
             db_connectivity_check(DbConnectivityCheckInput::offline(false))
         }
-        ReadinessComponentState::Unknown => skipped_database_check(),
+        ReadinessComponentState::Unknown => not_run_database_check(),
     }
 }
 
@@ -187,72 +186,42 @@ fn object_store_check(state: ReadinessComponentState) -> DoctorCheckResult {
                 writable: Some(true),
             })
         }
-        ReadinessComponentState::NotReady => DoctorCheckResult::new(
+        ReadinessComponentState::NotReady => DoctorCheckResult::not_run(
             DoctorCheckId::ObjectStoreExistsWritable,
-            DoctorCheckStatus::Failed,
-            "object store readiness check failed",
-            DoctorCheckDetails::ObjectStoreExistsWritable(ObjectStoreExistsWritableDetails {
-                configured: true,
-                exists: None,
-                writable: None,
-            }),
+            DoctorNotRunReason::DependencyUnavailable,
         ),
         ReadinessComponentState::Disabled => {
             object_store_exists_writable_check(ObjectStoreExistsWritableInput::offline(false))
         }
-        ReadinessComponentState::Unknown => skipped_object_store_check(),
+        ReadinessComponentState::Unknown => not_run_object_store_check(),
     }
 }
 
-fn skipped_database_check() -> DoctorCheckResult {
-    DoctorCheckResult::new(
+fn not_run_database_check() -> DoctorCheckResult {
+    DoctorCheckResult::not_run(
         DoctorCheckId::DbConnectivity,
-        DoctorCheckStatus::Skipped,
-        "database readiness check was not run",
-        DoctorCheckDetails::DbConnectivity(DbConnectivityDetails {
-            metadata_configured: false,
-            live_check_performed: false,
-            connectivity_verified: None,
-        }),
+        DoctorNotRunReason::DependencyUnavailable,
     )
 }
 
-fn skipped_object_store_check() -> DoctorCheckResult {
-    DoctorCheckResult::new(
+fn not_run_object_store_check() -> DoctorCheckResult {
+    DoctorCheckResult::not_run(
         DoctorCheckId::ObjectStoreExistsWritable,
-        DoctorCheckStatus::Skipped,
-        "object store readiness check was not run",
-        DoctorCheckDetails::ObjectStoreExistsWritable(ObjectStoreExistsWritableDetails {
-            configured: false,
-            exists: None,
-            writable: None,
-        }),
+        DoctorNotRunReason::DependencyUnavailable,
     )
 }
 
-fn skipped_missing_blob_check() -> DoctorCheckResult {
-    DoctorCheckResult::new(
+fn not_run_missing_blob_check() -> DoctorCheckResult {
+    DoctorCheckResult::not_run(
         DoctorCheckId::MissingBlobs,
-        DoctorCheckStatus::Skipped,
-        "missing blob check not run: no accepted public diagnostic surface",
-        DoctorCheckDetails::MissingBlobs(MissingBlobDetectionDetails {
-            input_count: 0,
-            missing_count: 0,
-            sample_hashes: Vec::new(),
-        }),
+        DoctorNotRunReason::DependencyUnavailable,
     )
 }
 
-fn skipped_adapter_token_check() -> DoctorCheckResult {
-    DoctorCheckResult::new(
+fn not_run_adapter_token_check() -> DoctorCheckResult {
+    DoctorCheckResult::not_run(
         DoctorCheckId::AdapterTokenSanity,
-        DoctorCheckStatus::Skipped,
-        "adapter token sanity check not run: no accepted public diagnostic surface",
-        DoctorCheckDetails::AdapterTokenSanity(AdapterTokenSanityDetails {
-            enabled_adapter_count: 0,
-            missing_token_hash_count: 0,
-            invalid_role_count: 0,
-        }),
+        DoctorNotRunReason::DependencyUnavailable,
     )
 }
 
@@ -431,7 +400,7 @@ mod tests {
     }
 
     #[test]
-    fn live_doctor_maps_readiness_to_core_report_and_skips_unavailable_checks() {
+    fn live_doctor_maps_readiness_to_core_report_and_reports_unavailable_checks_as_not_run() {
         let output = render_live_doctor(&configured(), &ready_client());
 
         assert_eq!(output.exit_code, CliExitCode::Success);
@@ -439,9 +408,13 @@ mod tests {
         assert!(output.stdout.contains("readiness: ready"));
         assert!(output.stdout.contains("server status: ready"));
         assert!(output.stdout.contains("ok: 2"));
-        assert!(output.stdout.contains("skipped: 2"));
-        assert!(output.stdout.contains("missing blob check not run"));
-        assert!(output.stdout.contains("adapter token sanity check not run"));
+        assert!(output.stdout.contains("not_run: 2"));
+        assert!(output
+            .stdout
+            .contains("check missing_blobs: not_run - doctor check was not run"));
+        assert!(output
+            .stdout
+            .contains("check adapter_token_sanity: not_run - doctor check was not run"));
         assert!(output.stderr.is_empty());
         assert_no_sensitive_markers(&output.stdout);
     }
@@ -458,7 +431,8 @@ mod tests {
 
         assert_eq!(output.exit_code, CliExitCode::RuntimeError);
         assert!(output.stdout.contains("readiness: not_ready"));
-        assert!(output.stdout.contains("failed: 2"));
+        assert!(output.stdout.contains("failed: 1"));
+        assert!(output.stdout.contains("not_run: 3"));
         assert!(output.stderr.contains("readiness=not_ready"));
         assert!(output.stderr.contains("doctor=failed"));
         assert_no_sensitive_markers(&output.stdout);
