@@ -1,3 +1,3 @@
 Temporary marker used only to synchronize the Stage 7 verification PR after the integration-base verifier was registered. This file is not part of the integration candidate.
 
-Retry: preserve compiler diagnostics artifact.
+Retry: apply the bounded Rust 1.88 compatibility fix and regenerate the lockfile.
