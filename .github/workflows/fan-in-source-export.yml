@@ -1,4 +1,4 @@
-name: Fan-in Source Export
+name: Fan-in Stage 3 Cursor Patch
 
 on:
   pull_request:
@@ -6,24 +6,150 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  export:
-    name: Export exact Server sources
+  patch:
+    name: Build cursor reconciliation candidate
     if: ${{ startsWith(github.head_ref, 'integration/') }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout exact integration head
         uses: actions/checkout@v4
-
-      - name: Upload exact imported sources
-        uses: actions/upload-artifact@v4
         with:
-          name: fan-in-stage3-server-sources-${{ github.event.pull_request.head.sha }}
-          path: |
-            crates/haze-sync-server/src/routes/gdrive.rs
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify source head and temporary ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${{ github.event.pull_request.head.sha }}"
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
+          test -z "$(git ls-remote --heads origin refs/heads/fan-in/stage3-cursor-patch)"
+
+      - name: Apply exact private cursor reconciliation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          production = Path("crates/haze-sync-server/src/routes/gdrive.rs")
+          tests = Path("crates/haze-sync-server/src/routes/gdrive_tests.rs")
+
+          source = production.read_text()
+          old_imports = """            GDriveCursorSummaryDto, GDriveDeleteCandidateFactsDto, GDriveEchoFactsDto,
+                      GDriveEchoStateDto, GDriveLastOperationsSummaryDto, GDriveMappingFactsDto,
+                      GDriveOperationKindDto, GDriveProviderIdentifierDto, GDriveStateCommitRequest,
+                      GDriveStateCommitResponse, GDriveStateErrorResponse, GDriveStateSnapshotResponse,
+          """
+          new_imports = """            GDriveDeleteCandidateFactsDto, GDriveEchoFactsDto, GDriveEchoStateDto,
+                      GDriveLastOperationsSummaryDto, GDriveMappingFactsDto, GDriveOperationKindDto,
+                      GDrivePrivateCursorStateDto, GDriveProviderIdentifierDto, GDriveRawCursorDto,
+                      GDriveStateCommitRequest, GDriveStateCommitResponse, GDriveStateErrorResponse,
+                      GDriveStateSnapshotResponse,
+          """
+          if source.count(old_imports) != 1:
+              raise SystemExit("unexpected gdrive import source shape")
+          source = source.replace(old_imports, new_imports, 1)
+
+          old_cursor = """    Ok(GDriveStateSnapshotResponse {
+              adapter_id: AdapterIdDto::new(page.state.adapter_id),
+              state_format_version: u32::try_from(page.state.state_format_version)
+                  .map_err(|_| GDriveHttpError::internal())?,
+              state_version: to_u64(page.state.state_version)?,
+              cursor: GDriveCursorSummaryDto {
+                  generation: to_u64(page.state.drive_cursor_generation)?,
+                  present: page.state.drive_cursor.is_some(),
+              },
+              core_export_checkpoint: to_u64(page.state.core_export_seq)?,
+          """
+          new_cursor = """    let cursor_generation = to_u64(page.state.drive_cursor_generation)?;
+              let cursor = match page.state.drive_cursor.as_deref() {
+                  Some(cursor) => GDrivePrivateCursorStateDto::Present {
+                      generation: cursor_generation,
+                      cursor: GDriveRawCursorDto::parse(cursor)
+                          .map_err(|_| GDriveHttpError::internal())?,
+                  },
+                  None => GDrivePrivateCursorStateDto::Absent {
+                      generation: cursor_generation,
+                  },
+              };
+              Ok(GDriveStateSnapshotResponse {
+                  adapter_id: AdapterIdDto::new(page.state.adapter_id),
+                  state_format_version: u32::try_from(page.state.state_format_version)
+                      .map_err(|_| GDriveHttpError::internal())?,
+                  state_version: to_u64(page.state.state_version)?,
+                  cursor,
+                  core_export_checkpoint: to_u64(page.state.core_export_seq)?,
+          """
+          if source.count(old_cursor) != 1:
+              raise SystemExit("unexpected gdrive cursor source shape")
+          production.write_text(source.replace(old_cursor, new_cursor, 1))
+
+          source = tests.read_text()
+          old_private = """    assert_eq!(private[\"cursor\"][\"generation\"], 1);
+              assert_eq!(private[\"cursor\"][\"present\"], true);
+              assert_eq!(private[\"mappings\"][0][\"path\"], path);
+          """
+          new_private = """    assert_eq!(private[\"cursor\"][\"state\"], \"present\");
+              assert_eq!(private[\"cursor\"][\"generation\"], 1);
+              assert_eq!(private[\"cursor\"][\"cursor\"], \"private-raw-cursor\");
+              assert_eq!(private[\"mappings\"][0][\"path\"], path);
+          """
+          if source.count(old_private) != 1:
+              raise SystemExit("unexpected private cursor test shape")
+          source = source.replace(old_private, new_private, 1)
+          source = source.replace(
+              "    assert!(!private.to_string().contains(\"private-raw-cursor\"));\n\n    let (status, admin)",
+              "    let (status, admin)",
+              1,
+          )
+          old_admin = """    assert_eq!(admin[\"mapping_count\"], 1);
+              assert_eq!(admin[\"echo_counts\"][\"none\"], 1);
+          """
+          new_admin = """    assert_eq!(admin[\"cursor\"][\"generation\"], 1);
+              assert_eq!(admin[\"cursor\"][\"present\"], true);
+              assert!(admin[\"cursor\"].get(\"cursor\").is_none());
+              assert_eq!(admin[\"mapping_count\"], 1);
+              assert_eq!(admin[\"echo_counts\"][\"none\"], 1);
+          """
+          if source.count(old_admin) != 1:
+              raise SystemExit("unexpected admin cursor test shape")
+          source = source.replace(old_admin, new_admin, 1)
+          old_absent = """    assert_eq!(isolated_state[\"state_version\"], 0);
+              assert_eq!(isolated_state[\"mappings\"], json!([]));
+          """
+          new_absent = """    assert_eq!(isolated_state[\"state_version\"], 0);
+              assert_eq!(isolated_state[\"cursor\"][\"state\"], \"absent\");
+              assert_eq!(isolated_state[\"cursor\"][\"generation\"], 0);
+              assert!(isolated_state[\"cursor\"].get(\"cursor\").is_none());
+              assert_eq!(isolated_state[\"mappings\"], json!([]));
+          """
+          if source.count(old_absent) != 1:
+              raise SystemExit("unexpected absent cursor test shape")
+          tests.write_text(source.replace(old_absent, new_absent, 1))
+          PY
+
+          rustfmt --edition 2021 \
+            crates/haze-sync-server/src/routes/gdrive.rs \
             crates/haze-sync-server/src/routes/gdrive_tests.rs
-          retention-days: 1
-          compression-level: 9
-          if-no-files-found: error
+          git diff --check
+          git diff --exit-code -- . ':!crates/haze-sync-server/src/routes/gdrive.rs' ':!crates/haze-sync-server/src/routes/gdrive_tests.rs'
+
+      - name: Create isolated candidate ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "haze-sync fan-in"
+          git config user.email "actions@users.noreply.github.com"
+          git add \
+            crates/haze-sync-server/src/routes/gdrive.rs \
+            crates/haze-sync-server/src/routes/gdrive_tests.rs
+          git commit -m "fix(server): align private GDrive cursor contract"
+          git push origin HEAD:refs/heads/fan-in/stage3-cursor-patch
