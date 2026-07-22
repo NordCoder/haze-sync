@@ -38,7 +38,7 @@ jobs:
 
       - name: Verify locked metadata
         shell: bash
-        run: bash .github/scripts/ci-run.sh cargo-metadata-locked cargo metadata --workspace --locked --format-version 1 --no-deps
+        run: bash .github/scripts/ci-run.sh cargo-metadata-locked cargo metadata --locked --format-version 1 --no-deps
 
       - name: Check locked workspace
         shell: bash
