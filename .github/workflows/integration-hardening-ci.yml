@@ -165,7 +165,6 @@ jobs:
           if source.count(old) != 1:
               raise SystemExit('unexpected Stage 7 runtime compatibility patch context')
           path.write_text(source.replace(old, new))
-          Path('clippy.toml').write_text('msrv = "1.88.0"\n')
           PY
           cargo fmt --all
           cargo generate-lockfile
@@ -201,7 +200,6 @@ jobs:
         run: |
           tar -czf "${RUNNER_TEMP}/stage7-verified-files.tgz" \
             Cargo.lock \
-            clippy.toml \
             .env.example \
             .github/scripts/deployment-smoke.sh \
             crates/haze-gdrive-adapter/Cargo.toml \
