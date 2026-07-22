@@ -97,7 +97,7 @@ pub async fn connect_pg_pool(config: &DatabaseConfig) -> Result<PgPool, DbRuntim
 
 /// Run a lightweight PostgreSQL connectivity check.
 pub async fn ping_pg_pool(pool: &PgPool) -> Result<(), DbRuntimeError> {
-    let _one = sqlx::query_scalar::<_, i64>("select 1")
+    let _one = sqlx::query_scalar::<_, i64>("select 1::bigint")
         .fetch_one(pool)
         .await
         .map_err(|_error| DbRuntimeError::PingFailed)?;
