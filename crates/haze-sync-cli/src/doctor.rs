@@ -96,13 +96,15 @@ fn select_mode(
 #[must_use]
 pub fn render_text_summary(report: &DoctorReport) -> String {
     format!(
-        "doctor summary: {:?} (total: {}, ok: {}, warnings: {}, failed: {}, skipped: {})",
+        "doctor summary: {:?} (total: {}, ok: {}, warnings: {}, failed: {}, skipped: {}, not_run: {}, placeholders: {})",
         report.summary.status,
         report.summary.total_checks,
         report.summary.ok_count,
         report.summary.warning_count,
         report.summary.failed_count,
-        report.summary.skipped_count
+        report.summary.skipped_count,
+        report.summary.not_run_count,
+        report.summary.placeholder_count
     )
     .to_lowercase()
 }
@@ -114,7 +116,7 @@ pub fn render_detailed_report(report: &DoctorReport) -> String {
         lines.push(format!(
             "check {}: {} - {}",
             check.check_id.as_str(),
-            status_label(check.status),
+            status_label(check.status()),
             check.message
         ));
     }
@@ -135,6 +137,8 @@ const fn status_label(status: DoctorCheckStatus) -> &'static str {
         DoctorCheckStatus::Warning => "warning",
         DoctorCheckStatus::Failed => "failed",
         DoctorCheckStatus::Skipped => "skipped",
+        DoctorCheckStatus::NotRun => "not_run",
+        DoctorCheckStatus::Placeholder => "placeholder",
     }
 }
 

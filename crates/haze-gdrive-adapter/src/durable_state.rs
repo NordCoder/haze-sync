@@ -10,9 +10,9 @@ use haze_sync_api::contracts::headers::{
     BearerToken, IdempotencyKey, AUTHORIZATION_HEADER, IDEMPOTENCY_KEY_HEADER,
 };
 use haze_sync_api::dto::gdrive::{
-    GDriveLastOperationsSummaryDto, GDriveMappingFactsDto, GDriveStateCommitRequest,
-    GDriveStateCommitResponse, GDriveStateErrorCode, GDriveStateErrorResponse,
-    GDriveStateSnapshotResponse,
+    GDriveLastOperationsSummaryDto, GDriveMappingFactsDto, GDrivePrivateCursorStateDto,
+    GDriveStateCommitRequest, GDriveStateCommitResponse, GDriveStateErrorCode,
+    GDriveStateErrorResponse, GDriveStateSnapshotResponse,
 };
 use haze_sync_api::routes::gdrive::{
     validate_private_snapshot, GDRIVE_STATE_COMMIT_ROUTE, GDRIVE_STATE_ROUTE,
@@ -772,11 +772,15 @@ struct SnapshotSignature {
 
 impl SnapshotSignature {
     fn from_snapshot(snapshot: &GDriveStateSnapshotResponse) -> Self {
+        let (cursor_generation, cursor_present) = match &snapshot.cursor {
+            GDrivePrivateCursorStateDto::Absent { generation } => (*generation, false),
+            GDrivePrivateCursorStateDto::Present { generation, .. } => (*generation, true),
+        };
         Self {
             state_format_version: snapshot.state_format_version,
             state_version: snapshot.state_version,
-            cursor_generation: snapshot.cursor.generation,
-            cursor_present: snapshot.cursor.present,
+            cursor_generation,
+            cursor_present,
             core_export_checkpoint: snapshot.core_export_checkpoint,
             last_operations: snapshot.last_operations.clone(),
         }
@@ -1186,7 +1190,11 @@ mod tests {
             "adapter_id": "gdrive-main",
             "state_format_version": 1,
             "state_version": state_version,
-            "cursor": { "generation": 3, "present": true },
+            "cursor": {
+                "state": "present",
+                "generation": 3,
+                "cursor": "sentinel-private-cursor"
+            },
             "core_export_checkpoint": 19,
             "last_operations": {},
             "mappings": mappings,
@@ -1254,6 +1262,16 @@ mod tests {
         let snapshot = client.get_state_page(Some(&after), 5).unwrap();
 
         assert_eq!(snapshot.state_version, 7);
+        match &snapshot.cursor {
+            GDrivePrivateCursorStateDto::Present { generation, cursor } => {
+                assert_eq!(*generation, 3);
+                assert_eq!(
+                    cursor.expose_for_private_commit(),
+                    "sentinel-private-cursor"
+                );
+            }
+            GDrivePrivateCursorStateDto::Absent { .. } => panic!("cursor should be present"),
+        }
         let calls = client.transport().calls();
         let request = &calls[0];
         assert_eq!(request.method(), HttpMethod::Get);
@@ -1266,6 +1284,31 @@ mod tests {
             "Bearer sentinel-adapter-token"
         );
         assert!(request.idempotency_key_for_transport().is_none());
+    }
+
+    #[test]
+    fn absent_private_cursor_decodes_and_signs_without_provider_value() {
+        let body = serde_json::to_vec(&serde_json::json!({
+            "adapter_id": "gdrive-main",
+            "state_format_version": 1,
+            "state_version": 7,
+            "cursor": { "state": "absent", "generation": 0 },
+            "core_export_checkpoint": 0,
+            "last_operations": {},
+            "mappings": [],
+            "next_after_path": null
+        }))
+        .unwrap();
+        let client = fake_client([Ok(HttpResponse::new(200, body))], policy(8_192, 4, 10));
+
+        let snapshot = client.get_state_page(None, 1).unwrap();
+        let signature = SnapshotSignature::from_snapshot(&snapshot);
+        assert!(matches!(
+            snapshot.cursor,
+            GDrivePrivateCursorStateDto::Absent { generation: 0 }
+        ));
+        assert_eq!(signature.cursor_generation, 0);
+        assert!(!signature.cursor_present);
     }
 
     #[test]
