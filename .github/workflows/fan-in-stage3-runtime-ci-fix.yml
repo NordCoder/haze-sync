@@ -1,4 +1,4 @@
-name: Fan-in Stage 3 Runtime CI Export
+name: Fan-in Stage 3 Runtime CI Blob Transport
 
 on:
   pull_request:
@@ -6,11 +6,11 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  export:
-    name: Export corrected runtime smoke workflow
+  transport:
+    name: Publish corrected workflow blob source
     if: ${{ startsWith(github.head_ref, 'integration/') }}
     runs-on: ubuntu-latest
     steps:
@@ -20,13 +20,14 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 1
 
-      - name: Verify source head
+      - name: Verify source head and destination ref
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          test -z "$(git ls-remote --heads origin refs/heads/fan-in/stage3-runtime-ci-content-v1)"
 
-      - name: Create configured runtime directories in smoke harness
+      - name: Materialize corrected workflow as ordinary content
         shell: bash
         run: |
           set -euo pipefail
@@ -47,17 +48,23 @@ jobs:
           count = source.count(old)
           if count != 1:
               raise SystemExit(f"expected one runtime directory insertion point, found {count}")
-          workflow.write_text(source.replace(old, new, 1))
+          corrected = source.replace(old, new, 1)
+          destination = Path("fan-in-artifacts/stage3/integration-ci.yml")
+          destination.parent.mkdir(parents=True, exist_ok=True)
+          destination.write_text(corrected)
           PY
-          git diff --check
-          test "$(git diff --name-only)" = ".github/workflows/integration-ci.yml"
 
-      - name: Upload corrected workflow
-        uses: actions/upload-artifact@v4
-        with:
-          name: fan-in-stage3-runtime-ci-${{ github.event.pull_request.head.sha }}
-          path: .github/workflows/integration-ci.yml
-          retention-days: 1
-          compression-level: 9
-          if-no-files-found: error
-          include-hidden-files: true
+          test "$(grep -Fxc '            mkdir -p "$HAZE_SYNC_OBJECT_STORE_PATH" "$HAZE_SYNC_WORKTREE_PATH"' fan-in-artifacts/stage3/integration-ci.yml)" -eq 1
+          cmp -s .github/workflows/integration-ci.yml fan-in-artifacts/stage3/integration-ci.yml && exit 1 || true
+          git diff --check -- fan-in-artifacts/stage3/integration-ci.yml
+          test "$(git status --short)" = "?? fan-in-artifacts/"
+
+      - name: Publish byte-preserving content branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "haze-sync fan-in"
+          git config user.email "actions@users.noreply.github.com"
+          git add fan-in-artifacts/stage3/integration-ci.yml
+          git commit -m "ci(fan-in): stage corrected integration workflow content"
+          git push origin HEAD:refs/heads/fan-in/stage3-runtime-ci-content-v1
