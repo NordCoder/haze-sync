@@ -4,3 +4,4 @@ include!("postgres_contract_tests/cas_idempotency.rs");
 include!("postgres_contract_tests/credentials_jobs.rs");
 include!("postgres_contract_tests/runtime.rs");
 include!("postgres_contract_tests/concurrency.rs");
+include!("postgres_contract_tests/validation.rs");
