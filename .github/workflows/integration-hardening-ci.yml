@@ -108,7 +108,7 @@ jobs:
           include-hidden-files: false
 
   local-vertical-slice:
-    name: Worktree + Obsidian local vertical slice
+    name: Worktree + Obsidian + CLI local vertical slice
     if: ${{ github.event_name != 'pull_request' || startsWith(github.head_ref, 'integration/') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -124,6 +124,9 @@ jobs:
         with:
           node-version: 20
           cache: npm
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Resolve candidate context
         shell: bash

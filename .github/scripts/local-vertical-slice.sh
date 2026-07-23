@@ -7,6 +7,9 @@ project_name="haze-sync-stage8-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}"
 worktree_dir="$(mktemp -d)"
 server_log="$(mktemp)"
 config_json="$(mktemp)"
+cli_human="$(mktemp)"
+cli_json="$(mktemp)"
+cli_plan_json="$(mktemp)"
 
 export COMPOSE_PROJECT_NAME="$project_name"
 export POSTGRES_DB="haze_sync_stage8"
@@ -25,7 +28,7 @@ compose=(docker compose --project-name "$project_name" -f "$base_file" -f "$work
 
 cleanup() {
   "${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
-  rm -f "$server_log" "$config_json"
+  rm -f "$server_log" "$config_json" "$cli_human" "$cli_json" "$cli_plan_json"
   if command -v sudo >/dev/null 2>&1; then
     sudo rm -rf "$worktree_dir"
   else
@@ -118,6 +121,59 @@ if [ "$server_ready" -ne 1 ]; then
   echo "Stage 8 Server did not become ready." >&2
   exit 1
 fi
+
+cargo build -p haze-sync-cli --locked
+cli_bin="$PWD/target/debug/haze-sync"
+export HAZE_SYNC_SERVER_URL="http://127.0.0.1:${HAZE_SYNC_HTTP_PORT}"
+export HAZE_SYNC_TOKEN_SOURCE="env:HAZE_SYNC_STAGE9_ADMIN_TOKEN"
+export HAZE_SYNC_STAGE9_ADMIN_TOKEN="$admin_token"
+
+"$cli_bin" preflight > "$cli_human"
+grep -Fx 'preflight: ready' "$cli_human" >/dev/null
+grep -F '[doctor]' "$cli_human" >/dev/null
+grep -F '[adapters]' "$cli_human" >/dev/null
+grep -F '[worktree]' "$cli_human" >/dev/null
+
+"$cli_bin" --output json preflight > "$cli_json"
+"$cli_bin" --output json recovery plan > "$cli_plan_json"
+python3 - "$cli_json" "$cli_plan_json" <<'PYJSON'
+import json
+import sys
+
+preflight_path, plan_path = sys.argv[1:]
+with open(preflight_path, encoding="utf-8") as handle:
+    preflight = json.load(handle)
+with open(plan_path, encoding="utf-8") as handle:
+    plan = json.load(handle)
+
+if set(preflight) != {"schema", "command", "ok", "exit_code", "stdout", "stderr"}:
+    raise SystemExit("Stage 9 preflight JSON fields are not the accepted v1 envelope")
+if preflight["schema"] != "haze-sync.cli.output.v1" or preflight["command"] != "preflight":
+    raise SystemExit("Stage 9 preflight JSON identity is invalid")
+if not preflight["ok"] or preflight["exit_code"] != 0 or preflight["stderr"] != "":
+    raise SystemExit("Stage 9 preflight JSON does not report success deterministically")
+if "preflight: ready" not in preflight["stdout"]:
+    raise SystemExit("Stage 9 preflight JSON does not carry the ready verdict")
+if set(plan) != {"schema", "command", "ok", "exit_code", "stdout", "stderr"}:
+    raise SystemExit("Stage 9 recovery plan JSON fields are not the accepted v1 envelope")
+if plan["schema"] != "haze-sync.cli.output.v1" or plan["command"] != "recovery plan":
+    raise SystemExit("Stage 9 recovery plan JSON identity is invalid")
+if not plan["ok"] or plan["exit_code"] != 0 or plan["stderr"] != "":
+    raise SystemExit("Stage 9 recovery plan JSON does not report success deterministically")
+if "writes: none" not in plan["stdout"] or "requires explicit operator approval" not in plan["stdout"]:
+    raise SystemExit("Stage 9 recovery plan is not an explicit no-write guarded dry run")
+PYJSON
+
+for plan in bootstrap recovery rollout; do
+  "$cli_bin" "$plan" plan | grep -Fx 'writes: none' >/dev/null
+done
+
+for secret in "$admin_token" "$worktree_token" "$obsidian_token"; do
+  if grep -F -- "$secret" "$cli_human" "$cli_json" "$cli_plan_json" >/dev/null; then
+    echo "Stage 9 CLI output exposed a secret marker." >&2
+    exit 1
+  fi
+done
 
 HAZE_OBSIDIAN_SMOKE_SERVER_URL="http://127.0.0.1:${HAZE_SYNC_HTTP_PORT}" \
 HAZE_OBSIDIAN_SMOKE_AUTH_TOKEN="$obsidian_token" \
