@@ -126,7 +126,7 @@ where
         "preflight" => {
             reject_trailing(args)?;
             Ok(CliCommand::Preflight)
-        },
+        }
         "bootstrap" => parse_plan_command(args, OperationalPlan::Bootstrap),
         "recovery" => parse_plan_command(args, OperationalPlan::Recovery),
         "rollout" => parse_plan_command(args, OperationalPlan::Rollout),
@@ -370,7 +370,10 @@ mod tests {
 
     #[test]
     fn operational_commands_parse_and_are_documented() {
-        assert_eq!(parse_cli(["haze-sync", "preflight"]).unwrap(), CliCommand::Preflight);
+        assert_eq!(
+            parse_cli(["haze-sync", "preflight"]).unwrap(),
+            CliCommand::Preflight
+        );
         assert_eq!(
             parse_cli(["haze-sync", "bootstrap", "plan"]).unwrap(),
             CliCommand::OperationalPlan(OperationalPlan::Bootstrap)

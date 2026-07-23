@@ -103,9 +103,14 @@ fn explicit_output_format(args: &[String]) -> Result<Option<OutputFormat>, confi
             index += 2;
             continue;
         }
-        if ["--config=", "--profile=", "--server-url=", "--token-source="]
-            .into_iter()
-            .any(|prefix| argument.starts_with(prefix))
+        if [
+            "--config=",
+            "--profile=",
+            "--server-url=",
+            "--token-source=",
+        ]
+        .into_iter()
+        .any(|prefix| argument.starts_with(prefix))
         {
             index += 1;
             continue;
