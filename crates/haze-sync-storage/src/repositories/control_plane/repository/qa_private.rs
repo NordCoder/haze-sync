@@ -5,6 +5,7 @@ async fn insert_or_replay_operational_job(
     job_records::insert_or_replay_operational_job(transaction, input).await
 }
 
+#[cfg(test)]
 async fn insert_or_replay_credential_issuance(
     transaction: &mut Transaction<'_, Postgres>,
     input: &CredentialIssuanceInput,
