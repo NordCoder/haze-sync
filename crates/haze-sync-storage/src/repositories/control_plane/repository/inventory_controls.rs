@@ -10,8 +10,8 @@ pub async fn lock_adapter_inventory_state(
     .map_err(map_database_error)?
     .ok_or(ControlPlaneRepositoryError::MissingRecord)?;
     Ok(AdapterInventoryStateRow {
-        adapter_inventory_generation: column!(&row, "adapter_inventory_generation"),
-        updated_at: column!(&row, "updated_at"),
+        adapter_inventory_generation: row_column!(&row, "adapter_inventory_generation"),
+        updated_at: row_column!(&row, "updated_at"),
     })
 }
 
@@ -32,12 +32,12 @@ pub async fn read_adapter_inventory_snapshot(
         .iter()
         .map(|row| {
             Ok(AdapterInventoryRow {
-                adapter_id: column!(row, "adapter_id"),
-                adapter_kind: column!(row, "adapter_kind"),
-                control_authority: column!(row, "control_authority"),
-                inventory_generation: column!(row, "inventory_generation"),
-                configured_at: column!(row, "configured_at"),
-                retired_at: column!(row, "retired_at"),
+                adapter_id: row_column!(row, "adapter_id"),
+                adapter_kind: row_column!(row, "adapter_kind"),
+                control_authority: row_column!(row, "control_authority"),
+                inventory_generation: row_column!(row, "inventory_generation"),
+                configured_at: row_column!(row, "configured_at"),
+                retired_at: row_column!(row, "retired_at"),
             })
         })
         .collect::<ControlPlaneResult<Vec<_>>>()?;
@@ -113,8 +113,8 @@ pub async fn cas_replace_adapter_inventory(
     .map_err(map_database_error)?
     .ok_or_else(|| stale(cas_namespaces::ADAPTER_INVENTORY_GENERATION))?;
     let updated_state = AdapterInventoryStateRow {
-        adapter_inventory_generation: column!(&updated, "adapter_inventory_generation"),
-        updated_at: column!(&updated, "updated_at"),
+        adapter_inventory_generation: row_column!(&updated, "adapter_inventory_generation"),
+        updated_at: row_column!(&updated, "updated_at"),
     };
     let (_, snapshot) = read_adapter_inventory_snapshot(transaction).await?;
     Ok((updated_state, snapshot))

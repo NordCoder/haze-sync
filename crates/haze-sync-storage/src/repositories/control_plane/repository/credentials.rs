@@ -246,6 +246,8 @@ pub async fn cas_update_credential_lifecycle(
         validate_identifier(revoked_by)?;
     }
 
+    // Discover the immutable principal identity without taking the credential lock,
+    // then use the same principal -> credential order as create/rotate composition.
     let observed = read_credential_by_id(transaction, credential_id)
         .await?
         .ok_or(ControlPlaneRepositoryError::MissingRecord)?;
@@ -297,16 +299,16 @@ pub async fn cas_update_credential_lifecycle(
 
 fn issuance_from_row(row: &PgRow) -> ControlPlaneResult<CredentialIssuanceRow> {
     Ok(CredentialIssuanceRow {
-        requester_principal_id: column!(row, "requester_principal_id"),
+        requester_principal_id: row_column!(row, "requester_principal_id"),
         idempotency_key_digest: required_digest(row, "idempotency_key_digest")?,
         request_fingerprint: required_digest(row, "request_fingerprint")?,
-        issuance_operation_id: column!(row, "issuance_operation_id"),
-        action: column!(row, "action"),
-        target_principal_id: column!(row, "target_principal_id"),
-        affected_credential_ids: column!(row, "affected_credential_ids"),
-        committed_outcome: column!(row, "committed_outcome"),
-        safe_result: column!(row, "safe_result"),
-        committed_at: column!(row, "committed_at"),
+        issuance_operation_id: row_column!(row, "issuance_operation_id"),
+        action: row_column!(row, "action"),
+        target_principal_id: row_column!(row, "target_principal_id"),
+        affected_credential_ids: row_column!(row, "affected_credential_ids"),
+        committed_outcome: row_column!(row, "committed_outcome"),
+        safe_result: row_column!(row, "safe_result"),
+        committed_at: row_column!(row, "committed_at"),
     })
 }
 

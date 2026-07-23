@@ -16,7 +16,9 @@ include!("control_plane/types.rs");
 include!("control_plane/repository.rs");
 
 #[cfg(test)]
+#[path = "control_plane/tests.rs"]
 mod tests;
 
 #[cfg(all(test, feature = "test-support"))]
+#[path = "control_plane/postgres_contract_tests.rs"]
 mod postgres_contract_tests;

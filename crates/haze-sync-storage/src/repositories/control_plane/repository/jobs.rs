@@ -40,7 +40,7 @@ pub async fn insert_or_replay_operational_job(
         if fingerprint != input.request_fingerprint {
             return Err(ControlPlaneRepositoryError::IdempotencyConflict);
         }
-        let operation_id: String = column!(&existing, "operation_id");
+        let operation_id: String = row_column!(&existing, "operation_id");
         return Ok(IdempotencyInsertOutcome::Replay(
             lock_operational_job(transaction, &operation_id).await?,
         ));
@@ -350,6 +350,7 @@ pub async fn cas_block_execution_slot_uncertain(
     slot_from_row(&row)
 }
 
+/// Clears an uncertain execution-slot fence only after caller-owned reconciliation.
 pub async fn cas_reconcile_execution_slot_uncertainty(
     transaction: &mut Transaction<'_, Postgres>,
     slot_id: &str,
