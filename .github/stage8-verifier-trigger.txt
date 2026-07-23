@@ -1,1 +1,2 @@
 Temporary Stage 8 verification trigger. This file is removed from the final integration tree.
+Retry after correcting the resolved Compose read-write assertion.
