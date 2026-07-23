@@ -13,6 +13,7 @@ use sqlx::{postgres::PgRow, Postgres, Row, Transaction};
 use std::{error::Error, fmt};
 
 include!("control_plane/types.rs");
+include!("control_plane/qa_corrections_types.rs");
 include!("control_plane/repository.rs");
 
 #[cfg(test)]
