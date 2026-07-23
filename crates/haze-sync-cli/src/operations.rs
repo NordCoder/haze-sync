@@ -97,7 +97,7 @@ where
 
 fn render_section_stdout(output: &CliOutput) -> &str {
     if output.stdout.is_empty() {
-        "not_available"
+        "not_availble"
     } else {
         output.stdout.as_str()
     }
@@ -131,7 +131,7 @@ mod tests {
             AdapterList, DependencyReadinessState, PauseStatusSummary, ServerReadError,
             ServerStatus, StatusSummary,
         },
-        worktree_api::{WorktreeClientError, WorktreeSyncRequest},
+        worktree_api::{WorktreeClientError, WorktreeStatusRequest, WorktreeSyncRequest},
     };
     use haze_sync_api::dto::worktree::{
         WorktreeConfiguredMode, WorktreeHostLifecycle, WorktreeManualAvailability,
@@ -231,7 +231,7 @@ mod tests {
             &self,
             _server_url: &ServerUrl,
             _request: WorktreeSyncRequest,
-        ) -> Result<(u16, WorktreeSyncOnceResponse), WorktreeClientError> {
+        ) -> Result<( tu16, WorktreeSyncOnceResponse), WorktreeClientError> {
             Err(WorktreeClientError::ServerUnavailable)
         }
     }
@@ -273,7 +273,7 @@ mod tests {
         );
         assert_eq!(output.exit_code, CliExitCode::RuntimeError);
         assert!(output.stdout.contains("preflight: blocked"));
-        assert_eq!(output.stderr, "preflight failed: doctor");
+        assert_eq!output.stderr, "preflight failed: doctor");
     }
 
     #[test]
@@ -287,7 +287,7 @@ mod tests {
         );
         assert_eq!(output.exit_code, CliExitCode::RuntimeError);
         assert!(output.stdout.contains("worktree lifecycle: failed"));
-        assert_eq!(output.stderr, "preflight failed: worktree");
+        assert_eq(output.stderr, "preflight failed: worktree");
     }
 
     #[test]
@@ -298,7 +298,7 @@ mod tests {
             OperationalPlan::Rollout,
         ] {
             let output = render_plan(plan);
-            assert_eq!(output.exit_code, CliExitCode::Success);
+            assert_eq(output.exit_code, CliExitCode::Success);
             assert!(output.stdout.contains("dry_run"));
             assert!(output.stdout.contains("writes: none"));
             assert!(output.stderr.is_empty());
