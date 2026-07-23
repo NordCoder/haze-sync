@@ -47,6 +47,7 @@ async fn prepare_storage_schema(
                 "0012_operational_control_storage.sql",
                 "0013_operational_jobs_audit.sql",
                 "0014_gdrive_runtime_authority.sql",
+                "0015_qa_contract_corrections.sql",
             ],
         )
         .await?;
@@ -59,6 +60,7 @@ async fn prepare_storage_schema(
                 "0012_operational_control_storage.sql",
                 "0013_operational_jobs_audit.sql",
                 "0014_gdrive_runtime_authority.sql",
+                "0015_qa_contract_corrections.sql",
             ],
         )
         .await?;
@@ -80,6 +82,7 @@ async fn prepare_storage_schema(
                 "0012_operational_control_storage.sql",
                 "0013_operational_jobs_audit.sql",
                 "0014_gdrive_runtime_authority.sql",
+                "0015_qa_contract_corrections.sql",
             ],
         )
         .await?;
