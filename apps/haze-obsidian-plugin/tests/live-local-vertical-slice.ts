@@ -66,7 +66,7 @@ async function main(): Promise<void> {
   );
 
   const replacementPath = path.resolve(worktreeRoot, ".stage8-replacement.tmp");
-  await writeFile(replacementPath, WORKTREE_CONTENT, { encoding: "utf8", mode: 0o600 });
+  await writeFile(replacementPath, WORKTREE_CONTENT, { encoding: "utf8", mode: 0o644 });
   await rename(replacementPath, worktreePath);
 
   const imported = await waitForRemoteContent(
