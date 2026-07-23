@@ -1,0 +1,48 @@
+name: Stage 9 Rustfmt Export
+
+on:
+  pull_request:
+    branches:
+      - integration/v1-fan-in
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    if: ${{ github.head_ref == 'integration/stage9-cli-ops' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Format candidate
+        shell: bash
+        run: cargo fmt --all
+
+      - name: Verify bounded formatted diff
+        shell: bash
+        run: |
+          git diff --name-only | sort > /tmp/actual.txt
+          cat > /tmp/expected.txt <<'EOF'
+          crates/haze-sync-cli/src/commands.rs
+          crates/haze-sync-cli/src/main.rs
+          crates/haze-sync-cli/src/operations.rs
+          EOF
+          diff -u /tmp/expected.txt /tmp/actual.txt
+
+      - name: Upload formatted sources
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage9-rustfmt-${{ github.run_id }}
+          path: |
+            crates/haze-sync-cli/src/commands.rs
+            crates/haze-sync-cli/src/main.rs
+            crates/haze-sync-cli/src/operations.rs
+          retention-days: 1
+          compression-level: 9
+          if-no-files-found: error
