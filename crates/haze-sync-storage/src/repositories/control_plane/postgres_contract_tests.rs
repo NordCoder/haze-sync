@@ -6,4 +6,5 @@ include!("postgres_contract_tests/runtime.rs");
 include!("postgres_contract_tests/concurrency.rs");
 include!("postgres_contract_tests/validation.rs");
 include!("postgres_contract_tests/qa_corrections.rs");
+include!("postgres_contract_tests/invalidation_serialization.rs");
 include!("postgres_contract_tests/suite.rs");
