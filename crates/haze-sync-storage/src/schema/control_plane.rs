@@ -29,7 +29,8 @@ pub mod table_names {
     pub const CREDENTIALS: &str = "credentials";
     pub const CREDENTIAL_ISSUANCE_IDEMPOTENCY: &str = "credential_issuance_idempotency";
     pub const OPERATIONAL_JOBS: &str = "operational_jobs";
-    pub const OPERATIONAL_JOB_ADAPTER_GENERATIONS: &str = "operational_job_adapter_generations";
+    pub const OPERATIONAL_JOB_ADAPTER_GENERATIONS: &str =
+        "operational_job_adapter_generations";
     pub const OPERATIONAL_EXECUTION_SLOTS: &str = "operational_execution_slots";
     pub const OPERATIONAL_IDEMPOTENCY: &str = "operational_idempotency";
     pub const OPERATIONAL_JOB_EVIDENCE: &str = "operational_job_evidence";
@@ -78,6 +79,7 @@ pub mod cas_namespaces {
     pub const CREDENTIAL_VERSION: &str = "credential_version";
     pub const JOB_VERSION: &str = "job_version";
     pub const EXECUTOR_FENCE: &str = "executor_fence";
+    pub const EXECUTOR_LEASE: &str = "executor_lease";
     pub const SLOT_VERSION: &str = "slot_version";
     pub const RUNTIME_LEASE_VERSION: &str = "runtime_lease_version";
     pub const STANDALONE_RUNTIME_EPOCH: &str = "standalone_runtime_epoch";
