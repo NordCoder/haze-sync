@@ -155,9 +155,7 @@ fn structured_metadata_validation_and_debug_are_secret_safe() {
         lease_heartbeat_at: None,
         lease_expires_at: None,
         last_accepted_report_sequence: 3,
-        last_accepted_report_fingerprint: Some(
-            SecretDigest::parse("c".repeat(64)).unwrap(),
-        ),
+        last_accepted_report_fingerprint: Some(SecretDigest::parse("c".repeat(64)).unwrap()),
         open_mutation_permits: 0,
         uncertain_external_effects: 0,
         takeover_state: "clear".into(),
