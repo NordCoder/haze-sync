@@ -10,3 +10,4 @@ include!("repository/runtime_report/accept.rs");
 include!("repository/runtime_report/uncertain.rs");
 include!("repository/runtime_report/reconcile.rs");
 include!("repository/facts.rs");
+include!("repository/qa_corrections.rs");
