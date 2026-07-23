@@ -55,21 +55,44 @@ Operational state MUST NOT be interpreted as proof that replicas are fully synch
 
 ### 3.1 Durable records and versioning
 
-Every durable operational-control record MUST contain a schema identifier or integer schema version. Readers MUST reject unsupported future versions rather than guessing.
+Every durable operational-control record MUST contain a schema identifier or integer `schema_version`. Readers MUST reject unsupported future schemas rather than guessing.
+
+`schema_version` describes data shape and MUST NOT be used as a compare-and-set token. Every mutable record MUST additionally expose one explicit mutable CAS token whose name identifies its namespace:
+
+```text
+maintenance_generation                 global maintenance record
+adapter_control_generation             one centrally controlled adapter record
+principal_version                      one principal record
+credential_set_generation              the credential set owned by one principal
+credential_version                     one credential record
+job_version                            one operational job record
+executor_fence                         one operational-job executor epoch
+adapter_inventory_generation           the configured centrally controlled adapter inventory
+```
 
 Identifiers MUST be opaque, stable, and non-secret. Operational identifiers SHOULD use the repository's accepted identifier conventions where applicable.
 
-All control generations MUST be non-negative, monotonically increasing integers. A generation MUST NOT be reused, decremented, or reset after restart, restore, or failover. Exhaustion or overflow MUST fail closed.
+Every generation, version, and fence value above MUST be a non-negative monotonically increasing integer. A value MUST NOT be reused, decremented, or reset after restart, restore, failover, archival, or lease takeover. Exhaustion or overflow MUST fail closed.
 
-All timestamps MUST be UTC instants. Comparisons that affect admission, expiry, grace, or confirmation MUST use Server-controlled time.
+The name `maintenance_generation` always means the current value from the singleton maintenance record. `maintenance_control_generation` and an unqualified job field named `expected_control_generation` are not separate namespaces and MUST NOT appear in durable V1 records. An adapter control record copies the exact global value into its `maintenance_generation`; an effective adapter report copies that value into `last_applied_maintenance_generation`; a job that depends on maintenance stores it as `expected_maintenance_generation`.
+
+All timestamps MUST be UTC instants. Comparisons that affect admission, expiry, grace, lease validity, or confirmation MUST use Server-controlled time.
 
 ### 3.2 Compare-and-set requirement
 
-Any request that changes maintenance state, adapter desired state, credential lifecycle, or a non-terminal operational job MUST be applied through a durable transaction with an expected version or generation.
+Any request that changes maintenance state, adapter desired state, principal or credential lifecycle, or a non-terminal operational job MUST be applied through a durable transaction with the exact current CAS token for every mutable record or set it changes.
 
-A stale request MUST be rejected with the safe code `stale_control_generation`. A stale request MUST NOT partially change state or external side effects.
+Required CAS inputs are:
 
-An exact replay identified by the same idempotency scope, key, and request fingerprint returns the existing result and MUST NOT allocate a new generation.
+- maintenance action: `expected_maintenance_generation`;
+- adapter desired-state action: `expected_adapter_control_generation`;
+- principal enable/disable or credential-set mutation: `expected_principal_version` and `expected_credential_set_generation`;
+- single-credential mutation: `expected_credential_version` plus the principal credential-set CAS when set invariants may change;
+- job mutation: `expected_job_version`; executor-owned updates additionally require the current `executor_fence` and lease proof.
+
+A stale generation MUST be rejected with safe code `stale_control_generation`. A stale record/set version MUST be rejected with safe code `stale_record_version`. A stale executor epoch MUST be rejected with safe code `stale_executor_fence`. A stale request MUST NOT partially change state, allocate a new generation, acquire a lease, or start an external side effect.
+
+An exact replay identified by the same idempotency scope, key, and request fingerprint returns the existing result and MUST NOT allocate a new generation or version. Replay permits observation of the stored result; it does not authorize a new mutation against stale CAS input.
 
 ### 3.3 Safe errors
 
@@ -113,8 +136,8 @@ The durable maintenance record MUST contain at least:
 
 ```text
 schema_version
+maintenance_generation
 state
-control_generation
 transition_operation_id
 transition_requested_by
 transition_requested_at
@@ -122,14 +145,14 @@ state_entered_at
 admission_fence_closed
 quiescence_evidence_version
 quiescence_evidence_id | null
-active_operational_job_id | null
+active_maintenance_job_id | null
 safe_error_category | null
 updated_at
 ```
 
 `admission_fence_closed` MUST be persisted as `true` in the same transaction that accepts `normal -> quiescing`, before the request is acknowledged as accepted.
 
-`control_generation` MUST increment for every accepted state-changing request. Automatic completion of an already accepted transition, such as `quiescing -> quiesced`, preserves the request's generation and records a new state transition event.
+`maintenance_generation` MUST increment for every accepted state-changing request. Automatic completion of an already accepted transition, such as `quiescing -> quiesced`, preserves the request's generation and records a new state transition event.
 
 ### 4.3 Legal, idempotent, rejected, and invalid transitions
 
@@ -250,34 +273,55 @@ A `quiesced` claim requires one immutable evidence record containing at least:
 ```text
 schema_version
 quiescence_evidence_id
-maintenance_control_generation
+maintenance_generation
+adapter_inventory_generation
 admission_fence_closed_at
 server_instance_id
 server_started_at
 active_authoritative_mutations = 0
 open_authoritative_transactions = 0
-worktree_control_generation
-worktree_last_applied_generation
-worktree_in_flight = false
-gdrive_control_generation
-gdrive_last_applied_generation | null
-gdrive_in_flight = false | fenced
+adapter_instances[]
 obsidian_authoritative_mutation_gate = closed
-checkpoint_summary
-external_fences
 captured_at
 ```
 
-`checkpoint_summary` MUST identify the last durable operation/cursor generations needed to detect later drift. It MUST NOT contain raw provider cursors, credentials, or file content.
+`adapter_instances` MUST contain exactly one identity-complete entry for every centrally controlled adapter instance present in the durable adapter inventory captured at `adapter_inventory_generation`. The inventory includes every configured hosted Worktree instance and every configured standalone GDrive instance, including desired-disabled instances. `adapter_inventory_generation` increments whenever such an instance is added, removed, replaced, or changes stable control identity/kind. Duplicate, missing, unknown, or subsequently added/removed adapter identities invalidate the evidence.
 
-A standalone GDrive adapter is quiesced only when one of these is true:
+Each entry MUST contain at least:
 
-1. it has acknowledged the current control generation and reported no in-flight provider/Core mutation; or
-2. an operator has established a versioned external fence by stopping the process or lease, revoking the Haze Sync credential used for mutations, and waiting until any bounded credential/cache validity has expired.
+```text
+adapter_id
+adapter_kind
+control_authority
+adapter_control_generation
+maintenance_generation
+desired_enabled
+desired_mode
+last_applied_adapter_control_generation | null
+last_applied_maintenance_generation | null
+runtime_lifecycle
+connection_state
+in_flight = false
+drain_proof = acknowledged | externally_fenced
+external_fence_id | null
+checkpoint_summary
+captured_at
+```
 
-A missing heartbeat, stale status, or disconnected process by itself is not a fence.
+For `drain_proof = acknowledged`, both last-applied generations MUST equal the desired record values, the current maintenance hold MUST be applied, and `in_flight` MUST be false. For `drain_proof = externally_fenced`, `external_fence_id` MUST identify immutable evidence that prevents that exact `adapter_id` from starting Core or replica mutations; a fence for one adapter identity MUST NOT satisfy another.
 
-Obsidian devices are not centrally frozen. Quiescence evidence asserts only that Server rejects their authoritative mutations. Destructive recovery MUST NOT assume that remote Obsidian vaults stopped changing or constitute a current backup.
+`checkpoint_summary` MUST identify the last durable operation/cursor generations needed to detect later drift for that adapter identity. It MUST NOT contain raw provider cursors, credentials, or file content.
+
+A standalone GDrive instance is quiesced only when one of these is true:
+
+1. that exact `adapter_id` has acknowledged its current `adapter_control_generation` and the current `maintenance_generation`, and reported no in-flight provider/Core mutation; or
+2. an operator has established a versioned external fence for that exact `adapter_id` by stopping its process or exclusive runtime lease, revoking every Haze Sync credential that could mutate as that principal, and waiting until any bounded credential/cache validity has expired.
+
+A missing heartbeat, stale status, disconnected process, desired-disabled state, or fence for a different adapter by itself is not drain evidence.
+
+Evidence becomes invalid before maintenance entry if the global `maintenance_generation`, `adapter_inventory_generation`, any included adapter desired record, any included external fence, or the admission fence changes. Server MUST re-read and compare all of those identities transactionally before accepting `quiesced -> maintenance` or starting a maintenance-required job.
+
+Obsidian devices are not centrally frozen and are not members of `adapter_instances`. Quiescence evidence asserts only that Server rejects their authoritative mutations. Destructive recovery MUST NOT assume that remote Obsidian vaults stopped changing or constitute a current backup.
 
 ### 4.9 Entry into maintenance
 
@@ -300,7 +344,7 @@ Server MUST:
 2. validate durable schema and required dependencies;
 3. publish new adapter control generations that remove the maintenance hold while preserving desired settings;
 4. start the hosted Worktree runtime when desired enabled;
-5. wait for every desired-enabled centrally controlled adapter to apply its current generation;
+5. wait for every desired-enabled centrally controlled adapter identity to apply its current adapter control and maintenance generations;
 6. verify no required runtime is failed or disconnected;
 7. reopen admission and enter `normal` atomically.
 
@@ -347,7 +391,7 @@ adapter_kind
 control_authority
 desired_enabled
 desired_mode
-control_generation
+adapter_control_generation
 maintenance_generation
 maintenance_hold
 updated_by
@@ -358,9 +402,10 @@ Invariants:
 
 - `desired_enabled = false` requires `desired_mode = disabled`.
 - `desired_enabled = true` requires a non-`disabled` mode valid for the adapter kind.
-- Changing enablement, mode, or maintenance hold increments `control_generation`.
-- Rewriting identical desired values with the current expected generation is an idempotent no-op.
-- A stale generation is rejected.
+- Changing enablement, mode, or maintenance hold increments `adapter_control_generation`.
+- `maintenance_generation` MUST equal the singleton maintenance generation whose hold value was used to build this snapshot; it is not independently incremented by the adapter record.
+- Rewriting identical desired values with the current `expected_adapter_control_generation` is an idempotent no-op.
+- A stale adapter control generation is rejected.
 
 ### 5.3 Effective runtime record
 
@@ -371,7 +416,7 @@ schema_version
 adapter_id
 effective_mode | null
 runtime_lifecycle
-last_applied_generation
+last_applied_adapter_control_generation
 last_applied_maintenance_generation
 heartbeat_at | null
 last_success_at | null
@@ -398,7 +443,7 @@ backing_off
 failed
 ```
 
-`last_applied_generation` MUST NOT exceed the desired `control_generation`.
+`last_applied_adapter_control_generation` MUST NOT exceed the desired `adapter_control_generation`; `last_applied_maintenance_generation` MUST NOT exceed the singleton `maintenance_generation`.
 
 `heartbeat_at` proves only recent control-plane contact. `last_success_at` proves only that one complete cycle succeeded at that time. Neither proves zero replica lag, complete reconciliation, or readiness.
 
@@ -487,9 +532,9 @@ The standalone process MUST continue polling and heartbeating while desired-disa
 On startup or reconnect, GDrive MUST:
 
 1. fetch the complete current control snapshot;
-2. compare its last applied generation;
-3. fail closed for mutation until the current generation is applied;
-4. report effective mode, lifecycle, and last applied generation;
+2. compare its last applied adapter control and maintenance generations;
+3. fail closed for mutation until the current adapter control and maintenance generations are applied;
+4. report effective mode, lifecycle, and both last-applied generations;
 5. resume cycles only when maintenance hold is false and the desired mode permits the direction.
 
 A disconnected or stale GDrive adapter MUST NOT be represented as successfully disabled, ready, or synchronized unless a separate fence proves that fact.
@@ -506,12 +551,12 @@ During any non-`normal` maintenance state, Server gates Obsidian mutations exact
 
 Desired control is durable and authoritative; effective state is eventually consistent.
 
-- A runtime retries fetching/applying the current generation with bounded backoff.
-- Applying a generation is idempotent.
-- An older generation received after a newer one is rejected and MUST NOT roll back effective state.
-- A runtime restart does not reset its durable last-applied generation.
+- A runtime retries fetching/applying the current adapter control and maintenance generations with bounded backoff.
+- Applying the pair `(adapter_control_generation, maintenance_generation)` is idempotent.
+- An older adapter control or maintenance generation received after a newer one is rejected and MUST NOT roll back effective state.
+- A runtime restart does not reset either durable last-applied generation.
 - Server retains desired state through runtime disconnection.
-- A control change is not complete until effective state reports the accepted generation or a safe error/fence is recorded.
+- A control change is not complete until effective state reports the accepted adapter control and maintenance generations or a safe error/fence is recorded.
 - Operator output MUST show desired and effective values side by side when they differ.
 
 ## 6. Credential lifecycle
@@ -527,6 +572,8 @@ Principal enablement and adapter desired enablement are distinct:
 - credential revoke invalidates only that credential;
 - provider OAuth material is not a Haze Sync credential and remains in provider-specific secret storage.
 
+The mutable principal record MUST contain at least `principal_id`, `role`, `principal_enabled`, `principal_version`, `credential_set_generation`, and lifecycle timestamps. `principal_version` increments for any principal field change. `credential_set_generation` increments in the same transaction as every create, rotate, revoke, grace transition, or other mutation that changes which credentials may authenticate for that principal. Principal and credential-set CAS values are never inferred from timestamps.
+
 ### 6.2 Credential record
 
 The versioned credential record MUST contain at least:
@@ -534,7 +581,9 @@ The versioned credential record MUST contain at least:
 ```text
 schema_version
 credential_id
+credential_version
 principal_id
+issuance_operation_id | null
 credential_kind
 role
 status
@@ -559,7 +608,9 @@ revoked
 expired
 ```
 
-Public/operator DTOs MUST omit `verifier_material`, salts, parameter strings that reveal verifier material, and any secret-management metadata. Safe output may include credential ID, principal ID, role, status, and lifecycle timestamps.
+`credential_version` starts at `1` and increments on every durable mutation of status, verifier scheme/material, lifecycle boundary, revocation metadata, or other authorization-relevant field. `issuance_operation_id` is required for newly issued V1 credentials and may be null only for migrated legacy credentials.
+
+Public/operator DTOs MUST omit `verifier_material`, salts, parameter strings that reveal verifier material, and any secret-management metadata. Safe output may include credential ID, principal ID, role, credential version, status, and lifecycle timestamps.
 
 ### 6.3 Token format and one-time plaintext delivery
 
@@ -573,10 +624,13 @@ The secret MUST contain at least 256 bits generated by a cryptographically secur
 
 The complete plaintext credential:
 
-- is returned only in the successful create or rotate response;
-- MUST NOT be persisted, logged, traced, audited, or returned by later lookup;
+- is included only in the initial create or rotate response generated by the committing request, whether or not the client successfully receives that response;
+- MUST NOT be persisted, logged, traced, audited, placed in an idempotency response snapshot, or returned by later lookup/replay;
 - MUST NOT be included in URLs, job summaries, artifacts, or error details;
+- exists only in bounded process memory between generation and response disposal;
 - cannot be recovered if the one-time response is lost; the operator must rotate or create another credential.
+
+Create and rotate MUST require an idempotency key. The durable idempotency result stores `issuance_operation_id`, `credential_id`, safe lifecycle metadata, and terminal outcome, but never plaintext or reversible secret material. An exact replay after commit returns that same safe result with `plaintext_available = false` and safe code `credential_secret_not_replayable`; it MUST NOT create another credential, repeat rotation, or return a newly generated replacement secret. Recovery from a lost response is a new explicitly authorized rotate or revoke request with a new idempotency key and current CAS values.
 
 ### 6.4 Verification material at rest
 
@@ -593,31 +647,34 @@ The required V1 verifier scheme is `argon2id_v1` with:
 
 Deployments MAY increase these parameters. They MUST NOT reduce them without a versioned security review.
 
-Lookup uses `credential_id` to select one record and then verifies the secret. The secret or its digest MUST NOT be used as a public lookup key.
+For `hs1` credentials, lookup uses `credential_id` to select one record and then verifies the secret. The secret or its digest MUST NOT be used as a public lookup key. The private legacy compatibility lookup is defined separately in section 6.9.
 
 ### 6.5 Create
 
 Credential creation MUST:
 
 1. authenticate and authorize the operator;
-2. validate that the target principal and role exist;
-3. reject creation if the principal already has an active credential, directing the caller to rotate;
-4. generate the credential and verifier in memory;
-5. persist the credential record and audit event in one transaction;
-6. return plaintext exactly once after durable commit.
+2. require `expected_principal_version`, `expected_credential_set_generation`, and an idempotency key;
+3. validate that the target principal and role exist;
+4. reject creation if the principal already has an active credential, directing the caller to rotate;
+5. generate the credential and verifier in memory;
+6. set `credential_version = 1` and V1 `not_before` to the Server commit instant; the V1 admin surface MUST NOT accept caller-selected future activation;
+7. persist the credential, increment `credential_set_generation`, finalize the safe idempotency result, and append the audit event in one transaction;
+8. return plaintext exactly once after durable commit and discard it after the response attempt.
 
-If the response cannot be delivered after commit, the credential remains valid but unrecoverable. The caller must use an explicit rotate/revoke action; Server MUST NOT replay the plaintext response.
+If the response cannot be delivered after commit, the credential remains valid but unrecoverable. Exact replay returns only the committed credential identity and safe metadata. The caller must use an explicit rotate/revoke action; Server MUST NOT replay plaintext or silently issue another credential.
 
 ### 6.6 Rotate and grace
 
-Rotation is atomic:
+Rotation requires the current `expected_principal_version`, `expected_credential_set_generation`, expected version of every credential whose status will change, and an idempotency key. Rotation is atomic:
 
-1. generate and persist one new `active` credential;
-2. move the previous active credential to `grace`;
+1. generate and persist one new `active` credential with `credential_version = 1` and `not_before` equal to the commit instant;
+2. move the previous active credential to `grace` and increment its `credential_version`;
 3. assign a bounded `grace_expires_at`;
-4. revoke any older grace credential in the same transaction;
-5. record rotation and any forced grace revocation in audit;
-6. return only the new plaintext credential.
+4. revoke any older grace credential and increment its `credential_version` in the same transaction;
+5. increment the principal `credential_set_generation` exactly once;
+6. finalize the safe idempotency result and record rotation and any forced grace revocation in audit;
+7. return only the new plaintext credential on the first successful response attempt.
 
 The default grace period is 15 minutes. The maximum accepted grace period is 24 hours. A requested zero grace period revokes the previous credential immediately.
 
@@ -629,10 +686,10 @@ A grace credential has the same role as before but is accepted only until `grace
 
 Revocation is explicit, durable, and immediate for any request admitted after the revoke transaction commits.
 
-- Revoking an already revoked or expired credential is an idempotent no-op.
+- Revoking requires `expected_credential_version` and current principal/credential-set CAS values when it can change set invariants. An exact idempotency replay is a no-op; an already revoked or expired credential with matching current CAS is also an idempotent no-op.
 - Revoking a credential does not delete its record or audit history.
 - Revoking the active credential does not automatically promote a grace credential.
-- Expiry is evaluated before authorization. A credential past `expires_at` or `grace_expires_at` is treated as expired even if an asynchronous status-maintenance task has not yet updated the row.
+- `not_before`, `expires_at`, and `grace_expires_at` are evaluated from Server time before authorization. A credential is unusable while `now < not_before` and expired when an applicable expiry boundary has passed, even if an asynchronous status-maintenance task has not yet updated the row.
 - Positive authentication caches MUST validate a revocation/principal generation or otherwise be invalidated so committed revocation is not bypassed by stale cache state.
 
 Credential revoke is permitted in every maintenance state when control storage is available.
@@ -641,14 +698,15 @@ Credential revoke is permitted in every maintenance state when control storage i
 
 Authentication MUST evaluate, in order:
 
-1. token shape and version;
-2. credential record existence;
+1. token shape and version, selecting exactly one of the `hs1` or legacy paths;
+2. credential record existence through the selected private lookup path;
 3. principal existence and `principal_enabled`;
-4. credential status and effective expiry;
-5. verifier result;
-6. role authorization for the requested operation.
+4. Server time at or after `not_before`;
+5. credential status and effective `expires_at`/`grace_expires_at` boundary;
+6. verifier result;
+7. role authorization for the requested operation.
 
-Malformed, unknown, non-matching, revoked, expired, grace-expired, or disabled-principal credentials MUST produce the same generic public authentication failure. Public output MUST NOT reveal which check failed.
+Malformed, unknown, non-matching, not-yet-valid, revoked, expired, grace-expired, or disabled-principal credentials MUST produce the same generic public authentication failure. Public output MUST NOT reveal which check failed or whether legacy lookup was attempted.
 
 `last_used_at` MAY be updated asynchronously, but failure to update it MUST NOT change an otherwise valid authentication decision.
 
@@ -659,14 +717,17 @@ The current `sync_adapters.enabled` and `sync_adapters.token_hash` model is migr
 A downstream migration MUST:
 
 - map `sync_adapters.enabled` to principal authorization enablement, not adapter desired runtime enablement;
-- create a principal for each accepted adapter identity/role;
-- represent the existing SHA-256 value as `legacy_sha256_v0` verification material;
+- create a principal for each accepted adapter identity/role with initialized principal and credential-set CAS values;
+- create one synthetic `credential_id` and credential record for the existing SHA-256 value using verifier scheme `legacy_sha256_v0`;
+- preserve the legacy SHA-256 value only as private verification/lookup material;
 - allow legacy credentials only for compatibility lookup;
 - prohibit creation or rotation into `legacy_sha256_v0`;
 - require the next rotation to issue an `argon2id_v1` credential;
 - never expose the legacy hash in public/operator output.
 
-Legacy compatibility MUST NOT weaken generic failure behavior or audit requirements.
+A token without the `hs1.` prefix enters the legacy path only while legacy compatibility is enabled. A token with the `hs1.` prefix that is malformed MUST fail generically and MUST NOT fall back to legacy lookup. Server computes the accepted legacy SHA-256 form in bounded memory and performs one private exact lookup against `legacy_sha256_v0` records. The raw token and computed digest MUST NOT be logged, audited, cached as public metadata, or returned. Zero matches, multiple matches, disabled principal, lifecycle rejection, or verifier mismatch fail generically. The legacy path MUST NOT scan or attempt Argon2 verification across unrelated credential rows.
+
+After rotation, the legacy credential follows the ordinary bounded grace or immediate-revoke rule and MUST NOT be promoted again. Exact replay of the rotation returns the same new credential identity without plaintext. Legacy compatibility MUST NOT weaken generic failure behavior, CAS, idempotency, audit, or revocation-cache requirements.
 
 ## 7. Operational jobs
 
@@ -675,8 +736,12 @@ Legacy compatibility MUST NOT weaken generic failure behavior or audit requireme
 Every operational job MUST use schema `haze-sync.operational-job.v1` and contain at least:
 
 ```text
+schema_version
 operation_id
+job_version
 kind
+maintenance_required
+destructive
 requester_principal_id
 requester_credential_id | null
 idempotency_scope
@@ -687,8 +752,8 @@ dry_run
 confirmation_required
 confirmation_digest | null
 confirmation_expires_at | null
-expected_control_generation
 expected_maintenance_generation | null
+expected_adapter_control_generations[]
 created_at
 updated_at
 started_at | null
@@ -699,9 +764,16 @@ safe_error_category | null
 artifact_manifest_id | null
 artifact_manifest_digest | null
 checkpoint | null
-lease_owner | null
+execution_scope_digest
+executor_id | null
+executor_fence
+lease_token_digest | null
+lease_heartbeat_at | null
 lease_expires_at | null
+destructive_execution_slot_id | null
 ```
+
+Each `expected_adapter_control_generations` entry MUST contain exactly `adapter_id` and `adapter_control_generation`; duplicate adapter IDs are invalid. `job_version` starts at `1`. `executor_fence` starts at `0` before the first lease and is incremented only by a successful lease acquisition or takeover.
 
 Raw idempotency keys, confirmation values, credentials, file content, provider payloads, or arbitrary command output MUST NOT be stored in the job record.
 
@@ -743,15 +815,17 @@ Legal transitions are:
 |---|---|---|
 | create | `planned` | Request validated and idempotency record reserved. |
 | `planned` | `awaiting_confirmation` | Plan and immutable confirmation inputs persisted. |
-| `planned` | `running` | Confirmation not required; current generation revalidated. |
+| `planned` | `running` | Confirmation not required; all expected generations, job version, and execution slot revalidated. |
 | `planned` | `cancelled` | No external side effect has started. |
-| `awaiting_confirmation` | `running` | One-time confirmation valid and current generation revalidated. |
+| `planned` | `failed` | Planning, generation, manifest, or pre-execution validation failed while the transition owner held current job CAS and before any external side effect. |
+| `awaiting_confirmation` | `running` | One-time confirmation valid and current generations revalidated. |
 | `awaiting_confirmation` | `cancelled` | Operator cancels or confirmation expires. |
+| `awaiting_confirmation` | `failed` | Stored plan/manifest became invalid, required generation changed, or restart recovery proves the job cannot safely start. |
 | `running` | `succeeded` | All required effects and durable checkpoints confirmed. |
 | `running` | `failed` | Safe terminal failure recorded; no success claim. |
 | `running` | `cancelled` | Cancellation completed and no further effects can start. |
 
-Terminal states are immutable. A retry creates a new operation with a new idempotency key and may reference the prior operation ID.
+Every transition MUST compare and increment `job_version`; executor-owned transitions also require the current executor fence. Terminal states are immutable. A retry creates a new operation with a new idempotency key and may reference the prior operation ID.
 
 ### 7.4 Dry run, artifact manifest, and confirmation
 
@@ -765,8 +839,9 @@ Confirmation MUST be bound to:
 operation_id
 kind
 request_fingerprint
-expected_control_generation
 expected_maintenance_generation
+expected_adapter_control_generations
+job_version
 artifact_manifest_digest
 confirmation_expiry
 ```
@@ -789,6 +864,37 @@ An executor MUST NOT accept arbitrary shell text, raw SQL, provider credentials,
 
 The CLI and connectors invoke those public/named actions. They do not become the execution authority.
 
+#### 7.5.1 Executor lease and fencing
+
+A job enters `running` only by atomically:
+
+1. comparing `expected_job_version` and all expected control generations;
+2. acquiring the applicable execution slot;
+3. assigning `executor_id`;
+4. incrementing `executor_fence` to a value never previously used by that job;
+5. storing only a non-reversible `lease_token_digest` plus bounded heartbeat/expiry timestamps;
+6. incrementing `job_version` and appending the start audit event.
+
+The executor holds the raw lease token only in bounded runtime memory or accepted secret transport. Every heartbeat, checkpoint, cancellation acknowledgement, lease release, and terminal transition MUST compare `(operation_id, expected_job_version, executor_fence, lease proof)`. A stale executor receives `stale_executor_fence` and MUST stop before starting another side effect.
+
+Before each bounded external step, the executor MUST re-read or strongly validate its current fence and lease. Provider/deployment operations SHOULD use an idempotency or fencing value derived from `(operation_id, step_id, executor_fence)` when the external system supports it. If an external action cannot be fenced or queried, lease expiry MUST NOT authorize takeover while its outcome is uncertain; the job remains running-recoverable or failed-uncertain until explicit reconciliation.
+
+Lease renewal extends time only; it does not change `executor_fence`. Lease takeover after expiry MUST allocate a larger fence and is allowed only when the durable checkpoint proves no prior external step is in flight, or when the next executor can query/deduplicate the exact step outcome. A former executor can never write a checkpoint or terminal result after takeover.
+
+#### 7.5.2 Destructive and overlapping-job concurrency
+
+Every executor contract MUST classify the job as `destructive`, `maintenance_required`, and provide a canonical `execution_scope_digest`.
+
+The durable global destructive execution slot MUST contain at least `slot_id`, `slot_version`, `operation_id | null`, `maintenance_generation | null`, `executor_fence | null`, `blocked_uncertain`, and timestamps. Acquisition, release, or reconciliation of the slot requires `expected_slot_version` and increments `slot_version`.
+
+- At most one `running` job with `destructive = true` or `maintenance_required = true` may exist globally.
+- Transition to `running` for such a job MUST acquire one durable global destructive execution slot in the same transaction as the job lease and bind it to `operation_id`, `expected_maintenance_generation`, and `executor_fence`.
+- A competing start is rejected with `operation_in_progress`; it MUST NOT wait invisibly or start partial work.
+- The slot is released only after a terminal outcome proves no further side effect can start. A failed job with an uncertain external effect retains or blocks the slot until a separate reconciler records a safe resolution.
+- Non-destructive jobs MAY run concurrently only when their versioned contracts prove disjoint execution scopes. Jobs with the same scope digest, or scopes that cannot be proven disjoint, MUST be serialized.
+
+Planning and awaiting-confirmation records may coexist, but their generations and manifests are revalidated when the execution slot is acquired; they do not reserve execution authority merely by existing.
+
 ### 7.6 Cancellation
 
 A cancel request on `running` sets `cancel_requested_at`; state remains `running` until the executor proves no further side effects can start.
@@ -803,11 +909,11 @@ A cancel request on `running` sets `cancel_requested_at`; state remains `running
 On restart:
 
 - terminal jobs remain unchanged;
-- `planned` jobs remain planned;
-- `awaiting_confirmation` jobs remain pending until confirmation expiry, then become `cancelled` with safe reason `confirmation_expired`;
-- `running` jobs may resume only from a durable checkpoint with idempotent or externally queryable side effects;
+- `planned` jobs remain planned only when their persisted plan inputs are valid; otherwise they transition to `failed` through CAS before any side effect;
+- `awaiting_confirmation` jobs remain pending while their plan, manifest, and generations remain valid; expiry becomes `cancelled`, while invalid or stale persisted inputs become `failed`;
+- `running` jobs may resume or transfer execution only from a durable checkpoint with idempotent, externally queryable, or externally fenced side effects and a newly acquired executor fence;
 - a non-resumable or ambiguous running job becomes `failed` with safe category `restart_recovery_required` and blocks resume from maintenance until reconciled;
-- a lease expiry alone does not prove an external action stopped.
+- a lease expiry alone does not prove an external action stopped and does not release a destructive execution slot.
 
 A job MUST NOT be marked succeeded solely because the process restarted after issuing an external request.
 
@@ -850,11 +956,11 @@ The request fingerprint MUST cover canonical safe request metadata including kin
 
 ### 8.3 Generation checks
 
-A new job request with a stale control or maintenance generation is rejected before job creation.
+A new job request with a stale maintenance generation, any stale adapter control generation, or stale requester/CAS record version is rejected before job creation.
 
-An exact replay of an existing job remains readable even if the current generation changed, but it is historical evidence only and MUST NOT restart execution.
+An exact replay of an existing job remains readable even if any current generation changed, but it is historical evidence only and MUST NOT restart execution.
 
-Immediately before `planned` or `awaiting_confirmation` enters `running`, the executor MUST revalidate all expected generations. A mismatch moves the job to `failed` with safe code `stale_control_generation` and performs no external effect.
+Immediately before `planned` or `awaiting_confirmation` enters `running`, Server MUST compare `expected_job_version`, the exact `expected_maintenance_generation`, every `(adapter_id, adapter_control_generation)` entry, and the applicable execution slot. A generation mismatch moves the job to `failed` with safe code `stale_control_generation`; a job-version mismatch rejects the caller with `stale_record_version`; neither path performs an external effect. Lease acquisition then creates a new `executor_fence` as defined in section 7.5.1.
 
 ### 8.4 Retention
 
@@ -883,8 +989,13 @@ correlation_id | null
 target_type
 target_id | null
 operation_id | null
-control_generation | null
 maintenance_generation | null
+adapter_control_generation | null
+principal_version | null
+credential_set_generation | null
+credential_version | null
+job_version | null
+executor_fence | null
 previous_state | null
 next_state | null
 safe_error_category | null
@@ -970,13 +1081,13 @@ Audit events MUST NOT contain:
 Storage owns future migrations and passive repositories for:
 
 - maintenance state and generation;
-- quiescence evidence;
+- quiescence evidence and adapter-inventory snapshots;
 - adapter desired/effective control records;
-- principals and credential records;
-- operational jobs, leases, checkpoints, confirmations, and idempotency records;
+- principals, credential-set generations, credential records, and issuance idempotency results;
+- operational jobs, executor fences, global/scoped execution slots, leases, checkpoints, confirmations, and idempotency records;
 - append-only operational audit events.
 
-Storage MUST provide transaction/CAS primitives and caller-owned locking. It MUST NOT decide maintenance transitions, adapter modes, credential authorization policy, job confirmation policy, or external side effects.
+Storage MUST provide transaction/CAS primitives for every named version/generation, complete adapter-inventory snapshots, and caller-owned locking. It MUST NOT decide maintenance transitions, adapter modes, credential authorization policy, job confirmation policy, or external side effects.
 
 Storage migration work MUST preserve existing adapter, cursor, idempotency, GDrive, Worktree, and audit data. It MUST implement the legacy credential migration described in this contract.
 
@@ -997,7 +1108,11 @@ maintenance_in_progress
 control_transition_in_progress
 invalid_control_transition
 stale_control_generation
+stale_record_version
+stale_executor_fence
 idempotency_conflict
+credential_secret_not_replayable
+operation_in_progress
 confirmation_required
 confirmation_expired
 operation_not_cancellable
@@ -1031,9 +1146,9 @@ CLI may later expose operator commands only through accepted public Server APIs.
 It may:
 
 - read desired/effective/maintenance/job status;
-- request quiesce, maintenance entry, and resume with expected generations;
-- create, rotate, and revoke credentials with one-time secret handling;
-- create dry-run plans, display safe manifests, confirm, poll, or cancel jobs.
+- request quiesce, maintenance entry, and resume with `expected_maintenance_generation`;
+- create, rotate, and revoke credentials with principal/credential-set/credential CAS values, idempotency keys, and one-time secret handling;
+- create dry-run plans, display safe manifests, confirm, poll, or cancel jobs using `job_version` and never treating a lease expiry as completion.
 
 It MUST NOT:
 
@@ -1064,7 +1179,7 @@ Worktree MUST NOT write control tables directly or decide that global quiescence
 GDrive owns provider/runtime behavior needed to:
 
 - poll private desired control while enabled or disabled;
-- apply only current generations;
+- apply only the current adapter control and maintenance generations;
 - stop new provider/Core mutations under hold;
 - drain/cancel in-flight work safely;
 - report effective mode, lifecycle, heartbeat, success, generation, and safe errors;
@@ -1127,39 +1242,39 @@ A downstream implementation is not accepted until evidence proves all applicable
 - drain/cancel and timeout behavior without cursor/checkpoint overclaim;
 - restart in every persisted state;
 - readiness false outside `normal` and health remaining truthful;
-- immutable quiescence evidence and GDrive/Obsidian boundary handling;
+- immutable, adapter-inventory-complete quiescence evidence covering every Worktree/GDrive `adapter_id`, plus the Obsidian mutation-gate boundary;
 - destructive jobs blocked without current evidence and maintenance generation.
 
 ### Adapter control
 
 - desired/effective values remain separately visible;
-- monotonic generation under concurrency and restart;
+- monotonic, namespace-explicit adapter and maintenance generations under concurrency and restart;
 - Worktree hosted application and GDrive polling/reporting;
 - disabled runtime remains distinct from credential revoke;
 - stale/disconnected representation and no fabricated readiness;
 - valid/invalid mode matrix and non-mutating `dry_run`;
-- resume blocked until desired-enabled controlled adapters apply current generation.
+- resume blocked until every desired-enabled controlled adapter identity applies its current adapter control and maintenance generations.
 
 ### Credentials
 
-- one-time plaintext delivery and irrecoverability after response;
+- one-time plaintext delivery, idempotent safe replay without secret redelivery, and explicit lost-response recovery;
 - Argon2id verification and secret-safe formatting/output;
-- create, rotate, bounded grace, existing-grace replacement, revoke, and expiry;
+- create, rotate, bounded grace, existing-grace replacement, revoke, `not_before`, and expiry;
 - maximum one active plus one grace credential;
 - immediate committed revocation despite caches;
-- generic lookup failure behavior;
-- legacy SHA-256 compatibility only until rotation;
+- generic lookup failure behavior across exact `hs1` ID lookup and private legacy raw-token compatibility lookup;
+- legacy SHA-256 compatibility through explicit private lookup and only until rotation/bounded grace;
 - audit with no secret or verifier material.
 
 ### Operational jobs and audit
 
-- exact state-transition matrix and terminal immutability;
+- exact state-transition matrix including pre-running failure transitions, CAS increments, and terminal immutability;
 - dry-run no-write proof;
 - bound one-time confirmation and expiry;
 - idempotent duplicate/concurrent behavior and fingerprint conflict;
 - stale generation rejection at create and start;
-- restart recovery from checkpoints and uncertain-outcome handling;
-- named bounded action execution without arbitrary shell/SQL/provider bypass;
+- restart recovery from checkpoints, executor fencing/takeover, destructive-slot retention, and uncertain-outcome handling;
+- named bounded action execution, global destructive concurrency control, and no arbitrary shell/SQL/provider bypass;
 - append-only, transactionally consistent, secret-safe audit events;
 - ordinary restore preserving the live operational control plane.
 
