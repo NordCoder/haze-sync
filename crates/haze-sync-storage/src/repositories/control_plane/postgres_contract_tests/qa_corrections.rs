@@ -1,9 +1,15 @@
+fn exact_test_time() -> DateTime<Utc> {
+    DateTime::parse_from_rfc3339("2026-07-23T20:00:00.000000Z")
+        .unwrap()
+        .with_timezone(&Utc)
+}
+
 #[tokio::test]
 async fn recovery_complete_quiescence_evidence_round_trips_as_one_typed_bundle() {
     let context = connect_required_test_database_from_env().await.unwrap();
     let mut transaction = begin_isolated_schema(context.pool()).await;
     apply_all(&mut transaction).await;
-    let now = Utc::now();
+    let now = exact_test_time();
 
     sqlx::query(
         "update maintenance_control set maintenance_generation = 1, state = 'quiescing', \
@@ -120,7 +126,7 @@ async fn operational_job_replay_returns_complete_idempotency_and_generation_bind
     let context = connect_required_test_database_from_env().await.unwrap();
     let mut transaction = begin_isolated_schema(context.pool()).await;
     apply_all(&mut transaction).await;
-    let now = Utc::now();
+    let now = exact_test_time();
     insert_principal(&mut transaction, "admin-a", "administrator", "admin", true, now)
         .await
         .unwrap();
@@ -156,7 +162,10 @@ async fn operational_job_replay_returns_complete_idempotency_and_generation_bind
     };
     assert_eq!(inserted.job.operation_id, "job-complete-a");
     assert_eq!(inserted.idempotency_scope, "operational_job");
-    assert_eq!(inserted.expected_adapter_generations, vec![("worktree-a".into(), 7)]);
+    assert_eq!(
+        inserted.expected_adapter_generations,
+        vec![("worktree-a".into(), 7)]
+    );
 
     let mut replay = input.clone();
     replay.operation_id = "ignored-replay-id".into();
@@ -168,7 +177,10 @@ async fn operational_job_replay_returns_complete_idempotency_and_generation_bind
     };
     assert_eq!(replayed.job.operation_id, "job-complete-a");
     assert_eq!(replayed.request_fingerprint, input.request_fingerprint);
-    assert_eq!(replayed.expected_adapter_generations, input.expected_adapter_generations);
+    assert_eq!(
+        replayed.expected_adapter_generations,
+        input.expected_adapter_generations
+    );
     transaction.rollback().await.unwrap();
 }
 
@@ -187,7 +199,7 @@ async fn credential_issuance_duplicate_reports_in_progress_without_waiting_or_mu
         .await
         .unwrap();
     apply_all(&mut setup).await;
-    let now = Utc::now();
+    let now = exact_test_time();
     insert_principal(&mut setup, "admin-a", "administrator", "admin", true, now)
         .await
         .unwrap();
