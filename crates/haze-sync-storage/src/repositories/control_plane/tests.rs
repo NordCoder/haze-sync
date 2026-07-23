@@ -1,7 +1,10 @@
 use super::*;
 
-const MIGRATION: &str =
-    include_str!("../../../../../migrations/0012_operational_control_storage.sql");
+const MIGRATIONS: &[&str] = &[
+    include_str!("../../../../../migrations/0012_operational_control_storage.sql"),
+    include_str!("../../../../../migrations/0013_operational_jobs_audit.sql"),
+    include_str!("../../../../../migrations/0014_gdrive_runtime_authority.sql"),
+];
 const UNSAFE_FRAGMENTS: &[&str] = &[
     "postgres://",
     "password",
@@ -97,7 +100,12 @@ fn migration_contains_complete_safety_boundaries() {
         "credential_issuance_idempotency_immutable",
         "operational_jobs_terminal_immutable",
     ] {
-        assert!(MIGRATION.contains(fragment), "missing SQL boundary {fragment}");
+        assert!(
+            MIGRATIONS
+                .iter()
+                .any(|migration| migration.contains(fragment)),
+            "missing SQL boundary {fragment}"
+        );
     }
     for forbidden in [
         "plaintext_credential",
@@ -108,7 +116,9 @@ fn migration_contains_complete_safety_boundaries() {
         "on delete cascade",
     ] {
         assert!(
-            !MIGRATION.to_ascii_lowercase().contains(forbidden),
+            !MIGRATIONS
+                .iter()
+                .any(|migration| migration.to_ascii_lowercase().contains(forbidden)),
             "migration contains forbidden persistence surface {forbidden}"
         );
     }
@@ -136,19 +146,27 @@ fn structured_metadata_validation_and_debug_are_secret_safe() {
         );
     }
 
-    let input = UncertainEffectInput {
-        effect_id: "effect-a".into(),
-        adapter_id: "adapter-a".into(),
-        runtime_instance_id: "runtime-a".into(),
-        standalone_runtime_epoch: 1,
-        expected_runtime_lease_version: 1,
-        lease_proof_digest: SecretDigest::parse("b".repeat(64)).unwrap(),
-        permit_id: None,
-        step_id: "step-a".into(),
-        effect_identity_digest: SecretDigest::parse("a".repeat(64)).unwrap(),
-        safe_metadata: serde_json::json!({"private-looking-value":"must-not-render"}),
+    let runtime = RuntimeAuthorityRow {
+        adapter_id: "gdrive-a".into(),
+        runtime_lease_version: 4,
+        standalone_runtime_epoch: 2,
+        runtime_instance_id: Some("runtime-a".into()),
+        lease_token_digest: Some(SecretDigest::parse("b".repeat(64)).unwrap()),
+        lease_heartbeat_at: None,
+        lease_expires_at: None,
+        last_accepted_report_sequence: 3,
+        last_accepted_report_fingerprint: Some(
+            SecretDigest::parse("c".repeat(64)).unwrap(),
+        ),
+        open_mutation_permits: 0,
+        uncertain_external_effects: 0,
+        takeover_state: "clear".into(),
+        updated_at: DateTime::parse_from_rfc3339("2026-07-23T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc),
     };
-    let debug = format!("{input:?}");
-    assert!(debug.contains("[REDACTED]"));
-    assert!(!debug.contains("must-not-render"));
+    let rendered = format!("{runtime:?}");
+    assert!(rendered.contains("[REDACTED]"));
+    assert!(!rendered.contains(&"b".repeat(64)));
+    assert!(!rendered.contains(&"c".repeat(64)));
 }

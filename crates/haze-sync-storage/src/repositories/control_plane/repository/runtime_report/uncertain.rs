@@ -41,7 +41,10 @@ pub async fn record_uncertain_external_effect(
         .fetch_one(&mut **transaction)
         .await
         .map_err(map_database_error)?;
-    if authority.lease_expires_at.is_none_or(|expiry| expiry <= database_now) {
+    if authority
+        .lease_expires_at
+        .map_or(true, |expiry| expiry <= database_now)
+    {
         return Err(stale(cas_namespaces::RUNTIME_LEASE_VERSION));
     }
     if let Some(permit_id) = &input.permit_id {

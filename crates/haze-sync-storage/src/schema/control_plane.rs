@@ -6,8 +6,12 @@
 
 /// Forward-only migration filenames added for operational control.
 pub const REQUIRED_BASE_MIGRATION_HEAD: &str = "0011_gdrive_durable_state.sql";
-pub const CURRENT_MIGRATION_HEAD: &str = "0012_operational_control_storage.sql";
-pub const CONTROL_PLANE_MIGRATIONS: &[&str] = &[CURRENT_MIGRATION_HEAD];
+pub const CURRENT_MIGRATION_HEAD: &str = "0014_gdrive_runtime_authority.sql";
+pub const CONTROL_PLANE_MIGRATIONS: &[&str] = &[
+    "0012_operational_control_storage.sql",
+    "0013_operational_jobs_audit.sql",
+    CURRENT_MIGRATION_HEAD,
+];
 
 /// Storage tables introduced by the Stage 11 control-plane migration.
 pub mod table_names {
@@ -24,8 +28,7 @@ pub mod table_names {
     pub const CREDENTIALS: &str = "credentials";
     pub const CREDENTIAL_ISSUANCE_IDEMPOTENCY: &str = "credential_issuance_idempotency";
     pub const OPERATIONAL_JOBS: &str = "operational_jobs";
-    pub const OPERATIONAL_JOB_ADAPTER_GENERATIONS: &str =
-        "operational_job_adapter_generations";
+    pub const OPERATIONAL_JOB_ADAPTER_GENERATIONS: &str = "operational_job_adapter_generations";
     pub const OPERATIONAL_EXECUTION_SLOTS: &str = "operational_execution_slots";
     pub const OPERATIONAL_IDEMPOTENCY: &str = "operational_idempotency";
     pub const OPERATIONAL_JOB_EVIDENCE: &str = "operational_job_evidence";
@@ -83,19 +86,32 @@ pub mod cas_namespaces {
 mod tests {
     use super::*;
 
-    const MIGRATION: &str = include_str!("../../../../migrations/0012_operational_control_storage.sql");
+    const MIGRATIONS: &[&str] = &[
+        include_str!("../../../../migrations/0012_operational_control_storage.sql"),
+        include_str!("../../../../migrations/0013_operational_jobs_audit.sql"),
+        include_str!("../../../../migrations/0014_gdrive_runtime_authority.sql"),
+    ];
 
     #[test]
     fn migration_metadata_names_the_exact_forward_file() {
-        assert_eq!(REQUIRED_BASE_MIGRATION_HEAD, "0011_gdrive_durable_state.sql");
-        assert_eq!(CONTROL_PLANE_MIGRATIONS, &[CURRENT_MIGRATION_HEAD]);
+        assert_eq!(
+            REQUIRED_BASE_MIGRATION_HEAD,
+            "0011_gdrive_durable_state.sql"
+        );
+        assert_eq!(CONTROL_PLANE_MIGRATIONS.len(), 3);
+        assert_eq!(
+            CONTROL_PLANE_MIGRATIONS.last(),
+            Some(&CURRENT_MIGRATION_HEAD)
+        );
     }
 
     #[test]
     fn every_control_table_is_created_by_the_registered_migration() {
         for table in table_names::ALL {
             assert!(
-                MIGRATION.contains(&format!("create table {table} (")),
+                MIGRATIONS
+                    .iter()
+                    .any(|migration| migration.contains(&format!("create table {table} ("))),
                 "registered control table {table} is missing from migration"
             );
         }
@@ -118,7 +134,12 @@ mod tests {
             "operational_jobs_terminal_immutable",
             "gdrive_runtime_reports_immutable",
         ] {
-            assert!(MIGRATION.contains(fragment), "missing migration guard {fragment}");
+            assert!(
+                MIGRATIONS
+                    .iter()
+                    .any(|migration| migration.contains(fragment)),
+                "missing migration guard {fragment}"
+            );
         }
     }
 }

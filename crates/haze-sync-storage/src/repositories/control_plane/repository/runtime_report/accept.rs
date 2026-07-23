@@ -50,7 +50,9 @@ pub async fn accept_ordered_runtime_report(
         .await
         .map_err(map_database_error)?;
     if authority.lease_token_digest.as_ref() != Some(&input.lease_proof_digest)
-        || authority.lease_expires_at.is_none_or(|expiry| expiry <= database_now)
+        || authority
+            .lease_expires_at
+            .map_or(true, |expiry| expiry <= database_now)
     {
         return Err(stale(cas_namespaces::RUNTIME_LEASE_VERSION));
     }
