@@ -3,6 +3,8 @@
 //! This module exposes stable table-name constants for repository code. It does
 //! not implement SQL execution, connections, transactions, or Core policy.
 
+pub mod control_plane;
+
 /// Storage table names owned by the Haze Sync metadata schema.
 pub mod table_names {
     /// Registered adapter identities and token hashes.
@@ -38,6 +40,26 @@ pub mod table_names {
     /// Safe audit event metadata.
     pub const AUDIT_EVENTS: &str = "audit_events";
 
+    /// Exact accepted Stage 10 table set migrated by 0011.
+    pub const PRE_CONTROL_P12: &[&str] = &[
+        SYNC_ADAPTERS,
+        CONTENT_BLOBS,
+        SYNC_OBJECTS,
+        FILE_REVISIONS,
+        OPERATION_LOG,
+        TOMBSTONES,
+        CONFLICTS,
+        ADAPTER_CURSORS,
+        IDEMPOTENCY_RECORDS,
+        GDRIVE_MAPPING,
+        GDRIVE_ADAPTER_STATE,
+        GDRIVE_DURABLE_ITEMS,
+        GDRIVE_OPERATIONS,
+        WORKTREE_INSTANCES,
+        WORKTREE_STATE,
+        AUDIT_EVENTS,
+    ];
+
     /// Ordered table list for the accepted current storage schema.
     pub const ALL: &[&str] = &[
         SYNC_ADAPTERS,
@@ -56,6 +78,28 @@ pub mod table_names {
         WORKTREE_INSTANCES,
         WORKTREE_STATE,
         AUDIT_EVENTS,
+        super::control_plane::table_names::MAINTENANCE_CONTROL,
+        super::control_plane::table_names::ADAPTER_INVENTORY_STATE,
+        super::control_plane::table_names::ADAPTER_INVENTORY,
+        super::control_plane::table_names::ADAPTER_DESIRED_CONTROLS,
+        super::control_plane::table_names::ADAPTER_EFFECTIVE_CONTROLS,
+        super::control_plane::table_names::QUIESCENCE_EVIDENCE,
+        super::control_plane::table_names::QUIESCENCE_EVIDENCE_INVALIDATIONS,
+        super::control_plane::table_names::QUIESCENCE_ADAPTER_SNAPSHOTS,
+        super::control_plane::table_names::QUIESCENCE_RUNTIME_SNAPSHOTS,
+        super::control_plane::table_names::PRINCIPALS,
+        super::control_plane::table_names::CREDENTIALS,
+        super::control_plane::table_names::CREDENTIAL_ISSUANCE_IDEMPOTENCY,
+        super::control_plane::table_names::OPERATIONAL_JOBS,
+        super::control_plane::table_names::OPERATIONAL_JOB_ADAPTER_GENERATIONS,
+        super::control_plane::table_names::OPERATIONAL_EXECUTION_SLOTS,
+        super::control_plane::table_names::OPERATIONAL_IDEMPOTENCY,
+        super::control_plane::table_names::OPERATIONAL_JOB_EVIDENCE,
+        super::control_plane::table_names::OPERATIONAL_AUDIT_EVENTS,
+        super::control_plane::table_names::GDRIVE_RUNTIME_AUTHORITIES,
+        super::control_plane::table_names::GDRIVE_RUNTIME_REPORTS,
+        super::control_plane::table_names::GDRIVE_MUTATION_PERMITS,
+        super::control_plane::table_names::GDRIVE_UNCERTAIN_EFFECTS,
     ];
 
     /// Exact accepted pre-STOR-GDA-P1 table set migrated by 0011.
@@ -92,10 +136,8 @@ pub mod table_names {
     ];
 }
 
-/// Ordered migration filenames for the current storage schema.
-///
-/// The historical name is retained as a public compatibility surface.
-pub const INITIAL_MIGRATIONS: &[&str] = &[
+/// Ordered migration filenames for the accepted Stage 10 base schema.
+pub const BASE_MIGRATIONS: &[&str] = &[
     "0001_sync_adapters.sql",
     "0002_content_blobs.sql",
     "0003_sync_objects_file_revisions.sql",
@@ -109,9 +151,28 @@ pub const INITIAL_MIGRATIONS: &[&str] = &[
     "0011_gdrive_durable_state.sql",
 ];
 
+/// Ordered migration filenames for the current complete storage schema.
+///
+/// The historical public name is retained as the canonical fresh-database
+/// migration registry, now including the forward Stage 11 control-plane file.
+pub const INITIAL_MIGRATIONS: &[&str] = &[
+    "0001_sync_adapters.sql",
+    "0002_content_blobs.sql",
+    "0003_sync_objects_file_revisions.sql",
+    "0004_operation_log.sql",
+    "0005_tombstones_conflicts.sql",
+    "0006_cursors_idempotency.sql",
+    "0007_gdrive_mapping.sql",
+    "0008_worktree_state.sql",
+    "0009_audit_events.sql",
+    "0010_worktree_durable_state.sql",
+    "0011_gdrive_durable_state.sql",
+    "0012_operational_control_storage.sql",
+];
+
 #[cfg(test)]
 mod tests {
-    use super::{table_names, INITIAL_MIGRATIONS};
+    use super::{control_plane, table_names, BASE_MIGRATIONS, INITIAL_MIGRATIONS};
 
     const MIGRATION_CONTENTS: &[(&str, &str)] = &[
         (
@@ -158,6 +219,10 @@ mod tests {
             "0011_gdrive_durable_state.sql",
             include_str!("../../../../migrations/0011_gdrive_durable_state.sql"),
         ),
+        (
+            "0012_operational_control_storage.sql",
+            include_str!("../../../../migrations/0012_operational_control_storage.sql"),
+        ),
     ];
 
     #[test]
@@ -168,6 +233,21 @@ mod tests {
         {
             assert_eq!(metadata_name, actual_name);
             assert!(contents.contains("create table") || contents.contains("alter table"));
+        }
+    }
+
+    #[test]
+    fn base_registry_stops_at_the_authorized_stage10_head() {
+        assert_eq!(BASE_MIGRATIONS.last(), Some(&"0011_gdrive_durable_state.sql"));
+        assert_eq!(INITIAL_MIGRATIONS.last(), Some(&control_plane::CURRENT_MIGRATION_HEAD));
+        assert_eq!(INITIAL_MIGRATIONS.len(), BASE_MIGRATIONS.len() + 1);
+    }
+
+    #[test]
+    fn accepted_pre_control_table_set_excludes_only_0012_tables() {
+        for table in control_plane::table_names::ALL {
+            assert!(!table_names::PRE_CONTROL_P12.contains(table));
+            assert!(table_names::ALL.contains(table));
         }
     }
 
