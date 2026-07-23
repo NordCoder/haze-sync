@@ -141,7 +141,7 @@ async fn explicit_transaction_rollback_removes_control_ddl_without_touching_base
          and table_name = any($1)",
     )
     .bind(
-        &crate::schema::control_plane::table_names::ALL
+        crate::schema::control_plane::table_names::ALL
             .iter()
             .map(|name| (*name).to_owned())
             .collect::<Vec<_>>(),
