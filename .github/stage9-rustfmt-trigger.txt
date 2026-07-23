@@ -1,1 +1,0 @@
-Temporary trigger for Stage 9 rustfmt artifact export. Never merge.
