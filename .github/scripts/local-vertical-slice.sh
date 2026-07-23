@@ -46,7 +46,7 @@ if server.get("environment", {}).get("HAZE_SYNC_WORKTREE_ADAPTER_MODE") != "bidi
     raise SystemExit("Stage 8 Worktree mode must be bidirectional")
 volumes = server.get("volumes", [])
 binds = [item for item in volumes if item.get("target") == "/var/lib/haze-sync/worktree"]
-if len(binds) != 1 or binds[0].get("type") != "bind" or binds[0].get("read_only") is not False:
+if len(binds) != 1 or binds[0].get("type") != "bind" or binds[0].get("read_only", False) is not False:
     raise SystemExit("Stage 8 Worktree bind must be one explicit read-write bind")
 PY
 
