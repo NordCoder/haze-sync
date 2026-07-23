@@ -152,7 +152,7 @@ pub const BASE_MIGRATIONS: &[&str] = &[
 /// Ordered migration filenames for the current complete storage schema.
 ///
 /// The historical public name is retained as the canonical fresh-database
-/// migration registry, now including the forward Stage 11 control-plane file.
+/// migration registry, now including the forward Stage 11 control-plane files.
 pub const INITIAL_MIGRATIONS: &[&str] = &[
     "0001_sync_adapters.sql",
     "0002_content_blobs.sql",
@@ -168,4 +168,5 @@ pub const INITIAL_MIGRATIONS: &[&str] = &[
     "0012_operational_control_storage.sql",
     "0013_operational_jobs_audit.sql",
     "0014_gdrive_runtime_authority.sql",
+    "0015_qa_contract_corrections.sql",
 ];
