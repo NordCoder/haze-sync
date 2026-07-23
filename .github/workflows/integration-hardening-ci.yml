@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - integration/v1-fan-in
   workflow_dispatch:
 
 permissions:
@@ -25,6 +26,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -34,7 +37,7 @@ jobs:
         run: |
           branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
           echo "HAZE_COMPONENT_BRANCH=${branch}" >> "$GITHUB_ENV"
-          echo "HAZE_HEAD_SHA=${{ github.event.pull_request.head.sha || github.sha }}" >> "$GITHUB_ENV"
+          echo "HAZE_HEAD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: Verify locked metadata
         shell: bash
@@ -79,13 +82,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Resolve candidate context
         shell: bash
         run: |
           branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
           echo "HAZE_COMPONENT_BRANCH=${branch}" >> "$GITHUB_ENV"
-          echo "HAZE_HEAD_SHA=${{ github.event.pull_request.head.sha || github.sha }}" >> "$GITHUB_ENV"
+          echo "HAZE_HEAD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: Validate and smoke deployment
         shell: bash
@@ -118,6 +123,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -133,7 +140,7 @@ jobs:
         run: |
           branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
           echo "HAZE_COMPONENT_BRANCH=${branch}" >> "$GITHUB_ENV"
-          echo "HAZE_HEAD_SHA=${{ github.event.pull_request.head.sha || github.sha }}" >> "$GITHUB_ENV"
+          echo "HAZE_HEAD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: Install locked Node dependencies
         shell: bash

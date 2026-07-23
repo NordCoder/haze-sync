@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - integration/v1-fan-in
   workflow_dispatch:
 
 permissions:
@@ -24,6 +25,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -33,7 +36,7 @@ jobs:
         run: |
           branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
           echo "HAZE_COMPONENT_BRANCH=${branch}" >> "$GITHUB_ENV"
-          echo "HAZE_HEAD_SHA=${{ github.event.pull_request.head.sha || github.sha }}" >> "$GITHUB_ENV"
+          echo "HAZE_HEAD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: cargo fmt
         shell: bash
@@ -94,6 +97,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -103,7 +108,7 @@ jobs:
         run: |
           branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
           echo "HAZE_COMPONENT_BRANCH=${branch}" >> "$GITHUB_ENV"
-          echo "HAZE_HEAD_SHA=${{ github.event.pull_request.head.sha || github.sha }}" >> "$GITHUB_ENV"
+          echo "HAZE_HEAD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: Wait for PostgreSQL readiness
         shell: bash
@@ -194,6 +199,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -203,7 +210,7 @@ jobs:
         run: |
           branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
           echo "HAZE_COMPONENT_BRANCH=${branch}" >> "$GITHUB_ENV"
-          echo "HAZE_HEAD_SHA=${{ github.event.pull_request.head.sha || github.sha }}" >> "$GITHUB_ENV"
+          echo "HAZE_HEAD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: Wait for PostgreSQL readiness
         shell: bash
