@@ -23,16 +23,13 @@ services:
       HAZE_GDRIVE_MAX_DELETES_PER_RUN: ${HAZE_GDRIVE_MAX_DELETES_PER_RUN:-10}
       HAZE_GDRIVE_MAX_DELETE_RATIO_PERCENT: ${HAZE_GDRIVE_MAX_DELETE_RATIO_PERCENT:-10}
     secrets:
+      # Local Docker Compose file secrets do not honor uid/gid/mode. The
+      # operator-owned source files must therefore already be readable by UID
+      # 10002 (or be world-readable only inside a protected parent directory).
       - source: haze_gdrive_adapter_token
         target: haze_gdrive_adapter_token
-        uid: "10002"
-        gid: "10002"
-        mode: 0400
       - source: haze_gdrive_oauth
         target: haze_gdrive_oauth
-        uid: "10002"
-        gid: "10002"
-        mode: 0400
     depends_on:
       server:
         condition: service_healthy

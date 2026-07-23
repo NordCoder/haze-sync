@@ -16,7 +16,7 @@ gdrive_log="$(mktemp)"
 chmod 700 "$secret_dir"
 printf '%s' 'stage7-adapter-token-placeholder' > "$secret_dir/adapter-token"
 printf '%s\n' 'stage7-disabled-oauth-placeholder' > "$secret_dir/oauth"
-chmod 600 "$secret_dir/adapter-token" "$secret_dir/oauth"
+chmod 0444 "$secret_dir/adapter-token" "$secret_dir/oauth"
 
 export COMPOSE_PROJECT_NAME="$project_name"
 export POSTGRES_DB="haze_sync_stage7"
