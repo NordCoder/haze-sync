@@ -15,4 +15,5 @@ fn complete_control_plane_postgres_contract_suite() {
     recovery_complete_quiescence_evidence_round_trips_as_one_typed_bundle();
     operational_job_replay_returns_complete_idempotency_and_generation_binding();
     credential_issuance_duplicate_reports_in_progress_without_waiting_or_mutating();
+    committed_invalidation_serializes_before_complete_evidence_admission();
 }
