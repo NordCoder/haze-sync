@@ -5,6 +5,13 @@ async fn insert_or_replay_operational_job(
     job_records::insert_or_replay_operational_job(transaction, input).await
 }
 
+async fn insert_or_replay_credential_issuance(
+    transaction: &mut Transaction<'_, Postgres>,
+    input: &CredentialIssuanceInput,
+) -> ControlPlaneResult<IdempotencyInsertOutcome<CredentialIssuanceRow>> {
+    credential_records::insert_or_replay_credential_issuance(transaction, input).await
+}
+
 fn issuance_from_row(row: &PgRow) -> ControlPlaneResult<CredentialIssuanceRow> {
     Ok(CredentialIssuanceRow {
         requester_principal_id: row_column!(row, "requester_principal_id"),
