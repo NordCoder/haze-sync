@@ -12,6 +12,9 @@ pub mod object_store;
 pub mod repositories;
 pub mod schema;
 
+#[path = "repositories/control_plane.rs"]
+pub mod control_plane;
+
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 
