@@ -12,4 +12,7 @@ fn complete_control_plane_postgres_contract_suite() {
     runtime_epoch_report_permit_and_uncertain_effect_primitives_are_fail_closed();
     expired_runtime_takeover_converts_open_permits_to_reconciliation_evidence();
     concurrent_maintenance_cas_allows_exactly_one_commit();
+    recovery_complete_quiescence_evidence_round_trips_as_one_typed_bundle();
+    operational_job_replay_returns_complete_idempotency_and_generation_binding();
+    credential_issuance_duplicate_reports_in_progress_without_waiting_or_mutating();
 }
