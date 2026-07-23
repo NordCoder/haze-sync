@@ -30,6 +30,7 @@ mod tests {
         migration_content!("0012_operational_control_storage.sql"),
         migration_content!("0013_operational_jobs_audit.sql"),
         migration_content!("0014_gdrive_runtime_authority.sql"),
+        migration_content!("0015_qa_contract_corrections.sql"),
     ];
 
     #[test]
@@ -53,7 +54,7 @@ mod tests {
             INITIAL_MIGRATIONS.last(),
             Some(&control_plane::CURRENT_MIGRATION_HEAD)
         );
-        assert_eq!(INITIAL_MIGRATIONS.len(), BASE_MIGRATIONS.len() + 3);
+        assert_eq!(INITIAL_MIGRATIONS.len(), BASE_MIGRATIONS.len() + 4);
     }
 
     #[test]
