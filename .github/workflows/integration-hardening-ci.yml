@@ -106,3 +106,52 @@ jobs:
           compression-level: 9
           if-no-files-found: ignore
           include-hidden-files: false
+
+  local-vertical-slice:
+    name: Worktree + Obsidian local vertical slice
+    if: ${{ github.event_name != 'pull_request' || startsWith(github.head_ref, 'integration/') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      HAZE_COMPONENT: integration-local-vertical-slice
+      HAZE_WORKFLOW_SLUG: integration-hardening-local-vertical-slice
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Resolve candidate context
+        shell: bash
+        run: |
+          branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          echo "HAZE_COMPONENT_BRANCH=${branch}" >> "$GITHUB_ENV"
+          echo "HAZE_HEAD_SHA=${{ github.event.pull_request.head.sha || github.sha }}" >> "$GITHUB_ENV"
+
+      - name: Install locked Node dependencies
+        shell: bash
+        run: npm ci
+
+      - name: Run local vertical slice
+        shell: bash
+        run: bash .github/scripts/ci-run.sh local-vertical-slice bash .github/scripts/local-vertical-slice.sh
+
+      - name: Finalize CI diagnostics
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: bash .github/scripts/ci-finalize.sh
+
+      - name: Upload CI diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-diag__component-integration-local-vertical-slice__wf-integration-hardening__run-${{ github.run_id }}__attempt-${{ github.run_attempt }}
+          path: ci-diagnostics/
+          retention-days: 1
+          compression-level: 9
+          if-no-files-found: ignore
+          include-hidden-files: false

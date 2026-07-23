@@ -10,7 +10,8 @@
     "test": "npm run test:compile && node -e \"require('fs').writeFileSync('.test-dist/package.json',JSON.stringify({type:'commonjs'}))\" && node --test .test-dist/tests/run-tests.js",
     "test:server-smoke": "npm run test:compile && node -e \"require('fs').writeFileSync('.test-dist/package.json',JSON.stringify({type:'commonjs'}))\" && node .test-dist/tests/loopback-server-smoke.js",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json --noEmit",
-    "build": "npm run typecheck"
+    "build": "npm run typecheck",
+    "test:local-vertical-slice": "npm run test:compile && node -e \"require('fs').writeFileSync('.test-dist/package.json',JSON.stringify({type:'commonjs'}))\" && node .test-dist/tests/live-local-vertical-slice.js"
   },
   "devDependencies": {
     "@types/node": "^20.14.10",
