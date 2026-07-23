@@ -1,7 +1,7 @@
-//! Stable names and migration metadata for Haze Sync storage tables.
-//!
-//! This module exposes stable table-name constants for repository code. It does
-//! not implement SQL execution, connections, transactions, or Core policy.
+// Stable names and migration metadata for Haze Sync storage tables.
+//
+// This module exposes stable table-name constants for repository code. It does
+// not implement SQL execution, connections, transactions, or Core policy.
 
 /// Storage table names owned by the Haze Sync metadata schema.
 pub mod table_names {
