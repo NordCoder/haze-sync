@@ -354,17 +354,17 @@ pub async fn accept_ordered_runtime_report(
     {
         return Err(ControlPlaneRepositoryError::StaleRuntimeEpoch);
     }
-    if input.report_sequence != authority.last_accepted_report_sequence {
-        if input.report_sequence == authority.last_accepted_report_sequence + 1 {
-            if input.expected_runtime_lease_version != authority.runtime_lease_version {
-                return Err(stale(cas_namespaces::RUNTIME_LEASE_VERSION));
-            }
-            if desired.adapter_control_generation != input.adapter_control_generation {
-                return Err(stale(cas_namespaces::ADAPTER_CONTROL_GENERATION));
-            }
-            if maintenance.maintenance_generation != input.maintenance_generation {
-                return Err(stale(cas_namespaces::MAINTENANCE_GENERATION));
-            }
+    if input.report_sequence != authority.last_accepted_report_sequence
+        && input.report_sequence == authority.last_accepted_report_sequence + 1
+    {
+        if input.expected_runtime_lease_version != authority.runtime_lease_version {
+            return Err(stale(cas_namespaces::RUNTIME_LEASE_VERSION));
+        }
+        if desired.adapter_control_generation != input.adapter_control_generation {
+            return Err(stale(cas_namespaces::ADAPTER_CONTROL_GENERATION));
+        }
+        if maintenance.maintenance_generation != input.maintenance_generation {
+            return Err(stale(cas_namespaces::MAINTENANCE_GENERATION));
         }
     }
 
