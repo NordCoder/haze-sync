@@ -4,7 +4,6 @@ on:
   pull_request:
     branches:
       - main
-      - integration/v1-fan-in
   workflow_dispatch:
 
 permissions:
