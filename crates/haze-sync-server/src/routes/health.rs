@@ -17,7 +17,7 @@ pub struct HealthResponse {
     pub status: &'static str,
 }
 
-/// Handles GET /health.
+/// Handles GET /health without touching runtime dependencies.
 pub async fn health() -> Json<HealthResponse> {
     Json(HealthResponse { status: "ok" })
 }

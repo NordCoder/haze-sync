@@ -3,6 +3,10 @@
 //! This crate contains pure Core algorithms and traits. Runtime wiring, HTTP
 //! routes, database pool creation, migrations, provider SDKs, and adapter loops
 //! live outside this crate.
+//!
+//! The public module surface is intentionally limited to storage/API-neutral Core
+//! decision primitives: revision upserts, conflict preservation, delete safety,
+//! idempotency, operation-log value models, and passive doctor summaries.
 
 pub mod conflict_saved_planner;
 pub mod conflict_service;

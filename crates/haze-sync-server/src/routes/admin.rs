@@ -1,10 +1,7 @@
-//! Minimal safe admin/status route fan-in.
-//!
-//! The handlers in this module expose read-only operational summaries built from
-//! already-sanitized W3-P6 DTOs. They do not mutate adapter state, pause/resume
-//! runtime work, call providers, or reveal sensitive runtime details.
+//! Administrative status and Worktree control routes.
 
 use axum::{
+    body::Bytes,
     extract::Extension,
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
@@ -14,10 +11,22 @@ use chrono::{DateTime, Utc};
 use haze_sync_api::{
     auth::AdapterPrincipal,
     contracts::errors::{ErrorResponse, PublicErrorCode},
-    dto::primitives::TimestampDto,
-    routes::admin::{
-        AdapterCursorSummary, AdapterListResponse, AdapterSummary, DependencyReadinessState,
-        PauseStatusSummary, ServerStatus, StatusSummaryResponse,
+    dto::{
+        primitives::TimestampDto,
+        worktree::{
+            WorktreeConfiguredMode, WorktreeHostLifecycle, WorktreeManualAvailability,
+            WorktreeReadiness, WorktreeReadinessReason, WorktreeStatusPlatformParts,
+            WorktreeSyncOnceRequest, WorktreeSyncOnceSubmissionStatus,
+        },
+    },
+    routes::{
+        admin::{
+            AdapterCursorSummary, AdapterListResponse, AdapterSummary, DependencyReadinessState,
+            PauseStatusSummary, ServerStatus, StatusSummaryResponse,
+        },
+        worktree::{
+            try_worktree_status_response, worktree_sync_once_response, WorktreeAdminAuthRequirement,
+        },
     },
 };
 use haze_sync_common::{AdapterId, AdapterRole as CommonAdapterRole};
@@ -28,63 +37,198 @@ use crate::{
     readiness::{ReadinessComponentStatus, ReadinessReport},
     routes::auth::{authenticate_principal, AuthFailure},
     state::ServerAppState,
+    worktree_http::ServerWorktreeSyncSubmission,
+    worktree_status::{
+        ServerWorktreeHostLifecycle, ServerWorktreeManualAvailability, ServerWorktreeModeCategory,
+        ServerWorktreeReadinessCategory, ServerWorktreeReadinessReason,
+        ServerWorktreeStatusSnapshot,
+    },
 };
 
 pub fn router() -> axum::Router {
     axum::Router::new()
         .route("/admin/status", axum::routing::get(status_route))
         .route("/admin/adapters", axum::routing::get(adapters_route))
+        .route(
+            "/admin/worktree/status",
+            axum::routing::get(worktree_status_route),
+        )
+        .route(
+            "/admin/worktree/sync-once",
+            axum::routing::post(worktree_sync_once_route),
+        )
 }
 
-/// Handles GET /v1/admin/status.
 pub(super) async fn status_route(
     Extension(state): Extension<ServerAppState>,
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
     authenticate_admin(&state, &headers).await?;
-
-    let response = if let Some(pool) = state.db_pool() {
-        status_from_runtime_state(&state, pool).await?
-    } else {
-        StatusSummaryResponse::placeholder()
-    };
-
-    Ok((StatusCode::OK, Json(response)).into_response())
+    Ok((StatusCode::OK, Json(status_from_state(&state).await)).into_response())
 }
 
-/// Handles GET /v1/admin/adapters.
 pub(super) async fn adapters_route(
     Extension(state): Extension<ServerAppState>,
     headers: HeaderMap,
 ) -> Result<Response, ApiError> {
     authenticate_admin(&state, &headers).await?;
-
     let response = if let Some(pool) = state.db_pool() {
         adapters_from_runtime_state(pool).await?
     } else {
         AdapterListResponse::empty()
     };
-
     Ok((StatusCode::OK, Json(response)).into_response())
 }
 
-async fn status_from_runtime_state(
-    state: &ServerAppState,
-    pool: &PgPool,
-) -> Result<StatusSummaryResponse, ApiError> {
-    let readiness = state.readiness_state().check().await;
-    let last_operation_sequence =
-        query_optional_i64(pool, "select max(seq) from operation_log").await?;
-    let adapter_count = query_count(pool, "select count(*) from sync_adapters").await?;
+pub(super) async fn worktree_status_route(
+    Extension(state): Extension<ServerAppState>,
+    headers: HeaderMap,
+) -> Result<Response, ApiError> {
+    authenticate_worktree_admin(&state, &headers).await?;
+    let snapshot = state
+        .worktree_control()
+        .and_then(|control| control.snapshot())
+        .ok_or_else(ApiError::worktree_unavailable)?;
+    let response = try_worktree_status_response(public_worktree_status(snapshot))
+        .map_err(|_error| ApiError::worktree_status_failed())?;
+    Ok((StatusCode::OK, Json(response)).into_response())
+}
 
-    Ok(StatusSummaryResponse::from_safe_parts(
+pub(super) async fn worktree_sync_once_route(
+    Extension(state): Extension<ServerAppState>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<Response, ApiError> {
+    authenticate_worktree_admin(&state, &headers).await?;
+    let _request = serde_json::from_slice::<WorktreeSyncOnceRequest>(&body)
+        .map_err(|_error| ApiError::invalid_worktree_request())?;
+
+    let submission = state
+        .worktree_control()
+        .map_or(ServerWorktreeSyncSubmission::Unavailable, |control| {
+            control.submit_sync_once()
+        });
+    let (status, public_status) = public_worktree_submission(submission);
+    Ok((status, Json(worktree_sync_once_response(public_status))).into_response())
+}
+
+fn public_worktree_status(snapshot: ServerWorktreeStatusSnapshot) -> WorktreeStatusPlatformParts {
+    WorktreeStatusPlatformParts {
+        configured_mode: match snapshot.mode {
+            ServerWorktreeModeCategory::Disabled => WorktreeConfiguredMode::Disabled,
+            ServerWorktreeModeCategory::ReadOnly => WorktreeConfiguredMode::ReadOnly,
+            ServerWorktreeModeCategory::ImportOnly => WorktreeConfiguredMode::ImportOnly,
+            ServerWorktreeModeCategory::ExportOnly => WorktreeConfiguredMode::ExportOnly,
+            ServerWorktreeModeCategory::Bidirectional => WorktreeConfiguredMode::Bidirectional,
+            ServerWorktreeModeCategory::DryRun => WorktreeConfiguredMode::DryRun,
+        },
+        host_lifecycle: match snapshot.lifecycle {
+            ServerWorktreeHostLifecycle::Disabled => WorktreeHostLifecycle::Disabled,
+            ServerWorktreeHostLifecycle::Starting => WorktreeHostLifecycle::Starting,
+            ServerWorktreeHostLifecycle::Running => WorktreeHostLifecycle::Running,
+            ServerWorktreeHostLifecycle::Cancelling => WorktreeHostLifecycle::Cancelling,
+            ServerWorktreeHostLifecycle::Shutdown => WorktreeHostLifecycle::Shutdown,
+            ServerWorktreeHostLifecycle::Failed => WorktreeHostLifecycle::Failed,
+        },
+        readiness: match snapshot.readiness {
+            ServerWorktreeReadinessCategory::Ready => WorktreeReadiness::Ready,
+            ServerWorktreeReadinessCategory::NotReady => WorktreeReadiness::NotReady,
+        },
+        readiness_reason: match snapshot.readiness_reason {
+            ServerWorktreeReadinessReason::DisabledInert => WorktreeReadinessReason::DisabledInert,
+            ServerWorktreeReadinessReason::Running => WorktreeReadinessReason::Running,
+            ServerWorktreeReadinessReason::Starting => WorktreeReadinessReason::Starting,
+            ServerWorktreeReadinessReason::Cancelling => WorktreeReadinessReason::Cancelling,
+            ServerWorktreeReadinessReason::Shutdown => WorktreeReadinessReason::Shutdown,
+            ServerWorktreeReadinessReason::Failed => WorktreeReadinessReason::Failed,
+        },
+        cycles_completed: snapshot.cycles_completed,
+        cycles_failed: snapshot.cycles_failed,
+        cycle_in_progress: snapshot.cycle_in_progress,
+        pending_watcher_hints: snapshot.pending_watcher_hints,
+        manual_availability: match snapshot.manual_availability {
+            ServerWorktreeManualAvailability::Available => WorktreeManualAvailability::Available,
+            ServerWorktreeManualAvailability::Busy => WorktreeManualAvailability::Busy,
+            ServerWorktreeManualAvailability::NotStarted => WorktreeManualAvailability::NotStarted,
+            ServerWorktreeManualAvailability::Cancelling => WorktreeManualAvailability::Cancelling,
+            ServerWorktreeManualAvailability::Shutdown => WorktreeManualAvailability::Shutdown,
+            ServerWorktreeManualAvailability::Unavailable => {
+                WorktreeManualAvailability::Unavailable
+            }
+            ServerWorktreeManualAvailability::Failed => WorktreeManualAvailability::Failed,
+        },
+    }
+}
+
+fn public_worktree_submission(
+    submission: ServerWorktreeSyncSubmission,
+) -> (StatusCode, WorktreeSyncOnceSubmissionStatus) {
+    match submission {
+        ServerWorktreeSyncSubmission::Accepted => (
+            StatusCode::ACCEPTED,
+            WorktreeSyncOnceSubmissionStatus::Accepted,
+        ),
+        ServerWorktreeSyncSubmission::Busy => {
+            (StatusCode::CONFLICT, WorktreeSyncOnceSubmissionStatus::Busy)
+        }
+        ServerWorktreeSyncSubmission::NotStarted => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            WorktreeSyncOnceSubmissionStatus::NotStarted,
+        ),
+        ServerWorktreeSyncSubmission::Cancelling => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            WorktreeSyncOnceSubmissionStatus::Cancelling,
+        ),
+        ServerWorktreeSyncSubmission::Shutdown => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            WorktreeSyncOnceSubmissionStatus::Shutdown,
+        ),
+        ServerWorktreeSyncSubmission::Unavailable => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            WorktreeSyncOnceSubmissionStatus::Unavailable,
+        ),
+        ServerWorktreeSyncSubmission::Failed => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            WorktreeSyncOnceSubmissionStatus::Failed,
+        ),
+    }
+}
+
+async fn status_from_state(state: &ServerAppState) -> StatusSummaryResponse {
+    let readiness = state.readiness_state().check().await;
+    let database_state = dependency_state_from_readiness(&readiness, "database");
+    let object_store_state = dependency_state_from_readiness(&readiness, "object_store");
+    let (last_operation_sequence, adapter_count) =
+        best_effort_runtime_metadata(state, database_state).await;
+
+    StatusSummaryResponse::from_safe_parts(
         server_status_from_readiness(&readiness),
-        dependency_state_from_readiness(&readiness, "database"),
-        dependency_state_from_readiness(&readiness, "object_store"),
+        database_state,
+        object_store_state,
         last_operation_sequence,
-        Some(adapter_count),
+        adapter_count,
         PauseStatusSummary::unsupported(),
-    ))
+    )
+}
+
+async fn best_effort_runtime_metadata(
+    state: &ServerAppState,
+    database_state: DependencyReadinessState,
+) -> (Option<i64>, Option<u64>) {
+    if database_state != DependencyReadinessState::Ready {
+        return (None, None);
+    }
+    let Some(pool) = state.db_pool() else {
+        return (None, None);
+    };
+    let last_operation_sequence = query_optional_i64(pool, "select max(seq) from operation_log")
+        .await
+        .ok()
+        .flatten();
+    let adapter_count = query_count(pool, "select count(*) from sync_adapters")
+        .await
+        .ok();
+    (last_operation_sequence, adapter_count)
 }
 
 async fn adapters_from_runtime_state(pool: &PgPool) -> Result<AdapterListResponse, ApiError> {
@@ -135,7 +279,6 @@ async fn adapters_from_runtime_state(pool: &PgPool) -> Result<AdapterListRespons
         }
         adapters.push(adapter);
     }
-
     Ok(AdapterListResponse::new(adapters))
 }
 
@@ -143,7 +286,6 @@ fn server_status_from_readiness(readiness: &ReadinessReport) -> ServerStatus {
     if readiness.is_ready() {
         return ServerStatus::Ready;
     }
-
     if readiness
         .components
         .iter()
@@ -166,7 +308,6 @@ fn dependency_state_from_readiness(
     else {
         return DependencyReadinessState::Unknown;
     };
-
     match component.status {
         ReadinessComponentStatus::Ready => DependencyReadinessState::Ready,
         ReadinessComponentStatus::NotReady | ReadinessComponentStatus::Disabled => {
@@ -197,11 +338,22 @@ async fn authenticate_admin(
     let principal = authenticate_principal(state, headers)
         .await
         .map_err(ApiError::from_auth_failure)?;
-
     if !principal.role().can_admin() {
         return Err(ApiError::forbidden_role());
     }
+    Ok(principal)
+}
 
+async fn authenticate_worktree_admin(
+    state: &ServerAppState,
+    headers: &HeaderMap,
+) -> Result<AdapterPrincipal, ApiError> {
+    let principal = authenticate_principal(state, headers)
+        .await
+        .map_err(ApiError::from_auth_failure)?;
+    WorktreeAdminAuthRequirement
+        .validate_principal(&principal)
+        .map_err(|_error| ApiError::forbidden_role())?;
     Ok(principal)
 }
 
@@ -247,6 +399,30 @@ impl ApiError {
         )
     }
 
+    fn invalid_worktree_request() -> Self {
+        Self::new(
+            StatusCode::BAD_REQUEST,
+            PublicErrorCode::InvalidRequest,
+            "Worktree sync request must be an empty JSON object",
+        )
+    }
+
+    fn worktree_unavailable() -> Self {
+        Self::new(
+            StatusCode::SERVICE_UNAVAILABLE,
+            PublicErrorCode::InternalError,
+            "Worktree runtime control is unavailable",
+        )
+    }
+
+    fn worktree_status_failed() -> Self {
+        Self::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            PublicErrorCode::InternalError,
+            "Worktree status response could not be constructed",
+        )
+    }
+
     fn internal() -> Self {
         Self::new(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -269,5 +445,6 @@ impl IntoResponse for ApiError {
         (self.status, Json(self.body)).into_response()
     }
 }
+
 #[cfg(test)]
 mod tests;

@@ -1,14 +1,9 @@
-//! V1 Core API route wiring for W2 normal file operations.
+//! V1 HTTP transport wiring for file operations and authoritative changes.
 //!
-//! This module wires already-merged W2 API helpers, storage repositories,
-//! idempotency primitives, object store primitives, and readiness/auth state into
-//! the normal PUT/GET/changes slice.
-//!
-//! W3 delete/conflict/admin behavior is composed alongside this router at the
-//! parent `/v1` namespace.
+//! Routes own parsing, authentication, authorization, and public response mapping.
+//! Reusable application services own transaction, locking, idempotency, Core,
+//! object-store, and Storage choreography.
 
-mod persistence;
-mod planning;
 #[cfg(test)]
 mod tests;
 
@@ -39,49 +34,27 @@ use haze_sync_api::{
     routes::{
         changes::{changes_response_from_parts, parse_changes_query, ChangesRouteError},
         files::{
-            parse_get_file_request, parse_put_file_request, FileDownloadRouteHeaders,
-            FileRouteError, GetFileRouteRequestParts, PutFileRouteRequest,
+            accepted_upload_response, conflict_saved_upload_response,
+            ignored_same_content_response, parse_get_file_request, parse_put_file_request,
+            FileDownloadRouteHeaders, FileRouteError, GetFileRouteRequestParts,
             PutFileRouteRequestParts, APPLICATION_OCTET_STREAM, X_REVISION_ID_HEADER,
             X_SIZE_BYTES_HEADER,
         },
     },
 };
-use haze_sync_common::{AdapterId, ContentHash, OperationId, RevisionId, VaultPath};
-#[cfg(test)]
-use haze_sync_core::revision_service::compute_content_hash;
-use haze_sync_core::{
-    conflict_saved_planner::ConflictSavedPreservationPlan,
-    conflict_service::ConflictPolicy,
-    idempotency::{RequestFingerprint, StoredIdempotencyResponse},
-    revision_service::{RevisionServiceError, StoredRevision},
-};
-use haze_sync_storage::{
-    locks::lock_vault_path,
-    models::FileRevisionRow,
-    object_store::ObjectStore,
-    repositories::{
-        idempotency::{
-            compare_request_fingerprint, insert_idempotency_record, read_idempotency_record,
-            IdempotencyRecordInput, IdempotencyRequestComparison, IdempotencyStoreOutcome,
-        },
-        operation_log::{ChangeFeedRow, OperationKindName, OperationLogRepository},
-        revisions::{get_current_revision_by_path, get_file_revision_by_id},
-        RepositoryError,
-    },
-    LocalObjectStore, ObjectStoreError,
-};
-use serde_json::json;
-use sha2::{Digest, Sha256 as Sha256Digest};
-use sqlx::PgPool;
-use std::{collections::HashMap, str::FromStr};
+use haze_sync_storage::repositories::operation_log::OperationKindName;
+use std::collections::HashMap;
 
 use crate::{
+    application::{
+        file_request_fingerprint, ApplicationActor, ApplicationError, ApplicationIdempotency,
+        ApplyFileCommand, ApplyFileOutcome, AuthoritativeChange, AuthoritativeChangesQuery,
+        RevisionContentQuery, ServerApplicationServices,
+    },
     http::errors::{not_implemented_response, ShellErrorResponse},
     routes::auth::{authenticate_principal, AuthFailure},
     state::ServerAppState,
 };
-
-use self::{persistence::apply_upsert_outcome, planning::run_core_normal_upsert};
 
 const MAX_UPLOAD_BYTES: u64 = 52_428_800;
 
@@ -138,58 +111,28 @@ async fn put_file_route(
         max_upload_bytes: Some(MAX_UPLOAD_BYTES),
     })?;
 
-    let pool = runtime_pool(&state)?;
-    let object_store = runtime_object_store(&state)?;
-    let fingerprint = request_fingerprint(&request, &principal);
-
-    if let Some(replay) = read_existing_idempotency(
-        pool,
-        &principal,
-        request.idempotency_key().as_str(),
-        fingerprint,
-    )
-    .await?
-    {
-        return replay_response(replay);
-    }
-
-    let mut transaction = pool.begin().await.map_err(|_error| ApiError::internal())?;
-    lock_vault_path(&mut *transaction, request.path())
+    let actor = ApplicationActor::new(principal.common_adapter_id().clone());
+    let fingerprint = file_request_fingerprint(
+        &actor,
+        request.path(),
+        request.base_revision_id(),
+        request.content_sha256(),
+        request.body(),
+    );
+    let command = ApplyFileCommand {
+        actor,
+        path: request.path().clone(),
+        base_revision_id: request.base_revision_id().cloned(),
+        content_hash: request.content_sha256(),
+        bytes: request.body().to_vec(),
+        idempotency: ApplicationIdempotency::new(request.idempotency_key().as_str(), fingerprint),
+    };
+    let outcome = application_services(&state)
+        .await?
+        .apply_file(command)
         .await
-        .map_err(map_repository_error)?;
-
-    let current_revision = get_current_revision_by_path(&mut *transaction, request.path())
-        .await
-        .map_err(map_repository_error)?
-        .map(stored_revision_from_row)
-        .transpose()?;
-
-    let outcome = run_core_normal_upsert(&request, &principal, current_revision, object_store)?;
-    let response_body =
-        apply_upsert_outcome(&mut transaction, &principal, object_store, outcome).await?;
-
-    if let Some(replay) = store_successful_idempotency(
-        &mut transaction,
-        &principal,
-        request.idempotency_key().as_str(),
-        fingerprint,
-        &response_body,
-    )
-    .await?
-    {
-        transaction
-            .rollback()
-            .await
-            .map_err(|_error| ApiError::internal())?;
-        return replay_response(replay);
-    }
-
-    transaction
-        .commit()
-        .await
-        .map_err(|_error| ApiError::internal())?;
-
-    Ok((StatusCode::OK, Json(response_body)).into_response())
+        .map_err(map_file_application_error)?;
+    Ok((StatusCode::OK, Json(put_response(outcome))).into_response())
 }
 
 async fn get_file_route(
@@ -203,42 +146,20 @@ async fn get_file_route(
         route_path: route_path.as_str(),
         revision_id: query.get("revision_id").map(String::as_str),
     })?;
-
-    let pool = runtime_pool(&state)?;
-    let object_store = runtime_object_store(&state)?;
-
-    let row = if let Some(revision_id) = request.revision_id() {
-        let row = get_file_revision_by_id(pool, revision_id)
-            .await
-            .map_err(map_repository_error)?
-            .ok_or(FileRouteError::NotFound)?;
-        if row.path != request.path().as_str() {
-            return Err(FileRouteError::NotFound.into());
-        }
-        row
-    } else {
-        get_current_revision_by_path(pool, request.path())
-            .await
-            .map_err(map_repository_error)?
-            .ok_or(FileRouteError::NotFound)?
-    };
-
-    let revision = stored_revision_from_row(row)?;
-    let bytes = object_store
-        .get_bytes(revision.content_hash)
-        .map_err(map_object_store_get_error)?;
-    if u64::try_from(bytes.len()).map_err(|_| ApiError::internal())? != revision.size_bytes {
-        return Err(ApiError::internal());
-    }
-
-    raw_file_response(
-        bytes,
-        FileDownloadRouteHeaders::new(
-            revision.revision_id,
-            revision.content_hash,
-            revision.size_bytes,
-        ),
-    )
+    let content = application_services(&state)
+        .await?
+        .revision_content(RevisionContentQuery {
+            path: request.path().clone(),
+            revision_id: request.revision_id().cloned(),
+        })
+        .await
+        .map_err(map_file_application_error)?;
+    let headers = FileDownloadRouteHeaders::new(
+        content.revision_id.clone(),
+        content.content_hash,
+        content.size_bytes,
+    );
+    raw_file_response(content.into_bytes(), headers)
 }
 
 async fn changes_route(
@@ -251,19 +172,20 @@ async fn changes_route(
         query.get("since").map(String::as_str),
         query.get("limit").map(String::as_str),
     )?;
-    let pool = runtime_pool(&state)?;
-    let page = OperationLogRepository::new()
-        .changes_since(pool, request.since_value(), request.limit_value())
+    let internal_query =
+        AuthoritativeChangesQuery::new(request.since_value(), request.limit_value())
+            .map_err(|_| ChangesRouteError::invalid_response_page())?;
+    let batch = application_services(&state)
+        .await?
+        .authoritative_changes(internal_query)
         .await
-        .map_err(map_repository_error)?;
-
-    let changes = page
+        .map_err(map_changes_application_error)?;
+    let changes = batch
         .changes
         .into_iter()
-        .map(change_entry_from_row)
+        .map(change_entry_dto)
         .collect::<Result<Vec<_>, _>>()?;
-    let response = changes_response_from_parts(page.from_seq, page.to_seq, page.has_more, changes)?;
-
+    let response = changes_response_from_parts(batch.from, batch.to, batch.has_more, changes)?;
     Ok((StatusCode::OK, Json(response)).into_response())
 }
 
@@ -272,186 +194,51 @@ pub async fn core_route_not_implemented() -> (StatusCode, Json<ShellErrorRespons
     not_implemented_response()
 }
 
-#[derive(Clone, Copy)]
-enum FilePermission {
-    Read,
-    Write,
-}
-
-async fn authenticate(
+async fn application_services(
     state: &ServerAppState,
-    headers: &HeaderMap,
-    permission: FilePermission,
-) -> Result<AdapterPrincipal, ApiError> {
-    let principal = authenticate_principal(state, headers)
-        .await
-        .map_err(ApiError::from_auth_failure)?;
-
-    match permission {
-        FilePermission::Read if !principal.role().can_read_files() => {
-            return Err(ApiError::forbidden_role());
-        }
-        FilePermission::Write if !principal.role().can_write_files() => {
-            return Err(ApiError::forbidden_role());
-        }
-        _ => {}
-    }
-
-    Ok(principal)
-}
-
-#[derive(Clone, Copy)]
-enum HeaderErrorKind {
-    Idempotency,
-    ContentSha256,
-    BaseRevision,
-}
-
-fn optional_header<'a>(
-    headers: &'a HeaderMap,
-    name: &'static str,
-    kind: HeaderErrorKind,
-) -> Result<Option<&'a str>, ApiError> {
-    headers
-        .get(name)
-        .map(|value| {
-            value.to_str().map_err(|_error| match kind {
-                HeaderErrorKind::Idempotency => FileRouteError::InvalidIdempotencyKey.into(),
-                HeaderErrorKind::ContentSha256 => FileRouteError::InvalidContentSha256.into(),
-                HeaderErrorKind::BaseRevision => FileRouteError::InvalidBaseRevision.into(),
-            })
-        })
-        .transpose()
-}
-
-fn runtime_pool(state: &ServerAppState) -> Result<&PgPool, ApiError> {
-    state.db_pool().ok_or_else(ApiError::storage_unavailable)
-}
-
-fn runtime_object_store(state: &ServerAppState) -> Result<&LocalObjectStore, ApiError> {
+) -> Result<ServerApplicationServices, ApiError> {
     state
-        .object_store()
+        .application_services()
         .ok_or_else(ApiError::storage_unavailable)
 }
 
-fn request_fingerprint(
-    request: &PutFileRouteRequest,
-    principal: &AdapterPrincipal,
-) -> RequestFingerprint {
-    let metadata = json!({
-        "method": "PUT",
-        "path": request.path().as_str(),
-        "base_revision_id": request
-            .base_revision_id()
-            .map(RevisionId::as_str)
-            .unwrap_or("null"),
-        "content_sha256": request.content_sha256().to_string(),
-        "adapter_id": principal.adapter_id(),
-        "scope": "adapter",
-    });
-    RequestFingerprint::from_safe_json_metadata(&metadata)
-}
-
-async fn read_existing_idempotency(
-    pool: &PgPool,
-    principal: &AdapterPrincipal,
-    idempotency_key: &str,
-    fingerprint: RequestFingerprint,
-) -> Result<Option<StoredIdempotencyResponse>, ApiError> {
-    let mut connection = pool
-        .acquire()
-        .await
-        .map_err(|_error| ApiError::internal())?;
-    let Some(record) = read_idempotency_record(
-        &mut connection,
-        principal.common_adapter_id(),
-        idempotency_key,
-    )
-    .await
-    .map_err(|_error| ApiError::internal())?
-    else {
-        return Ok(None);
-    };
-
-    match compare_request_fingerprint(&record, fingerprint.as_sha256())
-        .map_err(|_error| ApiError::internal())?
-    {
-        IdempotencyRequestComparison::SameRequest => {
-            let response = serde_json::from_value(record.response_json)
-                .map_err(|_error| ApiError::internal())?;
-            Ok(Some(response))
-        }
-        IdempotencyRequestComparison::DifferentRequest => {
-            Err(FileRouteError::IdempotencyMismatch.into())
-        }
+fn put_response(outcome: ApplyFileOutcome) -> PutFileResponse {
+    match outcome {
+        ApplyFileOutcome::Accepted {
+            path,
+            revision_id,
+            seq,
+            ..
+        } => accepted_upload_response(path, revision_id, seq),
+        ApplyFileOutcome::SameContent { path, .. } => ignored_same_content_response(path),
+        ApplyFileOutcome::ConflictSaved {
+            path,
+            conflict_id,
+            materialized_path,
+            policy_applied,
+            seq,
+        } => conflict_saved_upload_response(
+            path,
+            conflict_id,
+            materialized_path,
+            policy_dto(policy_applied),
+            seq,
+        ),
     }
 }
 
-async fn store_successful_idempotency(
-    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    principal: &AdapterPrincipal,
-    idempotency_key: &str,
-    fingerprint: RequestFingerprint,
-    response_body: &PutFileResponse,
-) -> Result<Option<StoredIdempotencyResponse>, ApiError> {
-    let stored_response = StoredIdempotencyResponse::json(
-        StatusCode::OK.as_u16(),
-        serde_json::to_value(response_body).map_err(|_error| ApiError::internal())?,
-    )
-    .map_err(|_error| ApiError::internal())?;
-    let input = IdempotencyRecordInput::new(
-        principal.common_adapter_id().clone(),
-        idempotency_key,
-        *fingerprint.as_sha256(),
-        serde_json::to_value(stored_response).map_err(|_error| ApiError::internal())?,
-    )
-    .map_err(|_error| ApiError::internal())?;
-
-    match insert_idempotency_record(transaction, &input)
-        .await
-        .map_err(|_error| ApiError::internal())?
-    {
-        IdempotencyStoreOutcome::Stored { .. } => Ok(None),
-        IdempotencyStoreOutcome::AlreadyExists { record } => {
-            match compare_request_fingerprint(&record, fingerprint.as_sha256())
-                .map_err(|_error| ApiError::internal())?
-            {
-                IdempotencyRequestComparison::SameRequest => {
-                    let response = serde_json::from_value(record.response_json)
-                        .map_err(|_error| ApiError::internal())?;
-                    Ok(Some(response))
-                }
-                IdempotencyRequestComparison::DifferentRequest => {
-                    Err(FileRouteError::IdempotencyMismatch.into())
-                }
-            }
-        }
-    }
-}
-
-fn stored_revision_from_row(row: FileRevisionRow) -> Result<StoredRevision, ApiError> {
-    let revision_id =
-        RevisionId::parse(row.revision_id.as_str()).map_err(|_error| ApiError::internal())?;
-    let path = VaultPath::parse(row.path.as_str()).map_err(|_error| ApiError::internal())?;
-    let parent_revision_id = row
-        .parent_revision_id
-        .as_deref()
-        .map(RevisionId::parse)
-        .transpose()
-        .map_err(|_error| ApiError::internal())?;
-    let content_hash =
-        ContentHash::parse(row.content_sha256.as_str()).map_err(|_error| ApiError::internal())?;
-    let size_bytes = u64::try_from(row.size_bytes).map_err(|_| ApiError::internal())?;
-    let created_by =
-        AdapterId::parse(row.created_by.as_str()).map_err(|_error| ApiError::internal())?;
-
-    Ok(StoredRevision {
-        revision_id,
-        path,
-        parent_revision_id,
-        content_hash,
-        size_bytes,
-        created_by,
+fn change_entry_dto(change: AuthoritativeChange) -> Result<ChangeEntryDto, ApiError> {
+    Ok(ChangeEntryDto {
+        seq: change.seq,
+        kind: operation_kind_dto(change.kind),
+        path: VaultPathDto::from(change.path),
+        revision_id: change.revision_id.map(RevisionIdDto::from),
+        content_sha256: change.content_hash.map(ContentSha256Dto::from),
+        size_bytes: change.size_bytes,
+        tombstone_id: change.tombstone_id.map(TombstoneIdDto::from),
+        conflict_id: change.conflict_id.map(ConflictIdDto::from),
+        updated_by: AdapterIdDto::from(change.actor_id),
+        updated_at: TimestampDto::from(change.occurred_at.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
     })
 }
 
@@ -480,50 +267,63 @@ fn raw_file_response(
         X_SIZE_BYTES_HEADER,
         &headers.size_bytes().to_string(),
     )?;
-
-    Ok(response)
-}
-
-fn replay_response(stored: StoredIdempotencyResponse) -> Result<Response, ApiError> {
-    let status =
-        StatusCode::from_u16(stored.status_code()).map_err(|_error| ApiError::internal())?;
-    let mut response = (status, Json(stored.body().clone())).into_response();
-
-    for (name, value) in stored.headers() {
-        let name =
-            HeaderName::from_bytes(name.as_bytes()).map_err(|_error| ApiError::internal())?;
-        let value = HeaderValue::from_str(value).map_err(|_error| ApiError::internal())?;
-        response.headers_mut().insert(name, value);
-    }
-
     Ok(response)
 }
 
 fn insert_header(headers: &mut HeaderMap, name: &'static str, value: &str) -> Result<(), ApiError> {
-    let name = HeaderName::from_bytes(name.as_bytes()).map_err(|_error| ApiError::internal())?;
-    let value = HeaderValue::from_str(value).map_err(|_error| ApiError::internal())?;
+    let name = HeaderName::from_bytes(name.as_bytes()).map_err(|_| ApiError::internal())?;
+    let value = HeaderValue::from_str(value).map_err(|_| ApiError::internal())?;
     headers.insert(name, value);
     Ok(())
 }
 
-fn change_entry_from_row(row: ChangeFeedRow) -> Result<ChangeEntryDto, ApiError> {
-    let kind = OperationKindName::from_str(row.kind.as_str()).map_err(map_repository_error)?;
-    Ok(ChangeEntryDto {
-        seq: row.seq,
-        kind: operation_kind_dto(kind),
-        path: VaultPathDto::from(row.path),
-        revision_id: row.revision_id.map(RevisionIdDto::from),
-        content_sha256: row.content_sha256.map(ContentSha256Dto::from),
-        size_bytes: row
-            .size_bytes
-            .map(u64::try_from)
-            .transpose()
-            .map_err(|_error| ApiError::internal())?,
-        tombstone_id: row.tombstone_id.map(TombstoneIdDto::from),
-        conflict_id: row.conflict_id.map(ConflictIdDto::from),
-        updated_by: AdapterIdDto::from(row.adapter_id),
-        updated_at: TimestampDto::from(row.created_at.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
-    })
+#[derive(Clone, Copy)]
+enum FilePermission {
+    Read,
+    Write,
+}
+
+async fn authenticate(
+    state: &ServerAppState,
+    headers: &HeaderMap,
+    permission: FilePermission,
+) -> Result<AdapterPrincipal, ApiError> {
+    let principal = authenticate_principal(state, headers)
+        .await
+        .map_err(ApiError::from_auth_failure)?;
+    match permission {
+        FilePermission::Read if !principal.role().can_read_files() => {
+            Err(ApiError::forbidden_role())
+        }
+        FilePermission::Write if !principal.role().can_write_files() => {
+            Err(ApiError::forbidden_role())
+        }
+        _ => Ok(principal),
+    }
+}
+
+#[derive(Clone, Copy)]
+enum HeaderErrorKind {
+    Idempotency,
+    ContentSha256,
+    BaseRevision,
+}
+
+fn optional_header<'a>(
+    headers: &'a HeaderMap,
+    name: &'static str,
+    kind: HeaderErrorKind,
+) -> Result<Option<&'a str>, ApiError> {
+    headers
+        .get(name)
+        .map(|value| {
+            value.to_str().map_err(|_| match kind {
+                HeaderErrorKind::Idempotency => FileRouteError::InvalidIdempotencyKey.into(),
+                HeaderErrorKind::ContentSha256 => FileRouteError::InvalidContentSha256.into(),
+                HeaderErrorKind::BaseRevision => FileRouteError::InvalidBaseRevision.into(),
+            })
+        })
+        .transpose()
 }
 
 const fn operation_kind_dto(kind: OperationKindName) -> OperationKindDto {
@@ -537,104 +337,37 @@ const fn operation_kind_dto(kind: OperationKindName) -> OperationKindDto {
     }
 }
 
-fn policy_dto(policy: ConflictPolicy) -> ConflictPolicyDto {
+const fn policy_dto(policy: haze_sync_core::conflict_service::ConflictPolicy) -> ConflictPolicyDto {
     match policy {
-        ConflictPolicy::PreserveBoth => ConflictPolicyDto::PreserveBoth,
-        ConflictPolicy::CurrentWinsWithIncomingBackup => {
+        haze_sync_core::conflict_service::ConflictPolicy::PreserveBoth => {
+            ConflictPolicyDto::PreserveBoth
+        }
+        haze_sync_core::conflict_service::ConflictPolicy::CurrentWinsWithIncomingBackup => {
             ConflictPolicyDto::CurrentWinsWithIncomingBackup
         }
     }
 }
 
-fn incoming_conflict_revision_id(
-    plan: &ConflictSavedPreservationPlan,
-) -> Result<RevisionId, ApiError> {
-    let hash = plan.incoming_content_hash.to_string();
-    RevisionId::parse(&deterministic_identifier(
-        "rev_",
-        &[
-            plan.materialized_path.as_str(),
-            plan.current_revision_id.as_str(),
-            hash.as_str(),
-            plan.incoming_adapter_id.as_str(),
-        ],
-    ))
-    .map_err(|_error| ApiError::internal())
-}
-
-fn conflict_id_from_plan(
-    plan: &ConflictSavedPreservationPlan,
-) -> Result<haze_sync_common::ConflictId, ApiError> {
-    let hash = plan.incoming_content_hash.to_string();
-    haze_sync_common::ConflictId::parse(&deterministic_identifier(
-        "conf_",
-        &[
-            plan.original_path.as_str(),
-            plan.materialized_path.as_str(),
-            plan.current_revision_id.as_str(),
-            hash.as_str(),
-            plan.incoming_adapter_id.as_str(),
-        ],
-    ))
-    .map_err(|_error| ApiError::internal())
-}
-
-fn conflict_created_operation_id(
-    conflict_id: &haze_sync_common::ConflictId,
-    incoming_revision_id: &RevisionId,
-    plan: &ConflictSavedPreservationPlan,
-) -> Result<OperationId, ApiError> {
-    OperationId::parse(&deterministic_identifier(
-        "op_",
-        &[
-            conflict_id.as_str(),
-            incoming_revision_id.as_str(),
-            OperationKindName::ConflictCreated.as_str(),
-            plan.original_path.as_str(),
-        ],
-    ))
-    .map_err(|_error| ApiError::internal())
-}
-
-fn map_object_store_get_error(error: ObjectStoreError) -> ApiError {
+fn map_file_application_error(error: ApplicationError) -> ApiError {
     match error {
-        ObjectStoreError::MissingBlob { .. } => FileRouteError::NotFound.into(),
-        _ => ApiError::internal(),
+        ApplicationError::DependenciesUnavailable => ApiError::storage_unavailable(),
+        ApplicationError::NotFound | ApplicationError::ContentUnavailable => {
+            FileRouteError::NotFound.into()
+        }
+        ApplicationError::Conflict => FileRouteError::Conflict.into(),
+        ApplicationError::InvalidContentHash => FileRouteError::InvalidContentSha256.into(),
+        ApplicationError::IdempotencyMismatch => FileRouteError::IdempotencyMismatch.into(),
+        ApplicationError::InvalidInput
+        | ApplicationError::ContentCorrupt
+        | ApplicationError::Internal => ApiError::internal(),
     }
 }
 
-fn map_repository_error(_error: RepositoryError) -> ApiError {
-    ApiError::internal()
-}
-
-fn map_revision_service_error(_error: RevisionServiceError) -> ApiError {
-    ApiError::internal()
-}
-
-pub(super) fn map_conflict_saved_planning_error(
-    _error: haze_sync_core::conflict_saved_planner::ConflictSavedPlanningError,
-) -> ApiError {
-    FileRouteError::Conflict.into()
-}
-
-pub(super) fn deterministic_identifier(prefix: &str, parts: &[&str]) -> String {
-    let mut hasher = Sha256Digest::new();
-    for part in parts {
-        hasher.update(part.as_bytes());
-        hasher.update([0]);
+fn map_changes_application_error(error: ApplicationError) -> ApiError {
+    match error {
+        ApplicationError::DependenciesUnavailable => ApiError::storage_unavailable(),
+        _ => ChangesRouteError::core_unavailable().into(),
     }
-    let digest = hasher.finalize();
-    format!("{prefix}{}", lower_hex(&digest[..16]))
-}
-
-fn lower_hex(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut output = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        output.push(char::from(HEX[usize::from(byte >> 4)]));
-        output.push(char::from(HEX[usize::from(byte & 0x0f)]));
-    }
-    output
 }
 
 #[derive(Debug)]
@@ -659,7 +392,7 @@ impl ApiError {
         )
     }
 
-    fn invalid_token() -> Self {
+    pub(super) fn invalid_token() -> Self {
         Self::new(
             StatusCode::UNAUTHORIZED,
             PublicErrorCode::InvalidToken,

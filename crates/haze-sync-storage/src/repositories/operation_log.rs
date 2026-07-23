@@ -5,7 +5,9 @@
 //! idempotency integration, and adapter runtime behavior.
 
 use crate::models::OperationLogRow;
-use crate::repositories::{map_sqlx_error, validate_limit, validate_sequence, RepositoryError};
+use crate::repositories::{
+    map_sqlx_error, validate_limit, validate_sequence, RepositoryError, RepositoryResult,
+};
 use chrono::{DateTime, Utc};
 use haze_sync_common::{AdapterId, ConflictId, OperationId, RevisionId, VaultPath};
 use serde::{Deserialize, Serialize};
@@ -122,11 +124,11 @@ impl OperationLogRepository {
         &self,
         executor: E,
         entry: &AppendOperationLogEntry,
-    ) -> Result<OperationLogRow, RepositoryError>
+    ) -> RepositoryResult<OperationLogRow>
     where
         E: Executor<'executor, Database = Postgres>,
     {
-        sqlx::query(
+        let row = sqlx::query(
             "insert into operation_log \
              (op_id, adapter_id, kind, path, revision_id, tombstone_id, conflict_id) \
              values ($1, $2, $3, $4, $5, $6, $7) \
@@ -139,10 +141,11 @@ impl OperationLogRepository {
         .bind(entry.revision_id.as_ref().map(RevisionId::as_str))
         .bind(entry.tombstone_id.as_deref())
         .bind(entry.conflict_id.as_ref().map(ConflictId::as_str))
-        .try_map(operation_log_row_from_pg)
         .fetch_one(executor)
         .await
-        .map_err(map_sqlx_error)
+        .map_err(map_sqlx_error)?;
+
+        operation_log_row_from_pg(&row)
     }
 
     /// Read an operation by global sequence.
@@ -150,22 +153,23 @@ impl OperationLogRepository {
         &self,
         executor: E,
         sequence: i64,
-    ) -> Result<Option<OperationLogRow>, RepositoryError>
+    ) -> RepositoryResult<Option<OperationLogRow>>
     where
         E: Executor<'executor, Database = Postgres>,
     {
         validate_sequence(sequence)?;
 
-        sqlx::query(
+        let row = sqlx::query(
             "select seq, op_id, adapter_id, kind, path, revision_id, tombstone_id, conflict_id, created_at \
              from operation_log \
              where seq = $1",
         )
         .bind(sequence)
-        .try_map(operation_log_row_from_pg)
         .fetch_optional(executor)
         .await
-        .map_err(map_sqlx_error)
+        .map_err(map_sqlx_error)?;
+
+        row.as_ref().map(operation_log_row_from_pg).transpose()
     }
 
     /// Read an operation by unique operation id.
@@ -173,20 +177,21 @@ impl OperationLogRepository {
         &self,
         executor: E,
         op_id: &OperationId,
-    ) -> Result<Option<OperationLogRow>, RepositoryError>
+    ) -> RepositoryResult<Option<OperationLogRow>>
     where
         E: Executor<'executor, Database = Postgres>,
     {
-        sqlx::query(
+        let row = sqlx::query(
             "select seq, op_id, adapter_id, kind, path, revision_id, tombstone_id, conflict_id, created_at \
              from operation_log \
              where op_id = $1",
         )
         .bind(op_id.as_str())
-        .try_map(operation_log_row_from_pg)
         .fetch_optional(executor)
         .await
-        .map_err(map_sqlx_error)
+        .map_err(map_sqlx_error)?;
+
+        row.as_ref().map(operation_log_row_from_pg).transpose()
     }
 
     /// Query operation metadata strictly after `since`, ordered by sequence.
@@ -195,14 +200,14 @@ impl OperationLogRepository {
         executor: E,
         since: i64,
         limit: u32,
-    ) -> Result<Vec<OperationLogRow>, RepositoryError>
+    ) -> RepositoryResult<Vec<OperationLogRow>>
     where
         E: Executor<'executor, Database = Postgres>,
     {
         validate_sequence(since)?;
         validate_limit(limit)?;
 
-        sqlx::query(
+        let rows = sqlx::query(
             "select seq, op_id, adapter_id, kind, path, revision_id, tombstone_id, conflict_id, created_at \
              from operation_log \
              where seq > $1 \
@@ -211,10 +216,11 @@ impl OperationLogRepository {
         )
         .bind(since)
         .bind(i64::from(limit))
-        .try_map(operation_log_row_from_pg)
         .fetch_all(executor)
         .await
-        .map_err(map_sqlx_error)
+        .map_err(map_sqlx_error)?;
+
+        rows.iter().map(operation_log_row_from_pg).collect()
     }
 
     /// Query a safe changes-feed page strictly after `since`, using one sentinel
@@ -224,14 +230,14 @@ impl OperationLogRepository {
         executor: E,
         since: i64,
         limit: u32,
-    ) -> Result<ChangeFeedPage, RepositoryError>
+    ) -> RepositoryResult<ChangeFeedPage>
     where
         E: Executor<'executor, Database = Postgres>,
     {
         validate_sequence(since)?;
         validate_limit(limit)?;
 
-        let mut rows = sqlx::query(
+        let rows = sqlx::query(
             "select \
                  operation_log.seq, \
                  operation_log.op_id, \
@@ -252,88 +258,89 @@ impl OperationLogRepository {
         )
         .bind(since)
         .bind(i64::from(limit) + 1)
-        .try_map(change_feed_row_from_pg)
         .fetch_all(executor)
         .await
         .map_err(map_sqlx_error)?;
+        let rows = rows
+            .iter()
+            .map(change_feed_row_from_pg)
+            .collect::<RepositoryResult<Vec<_>>>()?;
 
-        let has_more = rows.len() > limit as usize;
-        if has_more {
-            rows.truncate(limit as usize);
-        }
-
-        let to_seq = rows.last().map_or(since, |row| row.seq);
-
-        Ok(ChangeFeedPage {
-            from_seq: since,
-            to_seq,
-            has_more,
-            changes: rows,
-        })
+        Ok(change_feed_page_from_rows(since, limit, rows))
     }
 }
 
-fn operation_log_row_from_pg(row: PgRow) -> Result<OperationLogRow, sqlx::Error> {
+fn change_feed_page_from_rows(
+    since: i64,
+    limit: u32,
+    mut rows: Vec<ChangeFeedRow>,
+) -> ChangeFeedPage {
+    let has_more = rows.len() > limit as usize;
+    if has_more {
+        rows.truncate(limit as usize);
+    }
+
+    let to_seq = rows.last().map_or(since, |row| row.seq);
+
+    ChangeFeedPage {
+        from_seq: since,
+        to_seq,
+        has_more,
+        changes: rows,
+    }
+}
+
+fn operation_log_row_from_pg(row: &PgRow) -> RepositoryResult<OperationLogRow> {
+    let kind = validated_persisted_operation_kind(row.try_get("kind").map_err(map_sqlx_error)?)?;
+
     Ok(OperationLogRow {
-        seq: row.try_get("seq")?,
-        op_id: row.try_get("op_id")?,
-        adapter_id: row.try_get("adapter_id")?,
-        kind: row.try_get("kind")?,
-        path: row.try_get("path")?,
-        revision_id: row.try_get("revision_id")?,
-        tombstone_id: row.try_get("tombstone_id")?,
-        conflict_id: row.try_get("conflict_id")?,
-        created_at: row.try_get("created_at")?,
+        seq: row.try_get("seq").map_err(map_sqlx_error)?,
+        op_id: row.try_get("op_id").map_err(map_sqlx_error)?,
+        adapter_id: row.try_get("adapter_id").map_err(map_sqlx_error)?,
+        kind,
+        path: row.try_get("path").map_err(map_sqlx_error)?,
+        revision_id: row.try_get("revision_id").map_err(map_sqlx_error)?,
+        tombstone_id: row.try_get("tombstone_id").map_err(map_sqlx_error)?,
+        conflict_id: row.try_get("conflict_id").map_err(map_sqlx_error)?,
+        created_at: row.try_get("created_at").map_err(map_sqlx_error)?,
     })
 }
 
-fn change_feed_row_from_pg(row: PgRow) -> Result<ChangeFeedRow, sqlx::Error> {
+fn change_feed_row_from_pg(row: &PgRow) -> RepositoryResult<ChangeFeedRow> {
+    let kind = validated_persisted_operation_kind(row.try_get("kind").map_err(map_sqlx_error)?)?;
+    let size_bytes =
+        validated_persisted_size_bytes(row.try_get("size_bytes").map_err(map_sqlx_error)?)?;
+
     Ok(ChangeFeedRow {
-        seq: row.try_get("seq")?,
-        op_id: row.try_get("op_id")?,
-        adapter_id: row.try_get("adapter_id")?,
-        kind: row.try_get("kind")?,
-        path: row.try_get("path")?,
-        revision_id: row.try_get("revision_id")?,
-        content_sha256: row.try_get("content_sha256")?,
-        size_bytes: row.try_get("size_bytes")?,
-        tombstone_id: row.try_get("tombstone_id")?,
-        conflict_id: row.try_get("conflict_id")?,
-        created_at: row.try_get("created_at")?,
+        seq: row.try_get("seq").map_err(map_sqlx_error)?,
+        op_id: row.try_get("op_id").map_err(map_sqlx_error)?,
+        adapter_id: row.try_get("adapter_id").map_err(map_sqlx_error)?,
+        kind,
+        path: row.try_get("path").map_err(map_sqlx_error)?,
+        revision_id: row.try_get("revision_id").map_err(map_sqlx_error)?,
+        content_sha256: row.try_get("content_sha256").map_err(map_sqlx_error)?,
+        size_bytes,
+        tombstone_id: row.try_get("tombstone_id").map_err(map_sqlx_error)?,
+        conflict_id: row.try_get("conflict_id").map_err(map_sqlx_error)?,
+        created_at: row.try_get("created_at").map_err(map_sqlx_error)?,
     })
+}
+
+fn validated_persisted_operation_kind(kind: String) -> RepositoryResult<String> {
+    OperationKindName::from_str(&kind)?;
+    Ok(kind)
+}
+
+fn validated_persisted_size_bytes(size_bytes: Option<i64>) -> RepositoryResult<Option<i64>> {
+    if size_bytes.is_some_and(|value| value < 0) {
+        return Err(RepositoryError::InvalidSizeBytes);
+    }
+
+    Ok(size_bytes)
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+mod tests;
 
-    #[test]
-    fn operation_kind_names_match_contract_strings() {
-        assert_eq!(OperationKindName::UpsertFile.as_str(), "upsert_file");
-        assert_eq!(OperationKindName::DeleteFile.as_str(), "delete_file");
-        assert_eq!(OperationKindName::RestoreFile.as_str(), "restore_file");
-        assert_eq!(
-            OperationKindName::ConflictCreated.as_str(),
-            "conflict_created"
-        );
-        assert_eq!(
-            OperationKindName::ConflictResolved.as_str(),
-            "conflict_resolved"
-        );
-        assert_eq!(OperationKindName::BackupCreated.as_str(), "backup_created");
-    }
-
-    #[test]
-    fn operation_kind_roundtrips_json() {
-        let json = serde_json::to_string(&OperationKindName::ConflictCreated).unwrap();
-        assert_eq!(json, "\"conflict_created\"");
-        assert_eq!(
-            serde_json::from_str::<OperationKindName>(&json).unwrap(),
-            OperationKindName::ConflictCreated
-        );
-        assert_eq!(
-            OperationKindName::from_str("overwrite_file"),
-            Err(RepositoryError::InvalidOperationKind)
-        );
-    }
-}
+#[cfg(all(test, feature = "test-support"))]
+mod postgres_tests;

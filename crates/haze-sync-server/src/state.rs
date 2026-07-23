@@ -9,8 +9,10 @@ use haze_sync_storage::LocalObjectStore;
 use sqlx::PgPool;
 
 use crate::{
+    application::ServerApplicationServices,
     config::{ObjectStoreConfig, ServerConfig},
     readiness::ReadinessState,
+    worktree_http::ServerWorktreeHttpControl,
 };
 
 /// Explicit server dependencies used by W2 Core file-operation routes.
@@ -20,6 +22,7 @@ pub struct ServerAppState {
     object_store: Option<LocalObjectStore>,
     config: Option<ServerConfig>,
     auth: AuthState,
+    worktree_control: Option<ServerWorktreeHttpControl>,
 }
 
 impl ServerAppState {
@@ -31,6 +34,7 @@ impl ServerAppState {
             object_store: None,
             config: None,
             auth: AuthState::Disabled,
+            worktree_control: None,
         }
     }
 
@@ -47,6 +51,7 @@ impl ServerAppState {
             object_store,
             config,
             auth,
+            worktree_control: None,
         }
     }
 
@@ -59,6 +64,7 @@ impl ServerAppState {
             object_store: Some(object_store),
             config: Some(config),
             auth: AuthState::Database { pool: db_pool },
+            worktree_control: None,
         }
     }
 
@@ -70,7 +76,15 @@ impl ServerAppState {
             object_store: None,
             config: None,
             auth: AuthState::StaticPrincipal { principal },
+            worktree_control: None,
         }
+    }
+
+    /// Attach the cloneable Worktree HTTP boundary without transferring host ownership.
+    #[must_use]
+    pub(crate) fn with_worktree_control(mut self, control: ServerWorktreeHttpControl) -> Self {
+        self.worktree_control = Some(control);
+        self
     }
 
     /// Return the configured database pool, when runtime-backed routes are enabled.
@@ -85,6 +99,15 @@ impl ServerAppState {
         self.object_store.as_ref()
     }
 
+    /// Build reusable application services when the database authority exists.
+    #[must_use]
+    pub(crate) fn application_services(&self) -> Option<ServerApplicationServices> {
+        Some(ServerApplicationServices::new(
+            self.db_pool.as_ref()?.clone(),
+            self.object_store.clone(),
+        ))
+    }
+
     /// Return the loaded server configuration, when startup supplied one.
     #[must_use]
     pub const fn config(&self) -> Option<&ServerConfig> {
@@ -95,6 +118,12 @@ impl ServerAppState {
     #[must_use]
     pub const fn auth(&self) -> &AuthState {
         &self.auth
+    }
+
+    /// Return the optional passive Worktree HTTP control boundary.
+    #[must_use]
+    pub(crate) const fn worktree_control(&self) -> Option<&ServerWorktreeHttpControl> {
+        self.worktree_control.as_ref()
     }
 
     /// Build a readiness state from the same explicit dependencies.
@@ -126,6 +155,7 @@ impl std::fmt::Debug for ServerAppState {
             )
             .field("config", &self.config.as_ref().map(|_config| "[REDACTED]"))
             .field("auth", &self.auth)
+            .field("worktree_control", &self.worktree_control.is_some())
             .finish()
     }
 }
@@ -167,6 +197,8 @@ mod tests {
         let rendered = format!("{state:?} {report:?}");
 
         assert!(!report.is_ready());
+        assert!(state.application_services().is_none());
+        assert!(state.worktree_control().is_none());
         assert!(!rendered.contains("postgres://"));
         assert!(!rendered.contains("secret"));
         assert!(!rendered.contains("/srv/"));

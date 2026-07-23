@@ -1,0 +1,339 @@
+name: Integration CI
+
+on:
+  pull_request:
+    branches:
+      - main
+      - integration/v1-fan-in
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: Rust workspace integration
+    if: ${{ github.event_name != 'pull_request' || startsWith(github.head_ref, 'integration/') }}
+    runs-on: ubuntu-latest
+    env:
+      HAZE_COMPONENT: integration
+      HAZE_WORKFLOW_SLUG: integration-ci
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Resolve candidate context
+        shell: bash
+        run: |
+          branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          echo "HAZE_COMPONENT_BRANCH=${branch}" >> "$GITHUB_ENV"
+          echo "HAZE_HEAD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: cargo fmt
+        shell: bash
+        run: bash .github/scripts/ci-run.sh rust-fmt cargo fmt --all --check
+
+      - name: cargo check
+        shell: bash
+        run: bash .github/scripts/ci-run.sh cargo-check cargo check --workspace
+
+      - name: cargo test
+        shell: bash
+        run: bash .github/scripts/ci-run.sh cargo-test cargo test --workspace --exclude haze-sync-server
+
+      - name: cargo clippy
+        shell: bash
+        run: bash .github/scripts/ci-run.sh cargo-clippy cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Finalize CI diagnostics
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: bash .github/scripts/ci-finalize.sh
+
+      - name: Upload CI diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-diag__component-integration__wf-integration-ci__run-${{ github.run_id }}__attempt-${{ github.run_attempt }}
+          path: ci-diagnostics/
+          retention-days: 1
+          compression-level: 9
+          if-no-files-found: ignore
+          include-hidden-files: false
+
+  storage-postgres:
+    name: Storage PostgreSQL integration
+    if: ${{ github.event_name != 'pull_request' || startsWith(github.head_ref, 'integration/') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      HAZE_COMPONENT: integration-storage
+      HAZE_WORKFLOW_SLUG: integration-ci-storage-postgres
+      HAZE_SYNC_TEST_DATABASE_URL: postgresql://haze_sync_test:haze_sync_test_password@localhost:5432/haze_sync_fanin_test
+      RUST_TEST_THREADS: "1"
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: haze_sync_test
+          POSTGRES_PASSWORD: haze_sync_test_password
+          POSTGRES_DB: haze_sync_fanin_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --username=haze_sync_test --dbname=haze_sync_fanin_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Resolve candidate context
+        shell: bash
+        run: |
+          branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          echo "HAZE_COMPONENT_BRANCH=${branch}" >> "$GITHUB_ENV"
+          echo "HAZE_HEAD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Wait for PostgreSQL readiness
+        shell: bash
+        env:
+          POSTGRES_SERVICE_ID: ${{ job.services.postgres.id }}
+        run: |
+          bash .github/scripts/ci-run.sh storage-postgres-readiness bash -ceu '
+            for attempt in $(seq 1 30); do
+              if docker exec "$POSTGRES_SERVICE_ID" pg_isready \
+                --username=haze_sync_test \
+                --dbname=haze_sync_fanin_test; then
+                exit 0
+              fi
+              sleep 1
+            done
+            echo "PostgreSQL service did not become ready after 30 attempts." >&2
+            exit 1
+          '
+
+      - name: Run strict Storage PostgreSQL tests
+        shell: bash
+        run: bash .github/scripts/ci-run.sh storage-postgres-strict cargo test -p haze-sync-storage --features test-support -- --ignored
+
+      - name: Verify Stage 2 database evidence
+        shell: bash
+        run: |
+          bash .github/scripts/ci-run.sh storage-postgres-evidence bash -ceu '
+            log="${RUNNER_TEMP}/haze-ci-logs/storage-postgres-strict.log"
+            test -f "$log"
+
+            expected_tests=(
+              "test repositories::adapter_cursors::postgres_tests::exact_cursor_progression_is_locked_contiguous_and_rollback_safe ... ok"
+              "test repositories::worktree_state::postgres_tests::durable_instances_and_path_state_are_isolated_and_transactional ... ok"
+              "test repositories::gdrive_state::postgres_contract_tests::gdrive_compare_and_commit_is_versioned_replay_safe_isolated_and_rollback_safe ... ok"
+              "test repositories::gdrive_state::postgres_contract_tests::concurrent_loser_observes_stale_expected_after_winner_commits ... ok"
+              "test migration_0010_sql_guard_preserves_nonempty_legacy_state ... ok"
+              "test migration_0011_sql_guard_preserves_incompatible_preexisting_state ... ok"
+            )
+
+            for expected_test in "${expected_tests[@]}"; do
+              if ! grep -F -- "$expected_test" "$log" >/dev/null; then
+                echo "Missing successful PostgreSQL test evidence: $expected_test" >&2
+                exit 1
+              fi
+            done
+          '
+
+      - name: Finalize CI diagnostics
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: bash .github/scripts/ci-finalize.sh
+
+      - name: Upload CI diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-diag__component-integration-storage__wf-integration-ci-storage-postgres__run-${{ github.run_id }}__attempt-${{ github.run_attempt }}
+          path: ci-diagnostics/
+          retention-days: 1
+          compression-level: 9
+          if-no-files-found: ignore
+          include-hidden-files: false
+
+  server-postgres:
+    name: Server PostgreSQL integration
+    if: ${{ github.event_name != 'pull_request' || startsWith(github.head_ref, 'integration/') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      HAZE_COMPONENT: integration-server
+      HAZE_WORKFLOW_SLUG: integration-ci-server-postgres
+      HAZE_SYNC_TEST_DATABASE_URL: postgresql://haze_sync_server_test:haze_sync_server_test_password@localhost:5432/haze_sync_server_test
+      RUST_TEST_THREADS: "1"
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: haze_sync_server_test
+          POSTGRES_PASSWORD: haze_sync_server_test_password
+          POSTGRES_DB: haze_sync_server_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --username=haze_sync_server_test --dbname=haze_sync_server_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Resolve candidate context
+        shell: bash
+        run: |
+          branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          echo "HAZE_COMPONENT_BRANCH=${branch}" >> "$GITHUB_ENV"
+          echo "HAZE_HEAD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Wait for PostgreSQL readiness
+        shell: bash
+        env:
+          POSTGRES_SERVICE_ID: ${{ job.services.postgres.id }}
+        run: |
+          bash .github/scripts/ci-run.sh server-postgres-readiness bash -ceu '
+            for attempt in $(seq 1 30); do
+              if docker exec "$POSTGRES_SERVICE_ID" pg_isready \
+                --username=haze_sync_server_test \
+                --dbname=haze_sync_server_test; then
+                exit 0
+              fi
+              sleep 1
+            done
+            echo "PostgreSQL service did not become ready after 30 attempts." >&2
+            exit 1
+          '
+
+      - name: Run full Server PostgreSQL tests
+        shell: bash
+        run: bash .github/scripts/ci-run.sh server-postgres-tests cargo test -p haze-sync-server -- --test-threads=1
+
+      - name: Verify private cursor route evidence
+        shell: bash
+        run: |
+          bash .github/scripts/ci-run.sh server-postgres-evidence bash -ceu '
+            log="${RUNNER_TEMP}/haze-ci-logs/server-postgres-tests.log"
+            test -f "$log"
+            expected_tests=(
+              "gdrive_routes_enforce_auth_type_visibility_and_adapter_isolation ... ok"
+              "gdrive_commit_route_is_replay_safe_and_rolls_back_all_partial_facts ... ok"
+            )
+            for expected_test in "${expected_tests[@]}"; do
+              if ! grep -F -- "$expected_test" "$log" >/dev/null; then
+                echo "Missing successful Server route evidence: $expected_test" >&2
+                exit 1
+              fi
+            done
+          '
+
+      - name: Build Server runtime
+        shell: bash
+        run: bash .github/scripts/ci-run.sh server-runtime-build cargo build -p haze-sync-server
+
+      - name: Run startup, readiness, and graceful shutdown smoke
+        shell: bash
+        env:
+          POSTGRES_SERVICE_ID: ${{ job.services.postgres.id }}
+        run: |
+          bash .github/scripts/ci-run.sh server-runtime-smoke bash -ceu '
+            runtime_db=haze_sync_runtime_smoke
+            docker exec "$POSTGRES_SERVICE_ID" createdb \
+              --username=haze_sync_server_test "$runtime_db"
+            for migration in migrations/*.sql; do
+              docker exec -i "$POSTGRES_SERVICE_ID" psql \
+                --username=haze_sync_server_test \
+                --dbname="$runtime_db" \
+                --set=ON_ERROR_STOP=1 < "$migration"
+            done
+
+            export HAZE_SYNC_LISTEN_ADDR=127.0.0.1:18080
+            export HAZE_SYNC_DATABASE_URL="postgresql://haze_sync_server_test:haze_sync_server_test_password@localhost:5432/${runtime_db}"
+            export HAZE_SYNC_OBJECT_STORE_PATH="${RUNNER_TEMP}/haze-server-objects"
+            export HAZE_SYNC_WORKTREE_PATH="${RUNNER_TEMP}/haze-server-worktree"
+            export HAZE_SYNC_WORKTREE_ADAPTER_MODE=disabled
+            export HAZE_GDRIVE_ADAPTER_MODE=disabled
+            export HAZE_OBSIDIAN_ADAPTER_MODE=disabled
+
+            mkdir -p "$HAZE_SYNC_OBJECT_STORE_PATH" "$HAZE_SYNC_WORKTREE_PATH"
+
+            log="${RUNNER_TEMP}/haze-server-runtime.log"
+            target/debug/haze-sync-server >"$log" 2>&1 &
+            server_pid=$!
+            cleanup() {
+              if kill -0 "$server_pid" 2>/dev/null; then
+                kill -KILL "$server_pid" 2>/dev/null || true
+              fi
+            }
+            trap cleanup EXIT
+
+            ready=0
+            for attempt in $(seq 1 60); do
+              if curl --fail --silent --show-error http://127.0.0.1:18080/health >/dev/null \
+                && curl --fail --silent --show-error http://127.0.0.1:18080/ready >/dev/null; then
+                ready=1
+                break
+              fi
+              if ! kill -0 "$server_pid" 2>/dev/null; then
+                cat "$log" >&2
+                exit 1
+              fi
+              sleep 1
+            done
+            test "$ready" -eq 1
+
+            kill -INT "$server_pid"
+            for attempt in $(seq 1 30); do
+              if ! kill -0 "$server_pid" 2>/dev/null; then
+                wait "$server_pid"
+                trap - EXIT
+                test ! -s "$log" || ! grep -F "haze_sync_server_test_password" "$log"
+                exit 0
+              fi
+              sleep 1
+            done
+            echo "Server did not stop after SIGINT." >&2
+            cat "$log" >&2
+            exit 1
+          '
+
+      - name: Finalize CI diagnostics
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: bash .github/scripts/ci-finalize.sh
+
+      - name: Upload CI diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-diag__component-integration-server__wf-integration-ci-server-postgres__run-${{ github.run_id }}__attempt-${{ github.run_attempt }}
+          path: ci-diagnostics/
+          retention-days: 1
+          compression-level: 9
+          if-no-files-found: ignore
+          include-hidden-files: false

@@ -11,11 +11,16 @@ use sha2::{Digest, Sha256 as Sha256Digest};
 use std::{collections::BTreeMap, error::Error, fmt, str::FromStr};
 
 const MAX_IDEMPOTENCY_KEY_LEN: usize = 512;
-const MIN_STATUS_CODE: u16 = 100;
+const MIN_STATUS_CODE: u16 = 200;
 const MAX_STATUS_CODE: u16 = 599;
+const REDACTED_IDEMPOTENCY_KEY: &str = "<redacted-idempotency-key>";
 
 /// Safe, validated idempotency key from the `Idempotency-Key` header.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+///
+/// The raw key is available only through explicit storage-oriented accessors.
+/// Formatting is redacted so logs, reports, and errors do not accidentally
+/// expose key material.
+#[derive(Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct IdempotencyKey(String);
 
 impl IdempotencyKey {
@@ -34,13 +39,13 @@ impl IdempotencyKey {
         Ok(Self(input.to_owned()))
     }
 
-    /// Borrows the canonical key string.
+    /// Borrows the canonical raw key for durable storage lookup only.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
-    /// Consumes the key and returns the canonical key string.
+    /// Consumes the key and returns its raw value for durable storage only.
     #[must_use]
     pub fn into_string(self) -> String {
         self.0
@@ -53,9 +58,15 @@ impl AsRef<str> for IdempotencyKey {
     }
 }
 
+impl fmt::Debug for IdempotencyKey {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(REDACTED_IDEMPOTENCY_KEY)
+    }
+}
+
 impl fmt::Display for IdempotencyKey {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(self.as_str())
+        formatter.write_str(REDACTED_IDEMPOTENCY_KEY)
     }
 }
 
@@ -133,6 +144,9 @@ impl RequestFingerprint {
     }
 
     /// Hashes safe JSON request metadata after deterministic canonicalization.
+    ///
+    /// Callers must exclude credentials, raw request bytes, idempotency keys,
+    /// provider payloads, and other secret-bearing values from this metadata.
     #[must_use]
     pub fn from_safe_json_metadata(metadata: &Value) -> Self {
         let mut canonical = String::new();
@@ -180,8 +194,12 @@ impl From<RequestFingerprint> for Sha256 {
     }
 }
 
-/// JSON-safe response snapshot stored for a successful idempotent write.
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+/// JSON-safe response snapshot stored for a completed idempotent write.
+///
+/// The snapshot is intentionally limited to a final HTTP status, validated replay
+/// headers, and a public JSON body. It must not contain raw file bytes,
+/// credentials, cookies, an idempotency key, or internal error details.
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct StoredIdempotencyResponse {
     status_code: u16,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -190,7 +208,7 @@ pub struct StoredIdempotencyResponse {
 }
 
 impl StoredIdempotencyResponse {
-    /// Creates a stored response from safe public JSON body and optional headers.
+    /// Creates a stored response from a safe public JSON body and optional headers.
     pub fn new(
         status_code: u16,
         body: Value,
@@ -204,7 +222,9 @@ impl StoredIdempotencyResponse {
         for (name, value) in headers {
             let normalized_name = validate_response_header_name(&name)?;
             validate_response_header_value(&value)?;
-            normalized_headers.insert(normalized_name, value);
+            if normalized_headers.insert(normalized_name, value).is_some() {
+                return Err(IdempotencyError::UnsafeResponseHeader);
+            }
         }
 
         Ok(Self {
@@ -219,26 +239,48 @@ impl StoredIdempotencyResponse {
         Self::new(status_code, body, BTreeMap::new())
     }
 
-    /// HTTP status code to return for replay.
+    /// Final HTTP status code to return for replay.
     #[must_use]
     pub const fn status_code(&self) -> u16 {
         self.status_code
     }
 
-    /// Safe replay headers. Sensitive headers are rejected by the constructor.
+    /// Safe replay headers. Sensitive and transport-specific headers are rejected.
     #[must_use]
     pub const fn headers(&self) -> &BTreeMap<String, String> {
         &self.headers
     }
 
-    /// JSON response body to replay.
+    /// Public JSON response body to replay.
     #[must_use]
     pub const fn body(&self) -> &Value {
         &self.body
     }
 }
 
+impl<'de> Deserialize<'de> for StoredIdempotencyResponse {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct StoredResponseWire {
+            status_code: u16,
+            #[serde(default)]
+            headers: BTreeMap<String, String>,
+            body: Value,
+        }
+
+        let wire = StoredResponseWire::deserialize(deserializer)?;
+        Self::new(wire.status_code, wire.body, wire.headers).map_err(serde::de::Error::custom)
+    }
+}
+
 /// Stored idempotency record used to evaluate request replay behavior.
+///
+/// This record is serializable for storage/fan-in persistence only. Because it
+/// contains the validated raw idempotency key, API and report layers must not
+/// expose a serialized `StoredIdempotencyRecord` as public output.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct StoredIdempotencyRecord {
     scope: IdempotencyScope,
@@ -269,6 +311,7 @@ impl StoredIdempotencyRecord {
         &self.scope
     }
 
+    /// Returns the raw key for durable storage comparison only.
     #[must_use]
     pub const fn key(&self) -> &IdempotencyKey {
         &self.key
@@ -303,7 +346,9 @@ pub enum IdempotencyReplayOutcome {
 pub struct IdempotencyService;
 
 impl IdempotencyService {
-    /// Compares an optional stored record with an incoming request fingerprint.
+    /// Compares a record already loaded by exact scope/key with an incoming
+    /// request fingerprint. Durable lookup and atomic persistence remain outside
+    /// Core.
     #[must_use]
     pub fn evaluate(
         existing: Option<&StoredIdempotencyRecord>,
@@ -388,7 +433,7 @@ fn append_canonical_json(value: &Value, output: &mut String) {
         }
         Value::Object(values) => {
             let mut entries: Vec<_> = values.iter().collect();
-            entries.sort_by_key(|(left_key, _)| *left_key);
+            entries.sort_by_key(|(key, _)| *key);
             output.push('{');
             for (index, (key, value)) in entries.iter().enumerate() {
                 if index > 0 {
@@ -416,10 +461,7 @@ fn validate_response_header_name(name: &str) -> Result<String, IdempotencyError>
     }
 
     let normalized = name.to_ascii_lowercase();
-    if matches!(
-        normalized.as_str(),
-        "authorization" | "cookie" | "proxy-authorization" | "set-cookie" | "x-api-key"
-    ) {
+    if is_unsafe_response_header(&normalized) {
         return Err(IdempotencyError::UnsafeResponseHeader);
     }
 
@@ -430,12 +472,35 @@ fn validate_response_header_value(value: &str) -> Result<(), IdempotencyError> {
     if value
         .as_bytes()
         .iter()
-        .any(|byte| matches!(*byte, b'\0' | b'\r' | b'\n') || *byte == 0x7f || *byte < b' ')
+        .any(|byte| !matches!(*byte, b' '..=b'~'))
     {
         return Err(IdempotencyError::UnsafeResponseHeader);
     }
 
     Ok(())
+}
+
+fn is_unsafe_response_header(normalized_name: &str) -> bool {
+    matches!(
+        normalized_name,
+        "authorization"
+            | "connection"
+            | "content-encoding"
+            | "content-length"
+            | "cookie"
+            | "idempotency-key"
+            | "keep-alive"
+            | "proxy-authenticate"
+            | "proxy-authorization"
+            | "set-cookie"
+            | "te"
+            | "trailer"
+            | "transfer-encoding"
+            | "upgrade"
+            | "x-api-key"
+            | "x-auth-token"
+            | "x-idempotency-key"
+    )
 }
 
 fn is_visible_header_byte(byte: u8) -> bool {
@@ -467,6 +532,37 @@ mod tests {
             fingerprint,
             response(),
         )
+    }
+
+    #[test]
+    fn idempotency_key_validation_covers_boundaries_and_controls() {
+        let max_key = "a".repeat(MAX_IDEMPOTENCY_KEY_LEN);
+        assert_eq!(IdempotencyKey::parse(&max_key).unwrap().as_str(), max_key);
+
+        for invalid in [
+            String::new(),
+            "contains space".to_owned(),
+            "bad\0key".to_owned(),
+            "bad\nkey".to_owned(),
+            "bad\tkey".to_owned(),
+            "bad\u{7f}key".to_owned(),
+            "ключ".to_owned(),
+            "a".repeat(MAX_IDEMPOTENCY_KEY_LEN + 1),
+        ] {
+            assert_eq!(
+                IdempotencyKey::parse(&invalid),
+                Err(IdempotencyError::InvalidKey)
+            );
+        }
+    }
+
+    #[test]
+    fn idempotency_key_formatting_is_always_redacted() {
+        let key = IdempotencyKey::parse("secret-retry-key").unwrap();
+
+        assert_eq!(key.to_string(), REDACTED_IDEMPOTENCY_KEY);
+        assert_eq!(format!("{key:?}"), REDACTED_IDEMPOTENCY_KEY);
+        assert!(!key.to_string().contains(key.as_str()));
     }
 
     #[test]
@@ -524,27 +620,18 @@ mod tests {
     }
 
     #[test]
-    fn invalid_key_is_rejected() {
-        assert_eq!(
-            IdempotencyKey::parse("").unwrap_err(),
-            IdempotencyError::InvalidKey
-        );
-        assert_eq!(
-            IdempotencyKey::parse("contains space").unwrap_err(),
-            IdempotencyError::InvalidKey
-        );
-        assert_eq!(
-            IdempotencyKey::parse("bad\0key").unwrap_err(),
-            IdempotencyError::InvalidKey
-        );
-        assert_eq!(
-            IdempotencyKey::parse(&"a".repeat(MAX_IDEMPOTENCY_KEY_LEN + 1)).unwrap_err(),
-            IdempotencyError::InvalidKey
-        );
+    fn invalid_key_errors_do_not_echo_key_material() {
+        let error = IdempotencyKey::parse("bad\0secret-key-material").unwrap_err();
+
+        assert_eq!(error.code(), "invalid_idempotency_key");
+        assert_eq!(error.message(), "idempotency key is invalid");
+        assert_eq!(error.to_string(), "idempotency key is invalid");
+        assert_eq!(serde_json::to_string(&error).unwrap(), r#""invalid_key""#);
+        assert!(!error.to_string().contains("secret-key-material"));
     }
 
     #[test]
-    fn stored_response_roundtrips_through_serde() {
+    fn stored_response_roundtrips_through_validating_serde() {
         let mut headers = BTreeMap::new();
         headers.insert("X-Revision-Id".to_owned(), "rev_124".to_owned());
         headers.insert("Content-Type".to_owned(), "application/json".to_owned());
@@ -564,29 +651,117 @@ mod tests {
     }
 
     #[test]
-    fn sensitive_headers_are_rejected() {
-        let mut headers = BTreeMap::new();
-        headers.insert("Authorization".to_owned(), "Bearer token".to_owned());
+    fn stored_response_status_and_deserialization_boundaries_are_validated() {
+        for invalid_status in [99, 100, 199, 600] {
+            let invalid = json!({
+                "status_code": invalid_status,
+                "headers": {},
+                "body": {"status": "bad"}
+            });
+            assert!(serde_json::from_value::<StoredIdempotencyResponse>(invalid).is_err());
+        }
 
+        assert!(StoredIdempotencyResponse::json(200, json!({})).is_ok());
+        assert!(StoredIdempotencyResponse::json(599, json!({})).is_ok());
+
+        let unsafe_header = json!({
+            "status_code": 200,
+            "headers": {"Authorization": "Bearer token"},
+            "body": {"status": "bad"}
+        });
+        assert!(serde_json::from_value::<StoredIdempotencyResponse>(unsafe_header).is_err());
+    }
+
+    #[test]
+    fn unsafe_or_ambiguous_headers_are_rejected() {
+        for name in [
+            "Authorization",
+            "Connection",
+            "Content-Encoding",
+            "Content-Length",
+            "Cookie",
+            "Idempotency-Key",
+            "Keep-Alive",
+            "Proxy-Authenticate",
+            "Set-Cookie",
+            "TE",
+            "Trailer",
+            "Transfer-Encoding",
+            "Upgrade",
+            "X-Api-Key",
+            "X-Auth-Token",
+        ] {
+            let mut headers = BTreeMap::new();
+            headers.insert(name.to_owned(), "secret".to_owned());
+            assert_eq!(
+                StoredIdempotencyResponse::new(200, json!({}), headers),
+                Err(IdempotencyError::UnsafeResponseHeader)
+            );
+        }
+
+        for value in ["rev_1\r\nInjected: yes", "ключ"] {
+            let mut headers = BTreeMap::new();
+            headers.insert("X-Revision-Id".to_owned(), value.to_owned());
+            assert_eq!(
+                StoredIdempotencyResponse::new(200, json!({}), headers),
+                Err(IdempotencyError::UnsafeResponseHeader)
+            );
+        }
+
+        let mut duplicate_after_normalization = BTreeMap::new();
+        duplicate_after_normalization.insert("ETag".to_owned(), "one".to_owned());
+        duplicate_after_normalization.insert("etag".to_owned(), "two".to_owned());
         assert_eq!(
-            StoredIdempotencyResponse::new(200, json!({}), headers).unwrap_err(),
-            IdempotencyError::UnsafeResponseHeader
+            StoredIdempotencyResponse::new(200, json!({}), duplicate_after_normalization),
+            Err(IdempotencyError::UnsafeResponseHeader)
         );
     }
 
     #[test]
-    fn canonical_json_metadata_is_key_order_independent() {
+    fn canonical_json_metadata_is_recursive_and_key_order_independent() {
         let left = RequestFingerprint::from_safe_json_metadata(&json!({
             "path": "a.md",
-            "method": "PUT",
-            "content_sha256": "sha256:abc"
+            "request": {
+                "method": "PUT",
+                "metadata": {"b": 2, "a": 1}
+            },
+            "parts": [1, 2, 3]
         }));
         let right = RequestFingerprint::from_safe_json_metadata(&json!({
-            "content_sha256": "sha256:abc",
-            "method": "PUT",
+            "parts": [1, 2, 3],
+            "request": {
+                "metadata": {"a": 1, "b": 2},
+                "method": "PUT"
+            },
+            "path": "a.md"
+        }));
+        let reordered_array = RequestFingerprint::from_safe_json_metadata(&json!({
+            "parts": [3, 2, 1],
+            "request": {
+                "metadata": {"a": 1, "b": 2},
+                "method": "PUT"
+            },
             "path": "a.md"
         }));
 
         assert_eq!(left, right);
+        assert_ne!(left, reordered_array);
+    }
+
+    #[test]
+    fn durable_record_roundtrip_preserves_comparison_fields() {
+        let fingerprint = RequestFingerprint::from_safe_json_metadata(&json!({
+            "method": "PUT",
+            "path": "Notes/a.md",
+            "content_sha256": "sha256:abc"
+        }));
+        let stored = record(fingerprint);
+        let serialized = serde_json::to_string(&stored).unwrap();
+        let decoded: StoredIdempotencyRecord = serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(decoded, stored);
+        assert_eq!(decoded.scope().adapter_id(), &adapter_id());
+        assert_eq!(decoded.key().as_str(), "iphone:iphone-anna:op-001");
+        assert_eq!(*decoded.request_fingerprint(), fingerprint);
     }
 }

@@ -1,12 +1,8 @@
 use super::*;
 use axum::{body::Body, http::Request};
 use haze_sync_api::auth::{AdapterPrincipal, AdapterRole};
-use haze_sync_storage::{
-    repositories::operation_log::OperationLogRepository,
-    test_support::connect_test_database_from_env,
-};
+use haze_sync_storage::repositories::operation_log::OperationLogRepository;
 use http_body_util::BodyExt as _;
-use serde_json::json;
 use sqlx::PgPool;
 use tower::ServiceExt as _;
 
@@ -133,8 +129,12 @@ async fn seed_conflict_fixture(
     .expect("revisions should seed");
 
     sqlx::query(
-        "update sync_objects set current_revision_id = $1 where object_id = $2; \
-         update sync_objects set current_revision_id = $3 where object_id = $4",
+        "update sync_objects \
+         set current_revision_id = case object_id \
+             when $2 then $1 \
+             when $4 then $3 \
+         end \
+         where object_id in ($2, $4)",
     )
     .bind(current_revision_id)
     .bind(current_object_id)
@@ -169,10 +169,14 @@ async fn seed_conflict_fixture(
 }
 
 #[tokio::test]
-async fn get_open_conflicts_without_storage_returns_safe_empty_dto() {
+async fn get_open_conflicts_without_storage_returns_safe_unavailable_error() {
     let (status, json) = request_json("GET", "/conflicts?status=open", Body::empty()).await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(json["conflicts"], json!([]));
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(json["error"]["code"], "internal_error");
+    let rendered = json.to_string();
+    assert!(!rendered.contains("postgres://"));
+    assert!(!rendered.contains("conflict_route_test_token"));
+    assert!(!rendered.contains("sqlx::Error"));
 }
 
 #[tokio::test]
@@ -224,24 +228,13 @@ fn deterministic_conflict_resolved_operation_id_is_safe() {
 #[tokio::test]
 async fn metadata_only_resolution_actions_persist_resolution_without_mutating_current_file_when_real_postgres_is_available(
 ) {
-    let Some(context) = connect_test_database_from_env()
-        .await
-        .expect("test database lookup should stay safe")
-    else {
+    let Some(database) = crate::application::test_db::acquire_optional().await else {
         return;
     };
-    context
-        .apply_migrations()
-        .await
-        .expect("migrations should apply");
 
     for action in ["accept_current", "keep_both", "mark_resolved"] {
-        context
-            .clean_storage_tables()
-            .await
-            .expect("tables should clean");
-
-        let pool = context.pool().clone();
+        database.reset().await;
+        let pool = database.pool().clone();
         let principal = principal();
         seed_adapter(&pool, principal.adapter_id(), "obsidian_plugin").await;
         let (original_path, conflict_path, current_revision_id) =
@@ -303,22 +296,11 @@ async fn metadata_only_resolution_actions_persist_resolution_without_mutating_cu
 #[tokio::test]
 async fn accept_conflict_stays_not_implemented_and_does_not_mutate_state_when_real_postgres_is_available(
 ) {
-    let Some(context) = connect_test_database_from_env()
-        .await
-        .expect("test database lookup should stay safe")
-    else {
+    let Some(database) = crate::application::test_db::acquire_optional().await else {
         return;
     };
-    context
-        .apply_migrations()
-        .await
-        .expect("migrations should apply");
-    context
-        .clean_storage_tables()
-        .await
-        .expect("tables should clean");
 
-    let pool = context.pool().clone();
+    let pool = database.pool().clone();
     let principal = principal();
     seed_adapter(&pool, principal.adapter_id(), "obsidian_plugin").await;
     let (original_path, _conflict_path, current_revision_id) =
@@ -362,22 +344,11 @@ async fn accept_conflict_stays_not_implemented_and_does_not_mutate_state_when_re
 
 #[tokio::test]
 async fn resolved_conflicts_cannot_be_resolved_twice_when_real_postgres_is_available() {
-    let Some(context) = connect_test_database_from_env()
-        .await
-        .expect("test database lookup should stay safe")
-    else {
+    let Some(database) = crate::application::test_db::acquire_optional().await else {
         return;
     };
-    context
-        .apply_migrations()
-        .await
-        .expect("migrations should apply");
-    context
-        .clean_storage_tables()
-        .await
-        .expect("tables should clean");
 
-    let pool = context.pool().clone();
+    let pool = database.pool().clone();
     let principal = principal();
     seed_adapter(&pool, principal.adapter_id(), "obsidian_plugin").await;
     seed_conflict_fixture(&pool, "conf_01JTWICE", "open").await;

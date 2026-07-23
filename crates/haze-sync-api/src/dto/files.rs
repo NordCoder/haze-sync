@@ -118,6 +118,10 @@ pub enum FileIgnoredReasonDto {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FileRejectedReasonDto {
+    /// Uploaded bytes did not match X-Content-SHA256.
+    HashMismatch,
+    /// Write could not prove a safe current base revision.
+    StaleBaseRevision,
     /// Path is intentionally ignored by sync policy.
     IgnoredPath,
     /// Request failed validation before Core apply semantics.
@@ -224,6 +228,14 @@ mod tests {
             reason: FileIgnoredReasonDto::SameContent,
             path: VaultPathDto::from("Projects/Haze/plan.md"),
         };
+        let hash_mismatch = PutFileResponse::Rejected {
+            reason: FileRejectedReasonDto::HashMismatch,
+            path: VaultPathDto::from("Projects/Haze/plan.md"),
+        };
+        let stale = PutFileResponse::Rejected {
+            reason: FileRejectedReasonDto::StaleBaseRevision,
+            path: VaultPathDto::from("Projects/Haze/plan.md"),
+        };
 
         assert!(serde_json::to_string(&accepted)
             .unwrap()
@@ -234,6 +246,12 @@ mod tests {
         assert!(serde_json::to_string(&ignored)
             .unwrap()
             .contains("same_content"));
+        assert!(serde_json::to_string(&hash_mismatch)
+            .unwrap()
+            .contains("hash_mismatch"));
+        assert!(serde_json::to_string(&stale)
+            .unwrap()
+            .contains("stale_base_revision"));
     }
 
     #[test]

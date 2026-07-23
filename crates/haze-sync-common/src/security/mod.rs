@@ -13,7 +13,10 @@ pub const REDACTED: &str = "[REDACTED]";
 ///
 /// The wrapped value is intentionally accessible only through explicitly named
 /// sensitive accessors. Formatting this type never prints the wrapped value.
-#[derive(Clone, Eq, Hash, PartialEq)]
+/// The type intentionally does not implement serialization, `std::hash::Hash`,
+/// or secret lifecycle behavior such as cryptographic hashing, verification,
+/// loading, persistence, or rotation.
+#[derive(Clone, Eq, PartialEq)]
 pub struct SecretString(String);
 
 impl SecretString {
@@ -80,7 +83,7 @@ mod tests {
 
         let formatted = format!("{secret:?}");
 
-        assert!(formatted.contains(REDACTED));
+        assert_eq!(formatted, format!("SecretString(\"{REDACTED}\")"));
         assert!(!formatted.contains(raw_value));
     }
 
@@ -93,5 +96,53 @@ mod tests {
 
         assert_eq!(formatted, REDACTED);
         assert!(!formatted.contains(raw_value));
+    }
+
+    #[test]
+    fn formatting_contexts_do_not_leak_wrapped_value() {
+        let raw_value = "fixture_token_like_value";
+        let secret = SecretString::new(raw_value);
+
+        let display_context = format!("secret={secret}");
+        let debug_context = format!("secret={secret:?}");
+        let alternate_debug_context = format!("secret={secret:#?}");
+
+        for formatted in [display_context, debug_context, alternate_debug_context] {
+            assert!(formatted.contains(REDACTED), "formatted={formatted:?}");
+            assert!(!formatted.contains(raw_value), "formatted={formatted:?}");
+        }
+    }
+
+    #[test]
+    fn cloned_secret_still_redacts_when_formatted() {
+        let raw_value = "fixture_clone_value";
+        let secret = SecretString::from(raw_value);
+        let cloned = secret.clone();
+
+        assert_eq!(cloned.as_sensitive_str(), raw_value);
+        assert_eq!(cloned.to_string(), REDACTED);
+        assert!(!format!("{cloned:?}").contains(raw_value));
+    }
+
+    #[test]
+    fn sensitive_accessors_are_explicit() {
+        let raw_value = "fixture_secret_value";
+        let secret = SecretString::from(raw_value);
+
+        assert_eq!(secret.as_sensitive_str(), raw_value);
+        assert!(!secret.is_empty());
+        assert_eq!(secret.into_sensitive_string(), raw_value);
+    }
+
+    #[test]
+    fn empty_secret_still_redacts_when_formatted() {
+        let secret = SecretString::from(String::new());
+
+        assert!(secret.is_empty());
+        assert_eq!(secret.to_string(), REDACTED);
+        assert_eq!(
+            format!("{secret:?}"),
+            format!("SecretString(\"{REDACTED}\")")
+        );
     }
 }

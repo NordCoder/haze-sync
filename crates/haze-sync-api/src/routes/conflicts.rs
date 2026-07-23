@@ -26,6 +26,9 @@ use crate::{
     },
 };
 
+/// Maximum accepted byte length for the only current conflict-list query value.
+pub const MAX_CONFLICT_STATUS_QUERY_BYTES: usize = 16;
+
 /// HTTP status code for invalid conflict-route requests.
 pub const HTTP_STATUS_BAD_REQUEST: u16 = 400;
 
@@ -38,7 +41,7 @@ pub const HTTP_STATUS_CONFLICT: u16 = 409;
 /// Parsed request for `GET /v1/conflicts?status=open`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConflictListRequest {
-    /// Optional status filter. W3-P4 supports `open` and rejects every unsupported value.
+    /// Optional status filter. The V1 contract supports `open` only.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<ConflictStatusDto>,
 }
@@ -83,7 +86,7 @@ pub struct ConflictListRouteResponse {
     pub conflicts: Vec<ConflictRouteSummaryDto>,
 }
 
-/// Public conflict summary for W3-P4 route contract helpers.
+/// Public conflict summary for route contract helpers.
 ///
 /// This route-level DTO includes both the original path and materialized conflict
 /// path explicitly, while preserving incoming/conflict revision metadata when it
@@ -248,11 +251,11 @@ pub fn resolved_conflict_response(
 pub enum ConflictsRouteErrorKind {
     /// `{conflict_id}` failed public identifier validation.
     InvalidConflictId,
-    /// `status` query value is unsupported by the W3-P4 contract.
+    /// `status` query value is unsupported by the V1 contract.
     UnsupportedStatus,
     /// Resolve request body did not match the expected public shape.
     InvalidResolvePayload,
-    /// Resolve request action is unsupported by the W3-P4 contract.
+    /// Resolve request action is unsupported by the V1 contract.
     UnsupportedResolution,
     /// Future service/storage code did not find the public conflict id.
     NotFound,
@@ -399,6 +402,9 @@ fn parse_status_query_value(
 ) -> Result<Option<ConflictStatusDto>, ConflictsRouteError> {
     match raw {
         None => Ok(None),
+        Some(value) if value.len() > MAX_CONFLICT_STATUS_QUERY_BYTES => {
+            Err(ConflictsRouteError::unsupported_status())
+        }
         Some("open") => Ok(Some(ConflictStatusDto::Open)),
         Some(_) => Err(ConflictsRouteError::unsupported_status()),
     }
@@ -418,4 +424,160 @@ fn detail(field: impl Into<String>, value: impl Into<String>) -> SafeErrorDetail
     let mut fields = BTreeMap::new();
     fields.insert(field.into(), vec![value.into()]);
     SafeErrorDetails::Map(fields)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn conflict_id(value: &str) -> ConflictId {
+        ConflictId::parse(value).unwrap()
+    }
+
+    fn revision_id(value: &str) -> RevisionId {
+        RevisionId::parse(value).unwrap()
+    }
+
+    fn vault_path(value: &str) -> VaultPath {
+        VaultPath::parse(value).unwrap()
+    }
+
+    fn adapter_id(value: &str) -> AdapterId {
+        AdapterId::parse(value).unwrap()
+    }
+
+    #[test]
+    fn conflict_list_query_accepts_open_and_rejects_unsupported_or_unbounded_values() {
+        let no_filter = parse_conflicts_query(ConflictListRequestParts { status: None }).unwrap();
+        assert_eq!(no_filter.status, None);
+        assert_eq!(no_filter.to_dto().status, None);
+
+        let open = parse_conflicts_query(ConflictListRequestParts {
+            status: Some("open"),
+        })
+        .unwrap();
+        assert_eq!(open.status, Some(ConflictStatusDto::Open));
+        assert_eq!(open.to_dto().status, Some(ConflictStatusDto::Open));
+
+        for unsupported in ["", "resolved", "ignored", "OPEN"] {
+            assert_eq!(
+                parse_conflicts_query(ConflictListRequestParts {
+                    status: Some(unsupported),
+                })
+                .unwrap_err()
+                .kind(),
+                ConflictsRouteErrorKind::UnsupportedStatus
+            );
+        }
+
+        let too_long = "x".repeat(MAX_CONFLICT_STATUS_QUERY_BYTES + 1);
+        let error = parse_conflicts_query(ConflictListRequestParts {
+            status: Some(&too_long),
+        })
+        .unwrap_err();
+        assert_eq!(error.kind(), ConflictsRouteErrorKind::UnsupportedStatus);
+        assert!(!serde_json::to_string(&error.error_response())
+            .unwrap()
+            .contains(&too_long));
+    }
+
+    #[test]
+    fn conflict_resolution_actions_parse_without_executing_resolution() {
+        for (raw, expected) in [
+            ("accept_current", ConflictResolutionDto::AcceptCurrent),
+            ("accept_conflict", ConflictResolutionDto::AcceptConflict),
+            ("keep_both", ConflictResolutionDto::KeepBoth),
+            ("mark_resolved", ConflictResolutionDto::MarkResolved),
+        ] {
+            let request = parse_resolve_conflict_request(ResolveConflictRequestParts {
+                conflict_id: "conf_01JAPI5",
+                resolution: Some(raw),
+                extra_fields: &[],
+            })
+            .unwrap();
+
+            assert_eq!(request.conflict_id, conflict_id("conf_01JAPI5"));
+            assert_eq!(request.resolution, expected.clone());
+            assert_eq!(request.to_dto().resolution, expected);
+        }
+    }
+
+    #[test]
+    fn conflict_resolution_rejects_unknown_actions_and_extra_body_fields_safely() {
+        let unsupported = parse_resolve_conflict_request(ResolveConflictRequestParts {
+            conflict_id: "conf_01JAPI5",
+            resolution: Some("incoming_wins"),
+            extra_fields: &[],
+        })
+        .unwrap_err();
+        assert_eq!(
+            unsupported.kind(),
+            ConflictsRouteErrorKind::UnsupportedResolution
+        );
+
+        let extra_fields = parse_resolve_conflict_request(ResolveConflictRequestParts {
+            conflict_id: "conf_01JAPI5",
+            resolution: Some("accept_current"),
+            extra_fields: &["raw_bytes", "provider_payload"],
+        })
+        .unwrap_err();
+        assert_eq!(
+            extra_fields.kind(),
+            ConflictsRouteErrorKind::InvalidResolvePayload
+        );
+
+        let json = serde_json::to_string(&extra_fields.error_response()).unwrap();
+        assert!(!json.contains("raw_bytes"));
+        assert!(!json.contains("provider_payload"));
+        assert!(!json.contains("request_body"));
+    }
+
+    #[test]
+    fn conflict_list_route_response_roundtrips_safe_public_fields() {
+        let response = conflict_list_response_from_parts(vec![ConflictRouteSummaryParts {
+            conflict_id: conflict_id("conf_01JAPI5"),
+            original_path: vault_path("Projects/Haze/plan.md"),
+            conflict_path: vault_path(
+                "_haze_conflicts/open/Projects/Haze/plan.conflict.obsidian.md",
+            ),
+            current_revision_id: revision_id("rev_current"),
+            conflict_revision_id: Some(revision_id("rev_conflict")),
+            incoming_revision_id: Some(revision_id("rev_incoming")),
+            source_adapter_id: adapter_id("obsidian-plugin"),
+            policy_applied: ConflictPolicyDto::PreserveBoth,
+            status: ConflictStatusDto::Open,
+            created_at: Some(TimestampDto::from("2026-07-10T08:00:00Z")),
+            updated_at: None,
+        }]);
+
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("Projects/Haze/plan.md"));
+        assert!(json.contains("_haze_conflicts/open/"));
+        assert!(json.contains("rev_current"));
+        assert!(json.contains("rev_conflict"));
+        assert!(json.contains("rev_incoming"));
+        assert!(!json.contains("raw_bytes"));
+        assert!(!json.contains("content_sha256"));
+        assert!(!json.contains("token"));
+        assert!(!json.contains("DATABASE_URL"));
+
+        let decoded: ConflictListRouteResponse = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded, response);
+    }
+
+    #[test]
+    fn resolved_response_roundtrips_public_action_and_sequence() {
+        let response = resolved_conflict_response(
+            conflict_id("conf_01JAPI5"),
+            ConflictResolutionDto::KeepBoth,
+            51,
+        );
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("resolved"));
+        assert!(json.contains("keep_both"));
+        assert!(!json.contains("raw_bytes"));
+
+        let decoded: ResolveConflictResponse = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded, response);
+    }
 }

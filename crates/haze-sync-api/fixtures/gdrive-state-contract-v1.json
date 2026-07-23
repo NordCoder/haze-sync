@@ -1,0 +1,161 @@
+{
+  "schema_version": 1,
+  "private_snapshot": {
+    "adapter_id": "gdrive-main",
+    "state_format_version": 1,
+    "state_version": 7,
+    "cursor": {
+      "state": "present",
+      "generation": 3,
+      "cursor": "synthetic-private-cursor-fixture"
+    },
+    "core_export_checkpoint": 19,
+    "last_operations": {
+      "import": "op_gdrive_import_01",
+      "export": "op_gdrive_export_01",
+      "provider_mutation": "op_gdrive_provider_01"
+    },
+    "mappings": [
+      {
+        "path": "Notes/alpha.md",
+        "drive_file_id": "drive-file-fixture-01",
+        "drive_parent_id": "drive-parent-fixture-01",
+        "drive_name": "alpha.md",
+        "mime_type": "text/markdown",
+        "md5_checksum": "0123456789abcdef0123456789abcdef",
+        "head_revision_id": "drive-revision-fixture-01",
+        "drive_version": "drive-version-fixture-07",
+        "drive_modified_time": "2026-07-15T12:00:00Z",
+        "core_object_id": "obj_gdrive_fixture_01",
+        "core_revision_id": "rev_gdrive_fixture_01",
+        "core_seq": 19,
+        "echo": {
+          "state": "confirmed",
+          "operation_id": "op_gdrive_export_01",
+          "provider_version": "drive-version-fixture-07"
+        },
+        "delete_candidate": {
+          "first_seen_at": "2026-07-15T12:01:00Z",
+          "last_seen_at": "2026-07-15T12:02:00Z",
+          "generation": 2,
+          "blocked": true,
+          "confirmation_audit_id": "audit-gdrive-fixture-01"
+        },
+        "last_imported_at": "2026-07-15T11:55:00Z",
+        "last_exported_at": "2026-07-15T12:00:00Z",
+        "last_seen_at": "2026-07-15T12:02:00Z"
+      }
+    ],
+    "next_after_path": "Notes/alpha.md"
+  },
+  "admin_summary": {
+    "adapter_id": "gdrive-main",
+    "state_format_version": 1,
+    "state_version": 7,
+    "cursor": {
+      "generation": 3,
+      "present": true
+    },
+    "core_export_checkpoint": 19,
+    "mapping_count": 1,
+    "echo_counts": {
+      "none": 0,
+      "pending": 0,
+      "confirmed": 1
+    },
+    "delete_candidates": {
+      "total": 1,
+      "blocked": 1
+    },
+    "last_operation_presence": {
+      "import": true,
+      "export": true,
+      "provider_mutation": true
+    }
+  },
+  "commit_request_without_cursor_advance": {
+    "expected_state_version": 7,
+    "cursor": {
+      "expected_generation": 3
+    },
+    "core_export_checkpoint": 19,
+    "mapping": {
+      "path": "Notes/alpha.md",
+      "drive_file_id": "drive-file-fixture-01",
+      "drive_version": "drive-version-fixture-07",
+      "core_revision_id": "rev_gdrive_fixture_01",
+      "core_seq": 19,
+      "echo": {
+        "state": "confirmed",
+        "operation_id": "op_gdrive_export_01",
+        "provider_version": "drive-version-fixture-07"
+      },
+      "last_seen_at": "2026-07-15T12:02:00Z"
+    },
+    "operation": {
+      "operation_id": "op_gdrive_commit_01",
+      "kind": "export",
+      "facts_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "mapping_path": "Notes/alpha.md",
+      "core_seq": 19,
+      "drive_version": "drive-version-fixture-07"
+    }
+  },
+  "commit_outcomes": [
+    {
+      "status": "committed",
+      "state_version": 8,
+      "cursor_generation": 3,
+      "core_export_checkpoint": 19
+    },
+    {
+      "status": "replayed",
+      "state_version": 8
+    },
+    { "status": "stale_state" },
+    { "status": "cursor_regression" },
+    { "status": "cursor_gap" },
+    { "status": "mapping_conflict" },
+    { "status": "idempotency_conflict" },
+    { "status": "validation_failed" }
+  ],
+  "vocabulary": {
+    "echo_states": [
+      "none",
+      "pending",
+      "confirmed"
+    ],
+    "operation_kinds": [
+      "import",
+      "export",
+      "provider_mutation",
+      "cursor_checkpoint",
+      "delete_candidate"
+    ],
+    "commit_statuses": [
+      "committed",
+      "replayed",
+      "stale_state",
+      "cursor_regression",
+      "cursor_gap",
+      "mapping_conflict",
+      "idempotency_conflict",
+      "validation_failed"
+    ],
+    "error_codes": [
+      "unauthorized",
+      "forbidden",
+      "adapter_not_found",
+      "state_version_mismatch",
+      "invalid_cursor_state",
+      "stale_state",
+      "cursor_regression",
+      "cursor_gap",
+      "mapping_conflict",
+      "idempotency_conflict",
+      "validation_error",
+      "unavailable",
+      "internal"
+    ]
+  }
+}

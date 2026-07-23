@@ -1,0 +1,75 @@
+name: Integration Node CI
+
+on:
+  pull_request:
+    branches:
+      - main
+      - integration/v1-fan-in
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-node-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  obsidian-node:
+    name: Obsidian Node integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      HAZE_COMPONENT: integration-obsidian
+      HAZE_WORKFLOW_SLUG: integration-node-ci
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Resolve candidate context
+        shell: bash
+        run: |
+          branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          echo "HAZE_COMPONENT_BRANCH=${branch}" >> "$GITHUB_ENV"
+          echo "HAZE_HEAD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Install locked dependencies
+        shell: bash
+        run: bash .github/scripts/ci-run.sh node-install npm ci
+
+      - name: Run Obsidian tests
+        shell: bash
+        run: bash .github/scripts/ci-run.sh obsidian-test npm test --workspace haze-obsidian-plugin
+
+      - name: Typecheck Obsidian plugin
+        shell: bash
+        run: bash .github/scripts/ci-run.sh obsidian-typecheck npm run typecheck --workspace haze-obsidian-plugin
+
+      - name: Build Obsidian plugin
+        shell: bash
+        run: bash .github/scripts/ci-run.sh obsidian-build npm run build --workspace haze-obsidian-plugin
+
+      - name: Finalize CI diagnostics
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: bash .github/scripts/ci-finalize.sh
+
+      - name: Upload CI diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-diag__component-integration-obsidian__wf-integration-node-ci__run-${{ github.run_id }}__attempt-${{ github.run_attempt }}
+          path: ci-diagnostics/
+          retention-days: 1
+          compression-level: 9
+          if-no-files-found: ignore
+          include-hidden-files: false

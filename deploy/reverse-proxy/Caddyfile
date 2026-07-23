@@ -1,0 +1,33 @@
+# Production-style placeholder only.
+# Replace sync.example.com before starting Caddy.
+# Do not commit certificate files, private keys, bearer tokens, or credentials.
+# Requires Caddy 2.10+ for the request_body directive.
+
+sync.example.com {
+	# Public clients do not need dependency-state details. Caddy may still use
+	# the upstream /health endpoint for its own loopback active health check.
+	@internal_health path /health /ready
+	respond @internal_health 404
+
+	# Keep the proxy limit aligned with the accepted Server/API contract:
+	# 52,428,800 bytes (50 MiB). Do not lower or raise this independently.
+	request_body {
+		max_size 52428800
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	# The Haze Sync Server listener must remain loopback-only or otherwise
+	# unreachable from untrusted networks.
+	reverse_proxy 127.0.0.1:8080 {
+		health_uri /health
+		health_status 200
+		health_interval 30s
+		health_timeout 5s
+	}
+}

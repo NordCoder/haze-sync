@@ -3,7 +3,7 @@
   "name": "Haze Sync",
   "version": "0.1.0",
   "minAppVersion": "1.5.0",
-  "description": "Minimal Haze Sync plugin shell for Obsidian.",
+  "description": "Obsidian client adapter for guarded synchronization through Haze Sync Server.",
   "author": "Haze Sync contributors",
   "isDesktopOnly": false
 }
