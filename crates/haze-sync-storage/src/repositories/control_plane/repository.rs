@@ -2,6 +2,9 @@ include!("repository/base.rs");
 include!("repository/maintenance.rs");
 include!("repository/inventory_controls.rs");
 
+// Superseded incomplete evidence writers stay compiled only as private
+// compatibility implementation; the public boundary exports complete APIs.
+#[allow(dead_code)]
 mod effective_records {
     use super::*;
 
@@ -10,6 +13,8 @@ mod effective_records {
 
 pub use effective_records::{lock_adapter_effective_control, upsert_adapter_effective_control};
 
+// The former blocking issuance path remains private for regression coverage.
+#[allow(dead_code)]
 mod credential_records {
     use super::*;
 
