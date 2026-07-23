@@ -19,6 +19,7 @@ const CONTROL_MIGRATIONS: &[&str] = &[
     include_str!("../../../../../../migrations/0012_operational_control_storage.sql"),
     include_str!("../../../../../../migrations/0013_operational_jobs_audit.sql"),
     include_str!("../../../../../../migrations/0014_gdrive_runtime_authority.sql"),
+    include_str!("../../../../../../migrations/0015_qa_contract_corrections.sql"),
 ];
 
 async fn begin_isolated_schema(pool: &PgPool) -> Transaction<'_, Postgres> {
