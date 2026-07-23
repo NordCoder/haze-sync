@@ -122,6 +122,7 @@ pub const STORAGE_TEST_MIGRATIONS: &[TestMigration] = &[
     migration!("0009_audit_events.sql"),
     migration!("0010_worktree_durable_state.sql"),
     migration!("0011_gdrive_durable_state.sql"),
+    migration!("0012_operational_control_storage.sql"),
 ];
 
 pub struct PostgresTestContext {
@@ -249,9 +250,19 @@ async fn prepare_storage_schema(
     } else if same_table_set(&tables, table_names::ALL) {
         validate_current_schema(transaction).await?;
         return Ok(());
+    } else if same_table_set(&tables, table_names::PRE_CONTROL_P12) {
+        validate_stage10_schema(transaction).await?;
+        execute_named_migrations(transaction, &["0012_operational_control_storage.sql"]).await?;
     } else if same_table_set(&tables, table_names::PRE_STOR_GDA_P11) {
         validate_pre_gdrive_schema(transaction).await?;
-        execute_named_migrations(transaction, &["0011_gdrive_durable_state.sql"]).await?;
+        execute_named_migrations(
+            transaction,
+            &[
+                "0011_gdrive_durable_state.sql",
+                "0012_operational_control_storage.sql",
+            ],
+        )
+        .await?;
     } else if same_table_set(&tables, table_names::PRE_STOR_P10) {
         validate_table_columns(
             transaction,
@@ -267,6 +278,7 @@ async fn prepare_storage_schema(
             &[
                 "0010_worktree_durable_state.sql",
                 "0011_gdrive_durable_state.sql",
+                "0012_operational_control_storage.sql",
             ],
         )
         .await?;
@@ -317,13 +329,9 @@ async fn validate_pre_gdrive_schema(
     Ok(())
 }
 
-async fn validate_current_schema(
+async fn validate_stage10_schema(
     transaction: &mut Transaction<'_, Postgres>,
 ) -> PostgresTestResult<()> {
-    let tables = owned_storage_table_names(transaction).await?;
-    if !same_table_set(&tables, table_names::ALL) {
-        return Err(TestSupportError::IncompleteStorageSchema);
-    }
     validate_pre_gdrive_schema(transaction).await?;
     validate_table_columns(
         transaction,
@@ -355,6 +363,46 @@ async fn validate_current_schema(
         }
     }
     Ok(())
+}
+
+async fn validate_current_schema(
+    transaction: &mut Transaction<'_, Postgres>,
+) -> PostgresTestResult<()> {
+    let tables = owned_storage_table_names(transaction).await?;
+    if !same_table_set(&tables, table_names::ALL) {
+        return Err(TestSupportError::IncompleteStorageSchema);
+    }
+    validate_stage10_schema(transaction).await?;
+    validate_control_singletons(transaction).await
+}
+
+async fn validate_control_singletons(
+    transaction: &mut Transaction<'_, Postgres>,
+) -> PostgresTestResult<()> {
+    let maintenance_count = sqlx::query_scalar::<_, i64>(
+        "select count(*)::bigint from maintenance_control where singleton_id = 1",
+    )
+    .fetch_one(&mut **transaction)
+    .await
+    .map_err(|_| TestSupportError::DatabaseOperationFailed)?;
+    let inventory_count = sqlx::query_scalar::<_, i64>(
+        "select count(*)::bigint from adapter_inventory_state where singleton_id = 1",
+    )
+    .fetch_one(&mut **transaction)
+    .await
+    .map_err(|_| TestSupportError::DatabaseOperationFailed)?;
+    let global_slot_count = sqlx::query_scalar::<_, i64>(
+        "select count(*)::bigint from operational_execution_slots \
+         where slot_id = 'global-destructive' and slot_kind = 'global_destructive'",
+    )
+    .fetch_one(&mut **transaction)
+    .await
+    .map_err(|_| TestSupportError::DatabaseOperationFailed)?;
+    if maintenance_count == 1 && inventory_count == 1 && global_slot_count == 1 {
+        Ok(())
+    } else {
+        Err(TestSupportError::IncompleteStorageSchema)
+    }
 }
 
 async fn validate_worktree_schema(
@@ -468,22 +516,11 @@ fn owned_storage_table_names_sql() -> String {
 
 fn clean_storage_tables_sql() -> String {
     format!(
-        "truncate table {gdrive_operations}, {gdrive_durable_items}, {gdrive_adapter_state}, {audit_events}, {worktree_state}, {worktree_instances}, {gdrive_mapping}, {idempotency_records}, {adapter_cursors}, {operation_log}, {conflicts}, {tombstones}, {file_revisions}, {sync_objects}, {content_blobs}, {sync_adapters} restart identity cascade",
-        gdrive_operations = table_names::GDRIVE_OPERATIONS,
-        gdrive_durable_items = table_names::GDRIVE_DURABLE_ITEMS,
-        gdrive_adapter_state = table_names::GDRIVE_ADAPTER_STATE,
-        audit_events = table_names::AUDIT_EVENTS,
-        worktree_state = table_names::WORKTREE_STATE,
-        worktree_instances = table_names::WORKTREE_INSTANCES,
-        gdrive_mapping = table_names::GDRIVE_MAPPING,
-        idempotency_records = table_names::IDEMPOTENCY_RECORDS,
-        adapter_cursors = table_names::ADAPTER_CURSORS,
-        operation_log = table_names::OPERATION_LOG,
-        conflicts = table_names::CONFLICTS,
-        tombstones = table_names::TOMBSTONES,
-        file_revisions = table_names::FILE_REVISIONS,
-        sync_objects = table_names::SYNC_OBJECTS,
-        content_blobs = table_names::CONTENT_BLOBS,
-        sync_adapters = table_names::SYNC_ADAPTERS,
+        "truncate table {tables} restart identity cascade; \
+         insert into maintenance_control (singleton_id) values (1); \
+         insert into adapter_inventory_state (singleton_id) values (1); \
+         insert into operational_execution_slots (slot_id, slot_kind) \
+         values ('global-destructive', 'global_destructive')",
+        tables = table_names::ALL.join(", "),
     )
 }
