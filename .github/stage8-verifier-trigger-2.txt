@@ -1,1 +1,2 @@
 Temporary Stage 8 verification trigger after the bounded topology fix. Removed from the final tree.
+Synchronize after GitHub calculated the PR merge commit.
