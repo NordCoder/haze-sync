@@ -4,6 +4,7 @@ mod config_loader;
 mod doctor;
 mod doctor_live;
 mod http_transport;
+mod operations;
 mod output;
 mod server_api;
 mod worktree_api;
@@ -13,7 +14,7 @@ mod worktree_api;
 const _: usize = std::mem::size_of::<worktree_api::DeferredWorktreeClient>();
 
 use commands::{AdaptersCommand, CliCommand, HelpTopic, WorktreeCommand};
-use config::CliConfig;
+use config::{CliConfig, OutputFormat};
 use config_loader::{load_process_config, split_global_options, ProcessTokenProvider};
 use doctor::{DoctorCommand, DoctorMode};
 use http_transport::AuthenticatedHttpClient;
@@ -30,31 +31,88 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
-    let invocation = match split_global_options(args) {
+    let raw_args = args
+        .into_iter()
+        .map(|argument| argument.as_ref().to_owned())
+        .collect::<Vec<_>>();
+    let invocation = match split_global_options(raw_args.iter().map(String::as_str)) {
         Ok(invocation) => invocation,
         Err(error) => return CliOutput::usage_error(format!("{error}\n\n{}", usage())),
     };
+    let explicit_output = match explicit_output_format(&raw_args) {
+        Ok(format) => format,
+        Err(error) => {
+            return CliOutput::runtime_error(format!("configuration error: {error}"));
+        }
+    };
     let command = match commands::parse_cli(invocation.command_args.iter().map(String::as_str)) {
         Ok(command) => command,
-        Err(error) => return CliOutput::usage_error(format!("{error}\n\n{}", usage())),
+        Err(error) => {
+            return CliOutput::usage_error(format!("{error}\n\n{}", usage()))
+                .formatted(explicit_output.unwrap_or(OutputFormat::Human), "unknown");
+        }
     };
+    let command_name = command.command_name();
 
     if let CliCommand::Help(topic) = command {
         return CliOutput::success(match topic {
             HelpTopic::Root => usage(),
             HelpTopic::Doctor => doctor::usage().to_owned(),
-        });
+        })
+        .formatted(explicit_output.unwrap_or(OutputFormat::Human), command_name);
     }
 
     if command_is_offline(&command) {
-        return render_command(command, CliConfig::default());
+        let format = explicit_output.unwrap_or(OutputFormat::Human);
+        let config = CliConfig {
+            output_format: format,
+            ..CliConfig::default()
+        };
+        return render_command(command, config).formatted(format, command_name);
     }
 
     let config = match load_process_config(&invocation.overrides) {
         Ok(config) => config,
-        Err(error) => return CliOutput::runtime_error(format!("configuration error: {error}")),
+        Err(error) => {
+            return CliOutput::runtime_error(format!("configuration error: {error}"))
+                .formatted(explicit_output.unwrap_or(OutputFormat::Human), command_name);
+        }
     };
-    render_command(command, config)
+    let format = config.output_format;
+    render_command(command, config).formatted(format, command_name)
+}
+
+fn explicit_output_format(args: &[String]) -> Result<Option<OutputFormat>, config::ConfigError> {
+    let mut index = 1;
+    while index < args.len() {
+        let argument = &args[index];
+        if argument == "--output" {
+            return args
+                .get(index + 1)
+                .map(String::as_str)
+                .map(OutputFormat::parse)
+                .transpose();
+        }
+        if let Some(value) = argument.strip_prefix("--output=") {
+            return OutputFormat::parse(value).map(Some);
+        }
+        if matches!(
+            argument.as_str(),
+            "--config" | "--profile" | "--server-url" | "--token-source"
+        ) {
+            index += 2;
+            continue;
+        }
+        if ["--config=", "--profile=", "--server-url=", "--token-source="]
+            .into_iter()
+            .any(|prefix| argument.starts_with(prefix))
+        {
+            index += 1;
+            continue;
+        }
+        break;
+    }
+    Ok(None)
 }
 
 fn command_is_offline(command: &CliCommand) -> bool {
@@ -66,7 +124,7 @@ fn command_is_offline(command: &CliCommand) -> bool {
             mode: ReadCommandMode::Offline,
         }) | CliCommand::Doctor(DoctorCommand {
             mode: DoctorMode::Offline,
-        })
+        }) | CliCommand::OperationalPlan(_)
     )
 }
 
@@ -95,6 +153,8 @@ fn render_command(command: CliCommand, config: CliConfig) -> CliOutput {
         CliCommand::Worktree(WorktreeCommand::SyncOnce) => {
             worktree_api::render_worktree_sync_once(&config, &client)
         }
+        CliCommand::Preflight => operations::render_preflight(&config, &client),
+        CliCommand::OperationalPlan(plan) => operations::render_plan(plan),
     }
 }
 
@@ -222,5 +282,56 @@ mod tests {
             .stdout
             .contains("usage: haze-sync doctor [--offline]"));
         assert!(output.stdout.contains("haze-sync doctor --live"));
+    }
+
+    #[test]
+    fn preflight_requires_live_configuration() {
+        let output = run(["haze-sync", "preflight"]);
+        assert_eq!(output.exit_code, CliExitCode::RuntimeError);
+        assert!(output.stdout.contains("preflight: not_run"));
+        assert!(output.stderr.contains("server URL is not configured"));
+    }
+
+    #[test]
+    fn plans_support_explicit_stable_json_without_loading_config() {
+        let output = run([
+            "haze-sync",
+            "--config",
+            "/definitely/not/read/for/plan",
+            "--output",
+            "json",
+            "recovery",
+            "plan",
+        ]);
+        assert_eq!(output.exit_code, CliExitCode::Success);
+        assert!(output.stderr.is_empty());
+        let json: serde_json::Value = serde_json::from_str(&output.stdout).unwrap();
+        assert_eq!(json["schema"], "haze-sync.cli.output.v1");
+        assert_eq!(json["command"], "recovery plan");
+        assert_eq!(json["ok"], true);
+        assert_eq!(json["exit_code"], 0);
+        assert!(json["stdout"].as_str().unwrap().contains("writes: none"));
+    }
+
+    #[test]
+    fn parse_errors_use_json_when_explicitly_selected() {
+        let output = run([
+            "haze-sync",
+            "--output",
+            "json",
+            "rollout",
+            "plan",
+            "--force",
+        ]);
+        assert_eq!(output.exit_code, CliExitCode::UsageError);
+        assert!(output.stderr.is_empty());
+        let json: serde_json::Value = serde_json::from_str(&output.stdout).unwrap();
+        assert_eq!(json["command"], "unknown");
+        assert_eq!(json["ok"], false);
+        assert_eq!(json["exit_code"], 2);
+        assert!(json["stderr"]
+            .as_str()
+            .unwrap()
+            .contains("unexpected argument"));
     }
 }

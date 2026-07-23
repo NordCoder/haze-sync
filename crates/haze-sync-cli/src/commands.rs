@@ -6,6 +6,7 @@
 
 use crate::{
     doctor::{self, DoctorCliCommand, DoctorCommand, DoctorParseError},
+    operations::OperationalPlan,
     server_api::ReadCommandMode,
 };
 use std::fmt;
@@ -17,6 +18,8 @@ pub enum CliCommand {
     Adapters(AdaptersCommand),
     Doctor(DoctorCommand),
     Worktree(WorktreeCommand),
+    Preflight,
+    OperationalPlan(OperationalPlan),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -48,6 +51,8 @@ pub enum CliParseError {
     UnknownAdaptersCommand,
     MissingWorktreeCommand,
     UnknownWorktreeCommand,
+    MissingPlanCommand,
+    UnknownPlanCommand,
     UnexpectedArgument,
     Doctor(DoctorParseError),
 }
@@ -64,6 +69,8 @@ impl fmt::Display for CliParseError {
                 formatter.write_str("missing worktree command: expected status or sync-once")
             }
             Self::UnknownWorktreeCommand => formatter.write_str("unknown worktree command"),
+            Self::MissingPlanCommand => formatter.write_str("missing plan command: expected plan"),
+            Self::UnknownPlanCommand => formatter.write_str("unknown plan command"),
             Self::UnexpectedArgument => formatter.write_str("unexpected argument"),
             Self::Doctor(error) => write!(formatter, "{error}"),
         }
@@ -72,9 +79,29 @@ impl fmt::Display for CliParseError {
 
 impl std::error::Error for CliParseError {}
 
+impl CliCommand {
+    #[must_use]
+    pub const fn command_name(&self) -> &'static str {
+        match self {
+            Self::Help(_) => "help",
+            Self::Status(_) => "status",
+            Self::Adapters(_) => "adapters list",
+            Self::Doctor(_) => "doctor",
+            Self::Worktree(WorktreeCommand::Status) => "worktree status",
+            Self::Worktree(WorktreeCommand::SyncOnce) => "worktree sync-once",
+            Self::Preflight => "preflight",
+            Self::OperationalPlan(plan) => plan.command_name(),
+        }
+    }
+}
+
 #[must_use]
 pub const fn usage() -> &'static str {
-    "usage: haze-sync <command>\n\ncommands:\n  status [--offline]        read-only server status summary\n  adapters list [--offline] read-only adapter summary\n  doctor [--offline]        read-only offline doctor summary\n  doctor --live             read-only Server health/readiness/status doctor\n  worktree status           read hosted Worktree runtime status\n  worktree sync-once        request one bounded server-owned DryRun cycle"
+    "usage: haze-sync <command>\n\ncommands:\n  status [--offline]        read-only server status summary\n  adapters list [--offline] read-only adapter summary\n  doctor [--offline]        read-only offline doctor summary\n  doctor --live             read-only Server health/readiness/status doctor\n  worktree status           read hosted Worktree runtime status\n  worktree sync-once        request one bounded server-owned DryRun cycle
+  preflight                 live read-only operational readiness gate
+  bootstrap plan            dry-run trusted-source bootstrap checklist
+  recovery plan             dry-run backup/restore recovery checklist
+  rollout plan              dry-run staged adapter rollout checklist"
 }
 
 pub fn parse_cli<I, S>(args: I) -> Result<CliCommand, CliParseError>
@@ -96,6 +123,13 @@ where
         "adapters" => parse_adapters_command(args),
         "doctor" => parse_doctor_command(args),
         "worktree" => parse_worktree_command(args),
+        "preflight" => {
+            reject_trailing(args)?;
+            Ok(CliCommand::Preflight)
+        },
+        "bootstrap" => parse_plan_command(args, OperationalPlan::Bootstrap),
+        "recovery" => parse_plan_command(args, OperationalPlan::Recovery),
+        "rollout" => parse_plan_command(args, OperationalPlan::Rollout),
         _ => Err(CliParseError::UnknownCommand),
     }
 }
@@ -148,6 +182,19 @@ where
     };
     reject_trailing(args)?;
     Ok(CliCommand::Worktree(command))
+}
+
+fn parse_plan_command<I, S>(mut args: I, plan: OperationalPlan) -> Result<CliCommand, CliParseError>
+where
+    I: Iterator<Item = S>,
+    S: AsRef<str>,
+{
+    let command = next_argument(&mut args).ok_or(CliParseError::MissingPlanCommand)?;
+    if command != "plan" {
+        return Err(CliParseError::UnknownPlanCommand);
+    }
+    reject_trailing(args)?;
+    Ok(CliCommand::OperationalPlan(plan))
 }
 
 fn parse_read_mode<I, S>(args: I) -> Result<ReadCommandMode, CliParseError>
@@ -319,6 +366,43 @@ mod tests {
             assert_eq!(error, "unexpected argument");
             assert!(!error.contains(private));
         }
+    }
+
+    #[test]
+    fn operational_commands_parse_and_are_documented() {
+        assert_eq!(parse_cli(["haze-sync", "preflight"]).unwrap(), CliCommand::Preflight);
+        assert_eq!(
+            parse_cli(["haze-sync", "bootstrap", "plan"]).unwrap(),
+            CliCommand::OperationalPlan(OperationalPlan::Bootstrap)
+        );
+        assert_eq!(
+            parse_cli(["haze-sync", "recovery", "plan"]).unwrap(),
+            CliCommand::OperationalPlan(OperationalPlan::Recovery)
+        );
+        assert_eq!(
+            parse_cli(["haze-sync", "rollout", "plan"]).unwrap(),
+            CliCommand::OperationalPlan(OperationalPlan::Rollout)
+        );
+        assert!(usage().contains("preflight"));
+        assert!(usage().contains("bootstrap plan"));
+        assert!(usage().contains("recovery plan"));
+        assert!(usage().contains("rollout plan"));
+    }
+
+    #[test]
+    fn operational_plan_parser_is_bounded() {
+        assert_eq!(
+            parse_cli(["haze-sync", "bootstrap"]).unwrap_err(),
+            CliParseError::MissingPlanCommand
+        );
+        assert_eq!(
+            parse_cli(["haze-sync", "recovery", "apply"]).unwrap_err(),
+            CliParseError::UnknownPlanCommand
+        );
+        assert_eq!(
+            parse_cli(["haze-sync", "rollout", "plan", "--force"]).unwrap_err(),
+            CliParseError::UnexpectedArgument
+        );
     }
 
     #[test]
