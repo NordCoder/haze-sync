@@ -64,8 +64,10 @@ where
 
     if command_is_offline(&command) {
         let format = explicit_output.unwrap_or(OutputFormat::Human);
-        let mut config = CliConfig::default();
-        config.output_format = format;
+        let config = CliConfig {
+            output_format: format,
+            ..CliConfig::default()
+        };
         return render_command(command, config).formatted(format, command_name);
     }
 
@@ -327,6 +329,9 @@ mod tests {
         assert_eq!(json["command"], "unknown");
         assert_eq!(json["ok"], false);
         assert_eq!(json["exit_code"], 2);
-        assert!(json["stderr"].as_str().unwrap().contains("unexpected argument"));
+        assert!(json["stderr"]
+            .as_str()
+            .unwrap()
+            .contains("unexpected argument"));
     }
 }
