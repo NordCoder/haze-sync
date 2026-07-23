@@ -7,7 +7,7 @@
 //! planning/apply boundaries, conservative delete-candidate guardrails, OAuth
 //! credential/token handling, and a bounded mode-aware HTTP client for
 //! Server-owned durable state.
-//! Long-running runtime composition remains deferred.
+//! The long-running scheduler is implemented; concrete mutation-cycle composition remains fail-closed until its dedicated integration is published.
 
 pub mod auth;
 pub mod change_feed;
@@ -81,7 +81,13 @@ pub use google_http::{
 };
 pub use hash::ContentSha256;
 pub use identity::{AdapterIdentity, AdapterIdentitySource, ENV_ADAPTER_ID};
-pub use runtime::{AdapterRuntime, RuntimeState, StartupStatus};
+pub use runtime::{
+    AdapterRuntime, GuardedProductionCycleExecutor, RuntimeCycleContext, RuntimeCycleError,
+    RuntimeCycleErrorCategory, RuntimeCycleExecutor, RuntimeCycleKind, RuntimeCycleOutcome,
+    RuntimeCycleStatistics, RuntimeLoopError, RuntimeLoopOptions, RuntimeLoopSummary,
+    RuntimeResumeState, RuntimeSleeper, RuntimeState, ShutdownSignal, StartupStatus,
+    ThreadRuntimeSleeper,
+};
 pub use scan::{
     plan_full_scan, CoreUploadRequest, DeleteCandidatePlan, FullScanError, FullScanInput,
     FullScanPlan, ImportChangeKind, ImportExecution, PlannedImport, ScanSkipReason, SkippedImport,
