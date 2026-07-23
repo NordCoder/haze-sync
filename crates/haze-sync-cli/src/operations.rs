@@ -44,12 +44,17 @@ where
     }
 
     let doctor = doctor_live::render_live_doctor(config, client);
-    let adapters = server_api::render_adapters_command(config, ReadCommandMode::Auto, client);
+    let adapters =
+        server_api::render_adapters_command(config, ReadCommandMode::Auto, client);
     let worktree_status = worktree_api::render_worktree_status(config, client);
     let worktree = if worktree_status.exit_code == CliExitCode::Success
-        && worktree_status.stdout.contains("worktree readiness: ready")
+        && worktree_status
+            .stdout
+            .contains("worktree readiness: ready")
         && worktree_status.stdout.contains("cycles failed: 0")
-        && !worktree_status.stdout.contains("worktree lifecycle: failed")
+        && !worktree_status
+            .stdout
+            .contains("worktree lifecycle: failed")
     {
         worktree_status
     } else if worktree_status.exit_code == CliExitCode::Success {
@@ -97,7 +102,7 @@ where
 
 fn render_section_stdout(output: &CliOutput) -> &str {
     if output.stdout.is_empty() {
-        "not_availble"
+        "not_available"
     } else {
         output.stdout.as_str()
     }
@@ -125,18 +130,22 @@ mod tests {
     use crate::{
         config::{OutputFormat, ProfileName, ServerUrl, TokenSource},
         doctor_live::{
-            HealthSummary, ReadinessComponentState, ReadinessOverallStatus, ReadinessSummary,
+            HealthSummary, ReadinessComponentState, ReadinessOverallStatus,
+            ReadinessSummary,
         },
         server_api::{
-            AdapterList, DependencyReadinessState, PauseStatusSummary, ServerReadError,
-            ServerStatus, StatusSummary,
+            AdapterList, DependencyReadinessState, PauseStatusSummary,
+            ServerReadError, ServerStatus, StatusSummary,
         },
-        worktree_api::{WorktreeClientError, WorktreeStatusRequest, WorktreeSyncRequest},
+        worktree_api::{
+            WorktreeClientError, WorktreeStatusRequest, WorktreeSyncRequest,
+        },
     };
     use haze_sync_api::dto::worktree::{
-        WorktreeConfiguredMode, WorktreeHostLifecycle, WorktreeManualAvailability,
-        WorktreeReadiness, WorktreeReadinessReason, WorktreeStatusResponse,
-        WorktreeStatusSafeParts, WorktreeSyncOnceResponse,
+        WorktreeConfiguredMode, WorktreeHostLifecycle,
+        WorktreeManualAvailability, WorktreeReadiness, WorktreeReadinessReason,
+        WorktreeStatusResponse, WorktreeStatusSafeParts,
+        WorktreeSyncOnceResponse,
     };
 
     #[derive(Clone)]
@@ -146,7 +155,10 @@ mod tests {
     }
 
     impl DoctorReadClient for FakeClient {
-        fn fetch_health(&self, _server_url: &ServerUrl) -> Result<HealthSummary, ServerReadError> {
+        fn fetch_health(
+            &self,
+            _server_url: &ServerUrl,
+        ) -> Result<HealthSummary, ServerReadError> {
             if self.fail_doctor {
                 Err(ServerReadError::ServerUnavailable)
             } else {
@@ -167,13 +179,19 @@ mod tests {
             })
         }
 
-        fn fetch_status(&self, server_url: &ServerUrl) -> Result<StatusSummary, ServerReadError> {
+        fn fetch_status(
+            &self,
+            server_url: &ServerUrl,
+        ) -> Result<StatusSummary, ServerReadError> {
             ServerReadClient::fetch_status(self, server_url)
         }
     }
 
     impl ServerReadClient for FakeClient {
-        fn fetch_status(&self, _server_url: &ServerUrl) -> Result<StatusSummary, ServerReadError> {
+        fn fetch_status(
+            &self,
+            _server_url: &ServerUrl,
+        ) -> Result<StatusSummary, ServerReadError> {
             Ok(StatusSummary {
                 server_status: ServerStatus::Ready,
                 db_readiness_state: DependencyReadinessState::Ready,
@@ -184,7 +202,10 @@ mod tests {
             })
         }
 
-        fn fetch_adapters(&self, _server_url: &ServerUrl) -> Result<AdapterList, ServerReadError> {
+        fn fetch_adapters(
+            &self,
+            _server_url: &ServerUrl,
+        ) -> Result<AdapterList, ServerReadError> {
             Ok(AdapterList::empty())
         }
     }
@@ -197,33 +218,35 @@ mod tests {
         ) -> Result<(u16, WorktreeStatusResponse), WorktreeClientError> {
             Ok((
                 200,
-                WorktreeStatusResponse::from_safe_parts(WorktreeStatusSafeParts {
-                    configured_mode: WorktreeConfiguredMode::Disabled,
-                    host_lifecycle: if self.worktree_ready {
-                        WorktreeHostLifecycle::Disabled
-                    } else {
-                        WorktreeHostLifecycle::Failed
+                WorktreeStatusResponse::from_safe_parts(
+                    WorktreeStatusSafeParts {
+                        configured_mode: WorktreeConfiguredMode::Disabled,
+                        host_lifecycle: if self.worktree_ready {
+                            WorktreeHostLifecycle::Disabled
+                        } else {
+                            WorktreeHostLifecycle::Failed
+                        },
+                        readiness: if self.worktree_ready {
+                            WorktreeReadiness::Ready
+                        } else {
+                            WorktreeReadiness::NotReady
+                        },
+                        readiness_reason: if self.worktree_ready {
+                            WorktreeReadinessReason::DisabledInert
+                        } else {
+                            WorktreeReadinessReason::Failed
+                        },
+                        cycles_completed: 0,
+                        cycles_failed: u64::from(!self.worktree_ready),
+                        cycle_in_progress: false,
+                        pending_watcher_hints: 0,
+                        manual_availability: if self.worktree_ready {
+                            WorktreeManualAvailability::Unavailable
+                        } else {
+                            WorktreeManualAvailability::Failed
+                        },
                     },
-                    readiness: if self.worktree_ready {
-                        WorktreeReadiness::Ready
-                    } else {
-                        WorktreeReadiness::NotReady
-                    },
-                    readiness_reason: if self.worktree_ready {
-                        WorktreeReadinessReason::DisabledInert
-                    } else {
-                        WorktreeReadinessReason::Failed
-                    },
-                    cycles_completed: 0,
-                    cycles_failed: u64::from(!self.worktree_ready),
-                    cycle_in_progress: false,
-                    pending_watcher_hints: 0,
-                    manual_availability: if self.worktree_ready {
-                        WorktreeManualAvailability::Unavailable
-                    } else {
-                        WorktreeManualAvailability::Failed
-                    },
-                }),
+                ),
             ))
         }
 
@@ -231,7 +254,7 @@ mod tests {
             &self,
             _server_url: &ServerUrl,
             _request: WorktreeSyncRequest,
-        ) -> Result<( tu16, WorktreeSyncOnceResponse), WorktreeClientError> {
+        ) -> Result<(u16, WorktreeSyncOnceResponse), WorktreeClientError> {
             Err(WorktreeClientError::ServerUnavailable)
         }
     }
@@ -273,7 +296,7 @@ mod tests {
         );
         assert_eq!(output.exit_code, CliExitCode::RuntimeError);
         assert!(output.stdout.contains("preflight: blocked"));
-        assert_eq!output.stderr, "preflight failed: doctor");
+        assert_eq!(output.stderr, "preflight failed: doctor");
     }
 
     #[test]
@@ -287,7 +310,7 @@ mod tests {
         );
         assert_eq!(output.exit_code, CliExitCode::RuntimeError);
         assert!(output.stdout.contains("worktree lifecycle: failed"));
-        assert_eq(output.stderr, "preflight failed: worktree");
+        assert_eq!(output.stderr, "preflight failed: worktree");
     }
 
     #[test]
@@ -298,7 +321,7 @@ mod tests {
             OperationalPlan::Rollout,
         ] {
             let output = render_plan(plan);
-            assert_eq(output.exit_code, CliExitCode::Success);
+            assert_eq!(output.exit_code, CliExitCode::Success);
             assert!(output.stdout.contains("dry_run"));
             assert!(output.stdout.contains("writes: none"));
             assert!(output.stderr.is_empty());
