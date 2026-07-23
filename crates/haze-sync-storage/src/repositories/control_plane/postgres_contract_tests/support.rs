@@ -3,22 +3,22 @@ use crate::test_support::{connect_required_test_database_from_env, unique_test_i
 use sqlx::{Executor, PgPool};
 
 const BASE_MIGRATIONS: &[&str] = &[
-    include_str!("../../../../../migrations/0001_sync_adapters.sql"),
-    include_str!("../../../../../migrations/0002_content_blobs.sql"),
-    include_str!("../../../../../migrations/0003_sync_objects_file_revisions.sql"),
-    include_str!("../../../../../migrations/0004_operation_log.sql"),
-    include_str!("../../../../../migrations/0005_tombstones_conflicts.sql"),
-    include_str!("../../../../../migrations/0006_cursors_idempotency.sql"),
-    include_str!("../../../../../migrations/0007_gdrive_mapping.sql"),
-    include_str!("../../../../../migrations/0008_worktree_state.sql"),
-    include_str!("../../../../../migrations/0009_audit_events.sql"),
-    include_str!("../../../../../migrations/0010_worktree_durable_state.sql"),
-    include_str!("../../../../../migrations/0011_gdrive_durable_state.sql"),
+    include_str!("../../../../../../migrations/0001_sync_adapters.sql"),
+    include_str!("../../../../../../migrations/0002_content_blobs.sql"),
+    include_str!("../../../../../../migrations/0003_sync_objects_file_revisions.sql"),
+    include_str!("../../../../../../migrations/0004_operation_log.sql"),
+    include_str!("../../../../../../migrations/0005_tombstones_conflicts.sql"),
+    include_str!("../../../../../../migrations/0006_cursors_idempotency.sql"),
+    include_str!("../../../../../../migrations/0007_gdrive_mapping.sql"),
+    include_str!("../../../../../../migrations/0008_worktree_state.sql"),
+    include_str!("../../../../../../migrations/0009_audit_events.sql"),
+    include_str!("../../../../../../migrations/0010_worktree_durable_state.sql"),
+    include_str!("../../../../../../migrations/0011_gdrive_durable_state.sql"),
 ];
 const CONTROL_MIGRATIONS: &[&str] = &[
-    include_str!("../../../../../migrations/0012_operational_control_storage.sql"),
-    include_str!("../../../../../migrations/0013_operational_jobs_audit.sql"),
-    include_str!("../../../../../migrations/0014_gdrive_runtime_authority.sql"),
+    include_str!("../../../../../../migrations/0012_operational_control_storage.sql"),
+    include_str!("../../../../../../migrations/0013_operational_jobs_audit.sql"),
+    include_str!("../../../../../../migrations/0014_gdrive_runtime_authority.sql"),
 ];
 
 async fn begin_isolated_schema(pool: &PgPool) -> Transaction<'_, Postgres> {

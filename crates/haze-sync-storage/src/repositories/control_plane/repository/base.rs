@@ -253,7 +253,10 @@ fn credential_from_row(row: &PgRow) -> ControlPlaneResult<CredentialRow> {
         credential_kind: row_column!(row, "credential_kind"),
         status: row_column!(row, "status"),
         verifier_scheme: row_column!(row, "verifier_scheme"),
-        verifier_material: VerifierMaterial::parse(row_column!(row, "verifier_material"))?,
+        verifier_material: VerifierMaterial::parse(
+            row.try_get::<String, _>("verifier_material")
+                .map_err(|_| ControlPlaneRepositoryError::DatabaseOperationFailed)?,
+        )?,
         legacy_migrated: row_column!(row, "legacy_migrated"),
         created_at: row_column!(row, "created_at"),
         not_before: row_column!(row, "not_before"),
