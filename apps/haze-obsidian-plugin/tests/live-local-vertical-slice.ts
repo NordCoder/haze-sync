@@ -39,6 +39,10 @@ async function main(): Promise<void> {
   assert.ok(info.capabilities.includes("sha256"));
   assert.ok(info.capabilities.includes("batch_changes"));
 
+  const ready = await waitForWorktreeReady(parsedUrl, adminToken, 30_000);
+  assert.equal(ready.configured_mode, "bidirectional");
+  assert.equal(ready.manual_availability, "unavailable");
+
   const before = await client.getChanges({ since: 0, limit: 50 });
   const put = await client.putFile({
     path: VAULT_PATH,
@@ -53,15 +57,19 @@ async function main(): Promise<void> {
     throw new Error("Stage 8 Obsidian upload was not accepted.");
   }
 
-  await runWorktreeCycle(parsedUrl, adminToken);
-  await waitForFileContent(worktreePath, INITIAL_CONTENT, 60_000);
+  await waitForFileContent(worktreePath, INITIAL_CONTENT, parsedUrl, adminToken, 75_000);
 
   const replacementPath = path.resolve(worktreeRoot, ".stage8-replacement.tmp");
   await writeFile(replacementPath, WORKTREE_CONTENT, { encoding: "utf8", mode: 0o600 });
   await rename(replacementPath, worktreePath);
 
-  await runWorktreeCycle(parsedUrl, adminToken);
-  const imported = await waitForRemoteContent(client, WORKTREE_CONTENT, 60_000);
+  const imported = await waitForRemoteContent(
+    client,
+    WORKTREE_CONTENT,
+    parsedUrl,
+    adminToken,
+    60_000,
+  );
   assert.notEqual(imported.metadata.revision_id, put.revision_id);
   assert.equal(imported.metadata.content_sha256, contentHash(WORKTREE_CONTENT));
 
@@ -80,11 +88,12 @@ async function main(): Promise<void> {
   assert.equal(finalStatus.host_lifecycle, "running");
   assert.equal(finalStatus.readiness, "ready");
   assert.equal(finalStatus.readiness_reason, "running");
+  assert.equal(finalStatus.manual_availability, "unavailable");
   assert.equal(finalStatus.cycles_failed, 0);
   assert.ok(finalStatus.cycles_completed >= 2);
 
   console.log(
-    "PASS Stage 8 local vertical slice: Obsidian PUT, Worktree export/import, and Obsidian change/readback validated.",
+    "PASS Stage 8 local vertical slice: Obsidian PUT, automatic Worktree export/import, and Obsidian change/readback validated.",
   );
 }
 
@@ -123,59 +132,41 @@ async function getWorktreeStatus(serverUrl: URL, adminToken: string): Promise<Wo
   return (await response.json()) as WorktreeStatus;
 }
 
-async function runWorktreeCycle(serverUrl: URL, adminToken: string): Promise<void> {
-  const deadline = Date.now() + 60_000;
-  let baseline: WorktreeStatus | undefined;
-
+async function waitForWorktreeReady(
+  serverUrl: URL,
+  adminToken: string,
+  timeoutMs: number,
+): Promise<WorktreeStatus> {
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const status = await getWorktreeStatus(serverUrl, adminToken);
-    assert.notEqual(status.host_lifecycle, "failed");
-    assert.equal(status.cycles_failed, 0);
-
-    if (status.manual_availability === "available") {
-      baseline = status;
-      const response = await fetch(new URL("/v1/admin/worktree/sync-once", serverUrl), {
-        method: "POST",
-        body: "{}",
-        headers: {
-          Authorization: `Bearer ${adminToken}`,
-          "Content-Type": "application/json",
-        },
-        redirect: "error",
-        credentials: "omit",
-        cache: "no-store",
-      });
-      if (response.status === 202) {
-        const payload = (await response.json()) as { status?: string };
-        assert.equal(payload.status, "accepted");
-        break;
-      }
-      if (response.status !== 409 && response.status !== 503) {
-        throw new Error(`Worktree sync-once returned unexpected status ${response.status}.`);
-      }
+    if (status.host_lifecycle === "failed" || status.cycles_failed > 0) {
+      throw new Error("Worktree host failed before becoming ready.");
+    }
+    if (
+      status.configured_mode === "bidirectional" &&
+      status.host_lifecycle === "running" &&
+      status.readiness === "ready"
+    ) {
+      return status;
     }
     await sleep(200);
   }
+  throw new Error("Worktree host did not become ready within the bounded timeout.");
+}
 
-  if (baseline === undefined) {
-    throw new Error("Worktree manual cycle did not become available.");
+async function assertWorktreeHealthy(serverUrl: URL, adminToken: string): Promise<void> {
+  const status = await getWorktreeStatus(serverUrl, adminToken);
+  if (status.host_lifecycle === "failed" || status.cycles_failed > 0) {
+    throw new Error("Worktree automatic cycle failed during the local vertical slice.");
   }
-
-  while (Date.now() < deadline) {
-    const status = await getWorktreeStatus(serverUrl, adminToken);
-    assert.equal(status.cycles_failed, baseline.cycles_failed);
-    if (!status.cycle_in_progress && status.cycles_completed > baseline.cycles_completed) {
-      return;
-    }
-    await sleep(200);
-  }
-
-  throw new Error("Worktree manual cycle did not complete within the bounded timeout.");
 }
 
 async function waitForFileContent(
   filePath: string,
   expected: string,
+  serverUrl: URL,
+  adminToken: string,
   timeoutMs: number,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
@@ -186,16 +177,19 @@ async function waitForFileContent(
         return;
       }
     } catch {
-      // The export may not have materialized yet.
+      // The automatic export may not have materialized yet.
     }
+    await assertWorktreeHealthy(serverUrl, adminToken);
     await sleep(200);
   }
-  throw new Error("Worktree export did not materialize the expected file content.");
+  throw new Error("Automatic Worktree export did not materialize the expected file content.");
 }
 
 async function waitForRemoteContent(
   client: HazeSyncApiClient,
   expected: string,
+  serverUrl: URL,
+  adminToken: string,
   timeoutMs: number,
 ) {
   const deadline = Date.now() + timeoutMs;
@@ -207,11 +201,12 @@ async function waitForRemoteContent(
         return file;
       }
     } catch {
-      // The Worktree import may still be in progress.
+      // The watcher-triggered import may still be in progress.
     }
+    await assertWorktreeHealthy(serverUrl, adminToken);
     await sleep(200);
   }
-  throw new Error("Worktree import did not reach the Server within the bounded timeout.");
+  throw new Error("Automatic Worktree import did not reach the Server within the bounded timeout.");
 }
 
 function sleep(milliseconds: number): Promise<void> {

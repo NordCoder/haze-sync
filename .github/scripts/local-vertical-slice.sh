@@ -25,7 +25,12 @@ compose=(docker compose --project-name "$project_name" -f "$base_file" -f "$work
 
 cleanup() {
   "${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
-  rm -rf "$worktree_dir" "$server_log" "$config_json"
+  rm -f "$server_log" "$config_json"
+  if command -v sudo >/dev/null 2>&1; then
+    sudo rm -rf "$worktree_dir"
+  else
+    rm -rf "$worktree_dir"
+  fi
 }
 trap cleanup EXIT
 
