@@ -64,7 +64,7 @@ async fn idempotency_and_immutable_terminal_records_are_enforced() {
         retry_of_operation_id: None,
     };
     assert!(matches!(
-        insert_or_replay_operational_job(&mut transaction, &input)
+        insert_or_replay_complete_operational_job(&mut transaction, &input)
             .await
             .unwrap(),
         IdempotencyInsertOutcome::Inserted(_)
@@ -72,14 +72,14 @@ async fn idempotency_and_immutable_terminal_records_are_enforced() {
     let mut replay = input.clone();
     replay.operation_id = "job-ignored".into();
     assert!(matches!(
-        insert_or_replay_operational_job(&mut transaction, &replay)
+        insert_or_replay_complete_operational_job(&mut transaction, &replay)
             .await
             .unwrap(),
-        IdempotencyInsertOutcome::Replay(row) if row.operation_id == "job-a"
+        IdempotencyInsertOutcome::Replay(row) if row.job.operation_id == "job-a"
     ));
     replay.request_fingerprint = SecretDigest::parse("4".repeat(64)).unwrap();
     assert_eq!(
-        insert_or_replay_operational_job(&mut transaction, &replay).await,
+        insert_or_replay_complete_operational_job(&mut transaction, &replay).await,
         Err(ControlPlaneRepositoryError::IdempotencyConflict)
     );
     (&mut *transaction).execute("savepoint no_delete").await.unwrap();
@@ -98,7 +98,10 @@ async fn idempotency_and_immutable_terminal_records_are_enforced() {
     .execute(&mut *transaction)
     .await
     .unwrap();
-    (&mut *transaction).execute("savepoint terminal_immutable").await.unwrap();
+    (&mut *transaction)
+        .execute("savepoint terminal_immutable")
+        .await
+        .unwrap();
     assert!(sqlx::query("update operational_jobs set safe_summary='{}' where operation_id='job-a'")
         .execute(&mut *transaction)
         .await
@@ -109,4 +112,3 @@ async fn idempotency_and_immutable_terminal_records_are_enforced() {
         .unwrap();
     transaction.rollback().await.unwrap();
 }
-
