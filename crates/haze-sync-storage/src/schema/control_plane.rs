@@ -29,8 +29,7 @@ pub mod table_names {
     pub const CREDENTIALS: &str = "credentials";
     pub const CREDENTIAL_ISSUANCE_IDEMPOTENCY: &str = "credential_issuance_idempotency";
     pub const OPERATIONAL_JOBS: &str = "operational_jobs";
-    pub const OPERATIONAL_JOB_ADAPTER_GENERATIONS: &str =
-        "operational_job_adapter_generations";
+    pub const OPERATIONAL_JOB_ADAPTER_GENERATIONS: &str = "operational_job_adapter_generations";
     pub const OPERATIONAL_EXECUTION_SLOTS: &str = "operational_execution_slots";
     pub const OPERATIONAL_IDEMPOTENCY: &str = "operational_idempotency";
     pub const OPERATIONAL_JOB_EVIDENCE: &str = "operational_job_evidence";
