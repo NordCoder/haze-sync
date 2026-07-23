@@ -1,5 +1,6 @@
 include!("repository/base.rs");
-include!("repository/maintenance_inventory.rs");
+include!("repository/maintenance.rs");
+include!("repository/inventory_controls.rs");
 include!("repository/effective_evidence.rs");
 include!("repository/credentials.rs");
 include!("repository/jobs.rs");
