@@ -1,1 +1,2 @@
 Temporary isolated verifier marker for integration head f0dc79e9818e6d56673476e24a7dc91eb2bcccf2. This PR is never merged.
+Synchronize after confirming the branch is a direct fast-forward of the integration base.
