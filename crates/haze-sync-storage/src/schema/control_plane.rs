@@ -6,10 +6,11 @@
 
 /// Forward-only migration filenames added for operational control.
 pub const REQUIRED_BASE_MIGRATION_HEAD: &str = "0011_gdrive_durable_state.sql";
-pub const CURRENT_MIGRATION_HEAD: &str = "0014_gdrive_runtime_authority.sql";
+pub const CURRENT_MIGRATION_HEAD: &str = "0015_qa_contract_corrections.sql";
 pub const CONTROL_PLANE_MIGRATIONS: &[&str] = &[
     "0012_operational_control_storage.sql",
     "0013_operational_jobs_audit.sql",
+    "0014_gdrive_runtime_authority.sql",
     CURRENT_MIGRATION_HEAD,
 ];
 
@@ -28,7 +29,8 @@ pub mod table_names {
     pub const CREDENTIALS: &str = "credentials";
     pub const CREDENTIAL_ISSUANCE_IDEMPOTENCY: &str = "credential_issuance_idempotency";
     pub const OPERATIONAL_JOBS: &str = "operational_jobs";
-    pub const OPERATIONAL_JOB_ADAPTER_GENERATIONS: &str = "operational_job_adapter_generations";
+    pub const OPERATIONAL_JOB_ADAPTER_GENERATIONS: &str =
+        "operational_job_adapter_generations";
     pub const OPERATIONAL_EXECUTION_SLOTS: &str = "operational_execution_slots";
     pub const OPERATIONAL_IDEMPOTENCY: &str = "operational_idempotency";
     pub const OPERATIONAL_JOB_EVIDENCE: &str = "operational_job_evidence";
@@ -90,6 +92,7 @@ mod tests {
         include_str!("../../../../migrations/0012_operational_control_storage.sql"),
         include_str!("../../../../migrations/0013_operational_jobs_audit.sql"),
         include_str!("../../../../migrations/0014_gdrive_runtime_authority.sql"),
+        include_str!("../../../../migrations/0015_qa_contract_corrections.sql"),
     ];
 
     #[test]
@@ -98,7 +101,7 @@ mod tests {
             REQUIRED_BASE_MIGRATION_HEAD,
             "0011_gdrive_durable_state.sql"
         );
-        assert_eq!(CONTROL_PLANE_MIGRATIONS.len(), 3);
+        assert_eq!(CONTROL_PLANE_MIGRATIONS.len(), 4);
         assert_eq!(
             CONTROL_PLANE_MIGRATIONS.last(),
             Some(&CURRENT_MIGRATION_HEAD)
@@ -133,6 +136,8 @@ mod tests {
             "operational_audit_events_append_only",
             "operational_jobs_terminal_immutable",
             "gdrive_runtime_reports_immutable",
+            "active_cli_write_jobs",
+            "worktree_external_writer_evidence",
         ] {
             assert!(
                 MIGRATIONS
