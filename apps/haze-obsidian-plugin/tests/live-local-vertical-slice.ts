@@ -58,6 +58,12 @@ async function main(): Promise<void> {
   }
 
   await waitForFileContent(worktreePath, INITIAL_CONTENT, parsedUrl, adminToken, 75_000);
+  await waitForCycleCompletion(
+    parsedUrl,
+    adminToken,
+    ready.cycles_completed,
+    30_000,
+  );
 
   const replacementPath = path.resolve(worktreeRoot, ".stage8-replacement.tmp");
   await writeFile(replacementPath, WORKTREE_CONTENT, { encoding: "utf8", mode: 0o600 });
@@ -68,7 +74,7 @@ async function main(): Promise<void> {
     WORKTREE_CONTENT,
     parsedUrl,
     adminToken,
-    60_000,
+    110_000,
   );
   assert.notEqual(imported.metadata.revision_id, put.revision_id);
   assert.equal(imported.metadata.content_sha256, contentHash(WORKTREE_CONTENT));
@@ -160,6 +166,26 @@ async function assertWorktreeHealthy(serverUrl: URL, adminToken: string): Promis
   if (status.host_lifecycle === "failed" || status.cycles_failed > 0) {
     throw new Error("Worktree automatic cycle failed during the local vertical slice.");
   }
+}
+
+async function waitForCycleCompletion(
+  serverUrl: URL,
+  adminToken: string,
+  baselineCycles: number,
+  timeoutMs: number,
+): Promise<WorktreeStatus> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const status = await getWorktreeStatus(serverUrl, adminToken);
+    if (status.host_lifecycle === "failed" || status.cycles_failed > 0) {
+      throw new Error("Worktree export cycle failed before its durable checkpoint.");
+    }
+    if (!status.cycle_in_progress && status.cycles_completed > baselineCycles) {
+      return status;
+    }
+    await sleep(200);
+  }
+  throw new Error("Worktree export cycle did not complete within the bounded timeout.");
 }
 
 async function waitForFileContent(
