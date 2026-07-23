@@ -125,4 +125,5 @@ pub const STORAGE_TEST_MIGRATIONS: &[TestMigration] = &[
     migration!("0012_operational_control_storage.sql"),
     migration!("0013_operational_jobs_audit.sql"),
     migration!("0014_gdrive_runtime_authority.sql"),
+    migration!("0015_qa_contract_corrections.sql"),
 ];
