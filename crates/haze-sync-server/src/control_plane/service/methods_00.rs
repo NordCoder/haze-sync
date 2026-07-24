@@ -238,7 +238,7 @@ impl ControlPlaneServices {
             ("normal", MaintenanceActionDto::Resume)
             | ("quiesced", MaintenanceActionDto::Quiesce)
             | ("maintenance", MaintenanceActionDto::Quiesce)
-            | ("maintenance", MaintenanceActionDto::EnterMaintenance) => current,
+            | ("maintenance", MaintenanceActionDto::EnterMaintenance) => current.clone(),
             ("quiesced", MaintenanceActionDto::EnterMaintenance) => {
                 self.revalidate_quiescence_evidence(&mut transaction, &current)
                     .await?;

@@ -221,7 +221,7 @@ async fn validate_job_generations(
                 confirmation_consumed_at: current.job.confirmation_consumed_at,
                 executor_id: current.job.executor_id.clone(),
                 executor_fence,
-                lease_token_digest: Some(proof),
+                lease_token_digest: Some(proof.clone()),
                 lease_heartbeat_at: Some(now),
                 lease_expires_at: Some(now + Duration::seconds(JOB_LEASE_SECONDS)),
                 destructive_execution_slot_id: current.job.destructive_execution_slot_id.clone(),

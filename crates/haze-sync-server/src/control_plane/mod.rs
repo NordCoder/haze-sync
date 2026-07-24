@@ -68,6 +68,7 @@ impl ControlPlaneError {
             | ControlPlaneRepositoryError::StaleRuntimeEpoch
             | ControlPlaneRepositoryError::StaleRuntimeReport
             | ControlPlaneRepositoryError::RuntimeReportConflict => Self::Internal,
+            _ => Self::Internal,
         }
     }
 
