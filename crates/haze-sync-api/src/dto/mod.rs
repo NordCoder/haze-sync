@@ -6,6 +6,7 @@
 pub mod changes;
 pub mod common;
 pub mod conflicts;
+pub mod control_plane;
 pub mod files;
 pub mod gdrive;
 pub mod primitives;

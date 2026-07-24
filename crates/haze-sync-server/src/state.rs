@@ -1,8 +1,4 @@
-//! Server application state for W2 Core file-operation wiring.
-//!
-//! The state is explicit and cloneable for Axum handlers. It carries caller-owned
-//! runtime dependencies only; route construction still supports dependency-free
-//! health/readiness tests without hidden globals.
+//! Explicit cloneable Server runtime state.
 
 use haze_sync_api::auth::AdapterPrincipal;
 use haze_sync_storage::LocalObjectStore;
@@ -11,11 +7,11 @@ use sqlx::PgPool;
 use crate::{
     application::ServerApplicationServices,
     config::{ObjectStoreConfig, ServerConfig},
+    control_plane::ControlPlaneServices,
     readiness::ReadinessState,
     worktree_http::ServerWorktreeHttpControl,
 };
 
-/// Explicit server dependencies used by W2 Core file-operation routes.
 #[derive(Clone)]
 pub struct ServerAppState {
     db_pool: Option<PgPool>,
@@ -23,10 +19,10 @@ pub struct ServerAppState {
     config: Option<ServerConfig>,
     auth: AuthState,
     worktree_control: Option<ServerWorktreeHttpControl>,
+    control_plane: Option<ControlPlaneServices>,
 }
 
 impl ServerAppState {
-    /// Safe dependency-free state used by route-shell tests and `/health`.
     #[must_use]
     pub const fn dependency_free() -> Self {
         Self {
@@ -35,10 +31,10 @@ impl ServerAppState {
             config: None,
             auth: AuthState::Disabled,
             worktree_control: None,
+            control_plane: None,
         }
     }
 
-    /// Build runtime state from already-created dependencies.
     #[must_use]
     pub fn new(
         db_pool: Option<PgPool>,
@@ -52,10 +48,10 @@ impl ServerAppState {
             config,
             auth,
             worktree_control: None,
+            control_plane: None,
         }
     }
 
-    /// Build state from server config and a caller-owned PostgreSQL pool.
     #[must_use]
     pub fn from_config(config: ServerConfig, db_pool: PgPool) -> Self {
         let object_store = LocalObjectStore::new(config.object_store.root.clone());
@@ -63,12 +59,12 @@ impl ServerAppState {
             db_pool: Some(db_pool.clone()),
             object_store: Some(object_store),
             config: Some(config),
-            auth: AuthState::Database { pool: db_pool },
+            auth: AuthState::Database { pool: db_pool.clone() },
             worktree_control: None,
+            control_plane: None,
         }
     }
 
-    /// Build state for deterministic handler tests with a static principal.
     #[must_use]
     pub fn with_static_principal(principal: AdapterPrincipal) -> Self {
         Self {
@@ -77,56 +73,65 @@ impl ServerAppState {
             config: None,
             auth: AuthState::StaticPrincipal { principal },
             worktree_control: None,
+            control_plane: None,
         }
     }
 
-    /// Attach the cloneable Worktree HTTP boundary without transferring host ownership.
     #[must_use]
     pub(crate) fn with_worktree_control(mut self, control: ServerWorktreeHttpControl) -> Self {
         self.worktree_control = Some(control);
         self
     }
 
-    /// Return the configured database pool, when runtime-backed routes are enabled.
+    #[must_use]
+    pub(crate) fn with_control_plane(mut self, control_plane: ControlPlaneServices) -> Self {
+        self.control_plane = Some(control_plane);
+        self
+    }
+
     #[must_use]
     pub const fn db_pool(&self) -> Option<&PgPool> {
         self.db_pool.as_ref()
     }
 
-    /// Return the configured local object store, when runtime-backed routes are enabled.
     #[must_use]
     pub const fn object_store(&self) -> Option<&LocalObjectStore> {
         self.object_store.as_ref()
     }
 
-    /// Build reusable application services when the database authority exists.
     #[must_use]
     pub(crate) fn application_services(&self) -> Option<ServerApplicationServices> {
-        Some(ServerApplicationServices::new(
-            self.db_pool.as_ref()?.clone(),
-            self.object_store.clone(),
-        ))
+        let pool = self.db_pool.as_ref()?.clone();
+        Some(match &self.control_plane {
+            Some(control_plane) => ServerApplicationServices::new_with_admission(
+                pool,
+                self.object_store.clone(),
+                control_plane.admission().clone(),
+            ),
+            None => ServerApplicationServices::new(pool, self.object_store.clone()),
+        })
     }
 
-    /// Return the loaded server configuration, when startup supplied one.
     #[must_use]
     pub const fn config(&self) -> Option<&ServerConfig> {
         self.config.as_ref()
     }
 
-    /// Return explicit authentication state.
     #[must_use]
     pub const fn auth(&self) -> &AuthState {
         &self.auth
     }
 
-    /// Return the optional passive Worktree HTTP control boundary.
     #[must_use]
     pub(crate) const fn worktree_control(&self) -> Option<&ServerWorktreeHttpControl> {
         self.worktree_control.as_ref()
     }
 
-    /// Build a readiness state from the same explicit dependencies.
+    #[must_use]
+    pub(crate) const fn control_plane(&self) -> Option<&ControlPlaneServices> {
+        self.control_plane.as_ref()
+    }
+
     #[must_use]
     pub fn readiness_state(&self) -> ReadinessState {
         ReadinessState::from_optional(
@@ -156,18 +161,15 @@ impl std::fmt::Debug for ServerAppState {
             .field("config", &self.config.as_ref().map(|_config| "[REDACTED]"))
             .field("auth", &self.auth)
             .field("worktree_control", &self.worktree_control.is_some())
+            .field("control_plane", &self.control_plane.is_some())
             .finish()
     }
 }
 
-/// Authentication source used by server routes.
 #[derive(Clone)]
 pub enum AuthState {
-    /// No auth source was configured. Protected routes reject requests safely.
     Disabled,
-    /// Deterministic test principal; a syntactically valid bearer token is still required.
     StaticPrincipal { principal: AdapterPrincipal },
-    /// Runtime token lookup through `sync_adapters`.
     Database { pool: PgPool },
 }
 
@@ -195,10 +197,10 @@ mod tests {
         let state = ServerAppState::dependency_free();
         let report = state.readiness_state().check().await;
         let rendered = format!("{state:?} {report:?}");
-
         assert!(!report.is_ready());
         assert!(state.application_services().is_none());
         assert!(state.worktree_control().is_none());
+        assert!(state.control_plane().is_none());
         assert!(!rendered.contains("postgres://"));
         assert!(!rendered.contains("secret"));
         assert!(!rendered.contains("/srv/"));
@@ -209,7 +211,6 @@ mod tests {
         let principal =
             AdapterPrincipal::new("obsidian-plugin", AdapterRole::ObsidianPlugin).unwrap();
         let rendered = format!("{:?}", ServerAppState::with_static_principal(principal));
-
         assert!(rendered.contains("obsidian-plugin"));
         assert!(!rendered.contains("Bearer"));
         assert!(!rendered.contains("token"));

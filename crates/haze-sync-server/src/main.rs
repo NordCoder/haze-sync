@@ -1,8 +1,4 @@
 //! Haze Sync server binary.
-//!
-//! Startup loads explicit configuration, connects to PostgreSQL, prepares the
-//! object store, constructs one joined Worktree runtime host, and serves Axum
-//! until graceful shutdown. The Worktree host remains internal to Server.
 
 use std::{error::Error, fmt, fs, process::ExitCode, sync::Arc};
 
@@ -10,6 +6,7 @@ use tokio::net::TcpListener;
 
 use crate::{
     config::{ConfigError, ObjectStoreConfig, ServerConfig},
+    control_plane::{ControlPlaneError, ControlPlaneServices, DurableMaintenanceState},
     db::DbRuntimeError,
     state::ServerAppState,
     worktree_host::{ServerWorktreeHostConfig, ServerWorktreeHostError, ServerWorktreeRuntimeHost},
@@ -18,6 +15,7 @@ use crate::{
 
 mod application;
 pub mod config;
+mod control_plane;
 pub mod db;
 pub mod http;
 pub mod readiness;
@@ -31,7 +29,7 @@ mod worktree_runtime;
 mod worktree_status;
 
 pub const CRATE_ROLE: &str =
-    "Haze Sync HTTP server scaffolding, configuration, DB readiness, migrations, and W2/W3 route wiring.";
+    "Haze Sync HTTP server, operational control plane, and W2/W3 route wiring.";
 
 #[must_use]
 pub const fn package_name() -> &'static str {
@@ -57,21 +55,39 @@ async fn run_with_config(config: ServerConfig) -> Result<(), StartupError> {
     ensure_object_store_root(&config.object_store)?;
     let pool = db::connect_pg_pool(&config.database).await?;
     let listen_addr = config.listen_addr;
-    let state = ServerAppState::from_config(config.clone(), pool.clone());
-    let services = state
-        .application_services()
-        .ok_or(StartupError::WorktreeHost(
-            ServerWorktreeHostError::RuntimeFailed,
-        ))?;
-    let host_config = ServerWorktreeHostConfig::from_adapter_mode(config.worktree.mode)?;
-    let manual_budget = host_config.action_budget;
-    let worktree_host = Arc::new(
-        ServerWorktreeRuntimeHost::start(host_config, config.worktree.root.clone(), pool, services)
+    let control_plane = ControlPlaneServices::load(
+        pool.clone(),
+        config.database.database_url.as_sensitive_str().as_bytes(),
+    )
+    .await?;
+    control_plane.reconcile_startup().await?;
+    let state = ServerAppState::from_config(config.clone(), pool.clone())
+        .with_control_plane(control_plane.clone());
+
+    let mut worktree_host = None;
+    let state = if control_plane.maintenance_state() == DurableMaintenanceState::Normal {
+        let services = state
+            .application_services()
+            .ok_or(StartupError::WorktreeHost(
+                ServerWorktreeHostError::RuntimeFailed,
+            ))?;
+        let host_config = ServerWorktreeHostConfig::from_adapter_mode(config.worktree.mode)?;
+        let manual_budget = host_config.action_budget;
+        let host = Arc::new(
+            ServerWorktreeRuntimeHost::start(
+                host_config,
+                config.worktree.root.clone(),
+                pool,
+                services,
+            )
             .await?,
-    );
-    let worktree_control =
-        ServerWorktreeHttpControl::new(Arc::downgrade(&worktree_host), manual_budget);
-    let state = state.with_worktree_control(worktree_control);
+        );
+        let control = ServerWorktreeHttpControl::new(Arc::downgrade(&host), manual_budget);
+        worktree_host = Some(host);
+        state.with_worktree_control(control)
+    } else {
+        state
+    };
     let _legacy_status_boundary = ServerWorktreeRuntimeHost::status;
     let _readiness_boundary = crate::worktree_status::ServerWorktreeStatusSnapshot::is_ready;
 
@@ -82,9 +98,12 @@ async fn run_with_config(config: ServerConfig) -> Result<(), StartupError> {
         .with_graceful_shutdown(shutdown_signal())
         .await
         .map_err(|_error| StartupError::ServeFailed);
-    let host_result = match Arc::try_unwrap(worktree_host) {
-        Ok(host) => host.shutdown().await.map(|_| ()),
-        Err(_host) => Err(ServerWorktreeHostError::TaskFailed),
+    let host_result = match worktree_host {
+        Some(host) => match Arc::try_unwrap(host) {
+            Ok(host) => host.shutdown().await.map(|_| ()),
+            Err(_host) => Err(ServerWorktreeHostError::TaskFailed),
+        },
+        None => Ok(()),
     };
 
     match (serve_result, host_result) {
@@ -106,6 +125,7 @@ fn ensure_object_store_root(config: &ObjectStoreConfig) -> Result<(), StartupErr
 enum StartupError {
     Config(ConfigError),
     Database(DbRuntimeError),
+    ControlPlane(ControlPlaneError),
     WorktreeHost(ServerWorktreeHostError),
     ObjectStoreRootUnavailable,
     BindFailed,
@@ -117,6 +137,9 @@ impl fmt::Display for StartupError {
         match self {
             Self::Config(error) => write!(formatter, "configuration error: {error}"),
             Self::Database(error) => write!(formatter, "database startup failed: {}", error.code()),
+            Self::ControlPlane(error) => {
+                write!(formatter, "operational control startup failed: {}", error.safe_code())
+            }
             Self::WorktreeHost(error) => write!(formatter, "worktree host failed: {error}"),
             Self::ObjectStoreRootUnavailable => {
                 formatter.write_str("object store root could not be prepared")
@@ -141,6 +164,12 @@ impl From<DbRuntimeError> for StartupError {
     }
 }
 
+impl From<ControlPlaneError> for StartupError {
+    fn from(error: ControlPlaneError) -> Self {
+        Self::ControlPlane(error)
+    }
+}
+
 impl From<ServerWorktreeHostError> for StartupError {
     fn from(error: ServerWorktreeHostError) -> Self {
         Self::WorktreeHost(error)
@@ -157,11 +186,15 @@ mod tests {
     }
 
     #[test]
-    fn worktree_host_errors_are_secret_safe() {
-        let rendered =
-            StartupError::WorktreeHost(ServerWorktreeHostError::BindingFailed).to_string();
-        assert!(!rendered.contains("postgres://"));
-        assert!(!rendered.contains("/srv/"));
-        assert!(!rendered.contains("fingerprint"));
+    fn startup_errors_are_secret_safe() {
+        for rendered in [
+            StartupError::WorktreeHost(ServerWorktreeHostError::BindingFailed).to_string(),
+            StartupError::ControlPlane(ControlPlaneError::Internal).to_string(),
+        ] {
+            assert!(!rendered.contains("postgres://"));
+            assert!(!rendered.contains("/srv/"));
+            assert!(!rendered.contains("fingerprint"));
+            assert!(!rendered.contains("secret"));
+        }
     }
 }

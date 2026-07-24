@@ -7,6 +7,7 @@
 pub mod admin;
 pub mod changes;
 pub mod conflicts;
+pub mod control_plane;
 pub mod delete;
 pub mod files;
 pub mod gdrive;

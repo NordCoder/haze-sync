@@ -7,6 +7,7 @@ include!("postgres_contract_tests/concurrency.rs");
 include!("postgres_contract_tests/validation.rs");
 include!("postgres_contract_tests/qa_corrections.rs");
 include!("postgres_contract_tests/invalidation_serialization.rs");
+include!("postgres_contract_tests/server_primitives.rs");
 
 #[allow(clippy::too_many_arguments)]
 mod latest_qa_blockers {
@@ -14,9 +15,6 @@ mod latest_qa_blockers {
 
     include!("postgres_contract_tests/qa_blockers.rs");
 
-    // The Storage PostgreSQL CI command selects ignored tests only. Keep one
-    // ignored wrapper per matrix group so every regression is executed exactly
-    // once and remains visible by name in the test output.
     #[test]
     #[ignore = "executed by the explicit Storage PostgreSQL contract-suite command"]
     fn ci_executes_generic_effective_writer_boundary_matrix() {

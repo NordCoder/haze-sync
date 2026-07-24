@@ -14,7 +14,9 @@ use std::{error::Error, fmt};
 
 include!("control_plane/types.rs");
 include!("control_plane/qa_corrections_types.rs");
+include!("control_plane/server_primitives_types.rs");
 include!("control_plane/repository.rs");
+include!("control_plane/repository/server_primitives.rs");
 
 #[cfg(test)]
 #[path = "control_plane/tests.rs"]

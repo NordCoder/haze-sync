@@ -1,8 +1,8 @@
 //! Reusable asynchronous Server application services.
 //!
-//! HTTP routes and future built-in adapter executors consume this boundary instead
-//! of duplicating transaction, locking, idempotency, object-store, and repository
-//! choreography. Core remains the policy owner and Storage remains passive.
+//! HTTP routes and built-in adapter executors consume this boundary instead of
+//! duplicating transaction, locking, idempotency, object-store, admission, and
+//! repository choreography. Core remains the policy owner and Storage remains passive.
 
 mod changes;
 mod deletes;
@@ -31,7 +31,10 @@ use haze_sync_storage::LocalObjectStore;
 use sqlx::PgPool;
 use std::fmt;
 
-/// Internal actor identity used by reusable application services.
+use crate::control_plane::{
+    AdmissionClass, AdmissionController, AuthoritativeMutationPermit, DurableMaintenanceState,
+};
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ApplicationActor {
     adapter_id: AdapterId,
@@ -49,26 +52,16 @@ impl ApplicationActor {
     }
 }
 
-/// Stable safe failures from Server application services.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ApplicationError {
-    /// Required database/object-store dependencies are not configured.
     DependenciesUnavailable,
-    /// A caller supplied invalid internal cursor, bound, or command metadata.
     InvalidInput,
-    /// Requested authoritative file/revision metadata does not exist.
     NotFound,
-    /// Request conflicts with current authoritative state.
     Conflict,
-    /// Incoming bytes do not match the declared content hash.
     InvalidContentHash,
-    /// One idempotency key was reused for materially different input.
     IdempotencyMismatch,
-    /// Stored authoritative blob metadata exists but bytes are unavailable.
     ContentUnavailable,
-    /// Stored bytes or metadata are inconsistent with authoritative metadata.
     ContentCorrupt,
-    /// Internal persistence, conversion, or policy orchestration failed safely.
     Internal,
 }
 
@@ -96,23 +89,50 @@ impl fmt::Display for ApplicationError {
 
 impl std::error::Error for ApplicationError {}
 
-/// Cloneable explicit runtime dependencies for application operations.
 #[derive(Clone)]
 pub(crate) struct ServerApplicationServices {
     pool: PgPool,
     object_store: Option<LocalObjectStore>,
+    admission: AdmissionController,
 }
 
 impl ServerApplicationServices {
     #[must_use]
     pub(crate) fn new(pool: PgPool, object_store: Option<LocalObjectStore>) -> Self {
-        Self { pool, object_store }
+        Self::new_with_admission(
+            pool,
+            object_store,
+            AdmissionController::from_state(DurableMaintenanceState::Normal),
+        )
+    }
+
+    #[must_use]
+    pub(crate) fn new_with_admission(
+        pool: PgPool,
+        object_store: Option<LocalObjectStore>,
+        admission: AdmissionController,
+    ) -> Self {
+        Self {
+            pool,
+            object_store,
+            admission,
+        }
+    }
+
+    pub(crate) fn authoritative_mutation_permit(
+        &self,
+    ) -> Result<AuthoritativeMutationPermit, ApplicationError> {
+        self.admission
+            .admit(AdmissionClass::AuthoritativeMutation)
+            .map_err(|_| ApplicationError::DependenciesUnavailable)?
+            .ok_or(ApplicationError::Internal)
     }
 
     pub(crate) async fn apply_file(
         &self,
         command: ApplyFileCommand,
     ) -> Result<ApplyFileOutcome, ApplicationError> {
+        let _permit = self.authoritative_mutation_permit()?;
         let object_store = self
             .object_store
             .as_ref()
@@ -124,6 +144,7 @@ impl ServerApplicationServices {
         &self,
         command: ApplyDeleteCommand,
     ) -> Result<ApplyDeleteOutcome, ApplicationError> {
+        let _permit = self.authoritative_mutation_permit()?;
         deletes::apply_delete(&self.pool, command).await
     }
 
@@ -131,6 +152,9 @@ impl ServerApplicationServices {
         &self,
         query: AuthoritativeChangesQuery,
     ) -> Result<AuthoritativeChangeBatch, ApplicationError> {
+        self.admission
+            .admit(AdmissionClass::ChangeFeedRead)
+            .map_err(|_| ApplicationError::DependenciesUnavailable)?;
         changes::authoritative_changes(&self.pool, query).await
     }
 
@@ -138,6 +162,9 @@ impl ServerApplicationServices {
         &self,
         query: RevisionContentQuery,
     ) -> Result<AuthoritativeRevisionContent, ApplicationError> {
+        self.admission
+            .admit(AdmissionClass::PublicRead)
+            .map_err(|_| ApplicationError::DependenciesUnavailable)?;
         let object_store = self
             .object_store
             .as_ref()
@@ -149,6 +176,9 @@ impl ServerApplicationServices {
         &self,
         revision_id: RevisionId,
     ) -> Result<AuthoritativeRevisionContent, ApplicationError> {
+        self.admission
+            .admit(AdmissionClass::PublicRead)
+            .map_err(|_| ApplicationError::DependenciesUnavailable)?;
         let object_store = self
             .object_store
             .as_ref()
@@ -166,6 +196,7 @@ impl fmt::Debug for ServerApplicationServices {
                 "object_store",
                 &self.object_store.as_ref().map(|_| "[REDACTED]"),
             )
+            .field("admission", &self.admission)
             .finish()
     }
 }

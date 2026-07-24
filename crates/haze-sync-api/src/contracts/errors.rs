@@ -67,39 +67,37 @@ impl PublicError {
     }
 }
 
-/// Stable public error codes used by the Core API contract.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// Stable public error codes used by the Core and operational-control APIs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PublicErrorCode {
-    /// Request syntax or shape was invalid.
     InvalidRequest,
-    /// Vault path failed normalization or validation.
     InvalidPath,
-    /// Request data failed semantic validation.
     ValidationError,
-    /// Authentication token was missing or invalid.
     Unauthorized,
-    /// Authentication token was missing.
     MissingToken,
-    /// Authentication token was present but invalid.
     InvalidToken,
-    /// Authenticated adapter role is not allowed to perform the action.
     ForbiddenRole,
-    /// Requested file, revision, conflict, or other public resource was absent.
     NotFound,
-    /// Safe conflict response for a write that cannot overwrite current content.
     Conflict,
-    /// Same idempotency key was reused for a different write request.
     IdempotencyConflict,
-    /// Upload exceeded the configured maximum size.
+    IdempotencyInProgress,
     PayloadTooLarge,
-    /// Adapter exceeded a public rate limit.
     RateLimited,
-    /// Delete was rejected by stale-base or mass-delete safety rules.
     UnsafeDelete,
-    /// Ignored path was rejected by public sync policy.
     IgnoredPath,
-    /// Unexpected internal failure mapped to a safe public message.
+    MaintenanceInProgress,
+    ControlTransitionInProgress,
+    InvalidControlTransition,
+    StaleControlGeneration,
+    StaleRecordVersion,
+    StaleExecutorFence,
+    CredentialSecretNotReplayable,
+    OperationInProgress,
+    ConfirmationRequired,
+    ConfirmationExpired,
+    OperationNotCancellable,
+    UnsupportedOperationKind,
     InternalError,
 }
 
@@ -107,9 +105,7 @@ pub enum PublicErrorCode {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum SafeErrorDetails {
-    /// Field-to-messages map for validation-style errors.
     Map(BTreeMap<String, Vec<String>>),
-    /// Flat list for public non-field details.
     List(Vec<String>),
 }
 
@@ -123,12 +119,10 @@ mod tests {
             error: PublicError::new(PublicErrorCode::InvalidPath, "Path contains '..' segment")
                 .with_request_id("req_01J"),
         };
-
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("invalid_path"));
         assert!(!json.contains("stack"));
         assert!(!json.contains("secret"));
-
         let decoded: ErrorResponse = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded, response);
     }
@@ -137,14 +131,9 @@ mod tests {
     fn details_support_map_and_list_shapes() {
         let mut fields = BTreeMap::new();
         fields.insert("path".to_owned(), vec!["must be relative".to_owned()]);
-
         let mapped = SafeErrorDetails::Map(fields);
         let listed = SafeErrorDetails::List(vec!["retry later".to_owned()]);
-
-        assert_eq!(
-            serde_json::to_value(&mapped).unwrap()["path"][0],
-            "must be relative"
-        );
+        assert_eq!(serde_json::to_value(&mapped).unwrap()["path"][0], "must be relative");
         assert_eq!(serde_json::to_value(&listed).unwrap()[0], "retry later");
     }
 
@@ -153,23 +142,15 @@ mod tests {
         let raw_idempotency_key = "fixture-idempotency-key-01";
         let raw_bearer = "fixture-bearer-token-01";
         let mut details = BTreeMap::new();
-        details.insert(
-            "Idempotency-Key".to_owned(),
-            vec!["is required for write routes".to_owned()],
-        );
-        details.insert(
-            "X-Base-Revision-Id".to_owned(),
-            vec!["must be a revision id or literal null".to_owned()],
-        );
+        details.insert("Idempotency-Key".to_owned(), vec!["is required for write routes".to_owned()]);
+        details.insert("X-Base-Revision-Id".to_owned(), vec!["must be a revision id or literal null".to_owned()]);
         details.insert("query.limit".to_owned(), vec!["must be <= 1000".to_owned()]);
         let response = ErrorResponse {
             error: PublicError::new(PublicErrorCode::ValidationError, "validation failed")
                 .with_request_id("req_02J")
                 .with_details(SafeErrorDetails::Map(details)),
         };
-
         let json = serde_json::to_string(&response).unwrap();
-
         assert!(json.contains("Idempotency-Key"));
         assert!(json.contains("X-Base-Revision-Id"));
         assert!(json.contains("query.limit"));
@@ -178,5 +159,18 @@ mod tests {
         assert!(!json.contains("token_hash"));
         assert!(!json.contains("database_url"));
         assert!(!json.contains("stack_trace"));
+    }
+
+    #[test]
+    fn operational_codes_serialize_to_stable_safe_names() {
+        for (code, expected) in [
+            (PublicErrorCode::MaintenanceInProgress, "maintenance_in_progress"),
+            (PublicErrorCode::StaleControlGeneration, "stale_control_generation"),
+            (PublicErrorCode::CredentialSecretNotReplayable, "credential_secret_not_replayable"),
+            (PublicErrorCode::IdempotencyInProgress, "idempotency_in_progress"),
+            (PublicErrorCode::StaleExecutorFence, "stale_executor_fence"),
+        ] {
+            assert_eq!(serde_json::to_string(&code).unwrap(), format!("\"{expected}\""));
+        }
     }
 }
