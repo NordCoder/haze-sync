@@ -48,18 +48,12 @@ pub fn router() -> Router {
             "/admin/principals/:principal_id/credentials/rotate",
             post(rotate_credential),
         )
-        .route(
-            "/admin/credentials/:credential_id",
-            get(credential_status),
-        )
+        .route("/admin/credentials/:credential_id", get(credential_status))
         .route(
             "/admin/credentials/:credential_id/revoke",
             post(revoke_credential),
         )
-        .route(
-            "/admin/operational-jobs",
-            post(create_operational_job),
-        )
+        .route("/admin/operational-jobs", post(create_operational_job))
         .route(
             "/admin/operational-jobs/:operation_id",
             get(operational_job_status),
@@ -402,9 +396,7 @@ impl From<ControlPlaneError> for ApiError {
                 ControlPlaneRouteError::CredentialSecretNotReplayable
             }
             ControlPlaneError::OperationInProgress => ControlPlaneRouteError::OperationInProgress,
-            ControlPlaneError::ConfirmationRequired => {
-                ControlPlaneRouteError::ConfirmationRequired
-            }
+            ControlPlaneError::ConfirmationRequired => ControlPlaneRouteError::ConfirmationRequired,
             ControlPlaneError::ConfirmationExpired => ControlPlaneRouteError::ConfirmationExpired,
             ControlPlaneError::OperationNotCancellable => {
                 ControlPlaneRouteError::OperationNotCancellable

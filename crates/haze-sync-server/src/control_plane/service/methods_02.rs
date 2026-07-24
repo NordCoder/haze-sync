@@ -1,3 +1,4 @@
+impl ControlPlaneServices {
 async fn revalidate_quiescence_evidence(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
@@ -354,4 +355,4 @@ async fn revalidate_quiescence_evidence(
         })
     }
 
-    
+    }

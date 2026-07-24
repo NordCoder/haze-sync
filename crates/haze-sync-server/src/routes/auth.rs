@@ -53,7 +53,9 @@ fn required_auth_header(headers: &HeaderMap) -> Result<&str, AuthFailure> {
 
 fn map_control_auth_error(error: ControlPlaneError) -> AuthFailure {
     match error {
-        ControlPlaneError::Internal | ControlPlaneError::InvalidStoredState => AuthFailure::Internal,
+        ControlPlaneError::Internal | ControlPlaneError::InvalidStoredState => {
+            AuthFailure::Internal
+        }
         _ => AuthFailure::InvalidToken,
     }
 }

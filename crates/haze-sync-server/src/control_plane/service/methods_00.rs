@@ -1,3 +1,4 @@
+impl ControlPlaneServices {
 
     pub(crate) async fn load(pool: PgPool, server_secret: &[u8]) -> Result<Self, ControlPlaneError> {
         Self::load_with_boundaries(
@@ -357,4 +358,4 @@
         Ok(response)
     }
 
-    
+    }

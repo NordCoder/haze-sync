@@ -196,7 +196,6 @@ pub(crate) fn request_secret_digest(parts: &[&str]) -> Result<SecretDigest, Cryp
     secret_digest(hasher.finalize())
 }
 
-
 pub(crate) fn constant_time_digest_eq(left: &SecretDigest, right: &SecretDigest) -> bool {
     let left = left.as_str().as_bytes();
     let right = right.as_str().as_bytes();
@@ -205,7 +204,9 @@ pub(crate) fn constant_time_digest_eq(left: &SecretDigest, right: &SecretDigest)
     }
     left.iter()
         .zip(right.iter())
-        .fold(0_u8, |difference, (left, right)| difference | (left ^ right))
+        .fold(0_u8, |difference, (left, right)| {
+            difference | (left ^ right)
+        })
         == 0
 }
 
@@ -282,7 +283,10 @@ mod tests {
         assert_eq!(secret.len(), 64);
         assert!(parts.next().is_none());
         assert!(verify_argon2id_secret(secret, &issued.encoded_verifier));
-        assert!(!verify_argon2id_secret("wrong-secret", &issued.encoded_verifier));
+        assert!(!verify_argon2id_secret(
+            "wrong-secret",
+            &issued.encoded_verifier
+        ));
         assert!(!format!("{issued:?}").contains(secret));
     }
 
@@ -294,6 +298,9 @@ mod tests {
         let second = secrets.control_idempotency_key("maintenance", "raw-key");
         assert_eq!(first, second);
         assert!(!first.contains("raw-key"));
-        assert_ne!(random_secret("lease_").unwrap(), random_secret("lease_").unwrap());
+        assert_ne!(
+            random_secret("lease_").unwrap(),
+            random_secret("lease_").unwrap()
+        );
     }
 }

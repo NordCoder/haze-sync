@@ -43,9 +43,7 @@ impl ControlPlaneRouteError {
     #[must_use]
     pub const fn status_code(self) -> u16 {
         match self {
-            Self::InvalidRequest
-            | Self::InvalidIdempotencyKey
-            | Self::InvalidControlValue => 400,
+            Self::InvalidRequest | Self::InvalidIdempotencyKey | Self::InvalidControlValue => 400,
             Self::Forbidden => 403,
             Self::NotFound => 404,
             Self::StaleControlGeneration
@@ -99,7 +97,9 @@ impl ControlPlaneRouteError {
             Self::InvalidRequest => "Operational-control request is invalid",
             Self::InvalidIdempotencyKey => "Idempotency-Key is missing or invalid",
             Self::InvalidControlValue => "Operational-control request validation failed",
-            Self::MaintenanceInProgress => "The requested operation is unavailable during maintenance",
+            Self::MaintenanceInProgress => {
+                "The requested operation is unavailable during maintenance"
+            }
             Self::ControlTransitionInProgress => "A maintenance transition is already in progress",
             Self::InvalidControlTransition => "The requested maintenance transition is invalid",
             Self::StaleControlGeneration => "The expected control generation is stale",
@@ -112,7 +112,9 @@ impl ControlPlaneRouteError {
             Self::OperationInProgress => "A conflicting operational job is already in progress",
             Self::ConfirmationRequired => "One-time confirmation is required",
             Self::ConfirmationExpired => "The one-time confirmation has expired",
-            Self::OperationNotCancellable => "The operational job cannot be cancelled in its current state",
+            Self::OperationNotCancellable => {
+                "The operational job cannot be cancelled in its current state"
+            }
             Self::UnsupportedOperationKind => "The operational job kind is not supported",
             Self::NotFound => "The requested operational-control resource was not found",
             Self::Forbidden => "The authenticated role is not allowed for this operation",

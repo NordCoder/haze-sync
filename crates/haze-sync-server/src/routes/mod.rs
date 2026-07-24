@@ -16,11 +16,7 @@ use haze_sync_api::{
     },
 };
 
-use crate::{
-    control_plane::AdmissionClass,
-    readiness::ReadinessState,
-    state::ServerAppState,
-};
+use crate::{control_plane::AdmissionClass, readiness::ReadinessState, state::ServerAppState};
 
 pub mod admin;
 mod auth;
@@ -87,15 +83,18 @@ async fn operational_admission(
                     .components
                     .iter()
                     .find(|component| component.name == name)
-                    .map_or(DependencyReadinessState::Unknown, |component| match component.status {
-                        crate::readiness::ReadinessComponentStatus::Ready => {
-                            DependencyReadinessState::Ready
-                        }
-                        crate::readiness::ReadinessComponentStatus::NotReady
-                        | crate::readiness::ReadinessComponentStatus::Disabled => {
-                            DependencyReadinessState::NotReady
-                        }
-                    })
+                    .map_or(
+                        DependencyReadinessState::Unknown,
+                        |component| match component.status {
+                            crate::readiness::ReadinessComponentStatus::Ready => {
+                                DependencyReadinessState::Ready
+                            }
+                            crate::readiness::ReadinessComponentStatus::NotReady
+                            | crate::readiness::ReadinessComponentStatus::Disabled => {
+                                DependencyReadinessState::NotReady
+                            }
+                        },
+                    )
             };
             return (
                 StatusCode::OK,

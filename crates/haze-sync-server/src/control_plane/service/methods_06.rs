@@ -1,3 +1,4 @@
+impl ControlPlaneServices {
 async fn validate_job_generations(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
@@ -237,3 +238,4 @@ async fn validate_job_generations(
             .map_err(|_| ControlPlaneError::Internal)?;
         job_response(complete)
     }
+}

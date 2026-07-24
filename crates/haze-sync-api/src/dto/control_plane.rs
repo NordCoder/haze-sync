@@ -529,7 +529,10 @@ impl fmt::Debug for OperationalJobSubmissionResponse {
         formatter
             .debug_struct("OperationalJobSubmissionResponse")
             .field("job", &self.job)
-            .field("confirmation", &self.confirmation.as_ref().map(|_| "[REDACTED]"))
+            .field(
+                "confirmation",
+                &self.confirmation.as_ref().map(|_| "[REDACTED]"),
+            )
             .finish()
     }
 }

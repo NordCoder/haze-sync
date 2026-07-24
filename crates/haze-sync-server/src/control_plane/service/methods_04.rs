@@ -1,3 +1,4 @@
+impl ControlPlaneServices {
 pub(crate) async fn revoke_credential(
         &self,
         actor: &AuthenticatedIdentity,
@@ -418,5 +419,4 @@ pub(crate) async fn revoke_credential(
             confirmation: None,
         })
     }
-
-    
+}

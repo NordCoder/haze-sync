@@ -138,7 +138,11 @@ impl fmt::Display for StartupError {
             Self::Config(error) => write!(formatter, "configuration error: {error}"),
             Self::Database(error) => write!(formatter, "database startup failed: {}", error.code()),
             Self::ControlPlane(error) => {
-                write!(formatter, "operational control startup failed: {}", error.safe_code())
+                write!(
+                    formatter,
+                    "operational control startup failed: {}",
+                    error.safe_code()
+                )
             }
             Self::WorktreeHost(error) => write!(formatter, "worktree host failed: {error}"),
             Self::ObjectStoreRootUnavailable => {

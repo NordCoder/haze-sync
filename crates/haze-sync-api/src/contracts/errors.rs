@@ -133,7 +133,10 @@ mod tests {
         fields.insert("path".to_owned(), vec!["must be relative".to_owned()]);
         let mapped = SafeErrorDetails::Map(fields);
         let listed = SafeErrorDetails::List(vec!["retry later".to_owned()]);
-        assert_eq!(serde_json::to_value(&mapped).unwrap()["path"][0], "must be relative");
+        assert_eq!(
+            serde_json::to_value(&mapped).unwrap()["path"][0],
+            "must be relative"
+        );
         assert_eq!(serde_json::to_value(&listed).unwrap()[0], "retry later");
     }
 
@@ -142,8 +145,14 @@ mod tests {
         let raw_idempotency_key = "fixture-idempotency-key-01";
         let raw_bearer = "fixture-bearer-token-01";
         let mut details = BTreeMap::new();
-        details.insert("Idempotency-Key".to_owned(), vec!["is required for write routes".to_owned()]);
-        details.insert("X-Base-Revision-Id".to_owned(), vec!["must be a revision id or literal null".to_owned()]);
+        details.insert(
+            "Idempotency-Key".to_owned(),
+            vec!["is required for write routes".to_owned()],
+        );
+        details.insert(
+            "X-Base-Revision-Id".to_owned(),
+            vec!["must be a revision id or literal null".to_owned()],
+        );
         details.insert("query.limit".to_owned(), vec!["must be <= 1000".to_owned()]);
         let response = ErrorResponse {
             error: PublicError::new(PublicErrorCode::ValidationError, "validation failed")
@@ -164,13 +173,28 @@ mod tests {
     #[test]
     fn operational_codes_serialize_to_stable_safe_names() {
         for (code, expected) in [
-            (PublicErrorCode::MaintenanceInProgress, "maintenance_in_progress"),
-            (PublicErrorCode::StaleControlGeneration, "stale_control_generation"),
-            (PublicErrorCode::CredentialSecretNotReplayable, "credential_secret_not_replayable"),
-            (PublicErrorCode::IdempotencyInProgress, "idempotency_in_progress"),
+            (
+                PublicErrorCode::MaintenanceInProgress,
+                "maintenance_in_progress",
+            ),
+            (
+                PublicErrorCode::StaleControlGeneration,
+                "stale_control_generation",
+            ),
+            (
+                PublicErrorCode::CredentialSecretNotReplayable,
+                "credential_secret_not_replayable",
+            ),
+            (
+                PublicErrorCode::IdempotencyInProgress,
+                "idempotency_in_progress",
+            ),
             (PublicErrorCode::StaleExecutorFence, "stale_executor_fence"),
         ] {
-            assert_eq!(serde_json::to_string(&code).unwrap(), format!("\"{expected}\""));
+            assert_eq!(
+                serde_json::to_string(&code).unwrap(),
+                format!("\"{expected}\"")
+            );
         }
     }
 }

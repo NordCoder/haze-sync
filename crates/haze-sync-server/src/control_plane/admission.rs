@@ -240,7 +240,9 @@ mod tests {
         admission.set_state(DurableMaintenanceState::Quiescing);
         assert!(matches!(
             admission.admit(AdmissionClass::AuthoritativeMutation),
-            Err(AdmissionDenied::Maintenance(DurableMaintenanceState::Quiescing))
+            Err(AdmissionDenied::Maintenance(
+                DurableMaintenanceState::Quiescing
+            ))
         ));
         let waiter = {
             let admission = admission.clone();

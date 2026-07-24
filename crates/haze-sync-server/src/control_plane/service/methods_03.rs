@@ -1,3 +1,4 @@
+impl ControlPlaneServices {
 pub(crate) async fn rotate_credential(
         &self,
         actor: &AuthenticatedIdentity,
@@ -263,4 +264,4 @@ pub(crate) async fn rotate_credential(
         })
     }
 
-    
+    }

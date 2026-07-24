@@ -28,21 +28,23 @@ pub async fn ready(
     let mut report = readiness.check().await;
     if let Some(control_plane) = state.control_plane() {
         let maintenance = control_plane.maintenance_state();
-        report.components.push(if maintenance == DurableMaintenanceState::Normal {
-            ReadinessComponent {
-                name: "operational_control",
-                status: ReadinessComponentStatus::Ready,
-                code: "operational_control_ready",
-                message: "operational control is in normal state",
-            }
-        } else {
-            ReadinessComponent {
-                name: "operational_control",
-                status: ReadinessComponentStatus::NotReady,
-                code: "operational_control_not_ready",
-                message: "operational control is not in normal state",
-            }
-        });
+        report
+            .components
+            .push(if maintenance == DurableMaintenanceState::Normal {
+                ReadinessComponent {
+                    name: "operational_control",
+                    status: ReadinessComponentStatus::Ready,
+                    code: "operational_control_ready",
+                    message: "operational control is in normal state",
+                }
+            } else {
+                ReadinessComponent {
+                    name: "operational_control",
+                    status: ReadinessComponentStatus::NotReady,
+                    code: "operational_control_not_ready",
+                    message: "operational control is not in normal state",
+                }
+            });
         report = ReadinessReport::new(report.components);
     } else if state.db_pool().is_some() {
         report.components.push(ReadinessComponent {

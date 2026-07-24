@@ -1,3 +1,4 @@
+impl ControlPlaneServices {
 async fn apply_maintenance_hold(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
@@ -294,4 +295,4 @@ async fn apply_maintenance_hold(
         Ok(())
     }
 
-    
+    }

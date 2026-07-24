@@ -1,4 +1,9 @@
-use std::{collections::VecDeque, future::Future, pin::Pin, sync::{Arc, Mutex}};
+use std::{
+    collections::VecDeque,
+    future::Future,
+    pin::Pin,
+    sync::{Arc, Mutex},
+};
 
 use haze_sync_storage::control_plane::{
     QuiescenceAdapterSnapshotInput, QuiescenceRuntimeSnapshotInput,
@@ -34,10 +39,7 @@ pub(crate) trait AdapterControlEvidence: Send + Sync {
         targets: &'a [AdapterControlTarget],
     ) -> ControlFuture<'a, QuiescenceCollection>;
 
-    fn await_resume<'a>(
-        &'a self,
-        targets: &'a [AdapterControlTarget],
-    ) -> ControlFuture<'a, ()>;
+    fn await_resume<'a>(&'a self, targets: &'a [AdapterControlTarget]) -> ControlFuture<'a, ()>;
 }
 
 #[derive(Clone, Debug, Default)]
@@ -63,10 +65,7 @@ impl AdapterControlEvidence for EmptyInventoryAdapterControl {
         })
     }
 
-    fn await_resume<'a>(
-        &'a self,
-        targets: &'a [AdapterControlTarget],
-    ) -> ControlFuture<'a, ()> {
+    fn await_resume<'a>(&'a self, targets: &'a [AdapterControlTarget]) -> ControlFuture<'a, ()> {
         Box::pin(async move {
             if targets.is_empty() {
                 Ok(())
@@ -127,10 +126,7 @@ impl AdapterControlEvidence for DeterministicFakeAdapterControl {
         })
     }
 
-    fn await_resume<'a>(
-        &'a self,
-        _targets: &'a [AdapterControlTarget],
-    ) -> ControlFuture<'a, ()> {
+    fn await_resume<'a>(&'a self, _targets: &'a [AdapterControlTarget]) -> ControlFuture<'a, ()> {
         Box::pin(async move {
             match self.next()? {
                 ScriptedAdapterOutcome::Resumed => Ok(()),
@@ -237,7 +233,10 @@ mod tests {
                 safe_summary: serde_json::json!({}),
             })
             .await;
-        assert_eq!(unsupported, Err(ControlPlaneError::UnsupportedOperationKind));
+        assert_eq!(
+            unsupported,
+            Err(ControlPlaneError::UnsupportedOperationKind)
+        );
         let dry_run = executor
             .execute(ExecutorCommand {
                 operation_id: "operation-b".into(),

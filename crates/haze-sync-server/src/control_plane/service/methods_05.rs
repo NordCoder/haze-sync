@@ -1,3 +1,4 @@
+impl ControlPlaneServices {
 pub(crate) async fn operational_job_status(
         &self,
         actor: &AuthenticatedIdentity,
@@ -299,4 +300,4 @@ pub(crate) async fn operational_job_status(
         .await
     }
 
-    
+}

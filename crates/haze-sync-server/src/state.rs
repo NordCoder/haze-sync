@@ -59,7 +59,9 @@ impl ServerAppState {
             db_pool: Some(db_pool.clone()),
             object_store: Some(object_store),
             config: Some(config),
-            auth: AuthState::Database { pool: db_pool.clone() },
+            auth: AuthState::Database {
+                pool: db_pool.clone(),
+            },
             worktree_control: None,
             control_plane: None,
         }
